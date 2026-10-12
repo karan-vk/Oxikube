@@ -23,6 +23,7 @@ mod view_select;
 mod view_set_filter;
 mod view_states;
 mod view_status_filter;
+mod view_used_by;
 mod view_user_keymap;
 mod view_verbs;
 mod view_vim;

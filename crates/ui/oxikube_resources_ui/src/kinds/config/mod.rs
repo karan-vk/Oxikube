@@ -42,6 +42,7 @@ mod tests;
 
 use gpui::App;
 use oxikube_app::Section;
+use oxikube_domain::command::CommandId;
 
 pub use panel::ConfigPanel;
 
@@ -175,10 +176,16 @@ const KINDS: &[(Builtin, u32, Build)] = &[
 ];
 
 /// Registers the kinds of this module in the Config section. No kind here has actions of its
-/// own: they are read-only, and the generic row actions (open, YAML, edit, delete) apply.
+/// own beyond "Used by" on PriorityClasses (E12-S18): they are read-only, and the generic row
+/// actions (open, YAML, edit, delete) apply.
 pub(super) fn init(cx: &mut App) {
     let specs = KINDS.iter().map(|(kind, rank, build)| {
-        spec(kind, Section::CONFIG, *rank, &[]).with_detail(ConfigPanel::renderer(*build))
+        let actions: &[CommandId] = if kind.kind == "PriorityClass" {
+            &[CommandId::RESOURCE_SHOW_USED_BY]
+        } else {
+            &[]
+        };
+        spec(kind, Section::CONFIG, *rank, actions).with_detail(ConfigPanel::renderer(*build))
     });
     if let Err(error) = KindSpecs::register_all(cx, specs) {
         tracing::error!(%error, "the Config kinds were not all registered");

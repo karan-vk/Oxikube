@@ -167,6 +167,10 @@ actions!(
         /// (`service::OpenInBrowser`; `o`, bound where `kind == Service`). A toast says so while
         /// no port-forward manager is installed.
         OpenInBrowser,
+        /// Show what uses the cursor row's ServiceAccount, ConfigMap, Secret, claim or
+        /// PriorityClass: its detail on the "Used by" tab (`resource::ShowUsedBy`; k9s's `u`,
+        /// bound for those kinds only).
+        ShowUsedBy,
         /// Show the cursor row's Secret decoded in the detail drawer, or hide it again
         /// (`secret::Reveal`; k9s's `x`). A toast says so for a kind that is not a Secret.
         RevealSelected,

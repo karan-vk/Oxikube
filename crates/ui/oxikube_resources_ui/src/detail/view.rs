@@ -70,6 +70,8 @@ pub struct DetailView {
     pub(super) events_list: ListState,
     /// The Schema tab of a CRD (E07-S07).
     pub(super) schema: SchemaPane,
+    /// The Used by tab of a referenced kind (E12-S18).
+    pub(super) used_by: super::used_by::UsedByPane,
     /// The kind's own panel above the Overview (E12-S01): its spec's renderer, built on first draw.
     pub(super) kind_panel: KindPanel,
     /// A Secret's summary and what is revealed of it (E12-S11); empty for other kinds.
@@ -149,6 +151,7 @@ impl DetailView {
             find: FindPane::default(),
             events_list: ListState::new(0, ListAlignment::Top, px(240.)),
             schema: SchemaPane::default(),
+            used_by: Default::default(),
             kind_panel,
             secret: Default::default(),
             store: None,
@@ -250,11 +253,15 @@ impl DetailView {
         if left == DetailTab::Schema {
             self.schema_tab_closed();
         }
+        if left == DetailTab::UsedBy {
+            self.used_by_tab_closed();
+        }
         match tab {
             DetailTab::Events => self.start_events(cx),
             DetailTab::Yaml => self.refresh_yaml(cx),
             DetailTab::Describe => self.start_describe(cx),
             DetailTab::Schema => self.schema_tab_opened(),
+            DetailTab::UsedBy => self.used_by_tab_opened(cx),
             DetailTab::Overview => {}
         }
         // The find follows the tab: its text is another text.
@@ -363,6 +370,8 @@ impl DetailView {
         self.yaml.task = None;
         self.events.task = None;
         self.events.subscription = None;
+        // The lease on the Pods subscription goes with the view.
+        self.used_by_tab_closed();
         // Decoded Secret values live as long as the tab does.
         self.clear_secret();
     }

@@ -1,6 +1,7 @@
 //! The drawer's tabs.
 
 use oxikube_domain::ids::Gvk;
+use oxikube_domain::view::RefKind;
 
 use crate::crds::is_crd_kind;
 
@@ -19,6 +20,9 @@ pub enum DetailTab {
     Events,
     /// A CRD's `openAPIV3Schema` as a tree (E07-S07). Only a CustomResourceDefinition has it.
     Schema,
+    /// The workloads whose Pods name the object (E12-S18). Only a ServiceAccount, ConfigMap,
+    /// Secret, PersistentVolumeClaim or PriorityClass has it.
+    UsedBy,
 }
 
 impl DetailTab {
@@ -40,11 +44,23 @@ impl DetailTab {
         DetailTab::Schema,
     ];
 
+    /// [`ALL`](Self::ALL) and the Used by tab: what the five referenced kinds have.
+    const REFERENCED: [DetailTab; 5] = [
+        DetailTab::Overview,
+        DetailTab::Yaml,
+        DetailTab::Describe,
+        DetailTab::Events,
+        DetailTab::UsedBy,
+    ];
+
     /// The tabs of an object of type `gvk`: [`ALL`](Self::ALL), and for a CustomResourceDefinition
-    /// the Schema tab after them.
+    /// the Schema tab after them, for a ServiceAccount, ConfigMap, Secret, PersistentVolumeClaim
+    /// or PriorityClass the Used by tab.
     pub fn for_kind(gvk: &Gvk) -> &'static [DetailTab] {
         if is_crd_kind(gvk) {
             &Self::CRD
+        } else if RefKind::from_gvk(gvk).is_some() {
+            &Self::REFERENCED
         } else {
             &Self::ALL
         }
@@ -58,6 +74,7 @@ impl DetailTab {
             DetailTab::Describe => "Describe",
             DetailTab::Events => "Events",
             DetailTab::Schema => "Schema",
+            DetailTab::UsedBy => "Used by",
         }
     }
 
@@ -69,6 +86,7 @@ impl DetailTab {
             DetailTab::Describe => "describe",
             DetailTab::Events => "events",
             DetailTab::Schema => "schema",
+            DetailTab::UsedBy => "used-by",
         }
     }
 }

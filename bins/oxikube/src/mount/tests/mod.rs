@@ -37,6 +37,7 @@ mod signin;
 mod storage;
 mod tail;
 mod terminal;
+mod used_by;
 mod workloads;
 
 use gpui::{Entity, TestAppContext, VisualTestContext};

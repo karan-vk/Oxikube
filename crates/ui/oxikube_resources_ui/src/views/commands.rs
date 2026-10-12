@@ -7,7 +7,8 @@
 //! `resource::RefreshDescribe` (E07-S06), `resource::Find`, `resource::NextMatch` and
 //! `resource::PreviousMatch` (E11-S06, find in the YAML and Describe text), and the k9s verbs `resource::ViewYaml`,
 //! `resource::ViewDescribe` and `table::ToggleWide` (E11-S07), `service::ShowPods` (E12-S13),
-//! `secret::Reveal` (E12-S11, a Secret's values decoded in memory in its detail) and the pod
+//! `secret::Reveal` (E12-S11, a Secret's values decoded in memory in its detail),
+//! `resource::ShowUsedBy` (E12-S18, the detail's "Used by" tab) and the pod
 //! navigation `pod::JumpToOwner` and `pod::ShowNode` (E12-S03).
 //!
 //! None changes a cluster (no `MutationGuard` tier): they tell a view to show a detail, pin it
@@ -29,7 +30,7 @@ use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
 
 /// The commands this crate handles.
-pub const RESOURCE_COMMANDS: [CommandId; 24] = [
+pub const RESOURCE_COMMANDS: [CommandId; 25] = [
     CommandId::RESOURCE_OPEN,
     CommandId::RESOURCE_COPY_NAME,
     CommandId::RESOURCE_RETRY_FEED,
@@ -51,6 +52,7 @@ pub const RESOURCE_COMMANDS: [CommandId; 24] = [
     CommandId::RESOURCE_VIEW_DESCRIBE,
     CommandId::TABLE_TOGGLE_WIDE,
     CommandId::SERVICE_SHOW_PODS,
+    CommandId::RESOURCE_SHOW_USED_BY,
     CommandId::SECRET_REVEAL,
     CommandId::POD_JUMP_TO_OWNER,
     CommandId::POD_SHOW_NODE,
@@ -99,6 +101,9 @@ pub enum ViewRequest {
     ViewYaml(ResourceRef),
     /// Show `target`'s detail on its Describe tab (`resource::ViewDescribe`, `d`).
     ViewDescribe(ResourceRef),
+    /// Show what uses a ServiceAccount, ConfigMap, Secret, claim or PriorityClass: its detail opens
+    /// on the "Used by" tab (`resource::ShowUsedBy`, `u`, E12-S18).
+    ShowUsedBy(ResourceRef),
     /// Show a Secret's values decoded in its detail, or hide them again (`secret::Reveal`, `x`,
     /// E12-S11): the detail opens on `target`, and `key` (every key when `None`) is toggled.
     RevealSecret {
@@ -193,6 +198,7 @@ impl ResourceCommandSink {
             Command::ResourceCopyName { target } => ViewRequest::CopyName(target.clone()),
             Command::ResourceViewYaml { target } => ViewRequest::ViewYaml(target.clone()),
             Command::ResourceViewDescribe { target } => ViewRequest::ViewDescribe(target.clone()),
+            Command::ResourceShowUsedBy { target } => ViewRequest::ShowUsedBy(target.clone()),
             Command::SecretReveal { target, key } => ViewRequest::RevealSecret {
                 target: target.clone(),
                 key: key.clone(),

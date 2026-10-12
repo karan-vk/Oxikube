@@ -9,7 +9,7 @@ use gpui::{
     IntoElement, ParentElement as _, Render, StatefulInteractiveElement as _, Styled as _,
     Subscription, Task, WeakEntity, Window, div, px,
 };
-use oxikube_app::{PvcUsage as _, PvcUsageFeed, UsageStatus};
+use oxikube_app::{ReferenceFeed, UsageStatus};
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::ResourceRef;
 use oxikube_ui::layout::{StyledExt as _, h_flex, v_flex};
@@ -18,8 +18,8 @@ use oxikube_ui::{ActiveTokens as _, Tokens, u};
 use super::content::{Block, Field, Link, PanelContent, content_of, usage_block};
 use crate::detail::DetailView;
 use crate::kinds::storage::actions::is_claim;
-use crate::kinds::storage::usage::usage_feed;
 use crate::table::ToneColors;
+use crate::used_by::reference_feed;
 
 /// How often the claim panel looks for a change of the mounting Pods once they are known.
 const USAGE_POLL: Duration = Duration::from_secs(1);
@@ -40,7 +40,7 @@ pub struct StoragePanel {
     built_from: Option<(Option<Arc<str>>, Option<Arc<str>>)>,
     content: PanelContent,
     /// For a claim: the feed that knows which Pods mount it, and the list built from it.
-    usage: Option<Arc<PvcUsageFeed>>,
+    usage: Option<Arc<ReferenceFeed>>,
     usage_block: Option<Block>,
     usage_version: u64,
     /// Whether the Pods have not been listed yet (the panel looks again soon).
@@ -151,7 +151,7 @@ impl StoragePanel {
                 self._poll = Some(Self::poll_task(cx));
             }
             if self.usage.is_none() || stale {
-                self.usage = usage_feed(&env);
+                self.usage = reference_feed(&env);
             }
             self.usage_version = u64::MAX;
             self.rebuild_usage(namespace.as_deref().unwrap_or_default(), &name);
@@ -173,7 +173,7 @@ impl StoragePanel {
         let index = feed.index();
         self.warming = index.status() == UsageStatus::Warming;
         self.usage_version = index.version();
-        self.usage_block = Some(usage_block(&**index, namespace, name));
+        self.usage_block = Some(usage_block(index, namespace, name));
     }
 
     /// The task that looks for a change of the mounting Pods: every moment while they are being

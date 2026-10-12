@@ -311,6 +311,7 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             ),
             port: Some(80),
         },
+        "resource::ShowUsedBy" => Command::ResourceShowUsedBy { target: target() },
         "service::ShowPods" => Command::ServiceShowPods {
             target: ResourceRef::namespaced(
                 cluster,

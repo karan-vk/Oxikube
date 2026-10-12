@@ -50,6 +50,7 @@ pub fn spec() -> KindSpec {
         CommandId::SECRET_REVEAL,
         CommandId::SECRET_EDIT_DECODED,
         CommandId::SECRET_CREATE,
+        CommandId::RESOURCE_SHOW_USED_BY,
     ]);
     KindSpec::new(meta).with_detail(DetailRenderer::panel(|detail, _, cx| {
         cx.new(|cx| SecretPanel::new(detail, cx)).into()

@@ -23,6 +23,8 @@
 //!   kinds (E12-S14).
 //! * [`storage`]: [`storage::PvcSummary`], [`storage::PvSummary`], [`storage::StorageClassSummary`],
 //!   the VolumeSnapshot kinds and the PVC resize rule (E12-S15).
+//! * [`RefKind`] and [`pod_references`]: the ServiceAccounts, ConfigMaps, Secrets, claims and
+//!   PriorityClass a Pod names, the input of the "used by" index (E12-S18).
 //! * [`Health`] and [`health_of`]: the one rule for "is this object healthy" behind overview
 //!   tiles and sidebar counts.
 //!
@@ -64,6 +66,7 @@ mod node_load;
 mod node_taint;
 mod pod;
 mod pod_health;
+mod references;
 mod service;
 pub mod storage;
 mod workload;
@@ -107,6 +110,7 @@ pub use pod::{
     QosClass, ResourceAmounts, SecretValue, SourceData, SourceKind, SourceState, SourceValue,
     TerminatedState, Toleration, VolumeSummary, node_of,
 };
+pub use references::{PodRef, RefKind, pod_references};
 pub use service::{
     NoSelector, ServicePortSummary, ServiceStatus, ServiceSummary, ServiceType, TargetPort,
     resolve_target_port,

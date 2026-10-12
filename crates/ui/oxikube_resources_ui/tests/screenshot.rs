@@ -59,6 +59,10 @@
 //!   claims table with its Pods (used by) column, a claim's detail panel with the Pods that mount
 //!   it, and the resize dialog refusing a shrink, in both themes (E12-S15).
 //!
+//! - `detail_used_by_dark`, `detail_used_by_light` (`used_by`): the Used by tab of a ConfigMap's detail:
+//!   the summary and the workloads that use it (a Deployment through its ReplicaSet, a StatefulSet, a
+//!   CronJob and a lone Pod) (E12-S18).
+//!
 //! The Age and Restarts columns (ages, last-restart times) are hidden through a saved layout so
 //! the picture does not change with the clock. `harness = false`: on macOS the platform text system can only be created on the
 //! process main thread. Needs a GPU device (Metal, or Vulkan such as Mesa lavapipe on Linux), so
@@ -116,6 +120,8 @@ mod secrets;
 mod service;
 #[path = "screenshot/storage.rs"]
 mod storage;
+#[path = "screenshot/used_by.rs"]
+mod used_by;
 
 const WIDTH: f32 = 960.0;
 /// Narrower than the default columns (Name, Status, Ready, Node, IP: 740 px).
@@ -305,6 +311,7 @@ fn main() -> ExitCode {
         namespaces::run(),
         namespace_allocation::run(),
         storage::run(),
+        used_by::run(),
     ];
     let mut failed = false;
     for result in results {

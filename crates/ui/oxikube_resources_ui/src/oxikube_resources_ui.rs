@@ -18,6 +18,7 @@
 //! | [`overview_lite`] | E07-S11 | the Workloads overview: a card per workload kind with its total, a stacked status bar whose segments open the filtered table (E12-S07), and the recent-warnings panel |
 //! | [`table`] | E07-S03 | [`ResourceTable`](table::ResourceTable): the generic, virtualised table of one kind, with sorting, column layout per kind, multi-select, context menu and keyboard navigation |
 //! | [`table::states`] | E07-S10 | loading / empty / filtered-empty / forbidden / unauthorized / error states, the stale badge, Retry (`resource::RetryFeed`) and the API server's `Warning:` headers as toasts |
+//! | [`used_by`] | E12-S18 | "Used by": the shared reference feed ([`used_by::reference_feed`]) and the `resource::ShowUsedBy` row action for ServiceAccounts, ConfigMaps, Secrets, claims and PriorityClasses; the tab is the detail's ([`detail::DetailTab::UsedBy`]) |
 //! | [`views`] | E07-S03 | [`ResourceViews`]: the kind view that opens tables in cluster tabs (sidebar navigation, `resource::OpenList`) and runs the table commands on the UI thread |
 //!
 //! The `suite` module (tests only, E07-S12) is the browser's end-to-end suite: the real views driven
@@ -37,6 +38,7 @@ pub mod metrics;
 pub mod navigate;
 pub mod overview_lite;
 pub mod table;
+pub mod used_by;
 pub mod views;
 
 #[cfg(test)]

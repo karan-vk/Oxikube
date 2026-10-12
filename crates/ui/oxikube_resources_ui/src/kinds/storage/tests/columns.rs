@@ -9,8 +9,8 @@ use oxikube_testkit::storage::{pod_mounting, pod_mounting_in, pvc, storage_class
 use serde_json::json;
 
 use super::{cell, kind, storage_window, visible};
-use crate::kinds::storage::usage::usage_feed;
 use crate::table::tests::fixture::cluster;
+use crate::used_by::reference_feed;
 
 /// What the claims' column factory is given for the fixture's cluster.
 fn context(f: &crate::table::tests::fixture::Fixture) -> ColumnsContext {
@@ -83,7 +83,7 @@ fn the_pods_column_is_blank_not_zero_while_the_pods_cannot_be_read(cx: &mut Test
     assert_eq!(cell(&mut f, &table, "data", "pods"), "0");
     // The user may not list pods: usage is unknown, so the cell is empty rather than a false 0.
     let env = context(&f);
-    let feed = usage_feed(&env).expect("a feed");
+    let feed = reference_feed(&env).expect("a feed");
     feed.index().apply(&StoreDelta {
         rows: RowChange::Unchanged,
         state: FeedState::Forbidden {
@@ -122,7 +122,7 @@ fn the_pods_column_follows_the_pods_without_a_new_feed_per_cell(cx: &mut TestApp
     // Another pod mounts the claim: the index is told by the Pods feed, and the table redraws on
     // its next tick (usage is not part of a claim's own version).
     let env = context(&f);
-    let feed = usage_feed(&env).expect("a connected cluster has a feed");
+    let feed = reference_feed(&env).expect("a connected cluster has a feed");
     let renders = f.vcx.update(|_, cx| table.read(cx).render_count());
     let both = vec![
         Arc::new(StoreObject::Resource(pod_mounting(
@@ -153,7 +153,7 @@ fn the_pods_column_follows_the_pods_without_a_new_feed_per_cell(cx: &mut TestApp
         "the table redrew for the new count"
     );
     // Asking for the feed again shares the one that exists: no second Pods watch.
-    let again = usage_feed(&env).unwrap();
+    let again = reference_feed(&env).unwrap();
     assert!(Arc::ptr_eq(&feed, &again));
     assert_eq!(watches(&mut f), before);
 }

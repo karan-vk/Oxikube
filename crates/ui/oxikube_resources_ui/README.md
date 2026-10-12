@@ -49,6 +49,9 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
   opens the Pods table filtered by the selector. "Open in Browser" (`o`, `service::OpenInBrowser`)
   appears once the port-forward manager installs its opener (`ServiceBrowser::enable` plus
   `register_open_in_browser`); a Service without a selector says why it has no pods.
+- `used_by` (E12-S18): the "Used by" tab of a ServiceAccount, ConfigMap, Secret, claim or PriorityClass (the workloads
+  whose Pods name it, each a click away), `u` / "Used By" (`resource::ShowUsedBy`), and the shared reference feed the
+  claims' Pods column also reads (`oxikube_app::references`).
 - `kinds::storage` (E12-S15): the Storage section. Claims (Status, Storage Class, Size, Pods used by),
   volumes, storage classes (Default badge) and, where the CSI snapshot CRDs are served, volume snapshots
   and their classes; a detail panel per kind (a claim lists its bound volume and the Pods that mount it);

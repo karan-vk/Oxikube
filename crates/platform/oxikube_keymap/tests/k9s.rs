@@ -27,6 +27,7 @@ actions!(
         ShowPortForwards,
         ToggleWide,
         ShowServicePods,
+        ShowUsedBy,
         OpenInBrowser,
         DeleteSelected,
         ShellSelected,
@@ -182,7 +183,8 @@ fn c_and_u_cordon_and_uncordon_on_the_nodes_table_only(cx: &mut TestAppContext) 
             runs(cx, "s", &strs(&nodes)),
             Some("resource_table::ShellSelected")
         );
-        for kind in ["Pod", "Deployment", "Secret"] {
+        // `u` is used-by on five other kinds (`u_shows_what_uses_the_row_on_the_five_...`), free here.
+        for kind in ["Pod", "Deployment", "Job"] {
             let other = table(kind, "");
             for keys in ["c", "u"] {
                 assert_eq!(
@@ -239,6 +241,52 @@ fn r_drains_on_the_nodes_table_only(cx: &mut TestAppContext) {
     assert_eq!(
         ActionRegistry::commands_of("resource_table::DrainSelected"),
         [oxikube_domain::command::CommandId::NODE_DRAIN]
+    );
+}
+
+/// Used-by (E12-S18): `u` on the tables of a ServiceAccount, ConfigMap, Secret, claim and
+/// PriorityClass shows what uses the row, on every OS; the other kinds keep `u` for their own verb
+/// (Namespaces use it, Services show pods, Nodes uncordon) or leave it free, and a letter typed
+/// into the filter is text.
+#[gpui::test]
+fn u_shows_what_uses_the_row_on_the_five_referenced_kinds_only(cx: &mut TestAppContext) {
+    use oxikube_keymap::ActionRegistry;
+    for platform in [MAC, LINUX] {
+        install(cx, platform, "");
+        for kind in [
+            "ServiceAccount",
+            "ConfigMap",
+            "Secret",
+            "PersistentVolumeClaim",
+            "PriorityClass",
+        ] {
+            let stack = table(kind, "");
+            assert_eq!(
+                runs(cx, "u", &strs(&stack)),
+                Some("resource_table::ShowUsedBy"),
+                "{kind} ({platform:?})"
+            );
+            let typing = table(kind, "Editing");
+            assert_eq!(
+                press(cx, "u", &strs(&typing)),
+                Resolution::Unbound,
+                "{kind}"
+            );
+        }
+        for (kind, own) in [
+            ("Namespace", Some("resource_table::UseNamespace")),
+            ("Service", Some("resource_table::ShowServicePods")),
+            ("Node", Some("resource_table::UncordonSelected")),
+            ("Pod", None),
+            ("Deployment", None),
+        ] {
+            let stack = table(kind, "");
+            assert_eq!(runs(cx, "u", &strs(&stack)), own, "{kind} ({platform:?})");
+        }
+    }
+    assert_eq!(
+        ActionRegistry::commands_of("resource_table::ShowUsedBy"),
+        [CommandId::RESOURCE_SHOW_USED_BY]
     );
 }
 
