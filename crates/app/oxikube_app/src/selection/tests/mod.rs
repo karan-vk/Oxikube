@@ -1,6 +1,7 @@
 //! Tests of the bulk commands over the real guard and the testkit fakes: [`Selected`] is the
 //! guard harness with the real `selection::*` handlers on it and a small cluster `a`.
 
+mod concurrency;
 mod flow;
 mod guard;
 mod label;
@@ -17,6 +18,7 @@ use oxikube_testkit::{FakeResourcePort, ResourceCall};
 use serde_json::{Value, json};
 
 use crate::command_bus::{CommandOutput, DispatchContext, DispatchError};
+use crate::guard::Confirmation;
 use crate::selection::SelectionFlow;
 use crate::testing::{Harness, id};
 
@@ -49,6 +51,25 @@ impl Selected {
     ) -> Result<CommandOutput, DispatchError> {
         self.h
             .confirm_and_run(command, DispatchContext::new(initiator, "alice"))
+            .map(|outcome| outcome.completed().expect("the handler ran"))
+    }
+
+    /// Like [`run`](Self::run), but the port's writes yield while in flight (see
+    /// `FakeResourcePort::track_write_overlap`), so the batch runs on an executor that re-polls and
+    /// the port can tell how many writes overlapped.
+    pub fn run_overlapping(
+        &self,
+        command: Command,
+        initiator: Initiator,
+    ) -> Result<CommandOutput, DispatchError> {
+        let ctx = DispatchContext::new(initiator, "alice");
+        let request = self.h.ask(command.clone(), ctx.clone());
+        let answer = match request.expected_name {
+            Some(name) => Confirmation::typed(request.token, name),
+            None => Confirmation::simple(request.token),
+        };
+        self.port().track_write_overlap();
+        futures::executor::block_on(self.h.bus.dispatch(command, ctx.with_confirmation(answer)))
             .map(|outcome| outcome.completed().expect("the handler ran"))
     }
 

@@ -62,6 +62,7 @@ pub mod images;
 pub mod integration;
 pub mod kinds;
 pub mod manifests;
+pub mod overlap;
 #[cfg(feature = "screenshot")]
 pub mod screenshot;
 pub mod script;
@@ -75,6 +76,7 @@ pub use builders::{
     statefulset,
 };
 pub use fakes::*;
+pub use overlap::Overlap;
 pub use script::{CallLog, Script, StreamGauge, Timeline, unscripted};
 pub use scripted_feed::{ScriptedFeed, TICK};
 pub use test_ports::TestPorts;

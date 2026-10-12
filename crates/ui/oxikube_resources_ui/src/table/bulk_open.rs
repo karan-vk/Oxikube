@@ -4,7 +4,12 @@
 //! `Delete` or `Restart` with several rows selected, `Edit labels…`, and the palette's
 //! `selection::*` commands. The dialog, not the table, plans, asks and runs.
 
+use std::collections::HashSet;
+use std::sync::Arc;
+
 use gpui::{Context, Window};
+use oxikube_app::store::StoreObject;
+use oxikube_domain::Resource;
 use oxikube_domain::ids::ResourceRef;
 use oxikube_workspace::Toast;
 
@@ -64,23 +69,12 @@ impl ResourceTable {
     }
 
     /// The object the label editor previews: the cursor row when it is selected, else the first
-    /// selected row. Reads the rows already in memory.
+    /// selected row. Reads the rows already in memory (one pass, not a scan of the selection per
+    /// row).
     fn bulk_sample(&self, targets: &[ResourceRef], cx: &gpui::App) -> BulkSample {
-        let wanted = |name: &str, namespace: Option<&str>| {
-            targets
-                .iter()
-                .any(|t| &*t.name == name && t.namespace() == namespace)
-        };
         let cursor = self.cursor_row(cx);
         self.read_rows(cx, |rows| {
-            let from = |ix: usize| {
-                let resource = rows.row(ix)?.resource()?;
-                wanted(resource.name(), resource.namespace()).then(|| resource.clone())
-            };
-            let resource = cursor
-                .and_then(from)
-                .or_else(|| (0..rows.rows().len()).find_map(from));
-            let Some(resource) = resource else {
+            let Some(resource) = sample_resource(rows.rows(), cursor, targets) else {
                 return BulkSample::default();
             };
             let pairs = |map: &oxikube_domain::resource::StrMap| -> Vec<(String, String)> {
@@ -94,5 +88,96 @@ impl ResourceTable {
                 annotations: pairs(&resource.meta.annotations),
             }
         })
+    }
+}
+
+/// The row the label editor previews among `rows`: the one at `cursor` when it is one of
+/// `targets`, else the first row that is. One hash set of the targets, so the cost is the rows
+/// plus the targets, however they are laid out.
+fn sample_resource<'a>(
+    rows: &'a [Arc<StoreObject>],
+    cursor: Option<usize>,
+    targets: &[ResourceRef],
+) -> Option<&'a Resource> {
+    let wanted: HashSet<(&str, Option<&str>)> =
+        targets.iter().map(|t| (&*t.name, t.namespace())).collect();
+    let from = |ix: usize| {
+        let resource = rows.get(ix)?.resource()?;
+        wanted
+            .contains(&(resource.name(), resource.namespace()))
+            .then_some(resource)
+    };
+    cursor
+        .and_then(from)
+        .or_else(|| (0..rows.len()).find_map(from))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::table::tests::{p, rows};
+
+    fn target(name: &str) -> ResourceRef {
+        let resource = p("x", name, "1");
+        ResourceRef::namespaced(
+            oxikube_domain::ids::ClusterId::new("kubeconfig", &"ctx".into()),
+            resource.kind,
+            "x",
+            name,
+        )
+    }
+
+    fn name_of(found: Option<&Resource>) -> Option<&str> {
+        found.map(Resource::name)
+    }
+
+    #[test]
+    fn the_cursor_row_is_the_sample_when_it_is_selected() {
+        let list = rows(&["a", "b", "c", "d"]);
+        let targets = [target("b"), target("d")];
+        assert_eq!(
+            name_of(sample_resource(&list, Some(3), &targets)),
+            Some("d")
+        );
+    }
+
+    #[test]
+    fn an_unselected_cursor_row_falls_back_to_the_first_selected_row() {
+        let list = rows(&["a", "b", "c", "d"]);
+        let targets = [target("d"), target("c")];
+        assert_eq!(
+            name_of(sample_resource(&list, Some(0), &targets)),
+            Some("c")
+        );
+        assert_eq!(name_of(sample_resource(&list, None, &targets)), Some("c"));
+        assert_eq!(
+            name_of(sample_resource(&list, Some(99), &targets)),
+            Some("c")
+        );
+    }
+
+    #[test]
+    fn no_selected_row_in_memory_is_no_sample() {
+        let list = rows(&["a", "b"]);
+        assert_eq!(
+            name_of(sample_resource(&list, Some(0), &[target("z")])),
+            None
+        );
+    }
+
+    #[test]
+    fn a_large_selection_below_an_unselected_cursor_is_found_in_one_pass() {
+        // 5k unselected rows above 5k selected ones: the shape that was rows x targets.
+        let names: Vec<String> = (0..10_000).map(|i| format!("pod-{i:05}")).collect();
+        let list = rows(&names.iter().map(String::as_str).collect::<Vec<_>>());
+        let targets: Vec<ResourceRef> = names[5_000..].iter().map(|n| target(n)).collect();
+        let started = std::time::Instant::now();
+        let found = sample_resource(&list, Some(0), &targets);
+        assert_eq!(name_of(found), Some("pod-05000"));
+        assert!(
+            started.elapsed() < std::time::Duration::from_millis(100),
+            "took {:?}",
+            started.elapsed()
+        );
     }
 }
