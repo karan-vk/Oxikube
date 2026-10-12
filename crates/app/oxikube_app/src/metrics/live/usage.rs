@@ -165,7 +165,7 @@ impl ClusterUsage {
         }
     }
 
-    /// Records one poll of `kind`, answered at `at`. See the [module docs](self).
+    /// Records one poll of `kind`, answered at `at`.
     pub fn apply(&self, kind: MetricsKind, at: Timestamp, result: &OxiResult<MetricsOutcome>) {
         let mut data = self.data.write();
         let state = match result {

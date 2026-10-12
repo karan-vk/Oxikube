@@ -13,8 +13,9 @@ use super::run::drain_with;
 ///
 /// The writer the app passes is the guard's (`Mutation`), which wraps the session's
 /// [`KubeResources`](crate::KubeResources): evictions go through its unretried client (see
-/// [`with_unretried_pool`](crate::KubeResources::with_unretried_pool)), so a PodDisruptionBudget's
-/// 429 reaches the drain at once and shows as "blocked" while the drain backs off.
+/// [`with_lazy_unretried_client`](crate::KubeResources::with_lazy_unretried_client), which the
+/// connector sets), so a PodDisruptionBudget's 429 reaches the drain at once and shows as
+/// "blocked" while the drain backs off.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct KubeDrain;
 

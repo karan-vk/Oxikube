@@ -14,7 +14,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures::StreamExt as _;
-use k8s_openapi::api::core::v1::{Node, Pod};
+use k8s_openapi::api::core::v1::Pod;
 use kube::Api;
 use kube::api::ListParams;
 use oxikube_app::command_bus::{CommandRegistry, DispatchContext, DispatchError, Outcome};
@@ -108,14 +108,10 @@ fn prefs(namespace: &str, image: &str) -> ClusterPrefs {
 }
 
 async fn a_node(client: &kube::Client) -> String {
-    Api::<Node>::all(client.clone())
-        .list(&ListParams::default())
+    crate::nodes::real_node(client)
         .await
-        .expect("list nodes")
-        .items[0]
         .metadata
         .name
-        .clone()
         .expect("node name")
 }
 

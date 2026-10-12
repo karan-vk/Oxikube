@@ -101,7 +101,7 @@ impl AllocationRow {
         percent(self.limits.as_ref()?, self.limits_capacity.as_ref()?)
     }
 
-    /// Usage as a percent of the capacity the bar uses ([`usage_scale`](Self::usage_scale)).
+    /// Usage as a percent of the capacity the bar uses (`usage_scale`).
     pub fn usage_percent(&self) -> Option<f64> {
         let Usage::Value(value) = &self.usage else {
             return None;

@@ -824,18 +824,18 @@ fn r_restarts_and_i_sets_the_image_on_the_workloads_a_template_change_rolls(
                 "{kind} on {platform:?}"
             );
         }
-        // A ReplicaSet's template change rolls nothing, a Pod has no template, and a Node's `r` is
-        // the drain of a later story: none of them restarts.
-        for kind in [
-            "ReplicaSet",
-            "ReplicationController",
-            "Pod",
-            "Node",
-            "Service",
-        ] {
+        // A ReplicaSet's template change rolls nothing and a Pod has no template: neither restarts.
+        for kind in ["ReplicaSet", "ReplicationController", "Pod", "Service"] {
             assert_eq!(runs(cx, "r", &strs(&table(kind, ""))), None, "{kind}");
             assert_eq!(runs(cx, "i", &strs(&table(kind, ""))), None, "{kind}");
         }
+        // A Node's `r` is its drain (E12-S10), not a restart.
+        let node = table("Node", "");
+        assert_eq!(
+            runs(cx, "r", &strs(&node)),
+            Some("resource_table::DrainSelected")
+        );
+        assert_eq!(runs(cx, "i", &strs(&node)), None);
         // Typing into the table's filter field is text.
         let editing = table("Deployment", "Editing");
         assert_eq!(press(cx, "r", &strs(&editing)), Resolution::Unbound);

@@ -4,7 +4,8 @@
 //! Agents read cluster usage the way a user does: live CPU and memory from metrics-server, and
 //! history from Prometheus when the cluster has one. All three tools are read-only (no risk, no
 //! confirmation tier), stay available on a read-only cluster, and go through the same
-//! [`ToolRegistry`] as `k8s.get_logs`. The names carry the `k8s.` namespace [`ToolName`] requires
+//! [`ToolRegistry`](crate::tools::ToolRegistry) as `k8s.get_logs`. The names carry the `k8s.`
+//! namespace [`ToolName`](oxikube_ports::ToolName) requires
 //! (`top_pods` and `query_promql` are the acceptance's names).
 //!
 //! | Tool | Arguments | Answers with |
@@ -35,7 +36,7 @@
 //!
 //! # Size and redaction
 //!
-//! Every answer is bounded ([`bounds`]): rows, series, points per series and query length. Text
+//! Every answer is bounded (`bounds`): rows, series, points per series and query length. Text
 //! that came from outside (the query as echoed, series labels, error messages) passes through
 //! `oxikube_domain::redact`; a bearer token is never in an answer, because the tools never see
 //! one (the adapter reads it from the keychain).

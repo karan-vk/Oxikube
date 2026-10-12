@@ -283,8 +283,6 @@ fn render_detail(light: bool) -> anyhow::Result<RgbaImage> {
             set_image: None,
             rollback: None,
             drain: None,
-            set_image: None,
-            rollback: None,
         };
         cx.new(|cx| DetailView::new(target, deps, Mount::Drawer, cx))
     })?;

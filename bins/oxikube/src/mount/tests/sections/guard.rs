@@ -47,6 +47,10 @@ const RISKS: &[(CommandId, Risk)] = &[
     // The manifest editor's apply (E10); a Secret's "Edit decoded" applies through it.
     (CommandId::RESOURCE_APPLY, Risk::Low),
     (CommandId::RESOURCE_DELETE, Risk::Medium),
+    // The bulk actions on a table's selection (E12-S19); a one-row selection is the row action.
+    (CommandId::SELECTION_DELETE, Risk::Medium),
+    (CommandId::SELECTION_LABEL, Risk::Medium),
+    (CommandId::SELECTION_RESTART, Risk::Low),
     (CommandId::STORAGECLASS_SET_DEFAULT, Risk::Low),
     (CommandId::WORKLOAD_RESTART, Risk::Low),
     (CommandId::WORKLOAD_ROLLBACK, Risk::Medium),
