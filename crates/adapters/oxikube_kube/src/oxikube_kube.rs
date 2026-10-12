@@ -57,9 +57,9 @@ pub mod warnings;
 mod fake_api;
 
 pub use algorithms::{
-    BlockReason, DrainOptions, DrainProgress, DrainSummary, PodRef, RolloutRevision, RolloutUndo,
-    SkipReason, drain, drain_to_completion, job_from_cronjob, plan_drain, rollout_history,
-    rollout_undo, trigger_cronjob,
+    BlockReason, DrainOptions, DrainProgress, DrainSummary, KubeDrain, PodRef, RolloutRevision,
+    RolloutUndo, SkipReason, drain, drain_to_completion, drain_with, job_from_cronjob, plan_drain,
+    rollout_history, rollout_undo, trigger_cronjob,
 };
 pub use budget::{
     BudgetConfig, BudgetedResources, ByteCounter, FeedLease, FeedRegistry, FeedRequest, FeedSource,

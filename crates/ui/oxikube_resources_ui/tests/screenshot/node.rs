@@ -100,6 +100,7 @@ fn render(light: bool) -> anyhow::Result<RgbaImage> {
             dispatcher: Rc::new(Ignore),
             exec: None,
             scale: None,
+            drain: None,
         };
         cx.new(|cx| DetailView::new(target, deps, Mount::Drawer, cx))
     })?;

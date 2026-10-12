@@ -34,14 +34,14 @@ fn nodes_kind() -> ResourceKind {
     }
 }
 
-fn node_name() -> String {
+pub(super) fn node_name() -> String {
     oxikube_testkit::fixtures::node_ready()
         .meta
         .name
         .to_string()
 }
 
-fn node_ref() -> ResourceRef {
+pub(super) fn node_ref() -> ResourceRef {
     ResourceRef::cluster_scoped(
         TestPorts::cluster_id(),
         Gvk::new("", "v1", "Node"),
@@ -51,7 +51,7 @@ fn node_ref() -> ResourceRef {
 
 impl App {
     /// The nodes table of the connected cluster's tab, the first row under the cursor.
-    fn open_nodes(&mut self) -> gpui::Entity<ResourceTable> {
+    pub(super) fn open_nodes(&mut self) -> gpui::Entity<ResourceTable> {
         self.serve([nodes_kind()]);
         self.ports
             .connector
@@ -91,7 +91,7 @@ impl App {
         })
     }
 
-    fn cluster_ports(&self) -> oxikube_testkit::FakeClusterPorts {
+    pub(super) fn cluster_ports(&self) -> oxikube_testkit::FakeClusterPorts {
         self.ports.connector.ports_for(&TestPorts::cluster_id())
     }
 

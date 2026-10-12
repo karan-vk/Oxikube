@@ -1,10 +1,29 @@
-//! The drain filters: which pods are evicted, skipped or refused.
+//! The drain filters (`kubectl drain`): which pods are evicted, skipped or refused.
 
 use oxikube_domain::Resource;
+use oxikube_domain::drain::{BlockReason, DrainOptions, DrainPlan, SkipReason, plan_drain};
 use serde_json::{Value, json};
 
-use super::harness::*;
-use crate::algorithms::{BlockReason, DrainOptions, SkipReason, plan_drain};
+fn object(value: Value) -> Resource {
+    Resource::from_json(value).expect("a valid object")
+}
+
+/// A Running pod on `node` in `default`, controlled by an `owner_kind` when given.
+fn pod_json(name: &str, node: &str, owner_kind: Option<&str>) -> Value {
+    let mut pod = json!({
+        "apiVersion": "v1", "kind": "Pod",
+        "metadata": {"name": name, "namespace": "default", "uid": format!("{name}-uid")},
+        "spec": {"nodeName": node, "containers": [{"name": "c", "image": "pause"}]},
+        "status": {"phase": "Running"},
+    });
+    if let Some(kind) = owner_kind {
+        pod["metadata"]["ownerReferences"] = json!([{
+            "apiVersion": "apps/v1", "kind": kind, "name": "owner",
+            "uid": "owner-uid", "controller": true,
+        }]);
+    }
+    pod
+}
 
 fn with(mut pod: Value, patch: Value) -> Resource {
     for (pointer, value) in patch.as_object().expect("patch") {
@@ -14,7 +33,7 @@ fn with(mut pod: Value, patch: Value) -> Resource {
     object(pod)
 }
 
-fn evicted(plan: &crate::algorithms::DrainPlan) -> Vec<&str> {
+fn evicted(plan: &DrainPlan) -> Vec<&str> {
     plan.evict.iter().map(|p| p.name.as_str()).collect()
 }
 
@@ -150,4 +169,78 @@ fn every_blocker_is_reported_not_only_the_first() {
     let plan = plan_drain(&pods, &DrainOptions::default());
     let reasons: Vec<_> = plan.blocked.iter().map(|b| b.reason).collect();
     assert_eq!(reasons, [BlockReason::Unmanaged, BlockReason::DaemonSet]);
+}
+
+/// One generated pod: its owner, whether it is a mirror pod, its phase and whether it mounts an
+/// `emptyDir`.
+fn generated(
+    i: usize,
+    owner: Option<&str>,
+    mirror: bool,
+    phase: &str,
+    empty_dir: bool,
+) -> Resource {
+    let mut pod = pod_json(&format!("p{i}"), "n1", owner);
+    pod["status"]["phase"] = json!(phase);
+    if mirror {
+        pod["metadata"]["annotations"] = json!({"kubernetes.io/config.mirror": "hash"});
+    }
+    if empty_dir {
+        pod["spec"]["volumes"] = json!([{"name": "scratch", "emptyDir": {}}]);
+    }
+    object(pod)
+}
+
+proptest::proptest! {
+    /// Whatever the pods and the flags, a DaemonSet pod is never evicted when DaemonSets are
+    /// ignored, a mirror pod never is, every pod lands in exactly one list, and a blocked plan is
+    /// one the flags could have unblocked.
+    #[test]
+    fn the_filter_never_evicts_daemonset_or_mirror_pods_when_told_to_skip(
+        pods in proptest::collection::vec(
+            (
+                proptest::option::of(proptest::sample::select(vec![
+                    "ReplicaSet", "DaemonSet", "StatefulSet", "Job",
+                ])),
+                proptest::bool::ANY,
+                proptest::sample::select(vec!["Pending", "Running", "Succeeded", "Failed"]),
+                proptest::bool::ANY,
+            ),
+            0..24,
+        ),
+        delete_emptydir_data in proptest::bool::ANY,
+        force in proptest::bool::ANY,
+    ) {
+        let pods: Vec<Resource> = pods
+            .iter()
+            .enumerate()
+            .map(|(i, (owner, mirror, phase, empty))| generated(i, *owner, *mirror, phase, *empty))
+            .collect();
+        let options = DrainOptions {
+            ignore_daemonsets: true,
+            delete_emptydir_data,
+            force,
+            ..DrainOptions::default()
+        };
+        let plan = plan_drain(&pods, &options);
+        proptest::prop_assert_eq!(
+            plan.evict.len() + plan.skipped.len() + plan.blocked.len(),
+            pods.len()
+        );
+        for pod in &pods {
+            let name = pod.name();
+            let evicted = plan.evict.iter().any(|p| p.name == name);
+            let mirror = pod.meta.annotations.contains_key("kubernetes.io/config.mirror");
+            let daemon = pod
+                .meta
+                .controller_ref()
+                .is_some_and(|owner| &*owner.kind == "DaemonSet");
+            proptest::prop_assert!(!(evicted && (mirror || daemon)), "{name} was evicted");
+        }
+        // With DaemonSets ignored, a DaemonSet pod never blocks; with every flag on, nothing does.
+        proptest::prop_assert!(plan.blocked.iter().all(|b| b.reason != BlockReason::DaemonSet));
+        if delete_emptydir_data && force {
+            proptest::prop_assert!(plan.blocked.is_empty());
+        }
+    }
 }

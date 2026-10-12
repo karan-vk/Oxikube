@@ -278,6 +278,27 @@ impl Harness {
         })
     }
 
+    /// The standard harness with the real `node::Drain` handler (E12-S10) over `port` in place of
+    /// the recording test one, and its [`NodeService`](crate::nodes::NodeService) writing to the
+    /// guard's audit log.
+    pub fn with_drain(
+        port: Arc<oxikube_testkit::FakeDrainPort>,
+    ) -> (Self, Arc<crate::nodes::NodeService>) {
+        let service = std::cell::OnceCell::new();
+        let h = Self::build(&[CommandId::NODE_DRAIN], |reg, _, manager| {
+            let node = Arc::new(crate::nodes::NodeService::new(
+                port,
+                manager.clone(),
+                Arc::new(FakeClockPort::default()),
+            ));
+            let _ = service.set(node.clone());
+            crate::nodes::register_drain_command(reg, node)
+        });
+        let service = service.into_inner().expect("registered");
+        assert!(service.set_audit(h.bus.guard().audit_handle()));
+        (h, service)
+    }
+
     /// The standard harness without the recording test handlers of `skip` (a real handler takes
     /// their place in `extra`), plus the commands `extra` registers.
     pub fn build(

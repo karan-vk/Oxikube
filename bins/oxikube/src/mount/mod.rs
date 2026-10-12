@@ -282,7 +282,15 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (help_sink, help_rx) = oxikube_palette::help::HelpSink::channel();
     let (editor_sink, editor_rx) = oxikube_editor::view::EditorViewSink::channel();
     let (metrics_sink, metrics_rx) = oxikube_settings_ui::metrics::MetricsRequestSink::channel();
+    // `node::Drain` (E12-S10): the kube adapter's `kubectl drain` behind the app's node service,
+    // shared by the bus's handler and the drain dialog of this window.
+    let nodes = Arc::new(oxikube_app::nodes::NodeService::new(
+        Arc::new(oxikube_kube::KubeDrain),
+        services.sessions.clone(),
+        ports.clusters.clock.clone(),
+    ));
     let registry = bus::build_registry(bus::BusParts {
+        nodes: nodes.clone(),
         cluster_commands: services.cluster_commands.clone(),
         namespaces: services.namespaces.clone(),
         sources: sources.clone(),
@@ -317,6 +325,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         }
     };
     let bus = CommandBus::new(registry, services.guard(&ports));
+    // The drain writes one audit record per pod on the guard's own log.
+    nodes.set_audit(bus.guard().audit_handle());
     // A node shell audits the end of its pod's life (the deletion) on the guard's own log.
     if exec_service.set_audit(bus.guard().audit_handle()) {
         // Once per app: the first window to mount sets the log.
@@ -344,7 +354,12 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
                         local_user(),
                         &logs::row_actions(),
                     )
-                    .with_exec(exec_service),
+                    .with_exec(exec_service)
+                    .with_drain(oxikube_app::nodes::DrainFlow::new(
+                        bus.clone(),
+                        nodes,
+                        local_user(),
+                    )),
                 ),
             },
             tabs: tabs.downgrade(),

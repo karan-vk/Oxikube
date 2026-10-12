@@ -16,7 +16,7 @@ use oxikube_workspace::command_surface::CommandSurface;
 use oxikube_workspace::{Toast, Workspace};
 
 use super::actions::{
-    AttachSelected, CordonSelected, DebugSelected, DeleteSelected, RestartSelected,
+    AttachSelected, CordonSelected, DebugSelected, DeleteSelected, DrainSelected, RestartSelected,
     RollbackSelected, ScaleSelected, SetImageSelected, ShellSelected, UncordonSelected,
 };
 use super::view::ResourceTable;
@@ -137,6 +137,11 @@ impl ResourceTable {
                     .clone()
                     .unwrap_or_else(gpui::WeakEntity::new_invalid);
                 actions.scale_flow(workspace).begin(target, window, cx);
+            }
+        } else if command == CommandId::NODE_DRAIN {
+            // The dialog asks for the flags and the typed name; it sends the command.
+            if let Some(target) = targets.into_iter().next() {
+                self.begin_drain(&actions, target, window, cx);
             }
         } else if matches!(
             command,
@@ -351,6 +356,42 @@ impl ResourceTable {
     ) {
         let targets = self.action_targets(cx);
         self.run_action(CommandId::NODE_UNCORDON, targets, window, cx);
+    }
+
+    /// `r` on the Nodes table (k9s): drain the cursor row's node, through the dialog.
+    pub(super) fn on_drain(
+        &mut self,
+        _: &DrainSelected,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let targets = self.action_targets(cx);
+        self.run_action(CommandId::NODE_DRAIN, targets, window, cx);
+    }
+
+    /// Opens the drain dialog for `target` in this table's workspace.
+    fn begin_drain(
+        &mut self,
+        actions: &ResourceActions,
+        target: ResourceRef,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let (Some(flow), Some(workspace)) = (actions.drain_flow(), self.workspace.clone()) else {
+            self.toast(
+                Toast::warning("Drain is not available in this window.").key("drain-unavailable"),
+                cx,
+            );
+            return;
+        };
+        crate::kinds::node::drain::open_drain(
+            &workspace,
+            flow.clone(),
+            self.deps.dispatcher.clone(),
+            target,
+            window,
+            cx,
+        );
     }
 
     pub(super) fn on_debug(

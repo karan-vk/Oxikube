@@ -187,6 +187,30 @@ impl ClientPool {
         &self.config
     }
 
+    /// A new pool over the same kubeconfig, client factory and clock whose clients never retry
+    /// (`RetryMode::Disabled`). Empty: its clients are built on first use, like this one's.
+    ///
+    /// Evictions need it: a PodDisruptionBudget refuses one with HTTP 429, which the default
+    /// client retries for minutes before the caller sees it (see
+    /// [`KubeResources::with_unretried_pool`](crate::KubeResources::with_unretried_pool)).
+    pub fn without_retries(&self) -> Self {
+        let (kubeconfig, in_cluster) = {
+            let state = self.state.lock();
+            (state.kubeconfig.clone(), state.in_cluster.clone())
+        };
+        let pool = Self::with_parts(
+            kubeconfig,
+            PoolConfig {
+                retry: RetryMode::Disabled,
+                ..self.config.clone()
+            },
+            self.factory.clone(),
+            self.clock.clone(),
+        );
+        pool.state.lock().in_cluster = in_cluster;
+        pool
+    }
+
     /// The client for `context`, built on first use and shared afterwards.
     ///
     /// Errors: [`NotFound`](oxikube_domain::ErrorKind::NotFound) when the context is

@@ -31,14 +31,14 @@ use serde_json::json;
 use crate::clock::TokioClock;
 use crate::cluster::{Kind, catalog_entry};
 
-/// A Node no kubelet backs, deleted (best effort) when dropped.
-struct FakeNode {
+/// A Node no kubelet backs, deleted (best effort) when dropped. Shared with `drain`.
+pub(crate) struct FakeNode {
     context: String,
-    name: String,
+    pub(crate) name: String,
 }
 
 impl FakeNode {
-    async fn create(client: &kube::Client, context: &str, name: String) -> Self {
+    pub(crate) async fn create(client: &kube::Client, context: &str, name: String) -> Self {
         let node: Node = serde_json::from_value(json!({
             "apiVersion": "v1", "kind": "Node",
             "metadata": {"name": name},
@@ -66,11 +66,11 @@ impl Drop for FakeNode {
     }
 }
 
-fn node_ref(cluster: &ClusterId, name: &str) -> ResourceRef {
+pub(crate) fn node_ref(cluster: &ClusterId, name: &str) -> ResourceRef {
     ResourceRef::cluster_scoped(cluster.clone(), Gvk::new("", "v1", "Node"), name)
 }
 
-async fn unschedulable(client: &kube::Client, name: &str) -> Option<bool> {
+pub(crate) async fn unschedulable(client: &kube::Client, name: &str) -> Option<bool> {
     Api::<Node>::all(client.clone())
         .get(name)
         .await

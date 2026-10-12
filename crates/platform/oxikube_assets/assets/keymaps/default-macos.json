@@ -280,10 +280,13 @@
     // k9s node verbs (E12-S09): c cordons and u uncordons the cursor row's node. Scoped to
     // `kind == Node` so the keys stay free for other kinds (u is "used by" on ConfigMaps, Secrets
     // and ServiceAccounts). Both ask for one click and are blocked on a read-only cluster.
+    // `r` drains the node (E12-S10, k9s's verb): it opens the drain dialog (options, the plan,
+    // the node's name typed); `r` restarts on the workload kinds instead.
     "context": "ResourceTable && !Editing && kind == Node",
     "bindings": {
       "c": "resource_table::CordonSelected",
-      "u": "resource_table::UncordonSelected"
+      "u": "resource_table::UncordonSelected",
+      "r": "resource_table::DrainSelected"
     }
   },
   {

@@ -1,12 +1,12 @@
 //! One pod of a drain: evict it, back off while a budget refuses, wait until it is gone.
 
 use futures::channel::mpsc::UnboundedSender;
+use oxikube_domain::drain::{DrainOptions, DrainProgress, PodRef};
 use oxikube_domain::{ErrorKind, OxiError, OxiResult};
-use oxikube_ports::{DeleteOptions, Preconditions, ResourcePort};
+use oxikube_ports::{DeleteOptions, Preconditions, ResourceReader, ResourceWriter};
 use tokio::time::{Instant, sleep};
 use tracing::debug;
 
-use super::options::{DrainOptions, DrainProgress, PodRef};
 use crate::algorithms::api::pod_gvk;
 use crate::subresource::eviction_blocked;
 
@@ -16,7 +16,8 @@ pub(super) type Events = UnboundedSender<OxiResult<DrainProgress>>;
 
 /// What every pod of one drain shares.
 pub(super) struct Shared<'a> {
-    pub(super) port: &'a dyn ResourcePort,
+    pub(super) reader: &'a dyn ResourceReader,
+    pub(super) writer: &'a dyn ResourceWriter,
     pub(super) options: &'a DrainOptions,
     pub(super) deadline: Instant,
     pub(super) events: &'a Events,
@@ -59,7 +60,7 @@ async fn run(shared: &Shared<'_>, pod: &PodRef) -> Result<(), String> {
             attempt,
         });
         let evicted = shared
-            .port
+            .writer
             .evict(&pod.namespace, &pod.name, &delete_options(pod, options))
             .await;
         match evicted {
@@ -119,7 +120,7 @@ async fn wait_until_gone(shared: &Shared<'_>, pod: &PodRef) -> Result<(), String
 /// Whether the pod is missing or is now another object (a different uid).
 async fn is_gone(shared: &Shared<'_>, pod: &PodRef) -> OxiResult<bool> {
     let live = shared
-        .port
+        .reader
         .get_opt(&pod_gvk(), Some(&pod.namespace), &pod.name)
         .await?;
     Ok(match (live, &pod.uid) {

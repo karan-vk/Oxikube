@@ -20,7 +20,8 @@
 //! (All, or the nth favourite) for every table: see `namespaces`.
 //!
 //! `c` cordons and `u` uncordons the cursor row's node (E12-S09), bound in a section scoped to
-//! `kind == Node` so `u` stays free for "used by" on the kinds that get it (#397).
+//! `kind == Node` so `u` stays free for "used by" on the kinds that get it (#397); `r` drains it
+//! (E12-S10) through the drain dialog, in the same section (`r` restarts on workloads).
 //!
 //! The k9s verbs of E11-S07 live next to them: `y` shows the YAML, `d` describes, `e` edits, `l`
 //! opens the logs, `shift-f` forwards a port, `f` lists the forwards and `ctrl-w` toggles the wide
@@ -105,6 +106,9 @@ actions!(
         CordonSelected,
         /// Uncordon the cursor row's node (`node::Uncordon`; k9s's `u` on Nodes).
         UncordonSelected,
+        /// Drain the cursor row's node (`node::Drain`; k9s's `r` on Nodes): opens the drain dialog
+        /// (options, plan, typed name, progress).
+        DrainSelected,
         /// Show the cursor row's YAML in the detail drawer (`resource::ViewYaml`; k9s's `y`).
         ViewYaml,
         /// Show the cursor row's `kubectl describe` text in the detail drawer

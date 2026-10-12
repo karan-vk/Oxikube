@@ -1,7 +1,10 @@
 //! The drain's inputs and outputs: options, the plan's pod types and the progress events.
 
 use std::fmt;
+use std::sync::Arc;
 use std::time::Duration;
+
+use crate::ids::{ClusterId, Gvk, ResourceRef};
 
 /// How a drain behaves. [`Default`] is `kubectl drain` with no flags, plus a bounded wait.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,6 +65,18 @@ pub struct PodRef {
     pub uid: Option<String>,
 }
 
+impl PodRef {
+    /// The pod as a [`ResourceRef`] on `cluster` (what an audit record names).
+    pub fn resource_ref(&self, cluster: &ClusterId) -> ResourceRef {
+        ResourceRef::namespaced(
+            cluster.clone(),
+            Gvk::new("", "v1", "Pod"),
+            Arc::<str>::from(self.namespace.as_str()),
+            self.name.as_str(),
+        )
+    }
+}
+
 impl fmt::Display for PodRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}/{}", self.namespace, self.name)
@@ -75,6 +90,16 @@ pub enum SkipReason {
     Mirror,
     /// Managed by a DaemonSet, and the drain ignores those.
     DaemonSet,
+}
+
+impl SkipReason {
+    /// Why the pod is left alone, in words for a list.
+    pub fn explain(self) -> &'static str {
+        match self {
+            Self::Mirror => "mirror pod of a static pod (the kubelet owns it)",
+            Self::DaemonSet => "managed by a DaemonSet (ignored)",
+        }
+    }
 }
 
 /// Why a pod stops the drain before anything is changed.
@@ -95,6 +120,24 @@ impl BlockReason {
             Self::DaemonSet => "is managed by a DaemonSet (ignore_daemonsets skips it)",
             Self::LocalStorage => "uses emptyDir storage (delete_emptydir_data evicts it)",
             Self::Unmanaged => "is not managed by a controller (force evicts it)",
+        }
+    }
+
+    /// What is true of such a pod, in a few words for a list.
+    pub fn summary(self) -> &'static str {
+        match self {
+            Self::DaemonSet => "managed by a DaemonSet",
+            Self::LocalStorage => "uses emptyDir storage, which is lost",
+            Self::Unmanaged => "no controller recreates it",
+        }
+    }
+
+    /// The `kubectl drain` flag that lets the drain past such a pod.
+    pub fn flag(self) -> &'static str {
+        match self {
+            Self::DaemonSet => "--ignore-daemonsets",
+            Self::LocalStorage => "--delete-emptydir-data",
+            Self::Unmanaged => "--force",
         }
     }
 }

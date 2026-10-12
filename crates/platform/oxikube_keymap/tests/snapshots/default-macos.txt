@@ -139,6 +139,7 @@
   s                resource_table::ScaleSelected
 [ResourceTable && !Editing && kind == Node]
   c                resource_table::CordonSelected
+  r                resource_table::DrainSelected
   u                resource_table::UncordonSelected
 [ResourceTable && !Editing && kind == Secret]
   shift-e          resource_table::EditDecodedSelected

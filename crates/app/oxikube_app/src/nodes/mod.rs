@@ -1,4 +1,5 @@
-//! Nodes (E12-S09): cordon and uncordon, the node table's columns, and the pods on a node.
+//! Nodes (E12-S09): cordon and uncordon, the node table's columns, and the pods on a node; drain
+//! (E12-S10).
 //!
 //! | File | Holds |
 //! |---|---|
@@ -7,6 +8,7 @@
 //! | `columns` | [`NodeColumns`]: the node table's columns (Pods from the pods-by-node index), [`node_columns`] |
 //! | `usage` | [`NodeUsageSource`], [`NodeUsage`]: the CPU, Mem, CPU% and Mem% cells, from E13's metrics |
 //! | `pods` | [`list_node_pods`]: the field-selector fallback behind the detail when the Pod feed is not active |
+//! | `drain` | [`NodeService`], [`register_drain_command`], [`DrainFlow`]: `node::Drain` (`kubectl drain` through the guard, per-pod audit, progress for the dialog; see the module) |
 //!
 //! # Cordon and uncordon
 //!
@@ -30,6 +32,7 @@
 
 mod columns;
 mod commands;
+mod drain;
 mod pods;
 mod service;
 mod usage;
@@ -39,6 +42,10 @@ mod tests;
 
 pub use columns::{NodeColumns, node_columns};
 pub use commands::register_commands;
+pub use drain::{
+    DrainContext, DrainFlow, DrainMonitor, DrainReport, DrainStart, NodeService,
+    register_drain_command,
+};
 pub use pods::{NodePods, list_node_pods};
 pub use service::{NodeOutcome, set_unschedulable};
 pub use usage::{NodeUsage, NodeUsageSource};

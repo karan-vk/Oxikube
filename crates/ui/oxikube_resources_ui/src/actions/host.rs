@@ -70,6 +70,8 @@ pub struct ResourceActions {
     /// (E12-S06).
     rollouts: Arc<RolloutService>,
     rollback: RollbackRunner,
+    /// The drain dialog's flow (E12-S10); `None` until the app gives one.
+    drain: Option<oxikube_app::nodes::DrainFlow>,
 }
 
 impl ResourceActions {
@@ -116,7 +118,21 @@ impl ResourceActions {
             rollouts: Arc::new(RolloutService::new(sessions.clone())),
             storage: StorageFlows::new(bus, &sessions, &who),
             namespace_creator: NamespaceCreator::new(bus.clone(), who),
+            drain: None,
         }
+    }
+
+    /// Lets "Drain…" open the drain dialog over `flow` (the app's `NodeService`, on the same
+    /// bus). Without it the action says it is not available here.
+    #[must_use]
+    pub fn with_drain(mut self, flow: oxikube_app::nodes::DrainFlow) -> Self {
+        self.drain = Some(flow);
+        self
+    }
+
+    /// The drain dialog's flow, if one was given.
+    pub fn drain_flow(&self) -> Option<&oxikube_app::nodes::DrainFlow> {
+        self.drain.as_ref()
     }
 
     /// Deletes `n` objects at a time (at least one; the default is a few). One makes the requests

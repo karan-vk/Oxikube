@@ -437,6 +437,9 @@ pub fn audit_detail(command: &Command) -> Option<String> {
         Command::StorageClassSetDefault { clear_previous, .. } => {
             return Some(format!("clear_previous={clear_previous}"));
         }
+        // The flags (names and numbers); the handler adds the batch id the per-pod records share
+        // and, at the end, the counts.
+        Command::NodeDrain { flags, .. } => return Some(flags.audit_words()),
         _ => {}
     }
     if let Command::WorkloadSetImage { images, .. } = command {

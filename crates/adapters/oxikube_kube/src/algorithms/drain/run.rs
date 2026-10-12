@@ -4,14 +4,15 @@ use std::sync::Arc;
 
 use futures::channel::mpsc;
 use futures::{FutureExt as _, Stream, StreamExt as _, future, stream};
+use oxikube_domain::drain::{
+    DrainOptions, DrainPlan, DrainProgress, DrainSummary, PodRef, plan_drain,
+};
 use oxikube_domain::{OxiError, OxiResult, Resource};
-use oxikube_ports::{ListOptions, ResourcePort, WriteOptions};
+use oxikube_ports::{ListOptions, ResourcePort, ResourceReader, ResourceWriter, WriteOptions};
 use tokio::time::Instant;
 use tracing::debug;
 
 use super::evict::{Events, Shared, emit, evict_and_wait};
-use super::options::{DrainOptions, DrainPlan, DrainProgress, DrainSummary, PodRef};
-use super::plan::plan_drain;
 use crate::algorithms::api::{list_all, node_gvk, pod_gvk};
 use crate::subresource::ResourcePatch;
 
@@ -46,10 +47,26 @@ pub fn drain(
     node: impl Into<String>,
     options: DrainOptions,
 ) -> impl Stream<Item = OxiResult<DrainProgress>> + Send + 'static {
+    drain_with(port.clone(), port, node, options)
+}
+
+/// [`drain`] reading through `reader` and writing (the cordon, the evictions) through `writer`:
+/// what [`KubeDrain`](crate::KubeDrain) runs, with the session's reader and the guard's gated
+/// writer.
+pub fn drain_with(
+    reader: Arc<dyn ResourceReader>,
+    writer: Arc<dyn ResourceWriter>,
+    node: impl Into<String>,
+    options: DrainOptions,
+) -> impl Stream<Item = OxiResult<DrainProgress>> + Send + 'static {
     let node = node.into();
     let (events, progress) = mpsc::unbounded();
     let work = async move {
-        if let Err(error) = execute(&*port, &node, &options, &events).await {
+        let cluster = Cluster {
+            reader: &*reader,
+            writer: &*writer,
+        };
+        if let Err(error) = execute(cluster, &node, &options, &events).await {
             let _ = events.unbounded_send(Err(error));
         }
     };
@@ -89,14 +106,21 @@ where
     Err(OxiError::internal("the drain ended without a result"))
 }
 
+/// The two halves the drain works through.
+#[derive(Clone, Copy)]
+struct Cluster<'a> {
+    reader: &'a dyn ResourceReader,
+    writer: &'a dyn ResourceWriter,
+}
+
 async fn execute(
-    port: &dyn ResourcePort,
+    cluster: Cluster<'_>,
     node: &str,
     options: &DrainOptions,
     events: &Events,
 ) -> OxiResult<()> {
-    let node_object = port.get(&node_gvk(), None, node).await?;
-    let pods = pods_on(port, node).await?;
+    let node_object = cluster.reader.get(&node_gvk(), None, node).await?;
+    let pods = pods_on(cluster.reader, node).await?;
     let plan = plan_drain(&pods, options);
     if !plan.blocked.is_empty() {
         return Err(blocked_error(node, &plan));
@@ -120,14 +144,16 @@ async fn execute(
     let already = node_object.get_bool("/spec/unschedulable") == Some(true);
     if !already {
         debug!(op = "drain_cordon", node, "algorithm");
-        port.patch(
-            &node_gvk(),
-            None,
-            node,
-            &ResourcePatch::Cordon.to_patch(),
-            &WriteOptions::default(),
-        )
-        .await?;
+        cluster
+            .writer
+            .patch(
+                &node_gvk(),
+                None,
+                node,
+                &ResourcePatch::Cordon.to_patch(),
+                &WriteOptions::default(),
+            )
+            .await?;
     }
     announce(DrainProgress::Cordoned { already });
 
@@ -137,7 +163,7 @@ async fn execute(
     let plan = if already {
         plan
     } else {
-        let pods = pods_on(port, node).await?;
+        let pods = pods_on(cluster.reader, node).await?;
         let replan = plan_drain(&pods, options);
         if !replan.blocked.is_empty() {
             return Err(blocked_error(node, &replan));
@@ -153,7 +179,8 @@ async fn execute(
     };
 
     let shared = Shared {
-        port,
+        reader: cluster.reader,
+        writer: cluster.writer,
         options,
         deadline: Instant::now() + options.timeout,
         events,
@@ -176,7 +203,7 @@ async fn execute(
 }
 
 /// Every pod on `node`, across namespaces.
-async fn pods_on(port: &dyn ResourcePort, node: &str) -> OxiResult<Vec<Resource>> {
+async fn pods_on(port: &dyn ResourceReader, node: &str) -> OxiResult<Vec<Resource>> {
     let options = ListOptions::default()
         .fields(format!("spec.nodeName={node}"))
         .limit(PAGE);

@@ -43,7 +43,7 @@ fn every_initiator_gets_the_same_read_only_block() {
             pod_delete("a", "web-0"),
             Command::NodeDrain {
                 target: node("a", "worker-1"),
-                force: false,
+                flags: oxikube_domain::drain::DrainFlags::default(),
             },
         ] {
             let err = h.dispatch(cmd, ctx(initiator)).unwrap_err();

@@ -10,10 +10,10 @@
 //!
 //! | Piece | Where |
 //! |---|---|
-//! | [`DrainOptions`], [`DrainProgress`], [`DrainSummary`] and the pod types | `options` |
-//! | [`plan_drain`]: which pods are evicted, skipped or block the drain | `plan` |
+//! | [`DrainOptions`], [`DrainProgress`], [`DrainSummary`] and the pod types, [`plan_drain`] (which pods are evicted, skipped or block the drain) | `oxikube_domain::drain` (pure, shared with the app and the UI; E12-S10) |
 //! | one pod: evict, retry on a budget, wait for it to go | `evict` |
-//! | [`drain`]: the stream; [`drain_to_completion`]: await it | `run` |
+//! | [`drain`] / [`drain_with`]: the stream; [`drain_to_completion`]: await it | `run` |
+//! | [`KubeDrain`]: the `DrainPort` the app drains through (E12-S10) | `port` |
 //!
 //! # Differences from kubectl
 //!
@@ -32,13 +32,12 @@
 //! Dropping the stream stops the drain: nothing runs in the background. The node stays cordoned.
 
 mod evict;
-mod options;
-mod plan;
+mod port;
 mod run;
 
-pub use options::{
+pub use oxikube_domain::drain::{
     BlockReason, BlockedPod, DrainOptions, DrainPlan, DrainProgress, DrainSummary, PodRef,
-    SkipReason, SkippedPod,
+    SkipReason, SkippedPod, plan_drain,
 };
-pub use plan::plan_drain;
-pub use run::{drain, drain_to_completion};
+pub use port::KubeDrain;
+pub use run::{drain, drain_to_completion, drain_with};

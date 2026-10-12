@@ -1,7 +1,7 @@
 //! Which pods a drain evicts, skips or refuses: kubectl's drain filters, as a pure function.
 
-use oxikube_domain::Resource;
-use oxikube_domain::json::JsonRef;
+use crate::Resource;
+use crate::json::JsonRef;
 
 use super::options::{
     BlockReason, BlockedPod, DrainOptions, DrainPlan, PodRef, SkipReason, SkippedPod,

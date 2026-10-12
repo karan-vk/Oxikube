@@ -56,6 +56,8 @@ pub const STANDS_FOR: &[(&str, CommandId)] = &[
         "resource_table::RollbackSelected",
         CommandId::WORKLOAD_ROLLBACK,
     ),
+    // `r` on the Nodes table (E12-S10): the drain dialog.
+    ("resource_table::DrainSelected", CommandId::NODE_DRAIN),
     ("resource_table::DebugSelected", CommandId::POD_DEBUG),
     ("resource_table::ViewYaml", CommandId::RESOURCE_VIEW_YAML),
     (

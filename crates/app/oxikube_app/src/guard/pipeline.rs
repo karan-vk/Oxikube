@@ -101,6 +101,9 @@ impl MutationGuard {
         )
         .with_audit(self.audit.clone());
         let note = cx.audit_note_slot();
+        // A handler dropped mid-way (a cancelled drain) still leaves what it noted on the
+        // `Cancelled` record.
+        let attempt = attempt.with_note_slot(note.clone());
         let result = handler.handle(command, cx).await;
 
         let note = note.lock().ok().and_then(|mut slot| slot.take());

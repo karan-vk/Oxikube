@@ -21,6 +21,7 @@
 //! | [`CrashReporterPort`] | [`crash`] | `oxikube_crash` |
 //! | [`FsPort`] | [`fs`] | `oxikube_runtime` (std fs) or the testkit fake |
 //! | [`ClockPort`] | [`clock`] | `oxikube_runtime` (system clock) or `FakeClockPort` |
+//! | [`DrainPort`] (`kubectl drain` over a reader and the guard's writer, E12-S10) | [`drain`] | `oxikube_kube::KubeDrain` |
 //!
 //! Every trait is declared with `#[async_trait]` and is object-safe, so the app
 //! holds them as `Arc<dyn Port>`. Every fallible method returns
@@ -98,6 +99,7 @@ pub mod context;
 pub mod crash;
 pub mod describe;
 pub mod discovery;
+pub mod drain;
 pub mod exec;
 pub mod feed;
 pub mod feed_stats;
@@ -151,6 +153,7 @@ pub use describe::{DescribeOutput, DescribePort, DescribeSource};
 pub use discovery::{
     CrdWatchStatus, DiscoveryEvent, DiscoveryEvents, DiscoveryPort, KindsChange, ServerVersion,
 };
+pub use drain::{DrainPort, DrainStream};
 pub use exec::{
     AttachTarget, BackendEvent, DEFAULT_NODE_SHELL_IMAGE, DEFAULT_NODE_SHELL_NAMESPACE,
     DEFAULT_NSENTER_ARGS, DebugContainerSpec, ExecOptions, ExecPort, ExecSession, ExecStreamPort,
@@ -231,6 +234,7 @@ mod tests {
         warnings: Arc<dyn WarningPort>,
         health: Arc<dyn HealthReporter>,
         schema: Arc<dyn SchemaPort>,
+        drain: Arc<dyn DrainPort>,
     }
 
     /// Ports must be shareable across threads: `Arc<dyn Port>` is `Send + Sync`.
@@ -257,6 +261,7 @@ mod tests {
         assert_send_sync::<dyn ClusterConnectorPort>();
         assert_send_sync::<dyn AccessReviewPort>();
         assert_send_sync::<dyn SchemaPort>();
+        assert_send_sync::<dyn DrainPort>();
         assert_send_sync::<ClusterPorts>();
         assert_send_sync::<ClusterConnection>();
     }
@@ -264,7 +269,7 @@ mod tests {
     /// Every port's source file must name the adapter expected to implement it.
     #[test]
     fn every_port_docs_name_an_adapter() {
-        let ports: [(&str, &str, &str); 19] = [
+        let ports: [(&str, &str, &str); 20] = [
             (
                 "cluster_source",
                 include_str!("cluster_source.rs"),
@@ -300,6 +305,7 @@ mod tests {
             ("connector", include_str!("connector.rs"), "oxikube_kube"),
             ("access", include_str!("access.rs"), "oxikube_kube"),
             ("schema", include_str!("schema.rs"), "oxikube_kube::openapi"),
+            ("drain", include_str!("drain.rs"), "oxikube_kube::KubeDrain"),
         ];
         for (module, source, adapter) in ports {
             let docs: String = source

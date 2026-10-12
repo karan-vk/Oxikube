@@ -11,12 +11,13 @@ use super::panel::NodePanel;
 use crate::kinds::{DetailRenderer, KindSpec};
 use crate::metrics::MetricsSlot;
 
-/// A node's own actions: a shell on it (E09-S09), cordon and uncordon (E12-S09). Drain arrives
-/// with E12-S10.
-const NODE_ACTIONS: [CommandId; 3] = [
+/// A node's own actions: a shell on it (E09-S09), cordon and uncordon (E12-S09), drain
+/// (E12-S10).
+const NODE_ACTIONS: [CommandId; 4] = [
     CommandId::NODE_SHELL,
     CommandId::NODE_CORDON,
     CommandId::NODE_UNCORDON,
+    CommandId::NODE_DRAIN,
 ];
 
 /// The Nodes spec: its sidebar slot, a column provider per cluster (CPU% and Mem% from the

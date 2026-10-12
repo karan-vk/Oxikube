@@ -53,6 +53,7 @@
 //! | `AccessReviewPort` | [`FakeAccessReviewPort`] |
 //! | `WarningPort` | [`FakeWarningPort`] |
 //! | `SchemaPort` | [`FakeSchemaPort`] |
+//! | `DrainPort` | [`FakeDrainPort`] (scripted [`DrainRun`]s) |
 
 /// Implements `script()`, `recorded_calls()` and `clear_calls()` for a fake with fields
 /// `script: $scripts` and `calls: CallLog<$call>`.
@@ -81,6 +82,7 @@ mod agent;
 mod clock;
 mod cluster;
 mod data;
+mod drain;
 mod infra;
 mod integration;
 mod merge;
@@ -107,6 +109,7 @@ pub use data::{
     DiscoveryCall, DiscoveryScripts, FakeDiscoveryPort, FakeLogPort, FakeTableFeedPort, LogCall,
     LogScripts, TableCall, TableScripts,
 };
+pub use drain::{DrainCall, DrainRun, DrainScripts, FakeDrainPort};
 pub use infra::{
     CrashCall, CrashScripts, DescribeCall, DescribeScripts, FakeCrashReporterPort,
     FakeDescribePort, FakeHelmPort, FakeMetricsPort, FakeNotifierPort, FakePromqlPort,
