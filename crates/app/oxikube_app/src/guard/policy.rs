@@ -82,6 +82,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::NamespaceCreate { cluster, .. }
         | Command::ClusterSetColour { cluster, .. }
         | Command::ClusterShowMetricsSettings { cluster }
+        | Command::ClusterShowPulses { cluster }
         | Command::ClusterRedetectMetrics { cluster }
         | Command::ClusterToggleMetrics { cluster, .. }
         | Command::ClusterApplyPreset { cluster, .. }

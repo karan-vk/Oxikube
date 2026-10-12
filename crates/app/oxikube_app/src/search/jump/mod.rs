@@ -1,5 +1,5 @@
 //! The `:` jump bar's grammar, parser and planner (E11-S05): `:pods`, `:deploy kube-system`,
-//! `:pod /re`, `:pod app=x @prod`, `:ctx prod`, `:ns`, `:q`.
+//! `:pod /re`, `:pod app=x @prod`, `:ctx prod`, `:ns`, `:pulses`, `:q`.
 //!
 //! | Module | Holds |
 //! |---|---|
@@ -14,6 +14,7 @@
 //! ```text
 //! :<alias> [ns] [/filter] [k=v,..] [@ctx]     a resource list
 //! :ctx [name]     :ns [name]     :q           context, namespaces, quit
+//! :pulses (:pulse, :pu)                        the cluster's pulses page (E13-S10)
 //! :-   :[   :]                                 history
 //! ```
 //!

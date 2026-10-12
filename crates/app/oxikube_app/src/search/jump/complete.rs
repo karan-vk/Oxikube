@@ -1,7 +1,7 @@
 //! Completion for the bar: which word is being typed ([`site`]) and what could stand for it
 //! ([`candidates`]).
 //!
-//! The first word offers the aliases of the cluster and the reserved words (`ctx`, `ns`, `q`);
+//! The first word offers the aliases of the cluster and the reserved words (`ctx`, `ns`, `pulses`, `q`);
 //! the second, the namespaces of the cluster (after `ctx`, the contexts); a word after `@`, the
 //! contexts. Ranking by closeness to what is typed is the picker's (`oxikube_palette`), which
 //! matches off the UI thread above a few hundred candidates; this module only says what the
@@ -74,7 +74,9 @@ pub fn site(line: &str) -> CompletionSite {
     match head.as_str() {
         "ctx" | "context" if index == 1 => with(Slot::Context, partial, span),
         "ns" if index == 1 => with(Slot::Namespace, partial, span),
-        "q" | "quit" | "-" | "[" | "]" | "ctx" | "context" | "ns" => nothing(span),
+        "q" | "quit" | "-" | "[" | "]" | "ctx" | "context" | "ns" | "pulses" | "pulse" | "pu" => {
+            nothing(span)
+        }
         _ => {
             let is_flag = |text: &str| text.strip_prefix('/').is_some_and(takes_operand);
             // The word right after `/-l` is the filter's operand, not a namespace.
@@ -126,9 +128,10 @@ pub fn candidates(slot: Slot, env: &dyn JumpEnv) -> Vec<Candidate> {
     }
 }
 
-const RESERVED: [(&str, &str); 3] = [
+const RESERVED: [(&str, &str); 4] = [
     ("ctx", "switch the cluster context"),
     ("ns", "namespaces"),
+    ("pulses", "gauges and history per kind"),
     ("q", "quit"),
 ];
 

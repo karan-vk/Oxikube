@@ -28,6 +28,7 @@ mod node_actions;
 mod node_drain;
 mod node_shell;
 mod palette;
+mod pulses;
 mod resources;
 mod rollback;
 mod rollout;

@@ -15,6 +15,7 @@
 //! | `:ctx` | `view::Open { catalog }` |
 //! | `:ctx prod` | `cluster::Select { prod }` (or `cluster::Connect`) |
 //! | `:ns` | `resource::OpenList { Namespace }` |
+//! | `:pulses` | `cluster::ShowPulses` (E13-S10) |
 //! | `:ns kube-system` | `namespace::Select { [kube-system] }` |
 //! | `:q` | `app::Quit` (which asks first while operations are running) |
 //! | `-`, `[`, `]` | `jump::Last`, `jump::Back`, `jump::Forward` |
@@ -110,6 +111,7 @@ fn resolve_at(
         JumpCommand::Resource(resource) => resource_plan(resource, env, depth)?,
         JumpCommand::Ctx(name) => ctx_plan(name.as_ref(), env)?,
         JumpCommand::Ns(name) => ns_plan(name.as_ref(), env)?,
+        JumpCommand::Pulses => pulses_plan(env)?,
         JumpCommand::Quit => JumpPlan::now(vec![Command::AppQuit]),
         JumpCommand::History(step) => JumpPlan::now(vec![match step {
             HistoryStep::Last => Command::JumpLast,
@@ -318,6 +320,14 @@ fn ctx_plan(name: Option<&Spanned<String>>, env: &dyn JumpEnv) -> Result<JumpPla
         context.cluster.clone(),
         Vec::new(),
     ))
+}
+
+/// `:pulses`
+fn pulses_plan(env: &dyn JumpEnv) -> Result<JumpPlan, ParseError> {
+    let cluster = env
+        .active_cluster()
+        .ok_or_else(|| no_cluster(Span::default()))?;
+    Ok(JumpPlan::now(vec![Command::ClusterShowPulses { cluster }]))
 }
 
 /// `:ns [name]`

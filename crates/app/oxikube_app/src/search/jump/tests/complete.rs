@@ -70,6 +70,7 @@ fn aliases_are_the_clusters_names_plus_the_reserved_words() {
         "deploy",
         "ctx",
         "ns",
+        "pulses",
         "q",
         "certs",
         "certificates.cert-manager.io",

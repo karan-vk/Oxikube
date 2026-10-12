@@ -123,9 +123,10 @@ pub use kinds::{
     KindVisibility, RegisterKindError, Section, ServedKinds, SidebarSlot, SidebarTree,
 };
 pub use metrics::{
-    ClusterUsage, GpuVendorsHandle, LiveMetricsConfig, LiveMetricsConfigTable, MetricsInterest,
-    MetricsKind, MetricsService, MetricsState, MetricsVisibility, NamespaceAllocation,
-    NodeAllocation, UtilisationAggregator, allocate_namespaces, allocate_nodes,
+    ClusterUsage, ClusterUtilisation, GpuVendorsHandle, LiveMetricsConfig, LiveMetricsConfigTable,
+    MetricsInterest, MetricsKind, MetricsService, MetricsState, MetricsVisibility,
+    NamespaceAllocation, NodeAllocation, ResourceUse, UtilisationAggregator, allocate_namespaces,
+    allocate_nodes, cluster_utilisation,
 };
 pub use metrics_history::{
     ChartData, ChartDef, HistoryAvailability, HistoryError, HistorySubject, MetricsHistoryService,
@@ -164,8 +165,9 @@ pub use storage::{
     ResizeContext, ResizeFlow, ResizeReport,
 };
 pub use store::{
-    BucketCounts, CountState, CountTarget, CountsLease, KindCount, ResourceStore, ResourceStores,
-    StoreDelta, StoreQuery, Subscription, WorkloadCounters,
+    BucketCounts, CORE_TARGETS, CoreTarget, CountState, CountTarget, CountsLease, FetchedCount,
+    KindCount, ResourceStore, ResourceStores, StoreDelta, StoreQuery, Subscription, WorkloadCounters,
+    fetch_count,
 };
 pub use templates::{
     Prefill, SkippedTemplate, Template, TemplateCatalog, TemplateOrigin, TemplateService,

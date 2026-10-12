@@ -11,6 +11,7 @@
 //! | [`UtilisationAggregator`] | the entry point: nodes, namespaces and pods, using the GPU vendor list of the cluster at the time of the call |
 //! | [`GpuVendorsHandle`] | the hot-reloadable `metrics.gpu_vendors` table the aggregator reads (the binary pushes settings changes into it) |
 //! | [`NodeAllocation`] | one node: allocatable, the requests and limits of the pods on it, pod count |
+//! | [`cluster_utilisation`] (E13-S10) | the cluster's CPU and memory use against the nodes' allocatable, with its history from the per-node rings: the pulses gauges |
 //! | [`NamespaceAllocation`] | one namespace: pod count, requests and limits, compared with a quota's `hard` amounts |
 //! | [`live`] (E13-S03) | [`MetricsService`]: live CPU and memory from metrics-server, polled per cluster while someone looks, kept per node and pod in [`ClusterUsage`] (the metrics columns' source) |
 //!
@@ -32,6 +33,7 @@
 //! call it there), never in a frame.
 
 mod aggregator;
+mod cluster;
 pub mod live;
 mod namespaces;
 mod nodes;
@@ -40,6 +42,7 @@ mod tests;
 mod vendors;
 
 pub use aggregator::UtilisationAggregator;
+pub use cluster::{ClusterUtilisation, ResourceUse, cluster_utilisation};
 pub use live::{
     ClusterUsage, LiveMetricsConfig, LiveMetricsConfigTable, MetricsInterest, MetricsKind,
     MetricsService, MetricsState, MetricsVisibility,

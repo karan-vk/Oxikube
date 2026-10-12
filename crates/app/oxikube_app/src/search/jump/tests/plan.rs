@@ -315,6 +315,20 @@ fn q_is_the_quit_command_which_asks_before_losing_work() {
 }
 
 #[test]
+fn pulses_opens_the_shown_clusters_pulses() {
+    for line in ["pulses", "pulse", "pu"] {
+        assert_eq!(
+            planned(line).commands,
+            [Command::ClusterShowPulses {
+                cluster: cluster("dev")
+            }],
+            "{line}"
+        );
+    }
+    assert_eq!(planned("pu").record.as_deref(), Some("pulses"));
+}
+
+#[test]
 fn history_words_are_history_commands() {
     assert_eq!(planned("-").commands, [Command::JumpLast]);
     assert_eq!(planned("[").commands, [Command::JumpBack]);

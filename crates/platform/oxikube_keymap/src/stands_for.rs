@@ -154,6 +154,8 @@ pub const STANDS_FOR: &[(&str, CommandId)] = &[
         "resource_detail::PreviousMatch",
         CommandId::RESOURCE_PREVIOUS_MATCH,
     ),
+    // The pulses page (E13-S10): `enter` opens the selected tile's table.
+    ("pulses::Open", CommandId::RESOURCE_OPEN_LIST),
     // The catalog home (E06-S03).
     ("catalog::ConnectSelected", CommandId::CLUSTER_CONNECT),
     ("catalog::DisconnectSelected", CommandId::CLUSTER_DISCONNECT),

@@ -84,6 +84,8 @@ pub enum JumpCommand {
     Ctx(Option<Spanned<String>>),
     /// `:ns [name]`: the namespaces list, or select one.
     Ns(Option<Spanned<String>>),
+    /// `:pulses`: the shown cluster's pulses page (E13-S10).
+    Pulses,
     /// `:q`: quit.
     Quit,
     /// `-`, `[`, `]`: move through the history.
@@ -117,6 +119,7 @@ impl fmt::Display for JumpCommand {
             Self::Ctx(Some(name)) => write!(f, "ctx {}", name.value),
             Self::Ns(None) => f.write_str("ns"),
             Self::Ns(Some(name)) => write!(f, "ns {}", name.value),
+            Self::Pulses => f.write_str("pulses"),
             Self::Quit => f.write_str("q"),
             Self::History(step) => f.write_str(step.symbol()),
         }

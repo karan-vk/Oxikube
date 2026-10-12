@@ -463,6 +463,26 @@
     }
   },
   {
+    // The pulses page (E13-S10): move over the tiles, open the selected tile's table, count the
+    // kinds that have no feed again, close the page. k9s' `hjkl` and the arrows do the same.
+    "context": "Pulses",
+    "bindings": {
+      "left": "pulses::SelectLeft",
+      "h": "pulses::SelectLeft",
+      "right": "pulses::SelectRight",
+      "l": "pulses::SelectRight",
+      "up": "pulses::SelectUp",
+      "k": "pulses::SelectUp",
+      "down": "pulses::SelectDown",
+      "j": "pulses::SelectDown",
+      "home": "pulses::SelectFirst",
+      "end": "pulses::SelectLast",
+      "enter": "pulses::Open",
+      "r": "pulses::Refresh",
+      "escape": "pulses::Close"
+    }
+  },
+  {
     // Terminals (E09-S07): ctrl-` shows (and focuses) the shown cluster's terminal panel in the
     // bottom dock or hides it; ctrl-~ opens a new shell there (a plain shell tab when no cluster
     // tab is shown).
