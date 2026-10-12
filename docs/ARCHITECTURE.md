@@ -335,8 +335,8 @@ crate's `README.md` for its allowed dependencies. Highlights:
   batch (latest reading and a 60-sample `SampleRing` per node and pod, each pod's containers; objects missing from the
   answer are evicted) and moves its epoch once; `MetricsState` per kind (`Idle`, `Loading`, `Available`,
   `Unavailable(reason)`, `Failed`) is the table's `metrics unavailable: <reason>` badge. `ClusterUsage` is the Pods table's
-  `MetricsSource` (through `PodColumns::in_cluster`, the shared memo kept) and the Nodes table's `NodeUsageSource`; the
-  `/L` and node `%` cells are toned by `UsageThresholds` (k9s' `thresholds`, `metrics.thresholds`, warn 70 / critical 90).
+  `MetricsSource` (through `PodColumns::in_cluster`, the shared memo kept) and the Nodes table's `NodeUsageSource` (CPU,
+  Mem, CPU% and Mem%); the `/L` and node `%` cells are toned by `UsageThresholds` (k9s' `thresholds`, `metrics.thresholds`, warn 70 / critical 90).
   Tables pick up a poll in their once-a-second redraw check and re-rank a usage sort through `rank_epoch`.
   `cargo bench -p oxikube_app --bench live_metrics`.
 - `oxikube_app::exec` (E09-S08) — `ExecService`: `open_shell(pod, container, &ShellOptions)` finds the shell with a quick

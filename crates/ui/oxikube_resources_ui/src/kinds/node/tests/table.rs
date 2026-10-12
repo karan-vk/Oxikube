@@ -79,7 +79,9 @@ fn the_table_shows_the_stories_columns(cx: &mut TestAppContext) {
             "kernel",
             "internal-ip",
             "pods",
+            "cpu",
             "cpu-percent",
+            "memory",
             "memory-percent",
             "taints",
             "schedulable",
@@ -96,6 +98,7 @@ fn the_table_shows_the_stories_columns(cx: &mut TestAppContext) {
     );
     assert_eq!(cell(&mut f, &table, 1, "schedulable"), "No");
     // No metrics source yet: the slots show a dash, not zero.
+    assert_eq!(cell(&mut f, &table, 0, "cpu"), "–");
     assert_eq!(cell(&mut f, &table, 0, "cpu-percent"), "–");
     assert_eq!(cell(&mut f, &table, 0, "memory-percent"), "–");
 }

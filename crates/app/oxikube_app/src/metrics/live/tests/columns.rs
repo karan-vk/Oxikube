@@ -1,5 +1,5 @@
-//! The columns over a cluster's samples: CPU, Memory and the `%` columns for pods, CPU% and Mem%
-//! for nodes, the container cells; numeric sort on the raw value; threshold boundaries.
+//! The columns over a cluster's samples: CPU, Memory and the `%` columns for pods, CPU, Mem, CPU%
+//! and Mem% for nodes, the container cells; numeric sort on the raw value; threshold boundaries.
 
 use std::cmp::Ordering;
 use std::sync::Arc;
@@ -148,6 +148,60 @@ fn node_percent_cells_are_usage_over_allocatable_toned_by_the_thresholds() {
     usage.set_thresholds(thresholds);
     assert_eq!(cpu(&warm).1, Tone::Neutral);
     assert_eq!(cpu(&hot).1, Tone::Warn);
+}
+
+#[test]
+fn node_cpu_and_mem_cells_show_the_usage_and_sort_and_rerank_on_the_raw_value() {
+    let usage = Arc::new(ClusterUsage::new());
+    usage.apply(
+        MetricsKind::Nodes,
+        t0(),
+        &Ok(MetricsOutcome::Available(vec![
+            node_sample("a", t0(), 1850, 3204),
+            node_sample("b", t0(), 900, 12_288),
+            node_sample("c", t0(), 120, 512),
+        ])),
+    );
+    let columns = NodeColumns::new().with_usage(usage.clone());
+    let row = |name: &str| object(node().name(name).build());
+    let nodes = [row("a"), row("b"), row("c"), row("none")];
+    let a = &nodes[0];
+    let cpu = cell(&columns, a, "cpu");
+    assert_eq!(cpu.display(), "1850m");
+    assert_eq!(cpu.sort(), CellSort::Quantity(Quantity::from_milli(1850)));
+    assert_eq!(cell(&columns, a, "memory").display(), "3204Mi");
+    assert_eq!(cell(&columns, &nodes[3], "cpu").display(), "–", "never 0");
+    let order = |id: &str| -> Vec<String> {
+        let mut rows: Vec<&StoreObject> = nodes.iter().collect();
+        rows.sort_by(|x, y| cell(&columns, x, id).compare(&cell(&columns, y, id)));
+        rows.iter().map(|o| o.meta().name.to_string()).collect()
+    };
+    // `1850m` after `900m`, `12288Mi` after `3204Mi`: the quantity, not the text.
+    assert_eq!(order("cpu"), ["c", "b", "a", "none"], "blank last");
+    assert_eq!(order("memory"), ["c", "a", "b", "none"]);
+
+    // The next poll moves the absolute columns' rank epoch, so a table sorted by CPU re-ranks.
+    let before = (
+        columns.rank_epoch(&ColumnId::new("cpu")),
+        columns.rank_epoch(&ColumnId::new("memory")),
+    );
+    usage.apply(
+        MetricsKind::Nodes,
+        t0(),
+        &Ok(MetricsOutcome::Available(vec![node_sample(
+            "c",
+            t0() + jiff::SignedDuration::from_secs(15),
+            3900,
+            512,
+        )])),
+    );
+    assert_ne!(columns.rank_epoch(&ColumnId::new("cpu")), before.0);
+    assert_ne!(columns.rank_epoch(&ColumnId::new("memory")), before.1);
+    assert_eq!(
+        order("cpu"),
+        ["c", "a", "b", "none"],
+        "a and b left the poll"
+    );
 }
 
 #[test]

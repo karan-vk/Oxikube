@@ -1,6 +1,7 @@
 //! Live metrics in the tables: a Pods or Nodes table watches its kind while it is the active
 //! item, its usage cells read the cluster's samples (sorted by value, toned by the thresholds),
-//! and absence is a badge with the reason that opens the cluster's metrics settings.
+//! and absence is a badge with the reason that opens the cluster's metrics settings. `tick`: what
+//! the table's once-a-second check does when a poll lands (redraw, re-rank).
 
 use std::sync::Arc;
 
@@ -17,6 +18,8 @@ use oxikube_testkit::{FakeClockPort, node, pod};
 use crate::actions::tests::nodes_kind;
 use crate::table::ResourceTable;
 use crate::table::tests::fixture::{Fixture, cluster};
+
+mod tick;
 
 const MI: u64 = 1024 * 1024;
 

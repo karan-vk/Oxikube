@@ -107,18 +107,46 @@ async fn nodes_and_a_pod_reach_the_columns_from_metrics_server() {
     .await;
     let (node_count, _) = usage.counts();
     assert!(node_count >= 1, "the kind node has a sample");
-    let node_name = Api::<k8s_openapi::api::core::v1::Node>::all(client.clone())
+    let live_node = Api::<k8s_openapi::api::core::v1::Node>::all(client.clone())
         .list(&Default::default())
         .await
         .expect("list nodes")
         .items
         .into_iter()
-        .find_map(|node| node.metadata.name)
+        .next()
         .expect("a node");
+    let node_name = live_node.metadata.name.clone().expect("a node name");
     let node_usage = usage.usage(&node_name);
     assert!(
         node_usage.is_some_and(|u| u.cpu_millis > 0 && u.memory_bytes > 0),
         "{node_name}: {node_usage:?}"
+    );
+    // The Nodes table: CPU and Mem beside CPU% and Mem%.
+    let node_columns = oxikube_app::nodes::NodeColumns::new().with_usage(usage.clone());
+    let node_object = StoreObject::Resource(
+        oxikube_domain::Resource::from_json(serde_json::to_value(&live_node).unwrap())
+            .expect("a resource"),
+    );
+    let node_cell = |id: &str| {
+        node_columns
+            .cell(
+                &node_object,
+                &oxikube_app::ColumnId::new(id),
+                jiff::Timestamp::now(),
+            )
+            .display()
+            .to_owned()
+    };
+    assert!(node_cell("cpu").ends_with('m'), "{}", node_cell("cpu"));
+    assert!(
+        node_cell("memory").ends_with("Mi"),
+        "{}",
+        node_cell("memory")
+    );
+    assert!(
+        node_cell("cpu-percent").ends_with('%'),
+        "{}",
+        node_cell("cpu-percent")
     );
     assert_eq!(
         usage.counts().1,

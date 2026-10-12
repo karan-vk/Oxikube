@@ -1,19 +1,20 @@
 //! [`NodeColumns`]: the node table's columns.
 //!
-//! Roles, Status, Version, OS, Kernel, Internal IP, Pods, CPU%, Mem%, Taints, Schedulable and
-//! Age by default; External IP, instance type, zone, container runtime, architecture, the
+//! Roles, Status, Version, OS, Kernel, Internal IP, Pods, CPU, CPU%, Mem, Mem%, Taints,
+//! Schedulable and Age by default; External IP, instance type, zone, container runtime, architecture, the
 //! allocatable amounts and labels as wide columns. Most cells are the core catalogue's
 //! ([`CoreColumns`], from the Node view-model); three need more than the object:
 //!
 //! * **Pods** reads the store's pods-by-node index ([`NodeLoadsLease`]), one hash lookup per
 //!   visible cell, and shows `–` until the Pod feed is live.
-//! * **CPU%** and **Mem%** are the metrics slots: usage over allocatable, from a
-//!   [`NodeUsageSource`] E13 registers (`oxikube_app::metrics::ClusterUsage`), toned by its
-//!   [`UsageThresholds`]. Without one they show `–`.
+//! * **CPU** and **Mem** are the node's usage (`1850m`, `3204Mi`, sorted by the exact quantity),
+//!   and **CPU%** and **Mem%** that usage over allocatable, toned by the source's
+//!   [`UsageThresholds`](crate::columns::UsageThresholds): all from a [`NodeUsageSource`] E13
+//!   registers (`oxikube_app::metrics::ClusterUsage`). Without one they show `–`.
 //! * **Schedulable**, **Instance type** and **Zone** read `spec.unschedulable` and the
 //!   well-known labels.
 //!
-//! Pods, CPU% and Mem% are sortable, though the store ranks a row once per object version and a
+//! Pods and the usage columns are sortable, though the store ranks a row once per object version and a
 //! node object rarely changes: the provider's [`rank_epoch`](ColumnProvider::rank_epoch) moves
 //! with the pods index and the usage source's samples, and the table ranks again when it does.
 
@@ -22,13 +23,11 @@ use std::sync::Arc;
 
 use jiff::Timestamp;
 use oxikube_domain::ids::Gvk;
-use oxikube_domain::{Capabilities, NodeSummary, Quantity, Resource};
+use oxikube_domain::{Capabilities, NodeSummary, Resource};
 use parking_lot::Mutex;
 
-use crate::columns::{
-    Align, Cell, CellSort, Column, ColumnId, ColumnProvider, CoreColumns, SortKind, Tone,
-    UsageThresholds,
-};
+use super::usage::{NodeUsageSource, UsageColumn, absent, usage_cell};
+use crate::columns::{Align, Cell, Column, ColumnId, ColumnProvider, CoreColumns, SortKind, Tone};
 use crate::kinds::ColumnsContext;
 use crate::store::{NodeLoadsLease, ResourceStore, StoreObject};
 
@@ -43,7 +42,9 @@ fn node_column_ids() -> &'static [(&'static str, bool)] {
         ("kernel", false),
         ("internal-ip", false),
         ("pods", false),
+        ("cpu", false),
         ("cpu-percent", false),
+        ("memory", false),
         ("memory-percent", false),
         ("taints", false),
         ("schedulable", false),
@@ -60,43 +61,14 @@ fn node_column_ids() -> &'static [(&'static str, bool)] {
     ]
 }
 
-/// A node's current CPU and memory usage, from the metrics API.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct NodeUsage {
-    /// CPU in use, in millicores.
-    pub cpu_millis: i64,
-    /// Memory in use, in bytes.
-    pub memory_bytes: i64,
-}
-
-/// Where the CPU% and Mem% cells get a node's usage (E13 implements it over its metrics store).
-pub trait NodeUsageSource: Send + Sync {
-    /// The latest usage of the node named `node`; `None` when there is no sample (yet).
-    fn usage(&self, node: &str) -> Option<NodeUsage>;
-
-    /// A number that changes whenever some node's usage may have (a new sample). A table sorted
-    /// by CPU% or Mem% ranks again when it moves; a source that never reports `0` leaves a sort
-    /// by usage as stale as its last ranking.
-    fn epoch(&self) -> u64 {
-        0
-    }
-
-    /// When CPU% and Mem% turn amber or red (the `metrics.thresholds` setting). The default is
-    /// k9s': warn 70, critical 90.
-    fn thresholds(&self) -> UsageThresholds {
-        UsageThresholds::default()
-    }
-}
-
 const PODS: &str = "pods";
+const CPU: &str = "cpu";
+const MEMORY: &str = "memory";
 const CPU_PERCENT: &str = "cpu-percent";
 const MEMORY_PERCENT: &str = "memory-percent";
 const SCHEDULABLE: &str = "schedulable";
 const INSTANCE_TYPE: &str = "instance-type";
 const ZONE: &str = "zone";
-
-/// Shown in a cell that has no value (no Pod feed yet, no metrics).
-const ABSENT: &str = "–";
 
 /// The node table's [`ColumnProvider`]. One per cluster (see [`node_columns`]).
 pub struct NodeColumns {
@@ -125,7 +97,7 @@ impl NodeColumns {
         }
     }
 
-    /// Registers the source of the CPU% and Mem% cells.
+    /// Registers the source of the usage cells (CPU, Mem, CPU% and Mem%).
     #[must_use]
     pub fn with_usage(mut self, usage: Arc<dyn NodeUsageSource>) -> Self {
         self.usage = Some(usage);
@@ -164,6 +136,8 @@ impl NodeColumns {
         let own = |id: &str| -> Option<Column> {
             Some(match id {
                 PODS => Self::column(PODS, "Pods", false, Align::Right, SortKind::Number),
+                CPU => Self::column(CPU, "CPU", false, Align::Right, SortKind::Quantity),
+                MEMORY => Self::column(MEMORY, "Mem", false, Align::Right, SortKind::Quantity),
                 CPU_PERCENT => {
                     Self::column(CPU_PERCENT, "CPU%", false, Align::Right, SortKind::Number)
                 }
@@ -205,8 +179,10 @@ impl NodeColumns {
     fn resource_cell<'a>(&self, res: &'a Resource, column: &ColumnId, now: Timestamp) -> Cell<'a> {
         match column.as_str() {
             PODS => self.pods_cell(&res.meta.name),
-            CPU_PERCENT => self.usage_cell(res, true),
-            MEMORY_PERCENT => self.usage_cell(res, false),
+            CPU => self.usage_cell(res, true, false),
+            MEMORY => self.usage_cell(res, false, false),
+            CPU_PERCENT => self.usage_cell(res, true, true),
+            MEMORY_PERCENT => self.usage_cell(res, false, true),
             SCHEDULABLE => schedulable_cell(res),
             INSTANCE_TYPE => label_cell(NodeSummary::instance_type_of(res)),
             ZONE => label_cell(NodeSummary::zone_of(res)),
@@ -226,31 +202,8 @@ impl NodeColumns {
         }
     }
 
-    fn usage_cell<'a>(&self, res: &Resource, cpu: bool) -> Cell<'a> {
-        let Some(source) = self.usage.as_ref() else {
-            return absent();
-        };
-        let Some(usage) = source.usage(&res.meta.name) else {
-            return absent();
-        };
-        let status = res.json().get("status").and_then(|s| s.get("allocatable"));
-        let allocatable = status
-            .and_then(|a| a.get(if cpu { "cpu" } else { "memory" }))
-            .and_then(|q| q.as_str())
-            .and_then(|q| Quantity::parse(q).ok());
-        let Some(allocatable) = allocatable else {
-            return absent();
-        };
-        let used = if cpu {
-            Quantity::from_milli(usage.cpu_millis)
-        } else {
-            Quantity::from_value(usage.memory_bytes)
-        };
-        match used.percent_of(&allocatable) {
-            Some(percent) => Cell::float(format!("{}%", percent.round()), percent)
-                .with_tone(source.thresholds().of(cpu).tone(percent)),
-            None => absent(),
-        }
+    fn usage_cell<'a>(&self, res: &Resource, cpu: bool, percent: bool) -> Cell<'a> {
+        usage_cell(self.usage.as_deref(), res, UsageColumn { cpu, percent })
     }
 }
 
@@ -258,10 +211,6 @@ impl Default for NodeColumns {
     fn default() -> Self {
         Self::new()
     }
-}
-
-fn absent<'a>() -> Cell<'a> {
-    Cell::shown(ABSENT, CellSort::None)
 }
 
 fn schedulable_cell<'a>(res: &'a Resource) -> Cell<'a> {
@@ -299,20 +248,21 @@ impl ColumnProvider for NodeColumns {
         }
     }
 
-    /// Pods: what the pods-by-node index holds (and which index, after a reconnect). CPU% and
-    /// Mem%: the usage source's samples. The rest read the node object, which the store ranks
-    /// per version.
+    /// The usage columns (CPU, Mem, CPU% and Mem%): the usage source's samples. The rest read
+    /// the node object, which the store ranks per version.
     fn rank_epoch(&self, column: &ColumnId) -> u64 {
         match column.as_str() {
-            CPU_PERCENT | MEMORY_PERCENT => self.usage.as_ref().map_or(0, |u| u.epoch()),
+            CPU | MEMORY | CPU_PERCENT | MEMORY_PERCENT => {
+                self.usage.as_ref().map_or(0, |u| u.epoch())
+            }
             _ => 0,
         }
     }
 }
 
 /// The Nodes kind's per-cluster provider: [`NodeColumns`] over the cluster's store (its Pods
-/// column reads the pods-by-node index, kept while the provider holds the lease), with CPU% and
-/// Mem% from `usage` when given. Hand it to
+/// column reads the pods-by-node index, kept while the provider holds the lease), with the usage
+/// columns from `usage` when given. Hand it to
 /// [`KindMeta::with_columns_per_cluster`](crate::KindMeta::with_columns_per_cluster).
 pub fn node_columns(
     context: &ColumnsContext,
