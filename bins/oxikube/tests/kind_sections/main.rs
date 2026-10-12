@@ -59,11 +59,11 @@ use oxikube_testkit::sections::{KindCase, Seed, catalog};
 use kind_common::{Launched, launch};
 
 /// Nothing more.
-fn nothing(_: &mut Launched, _: &str) {}
+fn nothing(_: &mut Launched, _: &str, _: &str) {}
 
 /// Seeds `sections`' kinds, starts the app on the kind context with the test's namespace
-/// selected, checks each kind, then runs `more` on the same app.
-fn run(cx: &mut TestAppContext, sections: &[&str], more: fn(&mut Launched, &str)) {
+/// selected, checks each kind, then runs `more` (given the context and the namespace) on the same app.
+fn run(cx: &mut TestAppContext, sections: &[&str], more: fn(&mut Launched, &str, &str)) {
     let Some(context) = test_context() else {
         return;
     };
@@ -90,14 +90,14 @@ fn run(cx: &mut TestAppContext, sections: &[&str], more: fn(&mut Launched, &str)
         .expect("the session is open");
     for case in &cases {
         match seeded.name_of(case) {
-            Some(name) => check::kind(&mut app, &context, case, &name),
+            Some(name) => check::kind(&mut app, &context, ns.name(), case, &name),
             None => println!(
                 "skipping {}: {}/{} is not served by this cluster",
                 case.kind, case.group, case.version
             ),
         }
     }
-    more(&mut app, &context);
+    more(&mut app, &context, ns.name());
     println!(
         "section matrix {sections:?}: {} kinds in {:?}",
         cases.len(),

@@ -4,6 +4,17 @@ use oxikube_domain::ids::Scope;
 
 use super::*;
 
+/// The sidebar sections in the order the sidebar lists them.
+const SECTIONS: &[&str] = &[
+    "nodes",
+    "workloads",
+    "config",
+    "network",
+    "storage",
+    "namespaces",
+    "custom-resources",
+];
+
 const SEED: Seed<'static> = Seed {
     namespace: "oxi-test-0123abcd",
     stem: "oxi-test-0123abcd",

@@ -16,7 +16,7 @@
 //!
 //! The suites built on it: `bins/oxikube` `mount::tests::sections` (the real init order over
 //! fakes: the registry, the sidebar, the tables, the detail drawer, the row actions and the guard
-//! matrix) and `bins/oxikube/tests/kind_sections.rs` (the same against a kind cluster). A kind
+//! matrix) and `bins/oxikube/tests/kind_sections` (the same against a kind cluster). A kind
 //! that is registered but missing here, or a column or an action that changed, fails both: update
 //! the case in the same PR as the change, which makes the change visible to the reviewer.
 //!
@@ -153,17 +153,6 @@ impl KindCase {
 /// The label every seeded object carries.
 pub const SUITE_LABEL: &str = "oxikube.test/suite";
 
-/// The sidebar sections in the order the sidebar lists them, as the matrix knows them.
-pub const SECTIONS: &[&str] = &[
-    "nodes",
-    "workloads",
-    "config",
-    "network",
-    "storage",
-    "namespaces",
-    "custom-resources",
-];
-
 /// Every case, section by section in sidebar order, each section's kinds in their sidebar order.
 pub fn catalog() -> impl Iterator<Item = &'static KindCase> {
     cluster::NODES
@@ -176,9 +165,13 @@ pub fn catalog() -> impl Iterator<Item = &'static KindCase> {
         .chain(cluster::DEFINITIONS)
 }
 
-/// The cases of `section`, in sidebar order.
-pub fn in_section(section: &str) -> impl Iterator<Item = &'static KindCase> + '_ {
-    catalog().filter(move |case| case.section == section)
+/// A column as the matrix writes it: its title, suffixed `*` when only "wide" shows it.
+pub fn column_label(title: &str, wide: bool) -> String {
+    if wide {
+        format!("{title}*")
+    } else {
+        title.to_owned()
+    }
 }
 
 /// The case of `kind` (`Deployment`), if the matrix has it.

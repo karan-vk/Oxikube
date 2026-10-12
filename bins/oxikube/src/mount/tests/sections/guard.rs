@@ -19,7 +19,7 @@ use oxikube_testkit::TestPorts;
 use oxikube_testkit::sections::catalog;
 
 use super::super::App;
-use super::{served, target};
+use super::{served, target, ui};
 use crate::app_state::AppState;
 
 /// The risk of every mutating command (docs/CONTEXT.md, "Risk / ConfirmTier"): low and medium
@@ -84,10 +84,6 @@ fn expected_tier(id: CommandId, kind: &str) -> ConfirmTier {
         .iter()
         .find(|(raised, on, _)| *raised == id && *on == kind)
         .map_or_else(|| documented(id).1, |(_, _, tier)| *tier)
-}
-
-fn ui() -> DispatchContext {
-    DispatchContext::new(Initiator::Ui, "alice")
 }
 
 #[test]

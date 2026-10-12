@@ -3,17 +3,15 @@
 
 use futures::executor::block_on;
 use gpui::{Entity, TestAppContext};
-use oxikube_app::command_bus::DispatchContext;
-use oxikube_domain::audit::Initiator;
 use oxikube_domain::command::Command;
 use oxikube_resources_ui::detail::{DetailDrawer, DetailView};
 use oxikube_resources_ui::table::ResourceTable;
 use oxikube_testkit::TestPorts;
-use oxikube_testkit::sections::{KindCase, catalog};
+use oxikube_testkit::sections::{KindCase, catalog, column_label};
 use oxikube_workspace::sidebar::{DEFINITIONS_ENTRY, SidebarPanel};
 
 use super::super::App;
-use super::{SEED, target};
+use super::{SEED, target, ui};
 
 impl App {
     /// Activates `case`'s sidebar entry and returns the table it opened.
@@ -70,7 +68,7 @@ fn every_kind_opens_from_its_entry_with_its_columns_and_its_detail(cx: &mut Test
                 let columns: Vec<String> = d
                     .layout()
                     .columns()
-                    .map(|(c, _)| format!("{}{}", c.title, if c.wide { "*" } else { "" }))
+                    .map(|(c, _)| column_label(&c.title, c.wide))
                     .collect();
                 (rows, columns)
             })
@@ -91,7 +89,7 @@ fn every_kind_opens_from_its_entry_with_its_columns_and_its_detail(cx: &mut Test
             Command::ResourceOpen {
                 target: target.clone(),
             },
-            DispatchContext::new(Initiator::Ui, "alice"),
+            ui(),
         ));
         assert!(opened.is_ok(), "{}: {opened:?}", case.kind);
         app.tick();

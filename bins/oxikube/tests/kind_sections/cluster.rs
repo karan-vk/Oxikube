@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use kube::api::{
     Api, ApiResource, DeleteParams, DynamicObject, GroupVersionKind, ListParams, PostParams,
 };
-use oxikube_testkit::sections::{Api as Served, KindCase, Seed};
+use oxikube_testkit::sections::{Api as Served, KindCase, Seed, column_label};
 
 use crate::kind_common::{DEADLINE, on_cluster};
 
@@ -174,7 +174,7 @@ pub fn server_columns(context: &str, path: &str) -> Vec<String> {
             .map(|column| {
                 let name = column["name"].as_str().unwrap_or_default();
                 let wide = column["priority"].as_i64().unwrap_or(0) > 0;
-                format!("{name}{}", if wide { "*" } else { "" })
+                column_label(name, wide)
             })
             .collect()
     })

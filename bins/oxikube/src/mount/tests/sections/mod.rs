@@ -10,7 +10,7 @@
 //!   the user and for an agent), asks for its declared confirmation tier, leaves an audit record,
 //!   and has an MCP tool stub; every mutating command the app declares has a matrix entry.
 //!
-//! The same matrix runs against a kind cluster in `tests/kind_sections.rs`.
+//! The same matrix runs against a kind cluster in `tests/kind_sections`.
 
 mod guard;
 mod registry;
@@ -18,7 +18,9 @@ mod tables;
 
 use std::sync::Arc;
 
+use oxikube_app::command_bus::DispatchContext;
 use oxikube_app::{CommandBus, RowActions};
+use oxikube_domain::audit::Initiator;
 use oxikube_domain::ids::{Gvk, ResourceRef, Scope};
 use oxikube_domain::kinds::{ResourceKind, VerbSet};
 use oxikube_domain::session::NamespaceSelection;
@@ -48,6 +50,11 @@ pub(super) fn served(case: &KindCase) -> ResourceKind {
         ]),
         namespaced: case.scope == Scope::Namespaced,
     }
+}
+
+/// A user at the keyboard.
+pub(super) fn ui() -> DispatchContext {
+    DispatchContext::new(Initiator::Ui, "alice")
 }
 
 /// The seeded object of `case`.

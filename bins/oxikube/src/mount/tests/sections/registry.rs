@@ -7,9 +7,10 @@ use gpui::TestAppContext;
 use oxikube_app::{ColumnProvider, ColumnsContext, CoreColumns};
 use oxikube_domain::Capabilities;
 use oxikube_domain::command::CommandId;
+use oxikube_domain::ids::Gvk;
 use oxikube_resources_ui::kinds::KindSpecs;
 use oxikube_testkit::TestPorts;
-use oxikube_testkit::sections::{KindCase, catalog};
+use oxikube_testkit::sections::{KindCase, catalog, column_label};
 
 use super::super::App;
 use super::{served, unknown_kind};
@@ -27,11 +28,11 @@ const NOT_ON_ROWS: &[CommandId] = &[
 ];
 
 /// `columns`' titles as the matrix writes them (a wide one ends in `*`).
-fn titles(provider: &dyn ColumnProvider, case: &KindCase) -> Vec<String> {
+fn titles(provider: &dyn ColumnProvider, gvk: &Gvk) -> Vec<String> {
     provider
-        .columns(&case.gvk(), Capabilities::all())
+        .columns(gvk, Capabilities::all())
         .iter()
-        .map(|c| format!("{}{}", c.title, if c.wide { "*" } else { "" }))
+        .map(|c| column_label(&c.title, c.wide))
         .collect()
 }
 
@@ -92,7 +93,7 @@ fn every_kind_has_its_documented_columns_panel_and_scope(cx: &mut TestAppContext
             .or_else(|| meta.columns.build(&context))
             .unwrap_or_else(|| context.shared.clone());
         assert_eq!(
-            titles(provider.as_ref(), case),
+            titles(provider.as_ref(), &case.gvk()),
             case.columns,
             "{}'s columns",
             case.kind

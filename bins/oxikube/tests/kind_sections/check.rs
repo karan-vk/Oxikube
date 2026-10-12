@@ -7,7 +7,7 @@ use oxikube_domain::audit::Initiator;
 use oxikube_domain::command::CommandId;
 use oxikube_domain::ids::{Gvk, ResourceRef};
 use oxikube_domain::safety::ConfirmTier;
-use oxikube_testkit::sections::KindCase;
+use oxikube_testkit::sections::{KindCase, column_label};
 use oxikube_workspace::sidebar::DEFINITIONS_ENTRY;
 
 use crate::kind_common::Launched;
@@ -22,22 +22,6 @@ const GENERIC: &[CommandId] = &[
     CommandId::RESOURCE_DELETE,
 ];
 
-/// The test's namespace: the one the session has selected.
-fn namespace(app: &mut Launched) -> String {
-    let state = app.vcx.read(AppState::global);
-    let session = state
-        .services()
-        .sessions
-        .get(&app.cluster)
-        .expect("the session");
-    session
-        .namespace_selection()
-        .names()
-        .next()
-        .expect("one namespace selected")
-        .to_owned()
-}
-
 /// The table columns' titles (a wide one suffixed `*`).
 fn columns(
     app: &mut Launched,
@@ -47,7 +31,7 @@ fn columns(
         table.read(cx).read_rows(cx, |d| {
             d.layout()
                 .columns()
-                .map(|(c, _)| format!("{}{}", c.title, if c.wide { "*" } else { "" }))
+                .map(|(c, _)| column_label(&c.title, c.wide))
                 .collect()
         })
     })
@@ -55,8 +39,7 @@ fn columns(
 
 /// `case`'s object `name`: listed with the documented columns, its own actions on its row, its
 /// detail with its panel, and its mutations guarded without anything changing.
-pub fn kind(app: &mut Launched, context: &str, case: &KindCase, name: &str) {
-    let namespace = namespace(app);
+pub fn kind(app: &mut Launched, context: &str, namespace: &str, case: &KindCase, name: &str) {
     let entry = if case.section == "custom-resources" {
         DEFINITIONS_ENTRY.to_owned()
     } else {
@@ -77,7 +60,7 @@ pub fn kind(app: &mut Launched, context: &str, case: &KindCase, name: &str) {
 
     // The row's menu: the object under the cursor, the kind's own actions.
     let target = if case.namespaced() {
-        ResourceRef::namespaced(app.cluster.clone(), case.gvk(), namespace.as_str(), name)
+        ResourceRef::namespaced(app.cluster.clone(), case.gvk(), namespace, name)
     } else {
         ResourceRef::cluster_scoped(app.cluster.clone(), case.gvk(), name)
     };
@@ -104,7 +87,7 @@ pub fn kind(app: &mut Launched, context: &str, case: &KindCase, name: &str) {
     assert_eq!(panel, case.panel, "{}'s panel", case.kind);
 
     // Every mutation of the row asks first, and a read-only cluster refuses it; nothing changes.
-    let before = cluster::fingerprint(context, case, &namespace, name);
+    let before = cluster::fingerprint(context, case, namespace, name);
     let sessions = app.vcx.read(AppState::global).services().sessions.clone();
     for entry in entries.iter().filter(|e| e.action.meta().mutating) {
         let id = entry.command();
@@ -146,17 +129,16 @@ pub fn kind(app: &mut Launched, context: &str, case: &KindCase, name: &str) {
             .set_read_only(&app.cluster, false)
             .expect("the session");
     }
-    let after = cluster::fingerprint(context, case, &namespace, name);
+    let after = cluster::fingerprint(context, case, namespace, name);
     assert_eq!(before, after, "the {} was not changed", case.kind);
 }
 
 /// The printer-column parity (epic criterion 4): a Widget of the sample CRD (`cargo xtask
 /// kind-up`), opened from its Custom Resources group, has the columns the API server prints for
 /// `kubectl get widgets` (the wide `Owner` one too).
-pub fn printer_columns(app: &mut Launched, context: &str) {
-    let namespace = namespace(app);
+pub fn printer_columns(app: &mut Launched, context: &str, namespace: &str) {
     let name = "seed-widget";
-    if !cluster::create_widget(context, &namespace, name) {
+    if !cluster::create_widget(context, namespace, name) {
         println!("skipping the printer columns: test.oxikube.dev/v1 Widget is not served");
         return;
     }
