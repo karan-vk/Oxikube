@@ -120,7 +120,15 @@ fn a_restricted_user_sees_only_the_sections_they_may_list() {
             _ => None,
         })
         .collect();
-    assert_eq!(entries, ["workloads/pods", "network/services"]);
+    // The Workloads overview shows where the Pods entry does (E13-S09).
+    assert_eq!(
+        entries,
+        [
+            "workloads/workloads-overview",
+            "workloads/pods",
+            "network/services"
+        ]
+    );
     // A muted hint says why the rest is missing, instead of leaving an empty page.
     let Some(Row::Notice(notice)) = rows.last() else {
         panic!("a limited-access hint closes the list: {rows:?}");

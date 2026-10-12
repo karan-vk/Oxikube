@@ -178,7 +178,7 @@ pub async fn theme(driver: &mut Driver<'_>) -> Result<()> {
     Ok(())
 }
 
-/// `sidebar`: the cluster's first screen (the Workloads overview) with the sidebar's count badges,
+/// `sidebar`: the cluster's first screen (the cluster overview, E13-S09) with the sidebar's count badges,
 /// nothing driven but the churn: every refresh is watched, so a churn frame that runs long shows
 /// as a dropped one.
 pub async fn sidebar(driver: &mut Driver<'_>) -> Result<()> {

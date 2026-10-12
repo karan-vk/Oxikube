@@ -40,6 +40,8 @@ oxikube_describe.workspace = true
 oxikube_editor.workspace = true
 oxikube_kube.workspace = true
 oxikube_logs_ui.workspace = true
+# The cluster overview (E13-S09): the cluster tab's landing page and `cluster::ShowOverview`.
+oxikube_overview_ui.workspace = true
 oxikube_logging.workspace = true
 # The `?` help overlay (E11-S10); `kind_exec` also reads the container picker's matches through
 # `PickerDelegate` (E11-S02).

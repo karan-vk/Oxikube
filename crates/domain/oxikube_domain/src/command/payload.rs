@@ -167,6 +167,15 @@ pub enum Command {
         /// The cluster whose pulses open.
         cluster: ClusterId,
     },
+    /// Open the cluster's overview (E13-S09): health tiles (nodes ready, pods by phase), capacity
+    /// and allocation bars, top CPU and memory consumers, recent warnings, cluster info, and
+    /// history graphs when a Prometheus-compatible endpoint answers. Reads only what the session's
+    /// store and the metrics services already hold.
+    #[serde(rename = "cluster::ShowOverview")]
+    ClusterShowOverview {
+        /// The cluster whose overview opens.
+        cluster: ClusterId,
+    },
     /// Run the metrics provider detection for a cluster again (E13-S05): list the Services of the
     /// namespaces the monitoring stacks use, probe the ones that match with a cheap query through
     /// the API server's service proxy, and classify the stack. A cluster configured by hand has
@@ -1327,6 +1336,7 @@ impl Command {
             Command::ClusterSetColour { .. } => CommandId::CLUSTER_SET_COLOUR,
             Command::ClusterShowMetricsSettings { .. } => CommandId::CLUSTER_SHOW_METRICS_SETTINGS,
             Command::ClusterShowPulses { .. } => CommandId::CLUSTER_SHOW_PULSES,
+            Command::ClusterShowOverview { .. } => CommandId::CLUSTER_SHOW_OVERVIEW,
             Command::ClusterRedetectMetrics { .. } => CommandId::CLUSTER_REDETECT_METRICS,
             Command::ClusterToggleMetrics { .. } => CommandId::CLUSTER_TOGGLE_METRICS,
             Command::ClusterApplyPreset { .. } => CommandId::CLUSTER_APPLY_PRESET,
@@ -1721,6 +1731,7 @@ mod tests {
             },
             Command::ClusterShowMetricsSettings { cluster: cluster() },
             Command::ClusterShowPulses { cluster: cluster() },
+            Command::ClusterShowOverview { cluster: cluster() },
             Command::ClusterRedetectMetrics { cluster: cluster() },
             Command::ClusterToggleMetrics {
                 cluster: cluster(),
@@ -2373,6 +2384,7 @@ mod tests {
                     | Command::ClusterSetColour { .. }
                     | Command::ClusterShowMetricsSettings { .. }
                     | Command::ClusterShowPulses { .. }
+                    | Command::ClusterShowOverview { .. }
                     | Command::ClusterRedetectMetrics { .. }
                     | Command::ClusterToggleMetrics { .. }
                     | Command::ClusterApplyPreset { .. }

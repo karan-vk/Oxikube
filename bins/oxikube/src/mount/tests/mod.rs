@@ -28,6 +28,7 @@ mod network;
 mod node_actions;
 mod node_drain;
 mod node_shell;
+mod overview;
 mod palette;
 mod pulses;
 mod resources;

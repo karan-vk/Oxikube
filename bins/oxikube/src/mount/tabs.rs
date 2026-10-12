@@ -1,8 +1,8 @@
 //! What every cluster tab gets when it opens: the sidebar (E06-S10) in its left dock, the terminal
 //! panel (E09-S07) in its bottom dock, the connect
 //! lifecycle views (E06-S06), the namespace selector (E06-S07) in its toolbar, the resource
-//! views (E07-S11: the overview, see `resources`) and the sidebar's navigation to the resource
-//! tables (E07-S03).
+//! views (E07-S11, see `resources`), the cluster overview as its first screen (E13-S09, see
+//! `overview`) and the sidebar's navigation to the resource tables (E07-S03).
 
 use std::rc::Rc;
 use std::sync::Arc;
@@ -45,6 +45,8 @@ pub struct TabDeps {
     /// The newest warning events for the Workloads overview's panel (E12-S07): the Events feed
     /// when E14 provides one.
     pub warnings: Arc<dyn RecentWarnings>,
+    /// What the cluster overview (E13-S09), the tab's first screen, reads.
+    pub overview: oxikube_overview_ui::OverviewDeps,
 }
 
 /// The `ClusterTabsDeps` setup hook: sidebar (and its navigation to the resource tables),
@@ -86,6 +88,7 @@ pub fn tab_setup(
         connect(tab, session, window, cx);
         install_selector(tab, session, &deps, window, cx);
         super::resources::install(tab, session, &deps, window, cx);
+        super::overview::install(tab, session, &deps.overview, window, cx);
         super::metrics::install_tab(tab, session, &deps, window, cx);
         super::pulses::install_tab(tab, session, &deps, window, cx);
     }

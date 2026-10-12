@@ -6,17 +6,15 @@
 //!   (on GPUI's background executor in the deterministic test runtime), grace timers and
 //!   back-off on the app clock; each store asks its connection's watch budget before it opens a
 //!   feed (`kube_ports::WatchBudgets`, E04-F543).
-//! * [`install`] runs for every cluster tab: it opens the [`WorkloadsOverview`] as the tab's first
-//!   screen once the cluster is connected (when nothing else is open), and routes the sidebar's
-//!   "Cluster" section to the overview. A kind entry is the resource views' (E07-S03,
+//! * [`install`] runs for every cluster tab: it routes the sidebar's Workloads > Overview entry to
+//!   the [`WorkloadsOverview`] (the tab's first screen is the cluster overview since E13-S09,
+//!   `mount::overview`). A kind entry is the resource views' (E07-S03,
 //!   `oxikube_resources_ui::sidebar_navigation`): they find the kind through discovery, custom
 //!   resources included, and send `resource::OpenList` on the bus.
 //! * [`open_kinds`] applies the `resource::OpenList` requests on the UI thread: the views
 //!   registered with `oxikube_resources_ui::navigate::KindViews` (the generic resource table of
 //!   E07-S03) open the list, or a notice says that none can.
 
-use std::cell::Cell;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use futures::StreamExt as _;
@@ -32,8 +30,9 @@ use oxikube_workspace::{ClusterTab, ClusterTabs, Toast, Workspace};
 use super::tabs::TabDeps;
 use crate::app_state::AppState;
 
-/// The page id the sidebar's "Cluster" section navigates to.
-const OVERVIEW_PAGE: &str = "overview";
+/// The page id of the sidebar's Workloads > Overview entry (the cluster's "Cluster" header is the
+/// cluster overview's, E13-S09, `mount::overview`).
+pub const WORKLOADS_OVERVIEW_PAGE: &str = "workloads-overview";
 
 /// The app's `ResourceStores`: the ones already set on `state`, else new ones that are set.
 pub fn stores(state: &AppState, clock: Arc<dyn ClockPort>, cx: &App) -> Arc<ResourceStores> {
@@ -67,25 +66,6 @@ pub fn install(
     };
     let workspace = tab.read(cx).workspace().clone();
 
-    // The first screen: the overview, once the cluster is connected and nothing else is open.
-    let opened = Rc::new(Cell::new(false));
-    let open_first = {
-        let (tab, workspace) = (tab.clone(), workspace.clone());
-        let (cluster, overview) = (cluster.clone(), overview.clone());
-        move |window: &mut Window, cx: &mut App| {
-            if opened.get() || !tab.read(cx).info().state.phase().is_connected() {
-                return;
-            }
-            opened.set(true);
-            if workspace.read(cx).items().next().is_none() {
-                WorkloadsOverview::open(&workspace, cluster.clone(), overview.clone(), window, cx);
-            }
-        }
-    };
-    open_first(window, cx);
-    let observe = window.observe(tab, cx, move |_, window, cx| open_first(window, cx));
-    observe.detach();
-
     // The sidebar's clicks.
     let Some(panel) = workspace.read(cx).panel::<SidebarPanel>() else {
         tracing::warn!(%cluster, "the cluster tab has no sidebar: its entries do not navigate");
@@ -94,7 +74,7 @@ pub fn install(
     let navigate = window.subscribe(&panel, cx, move |_, event: &SidebarEvent, window, cx| {
         let SidebarEvent::Navigate(target) = event;
         match target {
-            SidebarTarget::Page(page) if page.as_ref() == OVERVIEW_PAGE => {
+            SidebarTarget::Page(page) if page.as_ref() == WORKLOADS_OVERVIEW_PAGE => {
                 WorkloadsOverview::open(&workspace, cluster.clone(), overview.clone(), window, cx);
             }
             // Kind entries: `oxikube_resources_ui::sidebar_navigation` (see the module docs).

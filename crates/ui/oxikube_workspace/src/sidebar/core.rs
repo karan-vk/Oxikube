@@ -8,6 +8,7 @@
 
 use gpui::App;
 use oxikube_domain::access::AccessRequirement;
+use oxikube_domain::ids::{Gvk, Scope};
 use oxikube_ui::IconName;
 
 use super::{SidebarEntry, SidebarRegistry, SidebarSection, SidebarTarget};
@@ -33,15 +34,26 @@ pub fn core_sections() -> Vec<SidebarSection> {
             .with_target(SidebarTarget::Page("overview".into())),
         section(2, "nodes", "Nodes", IconName::Server)
             .with_entries(kinds(&[("nodes", "Nodes", "", "nodes")])),
-        section(3, "workloads", "Workloads", IconName::Boxes).with_entries(kinds(&[
-            ("pods", "Pods", "", "pods"),
-            ("deployments", "Deployments", "apps", "deployments"),
-            ("daemonsets", "DaemonSets", "apps", "daemonsets"),
-            ("statefulsets", "StatefulSets", "apps", "statefulsets"),
-            ("replicasets", "ReplicaSets", "apps", "replicasets"),
-            ("jobs", "Jobs", "batch", "jobs"),
-            ("cronjobs", "CronJobs", "batch", "cronjobs"),
-        ])),
+        section(3, "workloads", "Workloads", IconName::Boxes).with_entries(
+            // The Workloads overview (E07-S11); the "Cluster" header is the cluster overview. It
+            // shows where the Pods entry does: it counts pods among the workloads.
+            std::iter::once(SidebarEntry {
+                id: "workloads-overview".into(),
+                title: "Overview".into(),
+                target: Some(SidebarTarget::Page("workloads-overview".into())),
+                ..SidebarEntry::kind("workloads-overview", "Overview", "", "pods")
+                    .with_kind(Gvk::new("", "v1", "Pod"), Scope::Namespaced)
+            })
+            .chain(kinds(&[
+                ("pods", "Pods", "", "pods"),
+                ("deployments", "Deployments", "apps", "deployments"),
+                ("daemonsets", "DaemonSets", "apps", "daemonsets"),
+                ("statefulsets", "StatefulSets", "apps", "statefulsets"),
+                ("replicasets", "ReplicaSets", "apps", "replicasets"),
+                ("jobs", "Jobs", "batch", "jobs"),
+                ("cronjobs", "CronJobs", "batch", "cronjobs"),
+            ])),
+        ),
         section(4, "config", "Config", IconName::FileText).with_entries(kinds(&[
             ("configmaps", "ConfigMaps", "", "configmaps"),
             ("secrets", "Secrets", "", "secrets"),
