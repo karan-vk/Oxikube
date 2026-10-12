@@ -9,6 +9,9 @@
 /screenshots/
 .env
 .claude/settings.local.json
+# Local factory packets, metrics snapshots and gate receipts.
+/.factory/
+__pycache__/
 # golden-image comparison failures (see oxikube_testkit::screenshot)
 **/tests/goldens/**/*.actual.png
 **/tests/goldens/**/*.diff.png

@@ -20,6 +20,7 @@ Closes #<issue>  —  `E__-S__` <title>
 - Keymap contexts/bindings: ...
 
 ## Tests
+- Verified HEAD / receipt: <SHA; gate receipts or exact commands and results; distinguish any earlier revision>
 - Unit (fakes): ...
 - Integration (kind): ...
 - GPUI / screenshot: ...
@@ -31,6 +32,7 @@ Closes #<issue>  —  `E__-S__` <title>
 <!-- source, licence, header added, THIRD_PARTY_NOTICES updated — or "none" -->
 
 ## Code review (mandatory, Sonnet)
+- Reviewed revision(s): <author SHA; reviewer SHA; material changes since review and re-review evidence>
 - Author pass (local Claude Code): `/code-review medium` on Sonnet — findings: <none | summary + how each was resolved>
 - Reviewer pass (local Claude Code): `/code-review medium <PR#> --comment` — <pending | done, no open confirmed findings>
 

@@ -1,0 +1,20 @@
+{
+  "gates": {
+    "fast": [
+      ["cargo", "fmt", "--all", "--check"],
+      ["cargo", "xtask", "lint-deps"],
+      ["cargo", "xtask", "check-gpui-pin"]
+    ],
+    "full": [
+      ["cargo", "fmt", "--all", "--check"],
+      ["cargo", "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"],
+      ["cargo", "test", "--workspace"],
+      ["cargo", "xtask", "lint-deps"],
+      ["cargo", "xtask", "check-gpui-pin"],
+      ["cargo", "deny", "check"]
+    ],
+    "factory": [
+      ["python3", "-m", "unittest", "discover", "-s", "tools/factory", "-p", "test_*.py"]
+    ]
+  }
+}

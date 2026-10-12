@@ -61,6 +61,9 @@ fails CI on any other edge and on banned crates per layer.
     coalesced. PRs touching hot paths report `--perf` numbers; janky code is rejected.
 
 ## Workflow
+For task setup, harness handoffs, verification receipts, or delivery-rate analysis, read
+`docs/factory/README.md`. The portable CLI is `python3 tools/factory/factory.py --help`.
+
 1. Pick the lowest-`Wave` `Ready` story in your area (Project field; see `docs/DEPENDENCIES.md`) whose
    "Blocked by" issues are Done; read its epic and acceptance criteria.
 2. Set Project Status to `In Progress`; branch from `main`.

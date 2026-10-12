@@ -1,0 +1,207 @@
+{
+  "repo": "karan-vk/Oxikube",
+  "since": "2026-10-03T00:00:00+00:00",
+  "until": "2026-10-12T02:45:00+00:00",
+  "merged_prs": 204,
+  "merged_per_24h": 22.381714285714285,
+  "pr_open_to_merge_hours_p50": 0.8213888888888888,
+  "pr_open_to_merge_hours_p90": 7.108055555555556,
+  "merged_by_utc_day": {
+    "2026-10-03": 29,
+    "2026-10-04": 10,
+    "2026-10-05": 19,
+    "2026-10-06": 36,
+    "2026-10-07": 47,
+    "2026-10-08": 10,
+    "2026-10-09": 4,
+    "2026-10-10": 23,
+    "2026-10-11": 24,
+    "2026-10-12": 2
+  },
+  "open_prs_at_collection": 12,
+  "oldest_open_prs": [
+    {
+      "number": 619,
+      "created_at": "2026-10-10T09:55:14Z",
+      "draft": false
+    },
+    {
+      "number": 620,
+      "created_at": "2026-10-10T09:55:37Z",
+      "draft": false
+    },
+    {
+      "number": 621,
+      "created_at": "2026-10-10T09:55:55Z",
+      "draft": false
+    },
+    {
+      "number": 622,
+      "created_at": "2026-10-10T09:56:08Z",
+      "draft": false
+    },
+    {
+      "number": 666,
+      "created_at": "2026-10-11T14:53:55Z",
+      "draft": false
+    },
+    {
+      "number": 668,
+      "created_at": "2026-10-11T18:56:18Z",
+      "draft": false
+    },
+    {
+      "number": 669,
+      "created_at": "2026-10-11T19:55:05Z",
+      "draft": false
+    },
+    {
+      "number": 670,
+      "created_at": "2026-10-11T20:07:42Z",
+      "draft": false
+    },
+    {
+      "number": 671,
+      "created_at": "2026-10-11T20:08:09Z",
+      "draft": false
+    },
+    {
+      "number": 672,
+      "created_at": "2026-10-12T00:59:57Z",
+      "draft": false
+    }
+  ],
+  "workflows": {
+    ".github/workflows/ci.yml (pull_request)": {
+      "runs": 822,
+      "conclusions": {
+        "success": 633,
+        "cancelled": 122,
+        "failure": 63,
+        "pending": 4
+      },
+      "elapsed_minutes_p50": 12.666666666666666,
+      "elapsed_minutes_p90": 28.683333333333334,
+      "additional_attempts": 8
+    },
+    ".github/workflows/ci.yml (push)": {
+      "runs": 214,
+      "conclusions": {
+        "success": 186,
+        "cancelled": 21,
+        "failure": 6,
+        "pending": 1
+      },
+      "elapsed_minutes_p50": 13.166666666666666,
+      "elapsed_minutes_p90": 27.883333333333333,
+      "additional_attempts": 0
+    },
+    ".github/workflows/integration.yml (pull_request)": {
+      "runs": 480,
+      "conclusions": {
+        "success": 383,
+        "failure": 42,
+        "cancelled": 55
+      },
+      "elapsed_minutes_p50": 7.7,
+      "elapsed_minutes_p90": 11.416666666666666,
+      "additional_attempts": 11
+    },
+    ".github/workflows/integration.yml (schedule)": {
+      "runs": 6,
+      "conclusions": {
+        "success": 5,
+        "failure": 1
+      },
+      "elapsed_minutes_p50": 11.766666666666667,
+      "elapsed_minutes_p90": 16.516666666666666,
+      "additional_attempts": 0
+    },
+    ".github/workflows/integration.yml (workflow_dispatch)": {
+      "runs": 1,
+      "conclusions": {
+        "success": 1
+      },
+      "elapsed_minutes_p50": 4.266666666666667,
+      "elapsed_minutes_p90": 4.266666666666667,
+      "additional_attempts": 0
+    },
+    ".github/workflows/nightly.yml (schedule)": {
+      "runs": 9,
+      "conclusions": {
+        "success": 1,
+        "failure": 7,
+        "cancelled": 1
+      },
+      "elapsed_minutes_p50": 70.73333333333333,
+      "elapsed_minutes_p90": 80.0,
+      "additional_attempts": 0
+    },
+    ".github/workflows/nightly.yml (workflow_dispatch)": {
+      "runs": 38,
+      "conclusions": {
+        "success": 11,
+        "cancelled": 12,
+        "failure": 15
+      },
+      "elapsed_minutes_p50": 21.566666666666666,
+      "elapsed_minutes_p90": 74.86666666666666,
+      "additional_attempts": 0
+    },
+    ".github/workflows/probe-509-perf.yml (push)": {
+      "runs": 1,
+      "conclusions": {
+        "failure": 1
+      },
+      "elapsed_minutes_p50": 44.233333333333334,
+      "elapsed_minutes_p90": 44.233333333333334,
+      "additional_attempts": 1
+    },
+    ".github/workflows/probe-509.yml (push)": {
+      "runs": 2,
+      "conclusions": {
+        "success": 1,
+        "failure": 1
+      },
+      "elapsed_minutes_p50": 16.083333333333332,
+      "elapsed_minutes_p90": 35.85,
+      "additional_attempts": 0
+    },
+    ".github/workflows/refresh-goldens.yml (push)": {
+      "runs": 4,
+      "conclusions": {
+        "success": 2,
+        "cancelled": 2
+      },
+      "elapsed_minutes_p50": 1.85,
+      "elapsed_minutes_p90": 10.783333333333333,
+      "additional_attempts": 0
+    },
+    ".github/workflows/refresh-goldens.yml (workflow_dispatch)": {
+      "runs": 1,
+      "conclusions": {
+        "success": 1
+      },
+      "elapsed_minutes_p50": 9.35,
+      "elapsed_minutes_p90": 9.35,
+      "additional_attempts": 0
+    },
+    "dynamic/dependabot/dependabot-updates (dynamic)": {
+      "runs": 282,
+      "conclusions": {
+        "success": 282
+      },
+      "elapsed_minutes_p50": 1.45,
+      "elapsed_minutes_p90": 1.7,
+      "additional_attempts": 0
+    }
+  },
+  "limitations": [
+    "PR-open-to-merge excludes implementation before PR creation; it is not story lead time.",
+    "Merged cohorts exclude unfinished PRs. Open PRs are reported separately at collection time.",
+    "Workflow elapsed time includes queueing and uses updated_at; it is not billable runner time.",
+    "Only the latest conclusion per run ID is available; additional attempts do not reveal first-pass yield.",
+    "Cancellations may be intentional supersession; failures do not by themselves establish flaky tests.",
+    "No agent active time, token cost, deployment frequency or production defect rate is measured."
+  ]
+}

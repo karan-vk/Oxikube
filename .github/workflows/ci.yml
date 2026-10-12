@@ -20,6 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: Portable factory tests
+        run: python3 -m unittest discover -s tools/factory -p 'test_*.py'
       - uses: ./.github/actions/setup-rust
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all --check

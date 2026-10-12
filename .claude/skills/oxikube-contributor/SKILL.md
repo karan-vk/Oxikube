@@ -12,6 +12,10 @@ touching code; read the matching reference file when you enter its territory.
 
 ## 1. Pick up a story
 
+For isolated worktrees, harness handoffs and revision-bound check receipts, use
+`docs/factory/README.md` and `python3 tools/factory/factory.py --help`. The same packet
+works in Codex, Claude Code and other harnesses; review policy below still applies.
+
 1. Open the story issue (title starts with its ID, e.g. `E07-S03`). Read the parent epic
    (goal, scope, "done when", risks) and the story's acceptance criteria. They are the
    spec. If they are ambiguous, comment on the issue with the interpretation you chose

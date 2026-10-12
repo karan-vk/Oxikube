@@ -1,0 +1,215 @@
+[
+  {
+    "repo": "karan-vk/Oxikube",
+    "since": "2026-10-03T00:00:00Z",
+    "until": "2026-10-08T00:00:00Z",
+    "merged_prs": 141,
+    "merged_per_24h": 28.2,
+    "pr_open_to_merge_hours_p50": 0.5688888888888889,
+    "pr_open_to_merge_hours_p90": 5.014444444444444,
+    "merged_by_utc_day": {
+      "2026-10-03": 29,
+      "2026-10-04": 10,
+      "2026-10-05": 19,
+      "2026-10-06": 36,
+      "2026-10-07": 47
+    },
+    "workflows": {
+      ".github/workflows/ci.yml (pull_request)": {
+        "runs": 529,
+        "conclusions": {
+          "success": 445,
+          "cancelled": 68,
+          "failure": 16
+        },
+        "elapsed_minutes_p50": 9.633333333333333,
+        "elapsed_minutes_p90": 22.5,
+        "additional_attempts": 7
+      },
+      ".github/workflows/ci.yml (push)": {
+        "runs": 151,
+        "conclusions": {
+          "success": 130,
+          "cancelled": 17,
+          "failure": 4
+        },
+        "elapsed_minutes_p50": 9.316666666666666,
+        "elapsed_minutes_p90": 22.7,
+        "additional_attempts": 0
+      },
+      ".github/workflows/integration.yml (pull_request)": {
+        "runs": 303,
+        "conclusions": {
+          "success": 249,
+          "failure": 30,
+          "cancelled": 24
+        },
+        "elapsed_minutes_p50": 6.866666666666666,
+        "elapsed_minutes_p90": 11.25,
+        "additional_attempts": 11
+      },
+      ".github/workflows/integration.yml (schedule)": {
+        "runs": 2,
+        "conclusions": {
+          "success": 1,
+          "failure": 1
+        },
+        "elapsed_minutes_p50": 10.25,
+        "elapsed_minutes_p90": 11.7,
+        "additional_attempts": 0
+      },
+      ".github/workflows/integration.yml (workflow_dispatch)": {
+        "runs": 1,
+        "conclusions": {
+          "success": 1
+        },
+        "elapsed_minutes_p50": 4.266666666666667,
+        "elapsed_minutes_p90": 4.266666666666667,
+        "additional_attempts": 0
+      },
+      ".github/workflows/nightly.yml (schedule)": {
+        "runs": 5,
+        "conclusions": {
+          "success": 1,
+          "failure": 3,
+          "cancelled": 1
+        },
+        "elapsed_minutes_p50": 25.866666666666667,
+        "elapsed_minutes_p90": 70.73333333333333,
+        "additional_attempts": 0
+      },
+      ".github/workflows/nightly.yml (workflow_dispatch)": {
+        "runs": 33,
+        "conclusions": {
+          "success": 10,
+          "cancelled": 11,
+          "failure": 12
+        },
+        "elapsed_minutes_p50": 20.016666666666666,
+        "elapsed_minutes_p90": 48.766666666666666,
+        "additional_attempts": 0
+      },
+      ".github/workflows/probe-509-perf.yml (push)": {
+        "runs": 1,
+        "conclusions": {
+          "failure": 1
+        },
+        "elapsed_minutes_p50": 44.233333333333334,
+        "elapsed_minutes_p90": 44.233333333333334,
+        "additional_attempts": 1
+      },
+      ".github/workflows/probe-509.yml (push)": {
+        "runs": 2,
+        "conclusions": {
+          "success": 1,
+          "failure": 1
+        },
+        "elapsed_minutes_p50": 16.083333333333332,
+        "elapsed_minutes_p90": 35.85,
+        "additional_attempts": 0
+      },
+      ".github/workflows/refresh-goldens.yml (push)": {
+        "runs": 1,
+        "conclusions": {
+          "success": 1
+        },
+        "elapsed_minutes_p50": 6.916666666666667,
+        "elapsed_minutes_p90": 6.916666666666667,
+        "additional_attempts": 0
+      },
+      "dynamic/dependabot/dependabot-updates (dynamic)": {
+        "runs": 184,
+        "conclusions": {
+          "success": 184
+        },
+        "elapsed_minutes_p50": 1.4,
+        "elapsed_minutes_p90": 1.6666666666666667,
+        "additional_attempts": 0
+      }
+    }
+  },
+  {
+    "repo": "karan-vk/Oxikube",
+    "since": "2026-10-10T00:00:00Z",
+    "until": "2026-10-12T00:00:00Z",
+    "merged_prs": 47,
+    "merged_per_24h": 23.5,
+    "pr_open_to_merge_hours_p50": 2.918888888888889,
+    "pr_open_to_merge_hours_p90": 8.028611111111111,
+    "merged_by_utc_day": {
+      "2026-10-10": 23,
+      "2026-10-11": 24
+    },
+    "workflows": {
+      ".github/workflows/ci.yml (pull_request)": {
+        "runs": 250,
+        "conclusions": {
+          "failure": 42,
+          "success": 163,
+          "cancelled": 45
+        },
+        "elapsed_minutes_p50": 21.8,
+        "elapsed_minutes_p90": 31.7,
+        "additional_attempts": 1
+      },
+      ".github/workflows/ci.yml (push)": {
+        "runs": 47,
+        "conclusions": {
+          "success": 44,
+          "cancelled": 1,
+          "failure": 2
+        },
+        "elapsed_minutes_p50": 21.9,
+        "elapsed_minutes_p90": 32.86666666666667,
+        "additional_attempts": 0
+      },
+      ".github/workflows/integration.yml (pull_request)": {
+        "runs": 145,
+        "conclusions": {
+          "success": 108,
+          "cancelled": 28,
+          "failure": 9
+        },
+        "elapsed_minutes_p50": 9.15,
+        "elapsed_minutes_p90": 11.633333333333333,
+        "additional_attempts": 0
+      },
+      ".github/workflows/integration.yml (schedule)": {
+        "runs": 2,
+        "conclusions": {
+          "success": 2
+        },
+        "elapsed_minutes_p50": 12.483333333333333,
+        "elapsed_minutes_p90": 12.7,
+        "additional_attempts": 0
+      },
+      ".github/workflows/nightly.yml (schedule)": {
+        "runs": 2,
+        "conclusions": {
+          "failure": 2
+        },
+        "elapsed_minutes_p50": 75.75,
+        "elapsed_minutes_p90": 80.0,
+        "additional_attempts": 0
+      },
+      ".github/workflows/nightly.yml (workflow_dispatch)": {
+        "runs": 1,
+        "conclusions": {
+          "failure": 1
+        },
+        "elapsed_minutes_p50": 80.56666666666666,
+        "elapsed_minutes_p90": 80.56666666666666,
+        "additional_attempts": 0
+      },
+      "dynamic/dependabot/dependabot-updates (dynamic)": {
+        "runs": 90,
+        "conclusions": {
+          "success": 90
+        },
+        "elapsed_minutes_p50": 1.5166666666666666,
+        "elapsed_minutes_p90": 1.7,
+        "additional_attempts": 0
+      }
+    }
+  }
+]
