@@ -31,7 +31,7 @@ struct Preview {
     view: Entity<CodeView>,
 }
 
-/// The ConfigMap panel. See the [module docs](super).
+/// The ConfigMap panel. See the module docs.
 pub struct ConfigMapPanel {
     detail: WeakEntity<DetailView>,
     /// The keys, made off the UI thread.

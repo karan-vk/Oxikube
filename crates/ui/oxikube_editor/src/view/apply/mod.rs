@@ -15,7 +15,7 @@
 //! | `flow` | the steps above on [`ManifestEditor`]: [`begin_apply`](ManifestEditor::begin_apply), what each answer does to the editor |
 //! | `preview` | [`ApplyPreviewDialog`]: the dry run's diff (virtualised), the fallback or force it will use, Apply / Cancel |
 //! | `batch` | a buffer of several documents (E10-S09): every document's dry run, one combined preview ([`BatchPreviewDialog`]), applied in buffer order, the per-document results panel |
-//! | `secrets` | [`SecretEncoder`]: a Secret shown as plaintext ("edit decoded", a created Secret) is base64-encoded on the way out (E12-S11) |
+//! | `secrets` | `SecretEncoder`: a Secret shown as plaintext ("edit decoded", a created Secret) is base64-encoded on the way out (E12-S11) |
 //! | `conflicts` | [`ConflictDialog`]: the fields other managers own, Force / Cancel |
 //!
 //! The editor never writes to a cluster: every request is a `resource::Apply` dispatch of

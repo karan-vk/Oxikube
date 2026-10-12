@@ -18,7 +18,7 @@ use crate::detail::{DetailView, RevealLoad};
 use crate::kinds::key_list;
 use crate::table::ToneColors;
 
-/// The Secret panel. See the [module docs](super).
+/// The Secret panel. See the module docs.
 pub struct SecretPanel {
     detail: WeakEntity<DetailView>,
     _detail: Option<Subscription>,
