@@ -46,7 +46,7 @@ pub(crate) fn pods_kind() -> ResourceKind {
         singular: "pod".into(),
         short_names: vec!["po".into()],
         categories: vec!["all".into()],
-        verbs: VerbSet::from_names(["get", "list", "watch", "delete"]),
+        verbs: VerbSet::from_names(["get", "list", "watch", "delete", "patch"]),
         namespaced: true,
     }
 }

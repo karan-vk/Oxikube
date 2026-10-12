@@ -113,6 +113,7 @@ pub fn row_actions() -> Vec<RowActionSpec> {
         .chain(rollout_row_actions())
         .chain(rollback_row_actions())
         .chain(crate::used_by::row_actions())
+        .chain(crate::bulk::bulk_row_actions())
         .collect()
 }
 

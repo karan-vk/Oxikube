@@ -58,6 +58,8 @@ pub const STANDS_FOR: &[(&str, CommandId)] = &[
     ),
     // `r` on the Nodes table (E12-S10): the drain dialog.
     ("resource_table::DrainSelected", CommandId::NODE_DRAIN),
+    // `shift-l` on any table (E12-S19): the label editor over the selection.
+    ("resource_table::EditLabels", CommandId::SELECTION_LABEL),
     ("resource_table::DebugSelected", CommandId::POD_DEBUG),
     ("resource_table::ViewYaml", CommandId::RESOURCE_VIEW_YAML),
     (

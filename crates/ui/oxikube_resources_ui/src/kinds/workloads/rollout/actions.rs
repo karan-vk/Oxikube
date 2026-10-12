@@ -12,8 +12,9 @@ pub const SET_IMAGE_ORDER: u16 = 144;
 
 /// The row actions this module adds, for Deployments, StatefulSets and DaemonSets
 /// ([`oxikube_app::is_rollable`]): `workload::Restart` and `workload::SetImage`. Both need the
-/// session's `MUTATE` grant and are greyed out on a read-only cluster. Neither is bulk yet: a
-/// selection of several acts on the cursor row (the bulk restart is E12-S19's).
+/// session's `MUTATE` grant and are greyed out on a read-only cluster. "Restart" is bulk (E12-S19):
+/// with several rows selected the table opens the bulk dialog (`selection::Restart`); "Set image"
+/// takes one workload and acts on the cursor row of a selection.
 ///
 /// "Restart" is dispatched as built (the bus asks its one confirmation); "Set image" opens the
 /// [`SetImageDialog`](super::SetImageDialog) for the images and sends the command the user
@@ -27,6 +28,7 @@ pub fn rollout_row_actions() -> Vec<RowActionSpec> {
         })
         .label("Restart")
         .kinds(KindFilter::Matching(rollable))
+        .bulk()
         .order(RESTART_ORDER),
         RowActionSpec::new(CommandId::WORKLOAD_SET_IMAGE, |target| {
             Command::WorkloadSetImage {

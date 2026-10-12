@@ -270,6 +270,15 @@ impl Harness {
         )
     }
 
+    /// The standard harness with the real bulk handlers (`selection::Delete`, `selection::Restart`,
+    /// `selection::Label`, E12-S19) over the fake resource ports. `resource::Delete` and
+    /// `pod::Delete` stay the recording test handlers: a bulk delete does not go through them.
+    pub fn with_selection() -> Self {
+        Self::with_extra(|reg, _, manager| {
+            crate::selection::register_commands(reg, manager.clone())
+        })
+    }
+
     /// The standard harness with the real `node::Cordon` and `node::Uncordon` handlers
     /// (E12-S09) in place of the recording test one, over the fake resource ports.
     pub fn with_node_handlers() -> Self {

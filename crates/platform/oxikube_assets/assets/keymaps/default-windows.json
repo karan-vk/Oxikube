@@ -207,6 +207,10 @@
       // claim under the cursor (the resize dialog), shift-s makes the storage class the default.
       "shift-r": "resource_table::ResizeClaim",
       "shift-s": "resource_table::SetDefaultClass",
+      // Bulk (E12-S19): shift-l edits the labels (or annotations) of the selected rows, or of the
+      // cursor row; any kind. Delete and r (restart) turn into their bulk dialogs when several rows are
+      // selected.
+      "shift-l": "resource_table::EditLabels",
       "/": "resource_table::FocusFilter",
       // k9s verbs on the cursor row (E11-S07): y the YAML, d describe, e edit, l logs (a pod's, or
       // a workload's pods), shift-f forward a port, f the active forwards. `ctrl-w` shows or hides

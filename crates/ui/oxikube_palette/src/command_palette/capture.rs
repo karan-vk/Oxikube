@@ -60,6 +60,9 @@ pub fn selection_of(target: &CommandTarget) -> Selection {
     if target.targets.iter().all(|object| &object.gvk == kind) {
         Selection::many(kind.clone(), count)
     } else {
-        Selection::mixed(count)
+        Selection::mixed_of(
+            count,
+            target.targets.iter().map(|object| object.gvk.clone()),
+        )
     }
 }

@@ -49,6 +49,7 @@
 
 pub mod actions;
 mod batch;
+mod bulk_open;
 mod cell_cache;
 mod cells;
 mod columns;

@@ -28,6 +28,7 @@
 //! dependency direction. `cargo xtask lint-deps` enforces it.
 
 pub mod actions;
+pub mod bulk;
 pub mod crds;
 pub mod describe_settings;
 pub mod detail;

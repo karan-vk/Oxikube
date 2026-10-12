@@ -24,6 +24,9 @@ use crate::actions::ActionContext;
 pub struct Selection {
     count: usize,
     kind: Option<Gvk>,
+    /// The distinct kinds of a selection of several kinds (empty when it is of one, or when the
+    /// caller did not say).
+    kinds: Vec<Gvk>,
 }
 
 impl Selection {
@@ -37,6 +40,7 @@ impl Selection {
         Self {
             count: 1,
             kind: Some(kind),
+            kinds: Vec::new(),
         }
     }
 
@@ -45,12 +49,30 @@ impl Selection {
         Self {
             count,
             kind: Some(kind),
+            kinds: Vec::new(),
         }
     }
 
     /// `count` objects of different kinds.
     pub fn mixed(count: usize) -> Self {
-        Self { count, kind: None }
+        Self {
+            count,
+            kind: None,
+            kinds: Vec::new(),
+        }
+    }
+
+    /// `count` objects of the different `kinds` it names (a bulk action that takes several kinds
+    /// checks each of them, E12-S19).
+    pub fn mixed_of(count: usize, kinds: impl IntoIterator<Item = Gvk>) -> Self {
+        let mut kinds: Vec<Gvk> = kinds.into_iter().collect();
+        kinds.sort();
+        kinds.dedup();
+        Self {
+            count,
+            kind: None,
+            kinds,
+        }
     }
 
     /// How many objects are selected.
@@ -75,6 +97,19 @@ impl Selection {
                         .kind
                         .as_ref()
                         .is_some_and(|k| &*k.group == group && &*k.kind == kind)
+            }
+            SelectionKind::AnyOf(allowed) => {
+                let is_allowed = |k: &Gvk| {
+                    allowed
+                        .iter()
+                        .any(|(group, kind)| &*k.group == *group && &*k.kind == *kind)
+                };
+                self.count >= 1
+                    && match &self.kind {
+                        Some(kind) => is_allowed(kind),
+                        // A mixed selection whose kinds are unknown cannot be vouched for.
+                        None => !self.kinds.is_empty() && self.kinds.iter().all(is_allowed),
+                    }
             }
         }
     }
@@ -181,6 +216,10 @@ impl fmt::Display for Unavailable {
             Unavailable::Selection(SelectionKind::Many) => f.write_str("Select an object"),
             Unavailable::Selection(SelectionKind::OfKind { kind, .. }) => {
                 write!(f, "Select a {kind}")
+            }
+            Unavailable::Selection(SelectionKind::AnyOf(kinds)) => {
+                let names: Vec<&str> = kinds.iter().map(|(_, kind)| *kind).collect();
+                write!(f, "Select only {}", names.join(", "))
             }
             Unavailable::Selection(SelectionKind::None) => f.write_str("Clear the selection"),
         }

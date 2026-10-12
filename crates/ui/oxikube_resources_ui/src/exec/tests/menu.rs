@@ -33,6 +33,7 @@ fn a_pod_offers_shell_attach_and_debug_after_logs_and_a_node_offers_only_its_own
             "Attach",
             "Debug",
             "Evict",
+            "Edit labels",
             "Delete",
             "Force Delete",
             "Sanitize"
@@ -42,7 +43,14 @@ fn a_pod_offers_shell_attach_and_debug_after_logs_and_a_node_offers_only_its_own
     let nodes = f.open(crate::actions::tests::nodes_kind());
     assert_eq!(
         labels(&mut f, &nodes),
-        ["Shell", "Cordon", "Uncordon", "Drain…", "Delete"],
+        [
+            "Shell",
+            "Cordon",
+            "Uncordon",
+            "Drain…",
+            "Edit labels",
+            "Delete"
+        ],
         "a node's Shell is `node::Shell`, not a pod's; it has no Attach"
     );
 }
@@ -54,7 +62,10 @@ fn a_selection_of_several_pods_offers_neither(cx: &mut TestAppContext) {
     let pods = f.open_pods();
     f.update(&pods, |t, cx| t.select_all(cx));
     // A sweep acts on the view, so it is offered (without a count) for a selection too.
-    assert_eq!(labels(&mut f, &pods), ["Delete 2 objects", "Sanitize"]);
+    assert_eq!(
+        labels(&mut f, &pods),
+        ["Edit labels 2 objects", "Delete 2 objects", "Sanitize"]
+    );
 }
 
 #[gpui::test]

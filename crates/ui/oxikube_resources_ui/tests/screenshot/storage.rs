@@ -182,6 +182,8 @@ fn panel(light: bool) -> anyhow::Result<RgbaImage> {
             dispatcher: Rc::new(Ignore),
             exec: None,
             scale: None,
+            set_image: None,
+            rollback: None,
             drain: None,
             set_image: None,
             rollback: None,

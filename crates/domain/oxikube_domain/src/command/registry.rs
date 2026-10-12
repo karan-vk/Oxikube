@@ -304,6 +304,15 @@ impl CommandId {
     pub const SECRET_EDIT_DECODED: CommandId = CommandId::new("secret::EditDecoded");
     /// `secret::Reveal`: show, or hide again, a Secret's values decoded in its detail (k9s `x`).
     pub const SECRET_REVEAL: CommandId = CommandId::new("secret::Reveal");
+    /// `selection::Delete`: delete the selected objects as one batch, one confirmation at the
+    /// riskiest object's tier, a result per object (E12-S19).
+    pub const SELECTION_DELETE: CommandId = CommandId::new("selection::Delete");
+    /// `selection::Label`: add, change or remove labels or annotations on the selected objects as
+    /// one batch (E12-S19).
+    pub const SELECTION_LABEL: CommandId = CommandId::new("selection::Label");
+    /// `selection::Restart`: rolling-restart the selected Deployments, StatefulSets and DaemonSets
+    /// as one batch (E12-S19).
+    pub const SELECTION_RESTART: CommandId = CommandId::new("selection::Restart");
     /// `table::FocusFilter`: move the keyboard focus to a resource table's filter bar.
     pub const TABLE_FOCUS_FILTER: CommandId = CommandId::new("table::FocusFilter");
     /// `table::ToggleWide`: show or hide the wide columns (`kubectl -o wide`) of a kind's tables.
@@ -373,6 +382,13 @@ const NONE: Capabilities = Capabilities::empty();
 
 /// The views a selection of resources is acted on from: a table row or the detail view of one.
 const TABLE_VIEWS: &[ViewContext] = &[ViewContext::Table, ViewContext::Detail];
+/// The kinds a restart rolls: the pod-template workloads whose controller replaces pods when the
+/// template changes (a ReplicaSet and a ReplicationController never do).
+const ROLLABLE_KINDS: &[(&str, &str)] = &[
+    ("apps", "Deployment"),
+    ("apps", "StatefulSet"),
+    ("apps", "DaemonSet"),
+];
 /// Commands of the resource table only.
 const TABLE_VIEW: &[ViewContext] = &[ViewContext::Table];
 /// Commands of the detail view only.
@@ -1463,6 +1479,43 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::core("Secret")),
+    // The bulk actions of a selection (E12-S19). Each is one guarded command over all the objects:
+    // the guard asks once, at the tier of the riskiest object (`Command::effective_risk` takes the
+    // maximum over the targets), refuses the whole batch on a read-only cluster before anything is
+    // sent, and the handler audits every object on its own under a shared batch id.
+    //
+    // The declared risk is the floor: a delete is medium (a simple confirm) until an object in the
+    // selection raises it (a Namespace, a cascading delete: type the name).
+    CommandMeta::mutation(
+        CommandId::SELECTION_DELETE,
+        "Delete Selection",
+        CommandScope::Selection,
+        Risk::Medium,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::Many),
+    // Labels can orphan pods from their Service or controller, so a label edit is a medium risk
+    // (one confirm, with the warning); annotations ride the same command.
+    CommandMeta::mutation(
+        CommandId::SELECTION_LABEL,
+        "Edit Labels of Selection",
+        CommandScope::Selection,
+        Risk::Medium,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::Many),
+    // Only when every selected object is a Deployment, StatefulSet or DaemonSet.
+    CommandMeta::mutation(
+        CommandId::SELECTION_RESTART,
+        "Restart Selection",
+        CommandScope::Selection,
+        Risk::Low,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::AnyOf(ROLLABLE_KINDS)),
     // Starts a port-forward to a pod behind the Service and opens the local end in the browser. A
     // forward changes nothing in the cluster, so it is a read like `pod::PortForward` (what the
     // forward may do is the port-forward manager's guard policy, E15); it needs the capability.
@@ -2010,7 +2063,56 @@ mod tests {
                 .filter(|m| !m.exec)
                 .all(|m| m.tool_risk() == m.risk
                     || m.id == CommandId::RESOURCE_DELETE
+                    || m.id == CommandId::SELECTION_DELETE
                     || m.id == CommandId::WORKLOAD_SCALE)
+        );
+    }
+
+    #[test]
+    fn the_bulk_commands_are_guarded_selection_mutations() {
+        for (id, title, tool, risk) in [
+            (
+                CommandId::SELECTION_DELETE,
+                "Delete Selection",
+                "k8s.selection_delete",
+                Risk::Medium,
+            ),
+            (
+                CommandId::SELECTION_LABEL,
+                "Edit Labels of Selection",
+                "k8s.selection_label",
+                Risk::Medium,
+            ),
+            (
+                CommandId::SELECTION_RESTART,
+                "Restart Selection",
+                "k8s.selection_restart",
+                Risk::Low,
+            ),
+        ] {
+            let meta = lookup(id).expect("registered");
+            assert!(meta.mutating && !meta.exec && !meta.privileged, "{id}");
+            assert_eq!(meta.title, title);
+            assert_eq!(meta.risk, Some(risk), "{id}");
+            assert_eq!(meta.confirm, ConfirmTier::Simple, "{id}");
+            assert_eq!(id.tool_name(), tool);
+            assert!(meta.availability.requires_writable, "{id}");
+            assert!(meta.availability.selection.needs_selection(), "{id}");
+        }
+        // Only a restart is picky about the kinds in the selection.
+        assert!(matches!(
+            lookup(CommandId::SELECTION_RESTART)
+                .unwrap()
+                .availability
+                .selection,
+            SelectionKind::AnyOf(kinds) if kinds.len() == 3
+        ));
+        assert_eq!(
+            lookup(CommandId::SELECTION_DELETE)
+                .unwrap()
+                .availability
+                .selection,
+            SelectionKind::Many
         );
     }
 

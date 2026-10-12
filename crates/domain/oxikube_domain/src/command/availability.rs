@@ -93,6 +93,9 @@ pub enum SelectionKind {
         /// Kind, for example `Pod`.
         kind: &'static str,
     },
+    /// One or more objects, every one of a kind in the list (`(group, kind)` pairs): a bulk
+    /// restart of Deployments, StatefulSets and DaemonSets, mixed or not.
+    AnyOf(&'static [(&'static str, &'static str)]),
 }
 
 impl SelectionKind {

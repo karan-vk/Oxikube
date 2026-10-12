@@ -1,7 +1,6 @@
 //! Tests of the row actions in a real table, over a real `CommandBus` and `MutationGuard` on
 //! testkit fakes (the table fixture's window, sessions and stores; no cluster, no threads).
 
-mod bulk;
 mod delete;
 mod menu;
 
@@ -22,7 +21,7 @@ pub(crate) fn nodes_kind() -> ResourceKind {
         singular: "node".into(),
         short_names: vec!["no".into()],
         categories: Vec::new(),
-        verbs: VerbSet::from_names(["get", "list", "watch", "delete"]),
+        verbs: VerbSet::from_names(["get", "list", "watch", "delete", "patch"]),
         namespaced: false,
     }
 }
@@ -36,7 +35,7 @@ pub(crate) fn deployments_kind() -> ResourceKind {
         singular: "deployment".into(),
         short_names: vec!["deploy".into()],
         categories: vec!["all".into()],
-        verbs: VerbSet::from_names(["get", "list", "watch", "delete"]),
+        verbs: VerbSet::from_names(["get", "list", "watch", "delete", "patch"]),
         namespaced: true,
     }
 }

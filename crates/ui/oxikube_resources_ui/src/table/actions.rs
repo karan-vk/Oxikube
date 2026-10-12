@@ -97,6 +97,10 @@ actions!(
         /// k9s's `ctrl-l` on a Deployment, StatefulSet, DaemonSet or ReplicaSet: bound for those
         /// kinds only).
         RollbackSelected,
+        /// Edit the labels or annotations of the selected rows, or of the cursor row, in the label
+        /// editor (`selection::Label`; `shift-l`, any kind). Several rows share one dialog, one
+        /// confirmation and a result per row.
+        EditLabels,
         /// Add a debug container to the cursor row's pod (`pod::Debug`, through the debug dialog;
         /// `shift-d`). A toast says why not for a kind that is not a pod, or on a read-only cluster.
         DebugSelected,

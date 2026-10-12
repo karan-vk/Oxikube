@@ -121,6 +121,7 @@
   shift-f          resource_table::PortForward
   shift-j          resource_table::ExtendNext
   shift-k          resource_table::ExtendPrevious
+  shift-l          resource_table::EditLabels
   shift-r          resource_table::ResizeClaim
   shift-s          resource_table::SetDefaultClass
   y                resource_table::ViewYaml

@@ -456,6 +456,23 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "terminal::OpenLink" => Command::TerminalOpenLink {
             target: "https://kubernetes.io".into(),
         },
+        "selection::Delete" => Command::SelectionDelete {
+            targets: vec![target()],
+            propagation: oxikube_domain::command::Propagation::Background,
+        },
+        "selection::Restart" => Command::SelectionRestart {
+            targets: vec![ResourceRef::namespaced(
+                cluster,
+                Gvk::new("apps", "v1", "Deployment"),
+                "default",
+                "api",
+            )],
+        },
+        "selection::Label" => Command::SelectionLabel {
+            targets: vec![target()],
+            field: oxikube_domain::selection::LabelField::Labels,
+            edits: vec![oxikube_domain::selection::LabelEdit::set("app", "web")],
+        },
         "window::New" => Command::WindowNew,
         "workload::Restart" => Command::WorkloadRestart {
             target: ResourceRef::namespaced(

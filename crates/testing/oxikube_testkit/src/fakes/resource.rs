@@ -16,6 +16,7 @@ use parking_lot::Mutex;
 use serde_json::Value;
 
 use super::FakeClockPort;
+use crate::overlap::Overlap;
 use crate::script::{CallLog, Script, StreamGauge, Timeline};
 
 const PORT: &str = "FakeResourcePort";
@@ -315,6 +316,7 @@ pub struct FakeResourcePort {
     store: Mutex<Vec<Resource>>,
     clock: Arc<FakeClockPort>,
     watches: StreamGauge,
+    writes: Overlap,
 }
 
 fake_plumbing!(FakeResourcePort, ResourceScripts, ResourceCall);
@@ -348,6 +350,7 @@ impl FakeResourcePort {
             store: Mutex::new(Vec::new()),
             clock,
             watches: StreamGauge::default(),
+            writes: Overlap::default(),
         }
     }
 
@@ -393,6 +396,19 @@ impl FakeResourcePort {
     /// A copy of every stored object, in insertion order.
     pub fn objects(&self) -> Vec<Resource> {
         self.store.lock().clone()
+    }
+
+    /// Makes `delete` and `patch` yield once while in flight and counts how many were in flight at
+    /// the same time ([`peak_writes`](Self::peak_writes)). Drive the caller with an executor that
+    /// re-polls (`futures::executor::block_on`), not `now_or_never`.
+    pub fn track_write_overlap(&self) {
+        self.writes.track();
+    }
+
+    /// The most `delete` and `patch` calls in flight at once since
+    /// [`track_write_overlap`](Self::track_write_overlap).
+    pub fn peak_writes(&self) -> usize {
+        self.writes.peak()
     }
 
     /// The recorded `ResourceWriter` calls only.
@@ -755,6 +771,7 @@ impl ResourceWriter for FakeResourcePort {
             patch: patch.clone(),
             options: options.clone(),
         });
+        let _in_flight = self.writes.enter().await;
         self.script.patch.next_or_else(|| match &patch.kind {
             // A server-side apply of a whole object: the body is what the store holds afterwards
             // (no field-ownership bookkeeping); a merge or strategic patch merges into the stored
@@ -816,6 +833,7 @@ impl ResourceWriter for FakeResourcePort {
             name: name.to_owned(),
             options: options.clone(),
         });
+        let _in_flight = self.writes.enter().await;
         self.script.delete.next_or_else(|| {
             if self.find(kind, namespace, name).is_none() {
                 return Err(OxiError::not_found(format!("{kind} {name} not found")));

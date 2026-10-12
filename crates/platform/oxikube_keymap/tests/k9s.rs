@@ -30,6 +30,7 @@ actions!(
         ShowUsedBy,
         OpenInBrowser,
         DeleteSelected,
+        EditLabels,
         ShellSelected,
         ScaleSelected,
         RestartSelected,
@@ -886,6 +887,54 @@ fn ctrl_l_rolls_back_the_workloads_that_keep_a_history(cx: &mut TestAppContext) 
             .collect::<Vec<_>>()
     });
     assert_eq!(keys, ["ctrl-l"]);
+}
+
+#[gpui::test]
+fn shift_l_edits_the_labels_of_the_selection_on_every_kind_and_is_text_in_the_filter(
+    cx: &mut TestAppContext,
+) {
+    for platform in [MAC, LINUX] {
+        install(cx, platform, "");
+        // Any kind: the bulk label editor works on a Pod, a Node and a custom resource alike.
+        for kind in ["Pod", "Deployment", "Node", "ConfigMap", "Widget"] {
+            assert_eq!(
+                runs(cx, "shift-l", &strs(&table(kind, ""))),
+                Some("resource_table::EditLabels"),
+                "{kind} on {platform:?}"
+            );
+        }
+        // The Delete key and `r` are the same keys with one row or several (the table turns them
+        // into the bulk dialog): the bindings do not change with the selection.
+        for selection in ["one", "many"] {
+            let stack = vec![
+                "Workspace".to_owned(),
+                "ClusterTab connected".to_owned(),
+                "Workspace".to_owned(),
+                "Pane".to_owned(),
+                format!("ResourceTable kind=Deployment selection={selection} scope=namespaced"),
+            ];
+            assert_eq!(
+                runs(cx, "ctrl-d", &strs(&stack)),
+                Some("resource_table::DeleteSelected")
+            );
+            assert_eq!(
+                runs(cx, "r", &strs(&stack)),
+                Some("resource_table::RestartSelected")
+            );
+        }
+        // Typing into the table's filter field is text.
+        let editing = table("Pod", "Editing");
+        assert_eq!(press(cx, "shift-l", &strs(&editing)), Resolution::Unbound);
+    }
+    // The palette shows the key next to the command.
+    install(cx, MAC, "");
+    let keys = cx.read(|cx| {
+        bindings_for_command(cx, CommandId::SELECTION_LABEL)
+            .into_iter()
+            .map(|info| info.keystrokes_text())
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(keys, ["shift-l"]);
 }
 
 #[gpui::test]

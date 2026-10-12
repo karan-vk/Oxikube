@@ -113,6 +113,7 @@ impl Render for ResourceTable {
             .on_action(cx.listener(Self::on_restart))
             .on_action(cx.listener(Self::on_set_image))
             .on_action(cx.listener(Self::on_rollback))
+            .on_action(cx.listener(Self::on_edit_labels))
             .on_action(cx.listener(Self::on_debug))
             .on_action(cx.listener(Self::on_resize_claim))
             .on_action(cx.listener(Self::on_set_default_class))
