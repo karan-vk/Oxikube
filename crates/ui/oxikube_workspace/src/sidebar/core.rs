@@ -38,8 +38,6 @@ pub fn core_sections() -> Vec<SidebarSection> {
             // The Workloads overview (E07-S11); the "Cluster" header is the cluster overview. It
             // shows where the Pods entry does: it counts pods among the workloads.
             std::iter::once(SidebarEntry {
-                id: "workloads-overview".into(),
-                title: "Overview".into(),
                 target: Some(SidebarTarget::Page("workloads-overview".into())),
                 ..SidebarEntry::kind("workloads-overview", "Overview", "", "pods")
                     .with_kind(Gvk::new("", "v1", "Pod"), Scope::Namespaced)

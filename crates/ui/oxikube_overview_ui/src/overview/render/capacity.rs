@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use gpui::{
-    AnyElement, App, Context, Hsla, InteractiveElement as _, IntoElement, ParentElement as _,
+    AnyElement, Context, Hsla, InteractiveElement as _, IntoElement, ParentElement as _,
     SharedString, Styled as _, div, px, relative,
 };
 use oxikube_domain::AllocationResource;
@@ -107,7 +107,7 @@ fn spark(id: &'static str, points: &Arc<[Point]>, range: (f64, f64)) -> AnyEleme
 impl ClusterOverview {
     pub(super) fn capacity(&self, cx: &mut Context<Self>) -> AnyElement {
         let tokens = cx.tokens();
-        let sparks = self.history.sparks().cloned();
+        let sparks = self.history.sparks();
         let rows = self.shown.lines.iter().map(|line| {
             let id = id_of(line.resource);
             let trend = sparks.as_ref().and_then(|s| match line.resource {
@@ -149,7 +149,7 @@ impl ClusterOverview {
                 .children(trend)
         });
         let mut card = card("overview-capacity", "Capacity and allocation", cx).children(rows);
-        card = card.child(legend(&tokens, cx));
+        card = card.child(legend(&tokens));
         if let Some(text) = self.shown.notice.clone() {
             card = card.child(self.notice("overview-live-notice", text, cx));
         } else if live_metrics_loading(&self.shown.snapshot) && self.deps.metrics.is_some() {
@@ -163,7 +163,7 @@ impl ClusterOverview {
     }
 }
 
-fn legend(tokens: &Tokens, _: &App) -> AnyElement {
+fn legend(tokens: &Tokens) -> AnyElement {
     let swatch = |colour: Hsla, label: &'static str| {
         h_flex()
             .gap(u(px(4.)))

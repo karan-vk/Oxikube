@@ -2,7 +2,8 @@
 //! when the app has no history metrics; a `metrics unavailable: <reason>` line with the way to
 //! the settings when it has them but the cluster has no endpoint.
 
-use gpui::{AnyElement, Context, IntoElement, ParentElement as _, Styled as _, div, px};
+use gpui::{AnyElement, Context, Entity, IntoElement, ParentElement as _, Styled as _, div, px};
+use oxikube_ui::chart::Chart;
 use oxikube_ui::layout::h_flex;
 use oxikube_ui::{ActiveTokens as _, u};
 
@@ -40,8 +41,8 @@ impl ClusterOverview {
             }
             HistoryState::Loading | HistoryState::Ready => {}
         }
-        let chart = |title: &'static str, entity: gpui::Entity<oxikube_ui::chart::Chart>| {
-            gpui::div()
+        let chart = |title: &'static str, entity: Entity<Chart>| {
+            div()
                 .flex_1()
                 .min_w(u(px(240.)))
                 .child(

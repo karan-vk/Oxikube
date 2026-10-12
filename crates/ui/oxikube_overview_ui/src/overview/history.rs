@@ -41,6 +41,18 @@ pub enum HistoryState {
     Failed(String),
 }
 
+impl HistoryState {
+    /// `metrics unavailable: <reason>` when the graphs cannot be drawn.
+    fn unavailable_text(&self) -> Option<String> {
+        match self {
+            Self::Unavailable(reason) | Self::Failed(reason) => {
+                Some(format!("metrics unavailable: {reason}"))
+            }
+            Self::Off | Self::Detecting | Self::Loading | Self::Ready => None,
+        }
+    }
+}
+
 /// The sparkline data of the capacity card: CPU and memory usage over the graphs' range.
 #[derive(Debug, Clone)]
 pub struct Sparks {
@@ -111,15 +123,7 @@ impl HistoryPanel {
 
     /// `metrics unavailable: <reason>` when the graphs cannot be drawn.
     pub fn unavailable_text(&self) -> Option<String> {
-        match &self.state {
-            HistoryState::Unavailable(reason) | HistoryState::Failed(reason) => {
-                Some(format!("metrics unavailable: {reason}"))
-            }
-            HistoryState::Off
-            | HistoryState::Detecting
-            | HistoryState::Loading
-            | HistoryState::Ready => None,
-        }
+        self.state.unavailable_text()
     }
 
     /// Starts querying (the overview went live). Nothing happens without history deps.
@@ -223,8 +227,8 @@ impl HistoryPanel {
             HistoryState::Ready => None,
             HistoryState::Loading | HistoryState::Detecting => Some("Loading…".into()),
             HistoryState::Off => Some("No history metrics".into()),
-            HistoryState::Unavailable(reason) | HistoryState::Failed(reason) => {
-                Some(format!("metrics unavailable: {reason}").into())
+            HistoryState::Unavailable(_) | HistoryState::Failed(_) => {
+                state.unavailable_text().map(Into::into)
             }
         }
     }

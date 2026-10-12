@@ -10,20 +10,25 @@ use crate::store::{RowChange, RowOp, StoreDelta, StoreObject};
 
 /// A tally that follows a subscription row by row.
 pub(crate) trait RowTally {
-    /// The rows were replaced by `rows`: count them from scratch.
-    fn reset(&mut self, rows: &[Arc<StoreObject>]);
+    /// Forgets everything counted.
+    fn clear(&mut self);
     /// `object` arrived or changed.
     fn upsert(&mut self, object: &StoreObject);
     /// `object` left.
     fn remove(&mut self, object: &StoreObject);
-}
 
-impl RowTally for PodTally {
+    /// The rows were replaced by `rows`: count them from scratch.
     fn reset(&mut self, rows: &[Arc<StoreObject>]) {
         self.clear();
         for row in rows {
-            RowTally::upsert(self, row);
+            self.upsert(row);
         }
+    }
+}
+
+impl RowTally for PodTally {
+    fn clear(&mut self) {
+        PodTally::clear(self);
     }
 
     fn upsert(&mut self, object: &StoreObject) {
@@ -38,11 +43,8 @@ impl RowTally for PodTally {
 }
 
 impl RowTally for NodeTally {
-    fn reset(&mut self, rows: &[Arc<StoreObject>]) {
-        self.clear();
-        for row in rows {
-            RowTally::upsert(self, row);
-        }
+    fn clear(&mut self) {
+        NodeTally::clear(self);
     }
 
     fn upsert(&mut self, object: &StoreObject) {
