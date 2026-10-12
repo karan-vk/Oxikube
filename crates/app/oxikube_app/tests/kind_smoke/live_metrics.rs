@@ -107,14 +107,7 @@ async fn nodes_and_a_pod_reach_the_columns_from_metrics_server() {
     .await;
     let (node_count, _) = usage.counts();
     assert!(node_count >= 1, "the kind node has a sample");
-    let live_node = Api::<k8s_openapi::api::core::v1::Node>::all(client.clone())
-        .list(&Default::default())
-        .await
-        .expect("list nodes")
-        .items
-        .into_iter()
-        .next()
-        .expect("a node");
+    let live_node = crate::nodes::real_node(&client).await;
     let node_name = live_node.metadata.name.clone().expect("a node name");
     let node_usage = usage.usage(&node_name);
     assert!(

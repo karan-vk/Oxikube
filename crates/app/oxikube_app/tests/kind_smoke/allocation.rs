@@ -14,9 +14,9 @@
 use std::process::Command as Process;
 use std::time::Duration;
 
-use k8s_openapi::api::core::v1::{Node, Pod, ResourceQuota};
+use k8s_openapi::api::core::v1::{Pod, ResourceQuota};
 use kube::Api;
-use kube::api::{ListParams, PostParams};
+use kube::api::PostParams;
 use oxikube_app::allocation::{
     AllocationKind, AllocationView, Usage, UsageState, namespace_usage, node_usage,
 };
@@ -92,15 +92,32 @@ async fn a_namespace_against_its_quota_matches_what_the_api_server_counts() {
         }},
     }))
     .expect("quota json");
-    Api::<ResourceQuota>::namespaced(client.clone(), ns.name())
+    let quotas = Api::<ResourceQuota>::namespaced(client.clone(), ns.name());
+    quotas
         .create(&PostParams::default(), &quota)
         .await
         .expect("create the quota");
+    // Admission charges a pod only to a quota whose status the controller has already filled in,
+    // and the controller recounts on pod changes, not on pod creation: a pod created before then
+    // waits for the full resync (minutes). So the pods come once the quota counts.
+    crate::eventually(
+        "the quota controller to publish the quota's status",
+        String::new,
+        || async {
+            quotas
+                .get("compute")
+                .await
+                .expect("get the quota")
+                .status
+                .and_then(|status| status.used)
+                .is_some_and(|used| used.contains_key("pods"))
+        },
+    )
+    .await;
     pod_with_resources(&client, ns.name(), "a", ("250m", "500m")).await;
     pod_with_resources(&client, ns.name(), "b", ("750m", "1")).await;
 
     // The quota controller's own accounting is the oracle.
-    let quotas = Api::<ResourceQuota>::namespaced(client.clone(), ns.name());
     let read_used = || async {
         quotas
             .get("compute")
@@ -210,17 +227,11 @@ async fn the_real_node_matches_kubectl_describe_and_has_a_usage_reading_or_a_rea
     };
     let client = kind.admin_client().await;
     let cluster = ClusterId::new("kind-smoke", &kind.context);
-    let nodes = Api::<Node>::all(client.clone())
-        .list(&ListParams::default())
+    let name = crate::nodes::real_node(&client)
         .await
-        .expect("list nodes");
-    // Other suites create fake nodes (`oxi-fake-*`) no kubelet backs; the real one is the rest.
-    let name = nodes
-        .items
-        .iter()
-        .filter_map(|n| n.metadata.name.clone())
-        .find(|n| !n.starts_with("oxi-fake-"))
-        .expect("a real node");
+        .metadata
+        .name
+        .expect("a node name");
     let reader = KubeResources::new(client.clone(), KubeDiscovery::new(client.clone()));
     let gpus = GpuVendors::default();
 

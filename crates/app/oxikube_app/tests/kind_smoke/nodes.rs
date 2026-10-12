@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use k8s_openapi::api::core::v1::{Node, Pod};
 use kube::Api;
-use kube::api::PostParams;
+use kube::api::{ListParams, PostParams};
 use oxikube_app::command_bus::{CommandRegistry, DispatchContext, DispatchError, Outcome};
 use oxikube_app::guard::Confirmation;
 use oxikube_app::nodes::{list_node_pods, register_commands};
@@ -31,6 +31,28 @@ use serde_json::json;
 use crate::clock::TokioClock;
 use crate::cluster::{Kind, catalog_entry};
 
+/// The taint every fake Node carries (here and in `oxikube_kube`'s suite).
+const FAKE_TAINT: &str = "oxikube.test/fake";
+
+/// The cluster's real node, never a [`FakeNode`]: other tests create those at any time (`oxi-fake-*`,
+/// `oxi-drain-*`, E12-S10), with no kubelet behind them, and they list before `oxikube-*`.
+pub(crate) async fn real_node(client: &kube::Client) -> Node {
+    Api::<Node>::all(client.clone())
+        .list(&ListParams::default())
+        .await
+        .expect("list nodes")
+        .items
+        .into_iter()
+        .find(|node| {
+            !node
+                .spec
+                .as_ref()
+                .and_then(|spec| spec.taints.as_ref())
+                .is_some_and(|taints| taints.iter().any(|t| t.key == FAKE_TAINT))
+        })
+        .expect("a real node")
+}
+
 /// A Node no kubelet backs, deleted (best effort) when dropped. Shared with `drain`.
 pub(crate) struct FakeNode {
     context: String,
@@ -42,7 +64,7 @@ impl FakeNode {
         let node: Node = serde_json::from_value(json!({
             "apiVersion": "v1", "kind": "Node",
             "metadata": {"name": name},
-            "spec": {"taints": [{"key": "oxikube.test/fake", "effect": "NoSchedule"}]},
+            "spec": {"taints": [{"key": FAKE_TAINT, "effect": "NoSchedule"}]},
         }))
         .expect("node json");
         let guard = Self {
