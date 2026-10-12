@@ -251,6 +251,9 @@ impl ManifestEditor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let decoded = mode == OpenMode::EditDecoded;
+        let mode = mode.normalized();
+        let dirty = self.is_dirty(cx);
         let Some(binding) = self.binding.as_mut() else {
             return;
         };
@@ -258,8 +261,22 @@ impl ManifestEditor {
         if failed {
             binding.reader = reader;
             binding.mode = mode;
+            if decoded && binding.is_secret() {
+                binding.request_decoded();
+            }
             self.begin_load(window, cx);
             return;
+        }
+        // "Edit decoded" on a tab that shows the Secret as the API serves it: the same switch as
+        // the toolbar's toggles, so a buffer with edits keeps them (and says why).
+        let switch = decoded
+            && binding.is_secret()
+            && !binding.decoded_requested
+            && binding.load == ResourceLoad::Ready;
+        if switch && !dirty {
+            binding.request_decoded();
+        } else if switch {
+            binding.notice = Some(DIRTY_NOTICE.into());
         }
         if mode == OpenMode::Edit && binding.mode == OpenMode::View {
             binding.mode = OpenMode::Edit;
@@ -272,7 +289,10 @@ impl ManifestEditor {
                 self.editor
                     .update(cx, |editor, cx| editor.api(window, cx).set_read_only(false));
             }
-            cx.notify();
         }
+        if switch && !dirty {
+            self.rerender(window, cx);
+        }
+        cx.notify();
     }
 }

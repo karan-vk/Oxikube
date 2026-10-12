@@ -49,6 +49,7 @@ use crate::resource::Resource;
 use jiff::Timestamp;
 
 mod config;
+mod configmap;
 mod crd;
 mod endpoints;
 mod health;
@@ -73,6 +74,9 @@ pub use config::{
     PolicyValidation, PriorityClassSummary, QuotaLevel, QuotaLine, QuotaSummary,
     RuntimeClassSummary, TargetRef, VpaContainerPolicy, VpaRecommendation, VpaSummary,
     WebhookConfigSummary, WebhookKind, WebhookRule, WebhookSummary, WebhookTarget, selector_text,
+};
+pub use configmap::{
+    BinaryEntry, ConfigEntry, ConfigMapView, PREVIEW_CAP, PreviewLanguage, SUMMARY_CHARS,
 };
 pub use crd::{
     CrdConversion, CrdNames, CrdSummary, CrdVersionSummary, PrinterColumn, crd_aliases_text,

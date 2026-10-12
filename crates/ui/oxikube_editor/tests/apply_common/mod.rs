@@ -115,6 +115,14 @@ impl EditorHost for Host {
     fn apply(&self, _: &ClusterId) -> Option<ApplyService> {
         Some(self.service.clone())
     }
+    fn reader(&self, _: &ClusterId) -> Option<Arc<dyn ResourceReader>> {
+        Some(self.resources.clone())
+    }
+    fn cluster_read_only(&self, cluster: &ClusterId) -> bool {
+        self.sessions
+            .get(cluster)
+            .is_some_and(|session| session.read_only())
+    }
     fn templates(&self) -> Option<TemplateService> {
         self.templates.clone()
     }

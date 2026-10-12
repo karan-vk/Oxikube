@@ -72,6 +72,8 @@ pub struct DetailView {
     pub(super) schema: SchemaPane,
     /// The kind's own panel above the Overview (E12-S01): its spec's renderer, built on first draw.
     pub(super) kind_panel: KindPanel,
+    /// A Secret's summary and what is revealed of it (E12-S11); empty for other kinds.
+    pub(super) secret: super::reveal::SecretState,
     pub(super) store: Option<ResourceStore>,
     /// The store the Events feed is subscribed on.
     pub(super) events_store: Option<ResourceStore>,
@@ -148,6 +150,7 @@ impl DetailView {
             events_list: ListState::new(0, ListAlignment::Top, px(240.)),
             schema: SchemaPane::default(),
             kind_panel,
+            secret: Default::default(),
             store: None,
             events_store: None,
             subscription: None,
@@ -212,6 +215,12 @@ impl DetailView {
                 Timestamp::now()
             }
         })
+    }
+
+    /// The time ages are read against (the clock, or the one a screenshot pinned): what a kind
+    /// panel's relative times (a certificate's expiry) are computed from.
+    pub fn current_time(&self) -> Timestamp {
+        self.now()
     }
 
     /// Tells the view whether it is on screen (the drawer's active state).
@@ -354,6 +363,8 @@ impl DetailView {
         self.yaml.task = None;
         self.events.task = None;
         self.events.subscription = None;
+        // Decoded Secret values live as long as the tab does.
+        self.clear_secret();
     }
 }
 

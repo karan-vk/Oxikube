@@ -252,6 +252,9 @@ impl ManifestEditor {
                 cx,
             ));
         }
+        if binding.is_decoded() {
+            toggles.push(self.decoded_chip(cx));
+        }
         if binding.is_secret() {
             let revealed = binding.options().reveal_secrets;
             toggles.push(self.toggle(
@@ -269,6 +272,29 @@ impl ManifestEditor {
             ));
         }
         toggles
+    }
+
+    /// "Decoded": the Secret's values are text here and base64 once applied (E12-S11).
+    fn decoded_chip(&self, cx: &mut Context<Self>) -> AnyElement {
+        let tokens = cx.tokens();
+        let title = self.title.clone();
+        div()
+            .id("manifest-decoded")
+            .debug_selector(move || format!("manifest-decoded-{title}"))
+            .flex_none()
+            .px(u(tokens.spacing.sm))
+            .rounded(u(tokens.radius.sm))
+            .bg(tokens.colors.element)
+            .text_color(tokens.colors.text_muted)
+            .tooltip(|window, cx| {
+                Tooltip::new(
+                    "The values are shown as text and base64-encoded when you apply. Binary \
+                     values show their size and are kept as they are.",
+                )
+                .build(window, cx)
+            })
+            .child("Decoded")
+            .into_any_element()
     }
 
     /// "kind-oxikube schemas", "Syntax only (no cluster)", plus a schema that could not be had.

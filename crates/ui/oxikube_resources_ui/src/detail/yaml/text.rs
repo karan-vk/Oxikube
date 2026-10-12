@@ -5,7 +5,10 @@
 //! serialises with the domain's YAML writer (`serde-saphyr`, which quotes `y`, `n`, `on`, `1e3`
 //! and the like so they read back as strings).
 
+use std::collections::BTreeSet;
+
 use oxikube_domain::Resource;
+use oxikube_domain::secret::DecodedSecret;
 
 use crate::detail::model::{HIDDEN, mask_secret_with};
 
@@ -36,6 +39,42 @@ pub fn yaml_text(resource: &Resource, options: YamlOptions) -> Result<String, St
     if !options.managed_fields {
         shown.strip_managed_fields();
     }
+    shown.to_yaml().map_err(|error| error.to_string())
+}
+
+/// [`yaml_text`] with some of a Secret's values shown as text (E12-S11): each key of `keys` (every
+/// key when `None`) that `decoded` holds shows its plaintext, a binary value its size
+/// (`(binary, 12 bytes)`); the other keys stay [`HIDDEN`]. The text holds plaintext: it lives in
+/// memory, and the detail refuses to save it to a file.
+///
+/// # Errors
+///
+/// The serialiser's message, when it fails (it does not for any JSON a cluster serves).
+pub fn yaml_text_revealed(
+    resource: &Resource,
+    options: YamlOptions,
+    decoded: &DecodedSecret,
+    keys: Option<&BTreeSet<String>>,
+) -> Result<String, String> {
+    let mut shown = resource.clone();
+    mask_secret_with(&mut shown, Some(HIDDEN));
+    if !options.managed_fields {
+        shown.strip_managed_fields();
+    }
+    shown.edit_json(|json| {
+        let Some(data) = json.get_mut("data").and_then(|data| data.as_object_mut()) else {
+            return;
+        };
+        for (key, value) in data.iter_mut() {
+            if keys.is_some_and(|keys| !keys.contains(key)) {
+                continue;
+            }
+            let Some(decoded) = decoded.get(key) else {
+                continue;
+            };
+            *value = decoded.shown().into();
+        }
+    });
     shown.to_yaml().map_err(|error| error.to_string())
 }
 

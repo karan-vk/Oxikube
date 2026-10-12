@@ -22,6 +22,20 @@ pub enum OpenMode {
     Edit,
     /// "View YAML in Editor" (`resource::ViewYamlInEditor`): the buffer is read-only.
     View,
+    /// "Edit decoded" (`secret::EditDecoded`, E12-S11): [`Edit`](Self::Edit) with a Secret's
+    /// values shown as plaintext, base64-encoded again when the buffer is applied. For any other
+    /// kind it is plain `Edit`.
+    EditDecoded,
+}
+
+impl OpenMode {
+    /// The mode the buffer is locked by: `EditDecoded` edits like `Edit`.
+    pub(crate) fn normalized(self) -> Self {
+        match self {
+            OpenMode::EditDecoded => OpenMode::Edit,
+            other => other,
+        }
+    }
 }
 
 /// How far the editor is with reading the object.
@@ -59,6 +73,8 @@ pub struct ResourceBinding {
     pub(crate) load: ResourceLoad,
     pub(crate) cluster_read_only: bool,
     pub(crate) reader: Option<Arc<dyn ResourceReader>>,
+    /// The tab was opened with `secret::EditDecoded` (a Secret shown as plaintext).
+    pub(crate) decoded_requested: bool,
     /// The object as read, values included: the toggles render it again.
     pub(crate) resource: Option<Arc<Resource>>,
     /// How many `managedFields` entries the text leaves out.
@@ -72,12 +88,13 @@ impl ResourceBinding {
     pub(crate) fn new(open: ResourceOpen) -> Self {
         Self {
             target: open.target,
-            mode: open.mode,
+            mode: open.mode.normalized(),
             options: RenderOptions::default(),
             shown_options: RenderOptions::default(),
             load: ResourceLoad::Loading,
             cluster_read_only: open.cluster_read_only,
             reader: open.reader,
+            decoded_requested: open.mode == OpenMode::EditDecoded,
             resource: None,
             hidden_managed_fields: 0,
             notice: None,
@@ -142,6 +159,25 @@ impl ResourceBinding {
     /// Whether the text masks Secret values now (a placeholder left in it is an error).
     pub fn masking(&self) -> bool {
         self.is_secret() && !self.options.reveal_secrets
+    }
+
+    /// Whether the buffer holds a Secret's values as plaintext (opened with "edit decoded" and
+    /// not masked since): they are base64-encoded when the buffer is applied.
+    pub fn is_decoded(&self) -> bool {
+        self.is_secret() && self.shown_options.decode_secrets && self.shown_options.reveal_secrets
+    }
+
+    /// Asks for the Secret's values as plaintext ("edit decoded"): shown and decoded on the next
+    /// render.
+    pub(crate) fn request_decoded(&mut self) {
+        self.decoded_requested = true;
+        self.options.decode_secrets = true;
+        self.options.reveal_secrets = true;
+    }
+
+    /// The object as read: what a decoded buffer takes the values of its binary keys from.
+    pub fn original(&self) -> Option<&Arc<Resource>> {
+        self.resource.as_ref()
     }
 
     pub(crate) fn rendered(&mut self, rendered: &RenderedManifest) {

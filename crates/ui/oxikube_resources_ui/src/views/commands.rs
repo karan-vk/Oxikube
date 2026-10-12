@@ -6,7 +6,8 @@
 //! `resource::CopyYaml`, `resource::SaveYaml`, `resource::ToggleManagedFields`,
 //! `resource::RefreshDescribe` (E07-S06), `resource::Find`, `resource::NextMatch` and
 //! `resource::PreviousMatch` (E11-S06, find in the YAML and Describe text), and the k9s verbs `resource::ViewYaml`,
-//! `resource::ViewDescribe` and `table::ToggleWide` (E11-S07), and `service::ShowPods` (E12-S13).
+//! `resource::ViewDescribe` and `table::ToggleWide` (E11-S07), `service::ShowPods` (E12-S13) and
+//! `secret::Reveal` (E12-S11, a Secret's values decoded in memory in its detail).
 //!
 //! None changes a cluster (no `MutationGuard` tier): they tell a view to show a detail, pin it
 //! as a tab, select rows, restart a feed (a read) or write the user's clipboard. Each is declared
@@ -27,7 +28,7 @@ use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
 
 /// The commands this crate handles.
-pub const RESOURCE_COMMANDS: [CommandId; 21] = [
+pub const RESOURCE_COMMANDS: [CommandId; 22] = [
     CommandId::RESOURCE_OPEN,
     CommandId::RESOURCE_COPY_NAME,
     CommandId::RESOURCE_RETRY_FEED,
@@ -49,6 +50,7 @@ pub const RESOURCE_COMMANDS: [CommandId; 21] = [
     CommandId::RESOURCE_VIEW_DESCRIBE,
     CommandId::TABLE_TOGGLE_WIDE,
     CommandId::SERVICE_SHOW_PODS,
+    CommandId::SECRET_REVEAL,
 ];
 
 /// A resource command, resolved, for the UI thread.
@@ -94,6 +96,14 @@ pub enum ViewRequest {
     ViewYaml(ResourceRef),
     /// Show `target`'s detail on its Describe tab (`resource::ViewDescribe`, `d`).
     ViewDescribe(ResourceRef),
+    /// Show a Secret's values decoded in its detail, or hide them again (`secret::Reveal`, `x`,
+    /// E12-S11): the detail opens on `target`, and `key` (every key when `None`) is toggled.
+    RevealSecret {
+        /// The Secret.
+        target: ResourceRef,
+        /// The one key to toggle; every key when `None`.
+        key: Option<String>,
+    },
     /// Show or hide the wide columns of the tables of `gvk` in `cluster` (`table::ToggleWide`,
     /// `ctrl-w`).
     ToggleWide {
@@ -176,6 +186,10 @@ impl ResourceCommandSink {
             Command::ResourceCopyName { target } => ViewRequest::CopyName(target.clone()),
             Command::ResourceViewYaml { target } => ViewRequest::ViewYaml(target.clone()),
             Command::ResourceViewDescribe { target } => ViewRequest::ViewDescribe(target.clone()),
+            Command::SecretReveal { target, key } => ViewRequest::RevealSecret {
+                target: target.clone(),
+                key: key.clone(),
+            },
             Command::TableToggleWide { cluster, gvk } => ViewRequest::ToggleWide {
                 cluster: cluster.clone(),
                 gvk: gvk.clone(),

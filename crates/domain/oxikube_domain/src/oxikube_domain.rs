@@ -18,6 +18,7 @@
 //! | [`colour`] | [`ClusterColour`], a cluster's `#rrggbb` accent colour |
 //! | [`preset`] | [`ClusterPreset`]: the prod / staging / dev / none postures (colour, read-only) |
 //! | [`command`] | [`Command`], [`CommandId`], [`CommandMeta`], [`Capability`] |
+//! | [`secret`] | [`SecretText`](secret::SecretText), [`DecodedSecret`](secret::DecodedSecret): a Secret's values decoded in memory, edited as plaintext and encoded back (E12-S11) |
 //! | [`safety`], [`audit`] | [`Risk`], [`ConfirmTier`], [`Initiator`], [`audit::AuditRecord`] |
 //! | [`utilisation`] | pod / node / namespace requests, limits and `%CPU/R`-style percents ([`ResourceAmounts`](utilisation::ResourceAmounts), [`percent`](utilisation::percent), `metrics.gpu_vendors`) |
 //! | [`log`], [`event`], [`metrics`] | telemetry-free records: `LogLine`, `Event`, `MetricsSample` |
@@ -66,6 +67,7 @@ pub mod redact;
 pub mod resource;
 pub mod safety;
 pub mod schema;
+pub mod secret;
 pub mod session;
 pub mod utilisation;
 pub mod view;

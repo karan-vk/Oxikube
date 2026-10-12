@@ -93,6 +93,18 @@ pub(super) fn render_of(
     light: bool,
     tab: DetailTab,
 ) -> anyhow::Result<RgbaImage> {
+    render_with(object, light, tab, false, |_, _| {})
+}
+
+/// [`render_of`] with the kind panels of ConfigMaps and Secrets registered when `panels`, and
+/// `after` run on the opened detail (a reveal, an expanded key) before the picture is taken.
+pub(crate) fn render_with(
+    object: Resource,
+    light: bool,
+    tab: DetailTab,
+    panels: bool,
+    after: impl FnOnce(&mut gpui::HeadlessAppContext, &gpui::Entity<DetailView>),
+) -> anyhow::Result<RgbaImage> {
     let context = ContextName::new("kind-oxikube");
     let cluster = ClusterId::new("/home/me/.kube/config", &context);
     let entry = ClusterContext::new(cluster.clone(), context, SourceId("kubeconfig".into()));
@@ -126,6 +138,10 @@ pub(super) fn render_of(
         // unchanged.
         oxikube_resources_ui::kinds::network::init(cx);
         cx.set_reduce_motion(true);
+        if panels {
+            oxikube_workspace::sidebar::init(cx);
+            oxikube_resources_ui::kinds::register_config_kinds(cx);
+        }
         let clock: Arc<dyn ClockPort> = clock;
         let deps = DetailDeps {
             sessions,
@@ -138,6 +154,7 @@ pub(super) fn render_of(
         cx.new(|cx| DetailView::new(target, deps, Mount::Drawer, cx))
     })?;
     cx.run_until_parked();
+    let mut opened = None;
     cx.update_window(window.into(), |view, _, cx| {
         let detail = view.downcast::<DetailView>().expect("the root view");
         let now: Timestamp = "2026-01-10T00:00:00Z".parse().expect("a timestamp");
@@ -145,7 +162,13 @@ pub(super) fn render_of(
             detail.pin_now(now, cx);
             detail.set_tab(tab, cx);
         });
+        opened = Some(detail);
     })?;
+    cx.run_until_parked();
+    // One frame builds the kind's panel; `after` acts on it; the next frames draw the result.
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))?;
+    cx.run_until_parked();
+    after(&mut cx, &opened.expect("the detail"));
     cx.run_until_parked();
     // A frame, so the editors of the YAML and Describe tabs exist; then the text lands and the
     // next frame draws it.

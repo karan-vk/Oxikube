@@ -108,6 +108,9 @@ pub struct ManifestEditor {
     pub(super) live: LiveLink,
     /// The way to apply the buffer to the cluster (E10-S08).
     pub(super) apply: ApplyLink,
+    /// The buffer's Secrets hold plaintext under `data` (the "Create secret" dialog's manifest,
+    /// E12-S11), to be base64-encoded when applied.
+    pub(super) plaintext_secrets: bool,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -143,9 +146,13 @@ impl ManifestEditor {
         if let Some(binding) = binding.as_mut() {
             // `show_managed_fields` / `mask_secrets` are the defaults of a fresh open.
             let settings = EditorSettings::resolve(Some(&binding.target.cluster), cx);
+            // "Edit decoded" is an explicit request for the values: it shows them whatever
+            // `mask_secrets` says.
+            let decoded = binding.decoded_requested && binding.is_secret();
             let options = RenderOptions {
                 managed_fields: settings.show_managed_fields,
-                reveal_secrets: !settings.mask_secrets,
+                reveal_secrets: !settings.mask_secrets || decoded,
+                decode_secrets: decoded,
             };
             binding.options = options;
             binding.shown_options = options;
@@ -182,6 +189,7 @@ impl ManifestEditor {
             schema_fetches: Vec::new(),
             live: LiveLink::new(parts.live),
             apply: ApplyLink::default(),
+            plaintext_secrets: false,
             _subscriptions: subscriptions,
         };
         if this.binding.is_some() {

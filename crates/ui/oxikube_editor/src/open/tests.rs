@@ -153,6 +153,65 @@ fn revealing_shows_the_values_as_served() {
 }
 
 #[test]
+fn decoding_shows_plaintext_and_a_binary_value_as_its_size() {
+    let mut object = secret();
+    object["data"]["blob"] = json!("//4=");
+    let out = render(
+        object,
+        RenderOptions {
+            reveal_secrets: true,
+            decode_secrets: true,
+            ..RenderOptions::default()
+        },
+    );
+    assert!(out.text.contains("password: secret"), "{}", out.text);
+    assert!(out.text.contains("username: admin"), "{}", out.text);
+    assert!(out.text.contains("blob: (binary, 2 bytes)"), "{}", out.text);
+    assert!(!out.text.contains("c2VjcmV0") && !out.text.contains("YWRtaW4="));
+    // The annotation that embeds the base64 copy is left out, and said so.
+    assert!(!out.text.contains("last-applied-configuration"));
+    assert!(out.hidden.iter().any(|h| h.kind == HiddenKind::LastApplied));
+    // Nothing is masked, so nothing blocks the apply.
+    assert!(out.masked.is_empty());
+    // The text is a manifest like any other: it reads back as one object.
+    let parsed = parse(&out.text);
+    assert_eq!(parsed.docs().len(), 1);
+}
+
+#[test]
+fn decoding_does_nothing_while_the_values_are_masked() {
+    let out = render(
+        secret(),
+        RenderOptions {
+            decode_secrets: true,
+            ..RenderOptions::default()
+        },
+    );
+    assert_eq!(out.masked.len(), 3, "hiding wins: {}", out.text);
+    assert!(!out.text.contains("password: secret"));
+}
+
+#[test]
+fn a_decoded_multi_line_value_round_trips_through_the_text() {
+    let object = json!({
+        "apiVersion": "v1", "kind": "Secret",
+        "metadata": {"name": "pem", "namespace": "default"},
+        "data": {"key.pem": "LS0tLS1CRUdJTiBLRVktLS0tLQptaWRkbGUKLS0tLS1FTkQgS0VZLS0tLS0K"}
+    });
+    let out = render(
+        object.clone(),
+        RenderOptions {
+            reveal_secrets: true,
+            decode_secrets: true,
+            ..RenderOptions::default()
+        },
+    );
+    let mut back: Value = serde_saphyr::from_str(&out.text).expect("reads back");
+    oxikube_domain::secret::from_decoded(&mut back, Some(&object)).expect("encodes");
+    assert_eq!(back["data"], object["data"], "{}", out.text);
+}
+
+#[test]
 fn only_secrets_are_masked() {
     let config = json!({
         "apiVersion": "v1", "kind": "ConfigMap",

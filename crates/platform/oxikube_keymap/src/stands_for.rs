@@ -101,6 +101,17 @@ pub const STANDS_FOR: &[(&str, CommandId)] = &[
         "resource_table::SetDefaultClass",
         CommandId::STORAGECLASS_SET_DEFAULT,
     ),
+    // A Secret's reveal and decoded edit (E12-S11).
+    ("resource_table::RevealSelected", CommandId::SECRET_REVEAL),
+    (
+        "resource_table::EditDecodedSelected",
+        CommandId::SECRET_EDIT_DECODED,
+    ),
+    ("resource_detail::RevealSecret", CommandId::SECRET_REVEAL),
+    (
+        "resource_detail::EditSecretDecoded",
+        CommandId::SECRET_EDIT_DECODED,
+    ),
     // The resource detail's find in the YAML and Describe text (E11-S06). `resource_detail::CloseFind`
     // only closes the field and gives the keys back to the detail, so it is view-local.
     ("resource_detail::Find", CommandId::RESOURCE_FIND),

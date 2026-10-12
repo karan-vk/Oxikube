@@ -92,8 +92,8 @@ pub(super) fn register(
     register_from(cx, section, kinds, 1, actions_of);
 }
 
-/// [`register`] with the ranks starting at `first * 10`: the slots before it belong to kinds with
-/// a module of their own (Pods, E12-S02).
+/// [`register`], numbering the kinds from `first` (rank `first * 10`): a section whose first kinds
+/// have modules of their own (their ranks are fixed there) lists the rest after them.
 pub(super) fn register_from(
     cx: &mut App,
     section: Section,

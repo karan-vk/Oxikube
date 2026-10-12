@@ -112,6 +112,8 @@ impl Render for ResourceTable {
             .on_action(cx.listener(Self::on_view_yaml))
             .on_action(cx.listener(Self::on_view_describe))
             .on_action(cx.listener(Self::on_edit))
+            .on_action(cx.listener(Self::on_reveal))
+            .on_action(cx.listener(Self::on_edit_decoded))
             .on_action(cx.listener(Self::on_view_logs))
             .on_action(cx.listener(Self::on_port_forward))
             .on_action(cx.listener(Self::on_show_port_forwards))
@@ -145,8 +147,14 @@ impl ResourceTable {
         let cluster = self.cluster.clone();
         let dispatcher = self.deps.dispatcher.clone();
         let namespaces = self.kind.gvk.is_namespace();
+        // A kind with a creator of its own (Secrets: Opaque, registry or TLS, E12-S11) lists it
+        // among its actions, and its "New" opens that instead of the template picker.
+        let secret = crate::kinds::KindSpecs::kind_for(cx, &self.kind.gvk)
+            .offers(oxikube_domain::command::CommandId::SECRET_CREATE);
         let tooltip = if namespaces {
             "Create a namespace"
+        } else if secret {
+            "Create a Secret: Opaque, Docker registry or TLS"
         } else {
             "Create a resource from a template"
         };
@@ -163,13 +171,17 @@ impl ResourceTable {
                             this.open_create_namespace(window, cx);
                             return;
                         }
-                        dispatcher.dispatch(
+                        let command = if secret {
+                            Command::SecretCreate {
+                                cluster: Some(cluster.clone()),
+                            }
+                        } else {
                             Command::ResourceCreate {
                                 cluster: Some(cluster.clone()),
                                 template: None,
-                            },
-                            cx,
-                        );
+                            }
+                        };
+                        dispatcher.dispatch(command, cx);
                     })),
             )
     }

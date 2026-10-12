@@ -11,6 +11,7 @@ mod keys;
 mod meta;
 mod open;
 mod pin;
+mod reveal;
 mod schema;
 mod secret;
 mod states;

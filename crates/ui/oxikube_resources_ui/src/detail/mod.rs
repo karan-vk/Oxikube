@@ -26,6 +26,7 @@
 //! | `events_feed` | the Events tab's subscription, started on first show |
 //! | `render`, `overview`, `parts`, `events_tab` | drawing: header, tab strip, the virtualised Overview (its stateless rows in `parts`) and Events lists |
 //! | `schema_tab`, `schema_view` | the Schema tab of a CRD's detail (E07-S07): its `openAPIV3Schema` as a collapsible tree, the version chips and the way to the custom resources (state and commands, then drawing) |
+//! | `reveal` | revealing a Secret's values in memory (E12-S11): the summary a Secret's full read keeps, `secret::Reveal` (`x`), the hide-again timer, the decoded values the YAML tab shows |
 //! | `kind_panel` | the kind's own panel above the Overview, from its spec's [`DetailRenderer`](crate::kinds::DetailRenderer) (E12-S01), and [`DetailView::resource`], what the panel reads |
 //! | `drawer` | [`DetailDrawer`]: the `Panel` that hosts a detail and hands it to the workspace when pinned |
 //!
@@ -65,6 +66,7 @@ pub mod model;
 mod overview;
 mod parts;
 mod render;
+mod reveal;
 mod scale;
 mod schema_tab;
 mod schema_view;
@@ -80,11 +82,13 @@ pub use describe::DescribeState;
 pub use drawer::{DEFAULT_WIDTH, DetailDrawer, ToggleDrawer};
 pub use events::{EventRow, MAX_EVENTS, events_about};
 pub use keys::{
-    Close, CloseFind, Find, NextMatch, PreviousMatch, SelectNext, SelectPrevious, ShowTab,
+    Close, CloseFind, EditSecretDecoded, Find, NextMatch, PreviousMatch, RevealSecret, SelectNext,
+    SelectPrevious, ShowTab,
 };
 pub use kind_panel::PanelHost;
 pub use model::DetailModel;
+pub use reveal::{REVEAL_TIMEOUT, RevealLoad};
 pub use state::{DetailDeps, DetailEvent, DetailState, Mount};
 pub use tabs::DetailTab;
 pub use view::{DetailView, item_key};
-pub use yaml::{YamlOptions, has_managed_fields, yaml_text};
+pub use yaml::{YamlOptions, has_managed_fields, yaml_text, yaml_text_revealed};

@@ -21,8 +21,8 @@ use oxikube_domain::session::NamespaceSelection;
 use oxikube_editor::apply::split_documents;
 use oxikube_editor::open::ResourceLoad;
 use oxikube_editor::view::{
-    ApplyPreviewDialog, ApplyStage, BatchPreviewDialog, ConflictDialog, ManifestEditor, Notice,
-    VALIDATION_DEBOUNCE,
+    ApplyPreviewDialog, ApplyStage, BatchPreviewDialog, ConflictDialog, CreateSecretDialog,
+    ManifestEditor, Notice, VALIDATION_DEBOUNCE,
 };
 use oxikube_ports::AuditQuery;
 use oxikube_ui::editor::{EditorApi as _, EditorDiagnostic};
@@ -187,6 +187,38 @@ impl EditorSession {
             })
         });
         editor
+    }
+
+    /// "Edit decoded" on the Secret `target` (`secret::EditDecoded`): the editor opened on a
+    /// fresh `get`, once its text, the values as plaintext, is in.
+    pub fn edit_decoded(&mut self, target: ResourceRef) -> Entity<ManifestEditor> {
+        let before = self.editors().len();
+        self.dispatch(Command::SecretEditDecoded { target });
+        let editor = self.opened(before, "the Edit decoded editor");
+        wait(&mut self.vcx, "the live Secret to load", |vcx| {
+            vcx.update(|_, cx| {
+                let load = editor.read(cx).binding().map(|b| b.load().clone());
+                match load {
+                    Some(ResourceLoad::Ready) => true,
+                    Some(ResourceLoad::Failed(error)) => panic!("the get failed: {error}"),
+                    _ => false,
+                }
+            })
+        });
+        editor
+    }
+
+    /// `secret::Create`: the dialog in the cluster's tab.
+    pub fn create_secret_dialog(&mut self) -> Entity<CreateSecretDialog> {
+        self.dispatch(Command::SecretCreate {
+            cluster: Some(self.cluster.clone()),
+        });
+        self.modal("the Create secret dialog")
+    }
+
+    /// Waits for the editor the dialog's result opened (beyond the `before` open).
+    pub fn secret_editor(&mut self, before: usize) -> Entity<ManifestEditor> {
+        self.opened(before, "the new Secret editor")
     }
 
     /// The editor's text.
@@ -354,6 +386,11 @@ pub fn dynamic_api(
         plural,
     );
     kube::Api::namespaced_with(client, namespace, &resource)
+}
+
+/// The Secrets API of `namespace`.
+pub fn secrets(client: kube::Client, namespace: &str) -> kube::Api<kube::api::DynamicObject> {
+    dynamic_api(client, namespace, ("", "v1", "Secret", "secrets"))
 }
 
 /// The ConfigMaps API of `namespace`.

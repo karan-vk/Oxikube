@@ -17,6 +17,7 @@ mod view_filter_keys;
 mod view_filter_saved;
 mod view_rows;
 mod view_scope;
+mod view_secret;
 mod view_select;
 mod view_set_filter;
 mod view_states;

@@ -287,6 +287,17 @@
     }
   },
   {
+    // Secrets (E12-S11), k9s's decode: x shows the cursor row's Secret decoded in the detail
+    // drawer, in memory only, and hides it again; shift-e opens it in the editor with its values
+    // as text (base64-encoded again when applied). Scoped to the Secrets table, so x stays free
+    // for other kinds' verbs.
+    "context": "ResourceTable && !Editing && kind == Secret",
+    "bindings": {
+      "x": "resource_table::RevealSelected",
+      "shift-e": "resource_table::EditDecodedSelected"
+    }
+  },
+  {
     // The table's filter field has the focus: escape clears the filter and returns to the rows
     // (enter returns without clearing; the field handles it).
     "context": "ResourceTable && Editing",
@@ -319,6 +330,15 @@
       "/": "resource_detail::Find",
       "n": "resource_detail::NextMatch",
       "shift-n": "resource_detail::PreviousMatch"
+    }
+  },
+  {
+    // A Secret's detail (E12-S11): x shows its values decoded, or hides them again (the YAML tab
+    // shows them too while they are on); shift-e opens the editor with the values as text.
+    "context": "DetailDrawer && !Editing && kind == Secret",
+    "bindings": {
+      "x": "resource_detail::RevealSecret",
+      "shift-e": "resource_detail::EditSecretDecoded"
     }
   },
   {

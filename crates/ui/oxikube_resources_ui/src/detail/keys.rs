@@ -37,6 +37,11 @@ actions!(
         PreviousMatch,
         /// Closes the find field, forgets the matches and returns to the detail.
         CloseFind,
+        /// Shows a Secret's values decoded, or hides them again (`secret::Reveal`; k9s's `x`).
+        RevealSecret,
+        /// Opens the Secret in the manifest editor with its values as text
+        /// (`secret::EditDecoded`; `shift-e`).
+        EditSecretDecoded,
     ]
 );
 
@@ -114,6 +119,28 @@ impl DetailView {
         cx: &mut Context<Self>,
     ) {
         self.close_find(window, cx);
+    }
+
+    pub(super) fn on_reveal_secret(
+        &mut self,
+        _: &RevealSecret,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.is_secret() {
+            self.request_reveal(None, cx);
+        }
+    }
+
+    pub(super) fn on_edit_secret_decoded(
+        &mut self,
+        _: &EditSecretDecoded,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.is_secret() {
+            self.request_edit_decoded(cx);
+        }
     }
 
     pub(super) fn on_show_tab(&mut self, action: &ShowTab, _: &mut Window, cx: &mut Context<Self>) {

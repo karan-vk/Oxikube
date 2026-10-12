@@ -55,6 +55,8 @@ impl Render for DetailView {
             .on_action(cx.listener(Self::on_next_match))
             .on_action(cx.listener(Self::on_previous_match))
             .on_action(cx.listener(Self::on_close_find))
+            .on_action(cx.listener(Self::on_reveal_secret))
+            .on_action(cx.listener(Self::on_edit_secret_decoded))
             .size_full()
             .overflow_hidden()
             .bg(colors.surface)

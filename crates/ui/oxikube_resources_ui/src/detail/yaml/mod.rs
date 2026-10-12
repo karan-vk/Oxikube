@@ -28,4 +28,4 @@ mod text;
 mod tests;
 
 pub(super) use tab::YamlTab;
-pub use text::{YamlOptions, has_managed_fields, yaml_text};
+pub use text::{YamlOptions, has_managed_fields, yaml_text, yaml_text_revealed};

@@ -12,11 +12,13 @@ path = "src/oxikube_domain.rs"
 doctest = false
 
 [dependencies]
+base64.workspace = true
 bitflags.workspace = true
 hex.workspace = true
 jiff.workspace = true
 indexmap.workspace = true
 regex.workspace = true
+secrecy.workspace = true
 serde.workspace = true
 serde-saphyr.workspace = true
 serde_json.workspace = true

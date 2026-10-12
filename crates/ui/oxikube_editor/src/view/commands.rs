@@ -1,7 +1,8 @@
 //! `editor::NewManifest`, `editor::ToggleReadOnly`, `editor::ToggleSoftWrap` (E10-S04),
 //! `resource::Edit`, `resource::ViewYamlInEditor`, `editor::ToggleManagedFields`,
 //! `editor::ToggleSecretMask` (E10-S06), `resource::Create` (E10-S09, the "Create resource"
-//! picker), for JSON mode (E10-S10) `editor::ConvertToJson`, `editor::ConvertToYaml`,
+//! picker), `secret::EditDecoded` and `secret::Create` (E12-S11, a Secret as plaintext and the
+//! "Create secret" dialog), for JSON mode (E10-S10) `editor::ConvertToJson`, `editor::ConvertToYaml`,
 //! `editor::UseJson` and `editor::UseYaml`, and the diff vs live commands (E10-S07:
 //! `editor::ShowDiff`, `ToggleDiffLayout`, `ReloadFromServer`, `MergeFromServer`,
 //! `KeepMine`, `TakeMine`, `TakeServer`, `AcceptMerge`) on the command bus, each with its MCP tool
@@ -25,7 +26,7 @@ use crate::json::Language;
 use crate::open::OpenMode;
 
 /// The commands [`register_commands`] handles.
-pub const EDITOR_COMMANDS: [CommandId; 22] = [
+pub const EDITOR_COMMANDS: [CommandId; 24] = [
     CommandId::EDITOR_NEW_MANIFEST,
     CommandId::EDITOR_TOGGLE_MANAGED_FIELDS,
     CommandId::EDITOR_TOGGLE_READ_ONLY,
@@ -48,6 +49,8 @@ pub const EDITOR_COMMANDS: [CommandId; 22] = [
     CommandId::EDITOR_TRIGGER_COMPLETION,
     CommandId::EDITOR_SHOW_HOVER,
     CommandId::RESOURCE_CREATE,
+    CommandId::SECRET_EDIT_DECODED,
+    CommandId::SECRET_CREATE,
 ];
 
 /// What the window's manifest editors should do.
@@ -76,6 +79,18 @@ pub enum EditorRequest {
         target: ResourceRef,
         /// Editable or read-only.
         mode: OpenMode,
+    },
+    /// `secret::EditDecoded` (E12-S11): like [`Open`](Self::Open) in edit mode, with the
+    /// Secret's values shown as plaintext; the buffer is re-encoded to base64 when applied.
+    OpenDecoded {
+        /// The Secret.
+        target: ResourceRef,
+    },
+    /// `secret::Create` (E12-S11): the "Create secret" dialog in `cluster`'s tab (the shown one
+    /// when `None`); its result opens in a new editor, to be applied with `resource::Apply`.
+    CreateSecret {
+        /// The cluster whose tab gets the dialog.
+        cluster: Option<ClusterId>,
     },
     /// `editor::ToggleManagedFields` on the focused editor, else the active pane's.
     ToggleManagedFields,
@@ -132,6 +147,8 @@ impl EditorRequest {
                 target,
                 mode: OpenMode::View,
             }),
+            Command::SecretEditDecoded { target } => Some(EditorRequest::OpenDecoded { target }),
+            Command::SecretCreate { cluster } => Some(EditorRequest::CreateSecret { cluster }),
             Command::EditorToggleManagedFields => Some(EditorRequest::ToggleManagedFields),
             Command::EditorToggleSecretMask => Some(EditorRequest::ToggleSecretMask),
             Command::EditorToggleReadOnly => Some(EditorRequest::ToggleReadOnly),

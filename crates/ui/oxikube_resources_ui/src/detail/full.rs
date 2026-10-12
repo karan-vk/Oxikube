@@ -9,11 +9,12 @@
 use std::sync::Arc;
 
 use gpui::Context;
+use oxikube_app::{SecretService, SecretSummary};
 use oxikube_domain::ids::{Gvk, Scope};
 use oxikube_domain::{ErrorKind, OxiError, OxiResult, Resource};
 use oxikube_runtime::spawn_kube;
 
-use super::model::mask_secret;
+use super::model::{is_secret, mask_secret};
 use super::state::FullState;
 use super::view::DetailView;
 
@@ -36,9 +37,14 @@ impl DetailView {
             let mut resource: Resource = reader
                 .get(&target.gvk, target.namespace(), &target.name)
                 .await?;
-            // Secret values never leave this task.
+            // A Secret's summary (key names, sizes, the registries and certificate its type puts
+            // on display) is made here from the full object, then the values are removed:
+            // they never leave this task.
+            let summary = is_secret(&target.gvk)
+                .then(|| SecretService::new().summarize(&resource).ok().map(Arc::new))
+                .flatten();
             mask_secret(&mut resource);
-            OxiResult::Ok(resource)
+            OxiResult::Ok((resource, summary))
         });
         self.full_task = Some(cx.spawn(async move |this, cx| {
             let result = match read.await {
@@ -49,9 +55,22 @@ impl DetailView {
         }));
     }
 
-    fn full_read(&mut self, result: OxiResult<Resource>, cx: &mut Context<Self>) {
+    fn full_read(
+        &mut self,
+        result: OxiResult<(Resource, Option<Arc<SecretSummary>>)>,
+        cx: &mut Context<Self>,
+    ) {
         match result {
-            Ok(resource) => self.full = FullState::Loaded(Arc::new(resource)),
+            Ok((resource, summary)) => {
+                self.full = FullState::Loaded(Arc::new(resource));
+                if summary.is_some() || self.is_secret() {
+                    self.secret.summary = summary;
+                }
+                // A new version of a revealed Secret: its values are read again.
+                if self.reveal_requested() {
+                    self.fetch_decoded(cx);
+                }
+            }
             // Gone since the feed's last word: the feed says so in its own time.
             Err(error) if error.kind() == ErrorKind::NotFound => {
                 self.full = FullState::Idle;

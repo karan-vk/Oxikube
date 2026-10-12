@@ -46,6 +46,7 @@ similar.workspace = true
 [dev-dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
+base64.workspace = true
 gpui = { workspace = true, features = ["test-support"] }
 gpui_platform = { workspace = true, features = ["test-support"] }
 insta.workspace = true
@@ -54,6 +55,8 @@ oxikube_testkit = { workspace = true, features = ["gpui-screenshot"] }
 oxikube_workspace = { workspace = true, features = ["test-support"] }
 parking_lot.workspace = true
 proptest.workspace = true
+# Captures what the apply of a decoded Secret logs (E12-S11): no value among it.
+tracing-subscriber.workspace = true
 # An independent YAML reader to check that what the writer emits reads back as the same data.
 serde-saphyr.workspace = true
 

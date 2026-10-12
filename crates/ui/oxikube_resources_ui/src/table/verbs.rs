@@ -16,6 +16,8 @@
 //! | `ctrl-w` | `ToggleWide` | `table::ToggleWide` | the wide columns of every table of the kind show or hide |
 //! | `u` (Services) | `ShowServicePods` | `service::ShowPods` | the Pods table, filtered by the Service's selector (E12-S13) |
 //! | `o` (Services) | `OpenInBrowser` | `service::OpenInBrowser` | a port of the Service in the browser, once port forwarding is installed (E12-S13) |
+//! | `x` | `RevealSelected` | `secret::Reveal` | a Secret's detail opens with its values decoded, in memory (E12-S11) |
+//! | `shift-e` | `EditDecodedSelected` | `secret::EditDecoded` | a Secret in the editor with its values as text (E12-S11) |
 //!
 //! `ctrl-d` (delete), `s` (shell) and `a` (attach) are in [`row_actions`](super::row_actions).
 //! The row-bound verbs act on the cursor row of a multi-selection and say so.
@@ -26,8 +28,8 @@ use oxikube_domain::ids::ResourceRef;
 use oxikube_workspace::Toast;
 
 use super::actions::{
-    EditSelected, OpenInBrowser, PortForward, ShowPortForwards, ShowServicePods, ToggleWide,
-    ViewDescribe, ViewLogs, ViewYaml,
+    EditDecodedSelected, EditSelected, OpenInBrowser, PortForward, RevealSelected,
+    ShowPortForwards, ShowServicePods, ToggleWide, ViewDescribe, ViewLogs, ViewYaml,
 };
 use super::view::ResourceTable;
 use crate::exec::PORT_FORWARDING_UNAVAILABLE;
@@ -57,6 +59,28 @@ impl ResourceTable {
     ) {
         let targets = self.action_targets(cx);
         self.run_action(CommandId::RESOURCE_EDIT, targets, window, cx);
+    }
+
+    /// `x`: the `secret::Reveal` row action of the Secrets kind (E12-S11).
+    pub(super) fn on_reveal(
+        &mut self,
+        _: &RevealSelected,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let targets = self.action_targets(cx);
+        self.run_action(CommandId::SECRET_REVEAL, targets, window, cx);
+    }
+
+    /// `shift-e`: the `secret::EditDecoded` row action of the Secrets kind (E12-S11).
+    pub(super) fn on_edit_decoded(
+        &mut self,
+        _: &EditDecodedSelected,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let targets = self.action_targets(cx);
+        self.run_action(CommandId::SECRET_EDIT_DECODED, targets, window, cx);
     }
 
     /// `l`: the logs of the cursor row. A pod's own; any other kind asks for the workload logs

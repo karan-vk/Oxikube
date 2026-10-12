@@ -9,6 +9,8 @@
 //! - **Open** (`resource::Edit`, `resource::ViewYamlInEditor`, E10-S06) opens an editor on a live
 //!   object in the object's cluster tab, titled `kind/name`, or focuses the tab that already
 //!   holds the object. The object is read fresh, off the UI thread, by the editor itself.
+//!   **OpenDecoded** (`secret::EditDecoded`, E12-S11) is Open in edit mode with a Secret's values
+//!   as plaintext; **CreateSecret** (`secret::Create`) opens the "Create secret" dialog (`secret`).
 //! - **ToggleReadOnly** / **ToggleSoftWrap** / **ToggleManagedFields** / **ToggleSecretMask** /
 //!   **ConvertTo** / **UseLanguage**, **TriggerCompletion** / **ShowHover** (E10-S05), and the diff vs live requests (E10-S07: **ShowDiff**,
 //!   **ReloadFromServer**, **MergeFromServer**, **KeepMine**, a side per conflict,
@@ -114,6 +116,10 @@ impl EditorViews {
                 this.create_resource(cluster, template, window, cx)
             }
             EditorRequest::Open { target, mode } => this.open_resource(&target, mode, window, cx),
+            EditorRequest::OpenDecoded { target } => {
+                this.open_resource(&target, OpenMode::EditDecoded, window, cx)
+            }
+            EditorRequest::CreateSecret { cluster } => this.create_secret(cluster, window, cx),
             EditorRequest::ToggleManagedFields => {
                 this.on_target(window, cx, |editor, window, cx| {
                     editor.toggle_managed_fields(window, cx);
