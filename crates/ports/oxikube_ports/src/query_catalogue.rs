@@ -64,7 +64,7 @@ pub struct RangePlan {
 
 impl RangePlan {
     /// The plan for the `span` ending at `end`, with the step policy of
-    /// [`steps_for`](oxikube_domain::metric_query::steps_for).
+    /// [`steps_for`].
     pub fn ending_at(end: Timestamp, span: Duration) -> Self {
         let steps = steps_for(span);
         Self {
