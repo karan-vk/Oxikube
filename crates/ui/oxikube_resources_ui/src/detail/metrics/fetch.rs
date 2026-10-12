@@ -8,7 +8,7 @@ use oxikube_app::{
     ChartData, ChartDef, HistoryAvailability, HistoryError, HistorySubject, MetricsHistoryService,
     SubjectKind, charts_for,
 };
-use oxikube_runtime::{KubeTask, notify_coalesced, spawn_kube};
+use oxikube_runtime::{KubeTask, KubeTaskError, notify_coalesced, spawn_kube};
 use oxikube_settings::MetricsSettings;
 
 use super::charts;
@@ -51,10 +51,16 @@ impl DetailView {
             // Detection is still looking; its result restarts the loop.
             return None;
         }
-        if SubjectKind::of(&self.target.gvk).is_some_and(SubjectKind::needs_pods)
-            && !self.metrics.pods.ready
-        {
-            return None;
+        if SubjectKind::of(&self.target.gvk).is_some_and(SubjectKind::needs_pods) {
+            if let Some(reason) = &self.metrics.pods.failed {
+                // No `Ready` will follow a refused feed: say why, and let Retry subscribe again.
+                self.metrics.state = MetricsState::failed(format!("cannot list pods: {reason}"));
+                cx.notify();
+                return None;
+            }
+            if !self.metrics.pods.ready {
+                return None;
+            }
         }
         let subject = self.metrics_subject()?;
         self.metrics.pods_left_out = subject.pods_left_out();
@@ -83,10 +89,20 @@ impl DetailView {
         self.metrics.state = MetricsState::after_fetch(results.iter().map(|(_, result)| result));
         let range_label = self.metrics.range.label();
         let mut old = std::mem::take(&mut self.metrics.charts);
+        let same_charts = old.len() == results.len()
+            && old
+                .iter()
+                .zip(&results)
+                .all(|(slot, (def, _))| slot.key == def.id);
         let mut slots = Vec::with_capacity(results.len());
         for (def, result) in &results {
             let slot = match old.iter().position(|slot| slot.key == def.id) {
-                Some(at) => old.swap_remove(at),
+                Some(at) => {
+                    let slot = old.swap_remove(at);
+                    // The range may have changed since the chart was made.
+                    charts::relabel(&slot.chart, def, range_label, cx);
+                    slot
+                }
                 None => ChartSlot {
                     key: def.id,
                     title: def.title.to_uppercase().into(),
@@ -105,7 +121,18 @@ impl DetailView {
             slots.push(slot);
         }
         self.metrics.charts = slots;
-        self.metrics.list.reset(self.metrics.charts.len());
+        // A refresh with the same cards leaves the list alone: resetting it would throw away the
+        // scroll position and every measured height every few seconds.
+        if !same_charts {
+            self.metrics.list.reset(self.metrics.charts.len());
+        }
+        notify_coalesced(cx);
+    }
+
+    /// Takes the death of the fetch task (a panic, or the runtime going down): the tab says so
+    /// with Retry, instead of showing an answer nobody gave. The loop carries on at its next tick.
+    pub(super) fn finish_failed(&mut self, error: KubeTaskError, cx: &mut Context<Self>) {
+        self.metrics.state = MetricsState::failed(error);
         notify_coalesced(cx);
     }
 }

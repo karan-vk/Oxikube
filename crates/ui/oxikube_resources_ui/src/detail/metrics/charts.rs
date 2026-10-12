@@ -49,13 +49,29 @@ pub(super) fn threshold_of(line: &ReferenceLine) -> Threshold {
     Threshold::new(line.value, line.label.clone()).tone(tone)
 }
 
+/// The accessible name of a chart: its heading and the range it covers.
+fn label_of(def: &ChartDef, range_label: &str) -> String {
+    format!("{}, last {range_label}", def.title)
+}
+
+/// Brings the name of a kept chart up to date with the range now shown.
+pub(super) fn relabel(
+    chart: &Entity<Chart>,
+    def: &ChartDef,
+    range_label: &str,
+    cx: &mut Context<DetailView>,
+) {
+    let label = label_of(def, range_label);
+    chart.update(cx, |chart, cx| chart.set_label(label, cx));
+}
+
 /// The chart entity for `data`, named for the screen reader by its heading and the range.
 pub(super) fn new_chart(
     def: &ChartDef,
     range_label: &str,
     cx: &mut Context<DetailView>,
 ) -> Entity<Chart> {
-    let label = format!("{}, last {range_label}", def.title);
+    let label = label_of(def, range_label);
     let format = format_of(def.unit);
     let id = def.id;
     cx.new(move |_| Chart::line(id).format(format).label(label))

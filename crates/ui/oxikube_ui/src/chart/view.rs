@@ -180,6 +180,21 @@ impl Chart {
         }
     }
 
+    /// Replaces the accessible name (the builder [`Chart::label`] sets the first one), for a
+    /// chart kept across a change of what it shows (the range of a metrics chart).
+    pub fn set_label(&mut self, label: impl Into<SharedString>, cx: &mut Context<Self>) {
+        let label = label.into();
+        if self.label.as_ref() != Some(&label) {
+            self.label = Some(label);
+            cx.notify();
+        }
+    }
+
+    /// The accessible name set by [`Chart::label`] or [`Chart::set_label`].
+    pub fn label_text(&self) -> Option<&SharedString> {
+        self.label.as_ref()
+    }
+
     /// Switches the series called `name` off, or on again. This is what a legend click does.
     pub fn toggle_series(&mut self, name: &SharedString, cx: &mut Context<Self>) {
         self.update(cx, |spec| {

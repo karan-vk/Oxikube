@@ -73,6 +73,8 @@ struct Prom {
     gated: AtomicBool,
     release: Notify,
     in_flight: AtomicUsize,
+    /// While set, a query panics (a bug in the fetch).
+    panics: AtomicBool,
 }
 
 struct InFlight<'a>(&'a Prom);
@@ -117,6 +119,7 @@ impl PromqlPort for Prom {
         range: TimeRange,
     ) -> OxiResult<Vec<PromqlSeries>> {
         self.calls.lock().push((query.to_owned(), range));
+        assert!(!self.panics.load(Ordering::SeqCst), "the query blew up");
         if self.gated.load(Ordering::SeqCst) {
             self.in_flight.fetch_add(1, Ordering::SeqCst);
             let _in_flight = InFlight(self);
@@ -730,4 +733,185 @@ fn the_view_metrics_command_says_why_when_there_is_no_prometheus(cx: &mut TestAp
         ["metrics unavailable: no Prometheus-compatible service was found"]
     );
     assert_eq!(rig.prom.queries(), 0);
+}
+
+/// A workload `kind` named `name` in `shop` that selects `app=web`.
+fn controller(kind: &str, name: &str) -> oxikube_domain::Resource {
+    oxikube_domain::Resource::from_json(serde_json::json!({
+        "apiVersion": "apps/v1", "kind": kind,
+        "metadata": {"name": name, "namespace": "shop", "uid": format!("{name}-uid"),
+                     "resourceVersion": "10", "creationTimestamp": "2026-01-01T00:00:00Z"},
+        "spec": {"selector": {"matchLabels": {"app": "web"}},
+                 "template": {"metadata": {"labels": {"app": "web"}},
+                              "spec": {"containers": [{"name": "app", "image": "shop/web:2"}]}}},
+        "status": {}
+    }))
+    .expect("a controller")
+}
+
+fn web_pods() -> [oxikube_domain::Resource; 2] {
+    ["web-a", "web-b"].map(|name| {
+        oxikube_testkit::pod()
+            .namespace("shop")
+            .name(name)
+            .label("app", "web")
+            .build()
+    })
+}
+
+fn controller_ref(kind: &str, name: &str) -> ResourceRef {
+    ResourceRef::namespaced(cluster(), Gvk::new("apps", "v1", kind), "shop", name)
+}
+
+#[gpui::test]
+fn a_daemon_set_graphs_the_pods_it_selects(cx: &mut TestAppContext) {
+    let mut rig = rig_with(
+        cx,
+        ready(),
+        [controller("DaemonSet", "proxy")]
+            .into_iter()
+            .chain(web_pods()),
+    );
+    rig.prom.answer(
+        "pod:cpu_usage",
+        Ok(vec![
+            series(&[("pod", "web-a")], &[0.1, 0.2]),
+            series(&[("pod", "web-b")], &[0.3, 0.1]),
+        ]),
+    );
+    let view = rig.d.open(&controller_ref("DaemonSet", "proxy"));
+    rig.d.click("detail-tab-metrics");
+    rig.d.settle();
+    assert_eq!(rig.state(&view), MetricsState::Ready);
+    assert!(rig.d.shown("metrics-chart-cpu"));
+    let pods: Vec<_> = rig
+        .catalogue
+        .recorded_calls()
+        .iter()
+        .filter(|c| c.request.kind == MetricKind::CpuUsage)
+        .map(|c| c.request.target.clone())
+        .collect();
+    assert_eq!(
+        pods,
+        [oxikube_domain::MetricTarget::Pod {
+            namespace: "shop".into(),
+            pods: oxikube_domain::PodSelector::Any(vec!["web-a".into(), "web-b".into()]),
+        }]
+    );
+}
+
+#[gpui::test]
+fn a_refused_pods_feed_says_why_and_retry_subscribes_again(cx: &mut TestAppContext) {
+    let mut rig = rig_with(
+        cx,
+        ready(),
+        [controller("Deployment", "web")]
+            .into_iter()
+            .chain(web_pods()),
+    );
+    rig.prom.answer(
+        "pod:cpu_usage",
+        Ok(vec![series(&[("pod", "web-a")], &[0.1, 0.2])]),
+    );
+    let view = rig.d.open(&controller_ref("Deployment", "web"));
+    // The user may read the Deployment but not list its pods: the next watch (the pods) is refused.
+    rig.d
+        .f
+        .ports()
+        .resources
+        .script()
+        .watch
+        .push_err(oxikube_domain::OxiError::forbidden(
+            "pods is forbidden: User cannot list resource \"pods\"",
+        ));
+    rig.d.click("detail-tab-metrics");
+    rig.d.settle();
+    let MetricsState::Error { message, retryable } = rig.state(&view) else {
+        panic!("the skeleton must not stay: {:?}", rig.state(&view));
+    };
+    assert!(message.starts_with("metrics unavailable: "), "{message}");
+    assert!(message.contains("forbidden"), "{message}");
+    assert!(retryable);
+    assert!(rig.d.shown("metrics-error"));
+    assert_eq!(rig.prom.queries(), 0, "nothing can be asked without pods");
+
+    // Access is granted; Retry subscribes to the pods again and loads.
+    rig.d.click("metrics-retry");
+    rig.d.settle();
+    assert_eq!(rig.state(&view), MetricsState::Ready);
+    assert!(rig.d.shown("metrics-chart-cpu"));
+}
+
+#[gpui::test]
+fn the_chart_names_follow_the_range(cx: &mut TestAppContext) {
+    let mut rig = rig(cx, ready());
+    two_containers(&rig.prom);
+    let view = rig.open("web-0");
+    rig.show_metrics(&view);
+    let label = |rig: &mut Rig| {
+        let cpu = rig.d.read(&view, |v| v.metrics_chart("cpu")).unwrap();
+        rig.d
+            .f
+            .vcx
+            .update(|_, cx| cpu.read(cx).label_text().map(|l| l.to_string()))
+    };
+    let first = label(&mut rig).expect("a label");
+    assert!(first.starts_with("CPU, last "), "{first}");
+    let other = if rig.d.read(&view, |v| v.metrics_range()) == RangePreset::Hours24 {
+        RangePreset::Hour1
+    } else {
+        RangePreset::Hours24
+    };
+    rig.d.update(&view, |v, cx| v.set_metrics_range(other, cx));
+    rig.d.settle();
+    let second = label(&mut rig).expect("a label");
+    assert_ne!(first, second);
+    assert!(second.ends_with(other.label()), "{second}");
+}
+
+#[gpui::test]
+fn a_refresh_with_the_same_cards_keeps_the_scroll_position(cx: &mut TestAppContext) {
+    let mut rig = rig(cx, ready());
+    two_containers(&rig.prom);
+    let view = rig.open("web-0");
+    // A drawer too short for the three cards, so the list scrolls.
+    rig.d
+        .f
+        .vcx
+        .simulate_resize(gpui::size(gpui::px(1920.), gpui::px(500.)));
+    rig.show_metrics(&view);
+    rig.d.draw();
+    let list = rig.d.read(&view, |v| v.metrics.list.clone());
+    list.scroll_to(gpui::ListOffset {
+        item_ix: 1,
+        offset_in_item: gpui::px(12.),
+    });
+    rig.d.draw();
+    assert_eq!(list.logical_scroll_top().item_ix, 1, "the list scrolls");
+    let queries = rig.prom.queries();
+    rig.advance(Duration::from_secs(31));
+    rig.d.draw();
+    assert!(rig.prom.queries() > queries, "the refresh ran");
+    assert_eq!(list.logical_scroll_top().item_ix, 1);
+    assert_eq!(list.logical_scroll_top().offset_in_item, gpui::px(12.));
+}
+
+#[gpui::test]
+fn a_fetch_that_dies_is_an_error_with_retry_not_an_empty_answer(cx: &mut TestAppContext) {
+    let mut rig = rig(cx, ready());
+    two_containers(&rig.prom);
+    rig.prom.panics.store(true, Ordering::SeqCst);
+    let view = rig.open("web-0");
+    rig.show_metrics(&view);
+    let MetricsState::Error { message, retryable } = rig.state(&view) else {
+        panic!("a dead fetch is an error: {:?}", rig.state(&view));
+    };
+    assert!(message.starts_with("metrics unavailable: "), "{message}");
+    assert!(retryable);
+    assert!(rig.d.shown("metrics-retry"));
+    assert!(!rig.d.shown("metrics-empty"));
+
+    rig.prom.panics.store(false, Ordering::SeqCst);
+    rig.d.click("metrics-retry");
+    assert_eq!(rig.state(&view), MetricsState::Ready);
 }

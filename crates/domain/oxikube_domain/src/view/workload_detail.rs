@@ -117,7 +117,7 @@ impl LabelSelector {
             .join(",")
     }
 
-    fn from_json(selector: JsonRef<'_>, plain_map: bool) -> Self {
+    pub(super) fn from_json(selector: JsonRef<'_>, plain_map: bool) -> Self {
         let labels = if plain_map {
             Some(selector)
         } else {

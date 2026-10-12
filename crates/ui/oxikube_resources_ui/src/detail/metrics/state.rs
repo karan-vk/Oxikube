@@ -57,6 +57,15 @@ impl MetricsState {
         }
     }
 
+    /// The tab could not ask at all (the pods feed was refused, the fetch task died):
+    /// `metrics unavailable: <reason>`, and Retry may help.
+    pub fn failed(reason: impl std::fmt::Display) -> Self {
+        Self::Error {
+            message: format!("metrics unavailable: {reason}"),
+            retryable: true,
+        }
+    }
+
     /// Whether the chart frames are drawn.
     pub fn shows_charts(&self) -> bool {
         matches!(self, Self::Ready)
@@ -80,6 +89,9 @@ pub(in crate::detail) struct PodFeed {
     pub(in crate::detail) subscription: Option<Subscription>,
     pub(in crate::detail) items: Vec<Arc<StoreObject>>,
     pub(in crate::detail) ready: bool,
+    /// Why the feed ended without a `Ready` (forbidden, unauthorized, failed); cleared by a new
+    /// subscription (Retry) or a `Ready`.
+    pub(in crate::detail) failed: Option<String>,
     pub(in crate::detail) task: Option<Task<()>>,
 }
 

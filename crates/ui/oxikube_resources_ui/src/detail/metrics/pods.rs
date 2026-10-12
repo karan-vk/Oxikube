@@ -1,6 +1,6 @@
 //! A workload's pods, followed to know which names to query.
 //!
-//! The Metrics tab of a Deployment, StatefulSet, DaemonSet or ReplicaSet draws one line per pod
+//! The Metrics tab of a Deployment, StatefulSet, DaemonSet, ReplicaSet or ReplicationController draws one line per pod
 //! it selects. The pods come from the namespace's Pod feed filtered by the workload's label
 //! selector (the feed other views of those pods share), started when the tab is first shown and
 //! dropped with it. Deltas are applied off the render path; the names are read when a fetch
@@ -13,7 +13,7 @@ use futures::Stream as _;
 use gpui::{AsyncApp, Context, Task, WeakEntity};
 use oxikube_app::store::{FeedState, LabelSelector, StoreDelta, StoreFilter, StoreQuery};
 use oxikube_domain::ids::Gvk;
-use oxikube_domain::view::WorkloadDetail;
+use oxikube_domain::view::pod_selector;
 
 use crate::detail::view::DetailView;
 
@@ -26,8 +26,8 @@ impl DetailView {
         };
         let Some(selector) = self
             .resource()
-            .and_then(|res| WorkloadDetail::from_resource(res).ok())
-            .map(|detail| detail.selector.display())
+            .and_then(|res| pod_selector(res).ok())
+            .map(|selector| selector.display())
         else {
             return;
         };
@@ -107,8 +107,19 @@ impl DetailView {
         }
         for delta in deltas {
             delta.apply_to(&mut self.metrics.pods.items);
-            if matches!(delta.state, FeedState::Ready) {
-                self.metrics.pods.ready = true;
+            match &delta.state {
+                FeedState::Ready => {
+                    self.metrics.pods.ready = true;
+                    self.metrics.pods.failed = None;
+                }
+                // These are not retried until the view subscribes again: no `Ready` will follow,
+                // so the tab says why instead of waiting for the pods for ever.
+                FeedState::Forbidden { message }
+                | FeedState::Unauthorized { message }
+                | FeedState::Failed { message, .. } => {
+                    self.metrics.pods.failed = Some(message.clone());
+                }
+                FeedState::Warming | FeedState::Retrying { .. } => {}
             }
         }
         // The first answer, or the first pod of a workload that had none, starts the fetching;

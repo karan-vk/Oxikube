@@ -194,6 +194,10 @@ impl DetailView {
 
     /// Asks again after an error (the Retry button).
     pub fn retry_metrics(&mut self, cx: &mut Context<Self>) {
+        if self.metrics.pods.failed.is_some() {
+            // A refused pods feed is not retried by the store: subscribe again.
+            self.metrics.pods = Default::default();
+        }
         self.metrics.state = MetricsState::Loading;
         self.run_metrics(cx);
         cx.notify();
@@ -244,9 +248,12 @@ impl DetailView {
                         break;
                     }
                 };
-                let results = work.await.unwrap_or_default();
+                let outcome = work.await;
                 let wait = this.update(cx, |view, cx| {
-                    view.finish_fetch(results, cx);
+                    match outcome {
+                        Ok(results) => view.finish_fetch(results, cx),
+                        Err(error) => view.finish_failed(error, cx),
+                    }
                     view.refresh_interval(cx)
                 });
                 let Ok(wait) = wait else { break };
