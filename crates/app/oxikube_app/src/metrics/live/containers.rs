@@ -1,13 +1,14 @@
 //! [`ContainerUsageCells`]: the usage cells of one container row (a pod's containers sub-table),
 //! k9s' container view: CPU, MEM, `%CPU/R`, `%CPU/L`, `%MEM/R`, `%MEM/L`.
 
+use oxikube_domain::Quantity;
 use oxikube_domain::metrics::ContainerUsage;
 use oxikube_domain::view::ResourceAmounts;
 
+use super::ring::{cpu_quantity, memory_quantity};
 use super::usage::{cpu_text, memory_text};
 use crate::columns::pods::ABSENT;
-use crate::columns::{Cell, CellSort, Tone, UsageThresholds};
-use oxikube_domain::Quantity;
+use crate::columns::{Cell, CellSort, Threshold, Tone, UsageThresholds};
 
 /// The usage cells of one container, in k9s' order. `–` without a reading (an init container,
 /// a container not running, no metrics) and in a `%` cell without its request or limit.
@@ -35,24 +36,18 @@ impl ContainerUsageCells {
         limits: &ResourceAmounts,
         thresholds: &UsageThresholds,
     ) -> Self {
-        let cpu = usage
-            .and_then(|u| u.cpu.value())
-            .map(|n| Quantity::from_nanos(i128::from(n)));
-        let memory = usage
-            .and_then(|u| u.memory.value())
-            .map(|b| Quantity::from_nanos(i128::from(b) * 1_000_000_000));
-        let usage_cell =
-            |value: Option<u64>, text: fn(u64) -> String, q: Option<Quantity>| match (value, q) {
-                (Some(v), Some(q)) => Cell::quantity(text(v), q),
-                _ => absent(),
-            };
+        let cpu = usage.and_then(|u| u.cpu.value());
+        let memory = usage.and_then(|u| u.memory.value());
+        let (cpu_q, memory_q) = (cpu.map(cpu_quantity), memory.map(memory_quantity));
         Self {
-            cpu: usage_cell(usage.and_then(|u| u.cpu.value()), cpu_text, cpu),
-            memory: usage_cell(usage.and_then(|u| u.memory.value()), memory_text, memory),
-            cpu_of_request: percent(cpu, requests.cpu, None),
-            cpu_of_limit: percent(cpu, limits.cpu, Some(thresholds.cpu)),
-            memory_of_request: percent(memory, requests.memory, None),
-            memory_of_limit: percent(memory, limits.memory, Some(thresholds.memory)),
+            cpu: cpu.map_or_else(absent, |n| Cell::quantity(cpu_text(n), cpu_quantity(n))),
+            memory: memory.map_or_else(absent, |b| {
+                Cell::quantity(memory_text(b), memory_quantity(b))
+            }),
+            cpu_of_request: percent(cpu_q, requests.cpu, None),
+            cpu_of_limit: percent(cpu_q, limits.cpu, Some(thresholds.cpu)),
+            memory_of_request: percent(memory_q, requests.memory, None),
+            memory_of_limit: percent(memory_q, limits.memory, Some(thresholds.memory)),
         }
     }
 
@@ -77,7 +72,7 @@ fn absent() -> Cell<'static> {
 fn percent(
     used: Option<Quantity>,
     of: Option<Quantity>,
-    threshold: Option<crate::columns::Threshold>,
+    threshold: Option<Threshold>,
 ) -> Cell<'static> {
     let Some(pct) = used.zip(of).and_then(|(used, of)| used.percent_of(&of)) else {
         return absent();

@@ -62,25 +62,21 @@ impl MetricsState {
         matches!(self, MetricsState::Available { .. })
     }
 
-    /// Why there are no metrics, as the text after `metrics unavailable: `. `None` while they
-    /// are (or are about to be) there.
-    pub fn unavailable_reason(&self) -> Option<String> {
-        match self {
-            MetricsState::Idle | MetricsState::Loading | MetricsState::Available { .. } => None,
-            MetricsState::Unavailable(reason) => Some(reason_text(*reason).to_owned()),
-            MetricsState::Failed { message } => Some(message.to_string()),
-        }
-    }
-
     /// `metrics unavailable: <reason>`, or `None` while metrics are (or are about to be) there.
     pub fn unavailable_text(&self) -> Option<String> {
-        self.unavailable_reason()
-            .map(|reason| format!("metrics unavailable: {reason}"))
+        let reason = match self {
+            MetricsState::Idle | MetricsState::Loading | MetricsState::Available { .. } => {
+                return None;
+            }
+            MetricsState::Unavailable(reason) => reason_text(*reason),
+            MetricsState::Failed { message } => message,
+        };
+        Some(format!("metrics unavailable: {reason}"))
     }
 }
 
 /// The words for a [`MissingReason`].
-pub fn reason_text(reason: MissingReason) -> &'static str {
+fn reason_text(reason: MissingReason) -> &'static str {
     match reason {
         MissingReason::NotInstalled => "metrics-server is not installed (no metrics.k8s.io API)",
         MissingReason::ApiUnavailable => {

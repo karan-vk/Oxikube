@@ -39,15 +39,23 @@ impl UsagePoint {
 
     /// CPU as an exact quantity in cores.
     pub fn cpu_quantity(&self) -> Option<Quantity> {
-        self.cpu_nanocores
-            .map(|n| Quantity::from_nanos(i128::from(n)))
+        self.cpu_nanocores.map(cpu_quantity)
     }
 
     /// Memory as an exact quantity in bytes.
     pub fn memory_quantity(&self) -> Option<Quantity> {
-        self.memory_bytes
-            .map(|b| Quantity::from_nanos(i128::from(b) * 1_000_000_000))
+        self.memory_bytes.map(memory_quantity)
     }
+}
+
+/// `nanocores` as an exact quantity in cores: the sort key of a CPU cell.
+pub(super) fn cpu_quantity(nanocores: u64) -> Quantity {
+    Quantity::from_nanos(i128::from(nanocores))
+}
+
+/// `bytes` as an exact quantity: the sort key of a memory cell.
+pub(super) fn memory_quantity(bytes: u64) -> Quantity {
+    Quantity::from_nanos(i128::from(bytes) * 1_000_000_000)
 }
 
 #[derive(Clone, Copy, Default)]

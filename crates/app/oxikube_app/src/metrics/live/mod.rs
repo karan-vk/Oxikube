@@ -31,7 +31,9 @@
 mod cadence;
 mod config;
 mod containers;
+mod handles;
 mod poller;
+mod reconcile;
 mod ring;
 mod service;
 mod state;
@@ -46,7 +48,8 @@ pub use config::{
     MIN_POLL_INTERVAL,
 };
 pub use containers::ContainerUsageCells;
+pub use handles::{MetricsInterest, MetricsVisibility};
 pub use ring::{RING_CAPACITY, SampleRing, UsagePoint};
-pub use service::{MetricsInterest, MetricsService, MetricsVisibility};
-pub use state::{MetricsKind, MetricsState, reason_text};
+pub use service::MetricsService;
+pub use state::{MetricsKind, MetricsState};
 pub use usage::{ClusterUsage, cpu_text, memory_text, usage_cell};

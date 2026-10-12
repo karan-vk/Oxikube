@@ -32,11 +32,6 @@ impl TableMetrics {
         }
     }
 
-    /// The kind of metrics the table shows, if any.
-    pub fn kind(&self) -> Option<MetricsKind> {
-        self.kind
-    }
-
     /// Whether the table holds an interest now.
     pub fn is_watching(&self) -> bool {
         self.interest.is_some()

@@ -23,11 +23,6 @@ impl ClusterPodColumns {
     pub(super) fn new(shared: Arc<PodColumns>, metrics: Option<Arc<dyn MetricsSource>>) -> Self {
         Self { shared, metrics }
     }
-
-    /// The shared provider behind it.
-    pub fn shared(&self) -> &Arc<PodColumns> {
-        &self.shared
-    }
 }
 
 impl std::fmt::Debug for ClusterPodColumns {

@@ -36,6 +36,12 @@ struct Data {
     states: [MetricsState; 2],
 }
 
+impl Data {
+    fn pod(&self, namespace: &str, name: &str) -> Option<&PodSeries> {
+        self.pods.get(namespace)?.get(name)
+    }
+}
+
 /// The samples of one cluster: the latest reading and the last 60 per node and pod, each pod's
 /// containers, the [`MetricsState`] of each kind and the thresholds the `%` cells are toned by.
 ///
@@ -77,9 +83,8 @@ impl ClusterUsage {
 
     /// The readings of the node named `node`, oldest first (at most 60).
     pub fn node_history(&self, node: &str) -> Vec<UsagePoint> {
-        self.data
-            .read()
-            .nodes
+        let data = self.data.read();
+        data.nodes
             .get(node)
             .map(|ring| ring.iter().collect())
             .unwrap_or_default()
@@ -87,21 +92,13 @@ impl ClusterUsage {
 
     /// The latest reading of the pod `namespace/name`.
     pub fn pod(&self, namespace: &str, name: &str) -> Option<UsagePoint> {
-        self.data
-            .read()
-            .pods
-            .get(namespace)?
-            .get(name)?
-            .ring
-            .latest()
+        self.data.read().pod(namespace, name)?.ring.latest()
     }
 
     /// The readings of the pod `namespace/name`, oldest first (at most 60).
     pub fn pod_history(&self, namespace: &str, name: &str) -> Vec<UsagePoint> {
         let data = self.data.read();
-        data.pods
-            .get(namespace)
-            .and_then(|pods| pods.get(name))
+        data.pod(namespace, name)
             .map(|series| series.ring.iter().collect())
             .unwrap_or_default()
     }
@@ -109,9 +106,7 @@ impl ClusterUsage {
     /// The latest reading of each running container of the pod `namespace/name`.
     pub fn containers(&self, namespace: &str, name: &str) -> Vec<ContainerUsage> {
         let data = self.data.read();
-        data.pods
-            .get(namespace)
-            .and_then(|pods| pods.get(name))
+        data.pod(namespace, name)
             .map(|series| series.containers.clone())
             .unwrap_or_default()
     }

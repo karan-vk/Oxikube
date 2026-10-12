@@ -103,7 +103,7 @@ fn main() {
         },
     );
 
-    let columns = Arc::new(PodColumns::new()).in_cluster(Some(usage.clone()));
+    let columns = Arc::new(PodColumns::new()).in_cluster(Some(usage));
     let row = StoreObject::Resource(
         pod()
             .uid("uid-bench")

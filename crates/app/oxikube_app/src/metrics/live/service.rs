@@ -2,7 +2,7 @@
 //! gets. The loop itself is in `poller`.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 
 use futures::future::BoxFuture;
 use futures::stream::BoxStream;
@@ -14,10 +14,11 @@ use tokio::sync::broadcast;
 
 use super::cadence::Cadence;
 use super::config::{LiveMetricsConfig, LiveMetricsConfigTable};
-use super::poller::poll_loop;
+use super::handles::{MetricsInterest, MetricsVisibility};
+use super::reconcile::follow;
 use super::state::{MetricsKind, MetricsState};
 use super::usage::ClusterUsage;
-use crate::session::{ClusterSessionManager, SessionChange, SessionUpdates};
+use crate::session::ClusterSessionManager;
 use crate::store::{Spawner, TaskGuard, spawn_guarded};
 
 /// Capacity of the change broadcast; a subscriber that falls behind re-reads the state.
@@ -28,12 +29,12 @@ pub(super) struct Entry {
     pub(super) usage: Arc<ClusterUsage>,
     pub(super) config: LiveMetricsConfig,
     /// Consumers per [`MetricsKind`].
-    interest: [usize; 2],
+    pub(super) interest: [usize; 2],
     /// Windows showing the cluster's tab.
-    visible: usize,
+    pub(super) visible: usize,
     pub(super) cadence: [Cadence; 2],
     /// The poller while the cluster is watched; dropping it aborts the loop.
-    poller: Option<TaskGuard>,
+    pub(super) poller: Option<TaskGuard>,
 }
 
 impl Entry {
@@ -60,17 +61,27 @@ impl Entry {
 
 #[derive(Default)]
 pub(super) struct State {
-    spawner: Option<Arc<dyn Spawner>>,
+    pub(super) spawner: Option<Arc<dyn Spawner>>,
     follower: Option<TaskGuard>,
     config: LiveMetricsConfigTable,
     pub(super) clusters: HashMap<ClusterId, Entry>,
+}
+
+impl State {
+    /// `cluster`'s entry, made with its configured settings on first sight.
+    pub(super) fn entry(&mut self, cluster: &ClusterId) -> &mut Entry {
+        let config = self.config.get(cluster);
+        self.clusters
+            .entry(cluster.clone())
+            .or_insert_with(|| Entry::new(config))
+    }
 }
 
 pub(super) struct Inner {
     pub(super) sessions: ClusterSessionManager,
     pub(super) clock: Arc<dyn ClockPort>,
     pub(super) state: Mutex<State>,
-    changes: broadcast::Sender<ClusterId>,
+    pub(super) changes: broadcast::Sender<ClusterId>,
 }
 
 /// Live CPU and memory from metrics-server, polled per cluster while someone looks (E13-S03).
@@ -160,14 +171,7 @@ impl MetricsService {
     /// `cluster`'s samples: the source its Pods and Nodes columns read. The same `Arc` for the
     /// life of the service.
     pub fn usage(&self, cluster: &ClusterId) -> Arc<ClusterUsage> {
-        let mut state = self.inner.state.lock();
-        let config = state.config.get(cluster);
-        state
-            .clusters
-            .entry(cluster.clone())
-            .or_insert_with(|| Entry::new(config))
-            .usage
-            .clone()
+        self.inner.state.lock().entry(cluster).usage.clone()
     }
 
     /// How the last poll of `kind` in `cluster` went.
@@ -186,11 +190,7 @@ impl MetricsService {
     pub fn watch(&self, cluster: &ClusterId, kind: MetricsKind) -> MetricsInterest {
         let first = {
             let mut state = self.inner.state.lock();
-            let config = state.config.get(cluster);
-            let entry = state
-                .clusters
-                .entry(cluster.clone())
-                .or_insert_with(|| Entry::new(config));
+            let entry = state.entry(cluster);
             entry.interest[kind.index()] += 1;
             let first = entry.interest[kind.index()] == 1;
             if first {
@@ -204,20 +204,13 @@ impl MetricsService {
         if first {
             self.inner.reconcile(cluster);
         }
-        MetricsInterest {
-            inner: Arc::downgrade(&self.inner),
-            cluster: cluster.clone(),
-            kind,
-        }
+        MetricsInterest::new(Arc::downgrade(&self.inner), cluster.clone(), kind)
     }
 
     /// A handle a window moves to the cluster tab it shows ([`MetricsVisibility::show`]): a
     /// cluster no window shows is not polled. Dropping it shows nothing.
     pub fn visibility(&self) -> MetricsVisibility {
-        MetricsVisibility {
-            inner: Arc::downgrade(&self.inner),
-            shown: None,
-        }
+        MetricsVisibility::new(Arc::downgrade(&self.inner))
     }
 
     /// Whether `cluster` is being polled now (it is watched, shown and connected).
@@ -249,188 +242,5 @@ impl MetricsService {
             }
         })
         .boxed()
-    }
-}
-
-/// A consumer of one kind of one cluster's metrics. Dropping it unregisters the consumer; the
-/// last one gone stops the poller (its task is dropped, so the call in flight is aborted).
-#[must_use = "the cluster is polled only while the interest is held"]
-pub struct MetricsInterest {
-    inner: Weak<Inner>,
-    cluster: ClusterId,
-    kind: MetricsKind,
-}
-
-impl std::fmt::Debug for MetricsInterest {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("MetricsInterest")
-            .field("cluster", &self.cluster)
-            .field("kind", &self.kind)
-            .finish()
-    }
-}
-
-impl Drop for MetricsInterest {
-    fn drop(&mut self) {
-        let Some(inner) = self.inner.upgrade() else {
-            return;
-        };
-        if let Some(entry) = inner.state.lock().clusters.get_mut(&self.cluster) {
-            let count = &mut entry.interest[self.kind.index()];
-            *count = count.saturating_sub(1);
-        }
-        inner.reconcile(&self.cluster);
-    }
-}
-
-/// Which cluster tab one window shows. See [`MetricsService::visibility`].
-pub struct MetricsVisibility {
-    inner: Weak<Inner>,
-    shown: Option<ClusterId>,
-}
-
-impl std::fmt::Debug for MetricsVisibility {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("MetricsVisibility")
-            .field("shown", &self.shown)
-            .finish()
-    }
-}
-
-impl MetricsVisibility {
-    /// The window now shows `cluster`'s tab (`None`: no cluster tab, the catalog say).
-    pub fn show(&mut self, cluster: Option<ClusterId>) {
-        if self.shown == cluster {
-            return;
-        }
-        let Some(inner) = self.inner.upgrade() else {
-            return;
-        };
-        let previous = std::mem::replace(&mut self.shown, cluster.clone());
-        {
-            let mut state = inner.state.lock();
-            if let Some(entry) = previous.as_ref().and_then(|c| state.clusters.get_mut(c)) {
-                entry.visible = entry.visible.saturating_sub(1);
-            }
-            if let Some(cluster) = &cluster {
-                let config = state.config.get(cluster);
-                state
-                    .clusters
-                    .entry(cluster.clone())
-                    .or_insert_with(|| Entry::new(config))
-                    .visible += 1;
-            }
-        }
-        for cluster in previous.iter().chain(cluster.iter()) {
-            inner.reconcile(cluster);
-        }
-    }
-
-    /// The cluster shown now.
-    pub fn shown(&self) -> Option<&ClusterId> {
-        self.shown.as_ref()
-    }
-}
-
-impl Drop for MetricsVisibility {
-    fn drop(&mut self) {
-        self.show(None);
-    }
-}
-
-impl Inner {
-    pub(super) fn notify(&self, cluster: &ClusterId) {
-        let _ = self.changes.send(cluster.clone());
-    }
-
-    fn reconcile_all(self: &Arc<Self>) {
-        let clusters: Vec<ClusterId> = self.state.lock().clusters.keys().cloned().collect();
-        for cluster in clusters {
-            self.reconcile(&cluster);
-        }
-    }
-
-    /// Starts `cluster`'s poller when it is watched, shown and connected, and stops it when it is
-    /// not.
-    pub(super) fn reconcile(self: &Arc<Self>, cluster: &ClusterId) {
-        let connected = self
-            .sessions
-            .get(cluster)
-            .is_some_and(|session| session.is_connected());
-        let mut state = self.state.lock();
-        let spawner = state.spawner.clone();
-        let Some(entry) = state.clusters.get_mut(cluster) else {
-            return;
-        };
-        let watched = entry.visible > 0 && entry.wanted().next().is_some() && connected;
-        match (watched, entry.poller.is_some(), spawner) {
-            (true, false, Some(spawner)) => {
-                for cadence in &mut entry.cadence {
-                    cadence.resume();
-                }
-                let task = poll_loop(Arc::downgrade(self), cluster.clone());
-                entry.poller = Some(spawn_guarded(&spawner, task));
-            }
-            (false, true, _) => entry.poller = None,
-            _ => {}
-        }
-    }
-
-    /// The cluster dropped its connection (or closed): stop, forget its samples and history.
-    fn disconnected(self: &Arc<Self>, cluster: &ClusterId) {
-        let usage = {
-            let mut state = self.state.lock();
-            let Some(entry) = state.clusters.get_mut(cluster) else {
-                return;
-            };
-            entry.poller = None;
-            entry.cadence = Default::default();
-            entry.usage.clone()
-        };
-        usage.clear();
-        self.notify(cluster);
-    }
-
-    /// The namespace selection moved: the pods are read again, now.
-    fn namespaces_changed(self: &Arc<Self>, cluster: &ClusterId) {
-        let usage = {
-            let mut state = self.state.lock();
-            let Some(entry) = state.clusters.get_mut(cluster) else {
-                return;
-            };
-            entry.cadence[MetricsKind::Pods.index()] = Cadence::default();
-            if entry.poller.is_some() {
-                entry.poller = None;
-            }
-            entry.usage.clone()
-        };
-        usage.clear_pods();
-        self.notify(cluster);
-        self.reconcile(cluster);
-    }
-}
-
-/// Reacts to the session updates until the service is dropped.
-async fn follow(inner: Weak<Inner>, mut updates: SessionUpdates) {
-    while let Some(item) = updates.next().await {
-        let Some(inner) = inner.upgrade() else {
-            return;
-        };
-        match item {
-            Ok(update) => match update.change {
-                SessionChange::StateChanged { from, state } => {
-                    let connected = state.phase().is_connected();
-                    if !connected && from.is_connected() {
-                        inner.disconnected(&update.cluster);
-                    } else if connected && !from.is_connected() {
-                        inner.reconcile(&update.cluster);
-                    }
-                }
-                SessionChange::Closed => inner.disconnected(&update.cluster),
-                SessionChange::NamespaceChanged(_) => inner.namespaces_changed(&update.cluster),
-                _ => {}
-            },
-            Err(_lagged) => inner.reconcile_all(),
-        }
     }
 }
