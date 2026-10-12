@@ -199,6 +199,8 @@ wiremock = "0.6"
 # never aws-lc-rs (one TLS provider).
 rcgen = { version = "0.14", default-features = false, features = ["crypto", "ring", "pem"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }
+# A PromQL parser: the query catalogue's tests check that every generated query is valid PromQL.
+promql-parser = "0.11"
 
 # --- xtask ---
 cargo_metadata = "0.23"

@@ -5,10 +5,13 @@
 //! installed outside that namespace; it is deleted when the test ends. Skips cleanly when
 //! `OXIKUBE_TEST_CONTEXT` is unset.
 
-use std::io::{BufRead, BufReader, Write};
-use std::process::{Child, ChildStdout, Command, Stdio};
+mod common;
+
+use std::io::Write;
+use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+use common::forward::PortForward;
 use jiff::Timestamp;
 use oxikube_ports::{PromEndpoint, PromqlEndpointPort, PromqlError, TimeRange};
 use oxikube_prometheus::PromqlClient;
@@ -64,48 +67,6 @@ fn kubectl(ns: &TestNamespace) -> Command {
     cmd
 }
 
-/// `kubectl port-forward` to the pod, killed on drop.
-struct PortForward {
-    child: Child,
-    port: u16,
-    /// Kept open: kubectl exits on SIGPIPE when it logs "Handling connection" to a closed pipe.
-    _stdout: BufReader<ChildStdout>,
-}
-
-impl PortForward {
-    fn start(ns: &TestNamespace) -> Self {
-        let mut child = kubectl(ns)
-            .args(["port-forward", "pod/prom", ":9090"])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("kubectl port-forward");
-        let stdout = child.stdout.take().unwrap();
-        let mut stdout = BufReader::new(stdout);
-        let mut line = String::new();
-        stdout.read_line(&mut line).expect("port-forward output");
-        // "Forwarding from 127.0.0.1:54321 -> 9090"
-        let port = line
-            .split("127.0.0.1:")
-            .nth(1)
-            .and_then(|rest| rest.split_whitespace().next())
-            .and_then(|p| p.parse().ok())
-            .unwrap_or_else(|| panic!("unexpected port-forward output: {line}"));
-        Self {
-            child,
-            port,
-            _stdout: stdout,
-        }
-    }
-}
-
-impl Drop for PortForward {
-    fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
-}
-
 #[tokio::test]
 async fn queries_a_real_prometheus_in_kind() {
     let Some(context) = test_context() else {
@@ -144,7 +105,7 @@ async fn queries_a_real_prometheus_in_kind() {
         ns.events()
     );
 
-    let forward = PortForward::start(&ns);
+    let forward = PortForward::start(ns.context(), ns.name(), "prom", 9090);
     let endpoint = PromEndpoint::new(format!("http://127.0.0.1:{}", forward.port))
         .with_timeout(Duration::from_secs(10));
     let client = PromqlClient::new();

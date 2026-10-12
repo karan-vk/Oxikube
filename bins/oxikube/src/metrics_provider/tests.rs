@@ -11,8 +11,10 @@ use oxikube_app::{
 use oxikube_domain::audit::Initiator;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::ClusterId;
-use oxikube_domain::{MetricsProviderKind, Resource};
-use oxikube_ports::ProviderTarget;
+use oxikube_domain::{
+    MetricKind, MetricRequest, MetricTarget, MetricsProviderKind, PodSelector, Resource,
+};
+use oxikube_ports::{ProviderTarget, RangePlan};
 use oxikube_settings::SettingsStore;
 use oxikube_testkit::{FakeServiceProxyPort, TestPorts};
 use serde_json::json;
@@ -50,7 +52,7 @@ fn fixture(cx: &mut TestAppContext, with_prometheus: bool) -> Fixture {
             .insert(service("monitoring", "prometheus-operated", 9090));
     }
     connected.service_proxy.respond_with(|service, request| {
-        (service.name == "prometheus-operated" && request.path == "/api/v1/query")
+        (service.name == "prometheus-operated" && request.path.starts_with("/api/v1/query"))
             .then(|| Ok(FakeServiceProxyPort::prometheus_ok()))
     });
     let proxy = connected.service_proxy;
@@ -141,6 +143,59 @@ fn connecting_a_cluster_with_kube_prometheus_finds_it_and_points_the_query_port_
     let last = f.proxy.recorded_calls().pop().unwrap();
     assert_eq!(last.service.short(), "monitoring/prometheus-operated:web");
     assert_eq!(last.path, "/api/v1/query");
+}
+
+#[gpui::test]
+fn the_catalogue_builds_the_query_for_the_provider_found_and_the_port_sends_it(
+    cx: &mut TestAppContext,
+) {
+    let f = fixture(cx, true);
+    f.connect(cx);
+    let services = f.state.services();
+    let kind = f.status().provider().expect("found").kind;
+
+    let request = MetricRequest::new(
+        MetricTarget::Pod {
+            namespace: "shop".into(),
+            pods: PodSelector::One("web-0".into()),
+        },
+        MetricKind::MemoryUsage,
+    );
+    let plan = RangePlan::ending_at(
+        jiff::Timestamp::from_second(1_800_000_000).unwrap(),
+        std::time::Duration::from_secs(3600),
+    );
+    let query = services
+        .metrics
+        .catalogue
+        .build(kind, &request, plan.rate_window)
+        .expect("a pod's memory has a query");
+    assert_eq!(query.series_label, Some("pod"));
+
+    block_on(
+        services
+            .metrics
+            .promql
+            .query_range(&cluster(), &query.promql, plan.range),
+    )
+    .unwrap();
+    let sent = f.proxy.recorded_calls().pop().unwrap();
+    assert_eq!(sent.path, "/api/v1/query_range");
+    let sent_query = sent
+        .params
+        .iter()
+        .find(|(name, _)| name == "query")
+        .map(|(_, value)| value.as_str());
+    assert_eq!(
+        sent_query,
+        Some(query.promql.as_str()),
+        "the catalogue's query reached the service proxy unchanged"
+    );
+    assert!(
+        query.promql.contains("container_memory_working_set_bytes"),
+        "{}",
+        query.promql
+    );
 }
 
 #[gpui::test]

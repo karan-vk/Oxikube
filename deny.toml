@@ -17,6 +17,7 @@ ignore = [
   { id = "RUSTSEC-2024-0384", reason = "instant: transitive via gpui-pre; unmaintained, not a vulnerability" },
   { id = "RUSTSEC-2024-0436", reason = "paste: transitive via gpui tree; unmaintained proc-macro, not a vulnerability" },
   { id = "RUSTSEC-2026-0206", reason = "rustybuzz: transitive via resvg/usvg in gpui-pre; unmaintained, not a vulnerability" },
+  { id = "RUSTSEC-2025-0141", reason = "bincode 2: unmaintained, not a vulnerability; only the test-only PromQL parser (promql-parser, a dev-dependency of oxikube_prometheus) pulls it, through lrpar" },
   { id = "RUSTSEC-2026-0192", reason = "ttf-parser: transitive via gpui text stack; unmaintained, not a vulnerability" },
 ]
 

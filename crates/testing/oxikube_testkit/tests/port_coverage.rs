@@ -11,9 +11,9 @@ use oxikube_ports::{
     ClusterSourcePort, ContextProviderPort, CrashReporterPort, DescribePort, DiscoveryPort,
     ExecPort, ExecStreamPort, FsPort, HelmPort, IntegrationPort, LogPort, MetricsPort,
     NotifierPort, PortForwardPort, PromqlEndpointPort, PromqlPort, ProviderDetectorPort,
-    ResourcePort, ResourceReader, ResourceWriter, SchemaPort, SecretStorePort, ServiceProxyPort,
-    StatePort, TableFeedPort, TerminalBackend, ToolDef, ToolName, ToolPort, UpdaterPort,
-    WarningPort,
+    QueryCataloguePort, ResourcePort, ResourceReader, ResourceWriter, SchemaPort, SecretStorePort,
+    ServiceProxyPort, StatePort, TableFeedPort, TerminalBackend, ToolDef, ToolName, ToolPort,
+    UpdaterPort, WarningPort,
 };
 use oxikube_testkit::*;
 
@@ -34,6 +34,7 @@ const FAKES: &[(&str, &str)] = &[
     ("PromqlPort", "FakePromqlPort"),
     ("PromqlEndpointPort", "FakePromqlEndpointPort"),
     ("ProviderDetectorPort", "FakeProviderDetectorPort"),
+    ("QueryCataloguePort", "FakeQueryCataloguePort"),
     ("ServiceProxyPort", "FakeServiceProxyPort"),
     ("DescribePort", "FakeDescribePort"),
     ("HelmPort", "FakeHelmPort"),
@@ -88,6 +89,7 @@ fn fakes_are_port_trait_objects() {
     let _: Arc<dyn PromqlPort> = Arc::new(FakePromqlPort::new());
     let _: Arc<dyn PromqlEndpointPort> = Arc::new(FakePromqlEndpointPort::new());
     let _: Arc<dyn ProviderDetectorPort> = Arc::new(FakeProviderDetectorPort::new());
+    let _: Arc<dyn QueryCataloguePort> = Arc::new(FakeQueryCataloguePort::new());
     let _: Arc<dyn ServiceProxyPort> = Arc::new(FakeServiceProxyPort::new());
     let _: Arc<dyn DescribePort> = Arc::new(FakeDescribePort::new());
     let _: Arc<dyn HelmPort> = Arc::new(FakeHelmPort::new());
