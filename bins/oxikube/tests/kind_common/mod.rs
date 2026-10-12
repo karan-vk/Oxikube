@@ -19,13 +19,16 @@ use oxikube::app_state::AppState;
 use oxikube::startup::{
     ConfigSource, PortsChoice, RuntimeChoice, StartupEnv, StartupReport, init, window,
 };
+use oxikube_app::command_bus::DispatchContext;
 use oxikube_app::store::FeedState;
 use oxikube_catalog_ui::CatalogView;
-use oxikube_domain::command::CommandId;
+use oxikube_domain::audit::Initiator;
+use oxikube_domain::command::{Command as BusCommand, CommandId};
 use oxikube_domain::ids::{ClusterId, ContextName, ResourceRef};
 use oxikube_domain::session::SessionPhase;
 use oxikube_kube::kubeconfig::{Strictness, default_kubeconfig_path, load_local_kubeconfig};
 use oxikube_kube::{ClientPool, ContextDefinition, PoolConfig};
+use oxikube_overview_ui::ClusterOverview;
 use oxikube_resources_ui::table::ResourceTable;
 use oxikube_terminal::view::TerminalView;
 use oxikube_testkit::integration::pods;
@@ -255,6 +258,35 @@ pub fn open_pods_table(
         })
     });
     vcx.update(|_, cx| inner.read(cx).items_of_type::<ResourceTable>()[0].clone())
+}
+
+/// Dispatches `cluster::ShowOverview` on the bus, as the palette does, and returns the overview
+/// page it opens in the cluster tab.
+pub fn open_overview(
+    vcx: &mut VisualTestContext,
+    tab: &Entity<ClusterTab>,
+    cluster: &ClusterId,
+) -> Entity<ClusterOverview> {
+    let bus = vcx
+        .update(|_, cx| AppState::global(cx).command_bus().cloned())
+        .expect("the bus");
+    let shown = futures::executor::block_on(bus.dispatch(
+        BusCommand::ClusterShowOverview {
+            cluster: cluster.clone(),
+        },
+        DispatchContext::new(Initiator::Ui, "kind test"),
+    ));
+    assert!(shown.is_ok(), "{shown:?}");
+    let inner = vcx.update(|_, cx| tab.read(cx).workspace().clone());
+    wait_value(vcx, "the overview to open", |vcx| {
+        vcx.update(|_, cx| {
+            inner
+                .read(cx)
+                .items_of_type::<ClusterOverview>()
+                .into_iter()
+                .next()
+        })
+    })
 }
 
 pub fn wait_ready(vcx: &mut VisualTestContext, context: &str) -> ClusterId {

@@ -28,13 +28,8 @@ use gpui::{Entity, TestAppContext, VisualTestContext};
 use jiff::Timestamp;
 use oxikube::app_state::AppState;
 use oxikube_app::ColumnId;
-use oxikube_app::command_bus::DispatchContext;
 use oxikube_app::metrics::live::UsagePoint;
 use oxikube_app::store::FeedState;
-use oxikube_domain::audit::Initiator;
-use oxikube_domain::command::Command as BusCommand;
-use oxikube_domain::ids::ClusterId;
-use oxikube_overview_ui::ClusterOverview;
 use oxikube_overview_ui::overview::HistoryState;
 use oxikube_resources_ui::table::ResourceTable;
 use oxikube_testkit::integration::TestNamespace;
@@ -42,7 +37,7 @@ use oxikube_testkit::integration::metrics::{MetricsTier, tier_context, wait_metr
 use oxikube_workspace::ClusterTab;
 use oxikube_workspace::sidebar::SidebarPanel;
 
-use kind_common::{Launched, create_pod, launch_with};
+use kind_common::{Launched, create_pod, launch_with, open_overview};
 
 /// metrics-server scrapes every 15 s and reports a new pod after one or two scrapes; a ring
 /// needs two distinct scrapes.
@@ -98,16 +93,18 @@ fn cell(
     })
 }
 
-fn is_cpu(text: &str) -> bool {
-    text.strip_suffix('m')
+/// Whether `text` is whole digits followed by `unit`.
+fn is_whole(text: &str, unit: &str) -> bool {
+    text.strip_suffix(unit)
         .is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
 }
 
+fn is_cpu(text: &str) -> bool {
+    is_whole(text, "m")
+}
+
 fn is_memory(text: &str) -> bool {
-    ["Ki", "Mi", "Gi"].iter().any(|unit| {
-        text.strip_suffix(unit)
-            .is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
-    })
+    ["Ki", "Mi", "Gi"].iter().any(|unit| is_whole(text, unit))
 }
 
 /// Opens the Nodes table from the sidebar, as a user does, and waits for it to list.
@@ -120,9 +117,8 @@ fn open_nodes_table(
         .update(|_, cx| inner.read(cx).panel::<SidebarPanel>())
         .expect("the sidebar");
     vcx.update(|_, cx| panel.update(cx, |panel, cx| panel.activate("nodes/nodes", cx)));
-    let mut found = None;
-    kind_common::wait(vcx, "the Nodes table to open and list", |vcx| {
-        found = vcx.update(|_, cx| {
+    kind_common::wait_value(vcx, "the Nodes table to open and list", |vcx| {
+        vcx.update(|_, cx| {
             inner
                 .read(cx)
                 .items_of_type::<ResourceTable>()
@@ -134,10 +130,8 @@ fn open_nodes_table(
                             d.state() == &FeedState::Ready && !d.rows().is_empty()
                         })
                 })
-        });
-        found.is_some()
-    });
-    found.expect("the Nodes table")
+        })
+    })
 }
 
 /// A node no fake-node suite created.
@@ -248,36 +242,6 @@ fn the_pods_and_nodes_tables_populate_from_metrics_server_and_the_rings_fill(
     assert_ring("node", &usage.node_history(&node));
 }
 
-fn overview(
-    vcx: &mut VisualTestContext,
-    tab: &Entity<ClusterTab>,
-    cluster: &ClusterId,
-) -> Entity<ClusterOverview> {
-    let bus = vcx
-        .update(|_, cx| AppState::global(cx).command_bus().cloned())
-        .expect("the bus");
-    let shown = futures::executor::block_on(bus.dispatch(
-        BusCommand::ClusterShowOverview {
-            cluster: cluster.clone(),
-        },
-        DispatchContext::new(Initiator::Ui, "kind test"),
-    ));
-    assert!(shown.is_ok(), "{shown:?}");
-    let inner = vcx.update(|_, cx| tab.read(cx).workspace().clone());
-    let mut found = None;
-    kind_common::wait(vcx, "the overview to open", |vcx| {
-        found = vcx.update(|_, cx| {
-            inner
-                .read(cx)
-                .items_of_type::<ClusterOverview>()
-                .into_iter()
-                .next()
-        });
-        found.is_some()
-    });
-    found.expect("the overview")
-}
-
 #[gpui::test]
 fn the_overview_has_populated_tiles_and_usage_and_no_graphs_without_prometheus(
     cx: &mut TestAppContext,
@@ -293,7 +257,7 @@ fn the_overview_has_populated_tiles_and_usage_and_no_graphs_without_prometheus(
         cluster,
         ..
     } = launch_with(cx, &context, settings());
-    let page = overview(&mut vcx, &tab, &cluster);
+    let page = open_overview(&mut vcx, &tab, &cluster);
 
     wait_for_metrics(&mut vcx, "live usage on the overview", |vcx| {
         vcx.update(|_, cx| {

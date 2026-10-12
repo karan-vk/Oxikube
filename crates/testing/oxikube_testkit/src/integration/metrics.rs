@@ -12,8 +12,8 @@
 //!
 //! The stack tiers are the nightly's (`metrics-stack` job); the charts and their versions are
 //! `fixtures/metrics-stack/charts.json`, which [`stack_versions`] prints into the test output.
-//! Waits poll a condition with a deadline and are only for readiness (a scrape landing, an
-//! endpoint answering); assertions are never retried.
+//! The suites' waits are only for readiness (a scrape landing, an endpoint answering) and print
+//! [`namespace_diagnostics`] when they run out; assertions are never retried.
 
 use std::process::Command;
 use std::time::{Duration, Instant};
@@ -23,30 +23,28 @@ use oxikube_ports::PromqlSeries;
 use super::{IntegrationError, ensure_kind_context, kubectl, test_context};
 
 /// `0` (or `false`, `off`, `no`) skips the metrics-server tier.
-pub const METRICS_SERVER_ENV: &str = "OXIKUBE_TEST_METRICS_SERVER";
+const METRICS_SERVER_ENV: &str = "OXIKUBE_TEST_METRICS_SERVER";
 /// `1` (or `true`, `on`, `yes`) runs the kube-prometheus-stack tier.
-pub const PROMETHEUS_STACK_ENV: &str = "OXIKUBE_TEST_PROMETHEUS_STACK";
+const PROMETHEUS_STACK_ENV: &str = "OXIKUBE_TEST_PROMETHEUS_STACK";
 /// `1` (or `true`, `on`, `yes`) runs the VictoriaMetrics manual-endpoint tier.
-pub const VICTORIA_METRICS_ENV: &str = "OXIKUBE_TEST_VICTORIA_METRICS";
+const VICTORIA_METRICS_ENV: &str = "OXIKUBE_TEST_VICTORIA_METRICS";
 
 /// The pinned charts of the stack tiers (`cargo xtask kind-metrics-stack` installs them).
-pub const STACK_CHARTS: &str = include_str!("../../fixtures/metrics-stack/charts.json");
+const STACK_CHARTS: &str = include_str!("../../fixtures/metrics-stack/charts.json");
 
 /// Where kube-prometheus-stack runs: the namespace and Service the detector's catalogue lists
-/// first, and the Service's port name.
+/// first.
 pub const KUBE_PROMETHEUS_NAMESPACE: &str = "monitoring";
 /// The Prometheus Service of the stack.
 pub const KUBE_PROMETHEUS_SERVICE: &str = "kube-prometheus-stack-prometheus";
-/// The port the detector picks on it.
-pub const KUBE_PROMETHEUS_PORT: &str = "http-web";
 
 /// Where VictoriaMetrics runs: a namespace the catalogue does not list, so only a manual
 /// endpoint reaches it.
 pub const VICTORIA_NAMESPACE: &str = "oxikube-vm";
 /// Its Service.
-pub const VICTORIA_SERVICE: &str = "vmsingle-test";
+const VICTORIA_SERVICE: &str = "vmsingle-test";
 /// Its port.
-pub const VICTORIA_PORT: u16 = 8428;
+const VICTORIA_PORT: u16 = 8428;
 /// The path prefix it serves under (`-http.pathPrefix`).
 pub const VICTORIA_PATH_PREFIX: &str = "/vm";
 
@@ -73,7 +71,7 @@ impl MetricsTier {
 
     /// Whether the tier runs when its variable is unset: only metrics-server, which `kind-up`
     /// always installs.
-    pub const fn on_by_default(self) -> bool {
+    const fn on_by_default(self) -> bool {
         matches!(self, Self::MetricsServer)
     }
 
@@ -118,19 +116,19 @@ pub fn tier_context(tier: MetricsTier) -> Option<String> {
 
 /// One chart of [`STACK_CHARTS`].
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StackChart {
+struct StackChart {
     /// The Helm release.
-    pub release: String,
+    release: String,
     /// The chart.
-    pub chart: String,
+    chart: String,
     /// Its pinned version.
-    pub version: String,
+    version: String,
     /// The namespace it is installed in.
-    pub namespace: String,
+    namespace: String,
 }
 
 /// The charts of [`STACK_CHARTS`], in install order.
-pub fn stack_charts() -> Vec<StackChart> {
+fn stack_charts() -> Vec<StackChart> {
     let parsed: serde_json::Value =
         serde_json::from_str(STACK_CHARTS).expect("charts.json is JSON");
     let text = |chart: &serde_json::Value, key: &str| {
@@ -168,7 +166,7 @@ pub fn victoria_service_path() -> String {
 }
 
 /// Whether the `metrics.k8s.io` APIService is `Available` (what `kubectl top` needs).
-pub fn metrics_api_available(context: &str) -> bool {
+fn metrics_api_available(context: &str) -> bool {
     Command::new("kubectl")
         .args([
             "--context",
@@ -205,31 +203,6 @@ pub fn wait_metrics_api(context: &str, timeout: Duration) -> Result<(), Integrat
         std::thread::sleep(Duration::from_millis(500));
     }
     Ok(())
-}
-
-/// Polls `check` every `interval` until it gives a value; panics after `timeout` with `what` and
-/// what `diagnostics` returns then. For readiness only (a scrape landing, a pod being polled),
-/// never to retry an assertion.
-pub fn ready_within<T>(
-    what: &str,
-    timeout: Duration,
-    interval: Duration,
-    mut check: impl FnMut() -> Option<T>,
-    diagnostics: impl FnOnce() -> String,
-) -> T {
-    let started = Instant::now();
-    loop {
-        if let Some(value) = check() {
-            return value;
-        }
-        if started.elapsed() > timeout {
-            panic!(
-                "timed out after {timeout:?} waiting for {what}\n{}",
-                diagnostics()
-            );
-        }
-        std::thread::sleep(interval);
-    }
 }
 
 /// The pods and events of `namespace`, for a failure message: what the stack was doing when a
@@ -380,33 +353,5 @@ mod tests {
     #[should_panic(expected = "negative reading")]
     fn a_negative_reading_fails() {
         assert_samples("cpu", [1.0, -0.5]);
-    }
-
-    #[test]
-    fn ready_within_returns_the_first_value() {
-        let mut calls = 0;
-        let value = ready_within(
-            "the third call",
-            Duration::from_secs(5),
-            Duration::from_millis(1),
-            || {
-                calls += 1;
-                (calls == 3).then_some(calls)
-            },
-            String::new,
-        );
-        assert_eq!(value, 3);
-    }
-
-    #[test]
-    #[should_panic(expected = "timed out after")]
-    fn ready_within_fails_with_the_diagnostics() {
-        ready_within::<()>(
-            "nothing",
-            Duration::from_millis(5),
-            Duration::from_millis(1),
-            || None,
-            || "the stack's pods".to_owned(),
-        );
     }
 }

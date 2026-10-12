@@ -27,19 +27,15 @@ use std::future::Future;
 use std::process::Command;
 use std::time::{Duration, Instant};
 
-use gpui::{Entity, TestAppContext, VisualTestContext};
+use gpui::{TestAppContext, VisualTestContext};
 use jiff::Timestamp;
 use oxikube::app_state::AppState;
-use oxikube_app::command_bus::DispatchContext;
 use oxikube_app::{
     ChartData, HistoryError, HistorySubject, ProviderStatus, SubjectKind, charts_for,
 };
 use oxikube_domain::MetricsProviderKind;
-use oxikube_domain::audit::Initiator;
-use oxikube_domain::command::Command as BusCommand;
 use oxikube_domain::ids::ClusterId;
 use oxikube_domain::metric_query::RangePreset;
-use oxikube_overview_ui::ClusterOverview;
 use oxikube_overview_ui::overview::HistoryState;
 use oxikube_ports::RangePlan;
 use oxikube_testkit::integration::metrics::{
@@ -47,9 +43,8 @@ use oxikube_testkit::integration::metrics::{
     VICTORIA_PATH_PREFIX, assert_samples, assert_series, namespace_diagnostics, tier_context,
     victoria_service_path,
 };
-use oxikube_workspace::ClusterTab;
 
-use kind_common::{Launched, launch, launch_with};
+use kind_common::{Launched, launch, launch_with, open_overview};
 
 /// A fresh stack needs a few scrapes (15 s apart) before a rate has two samples; detection probes
 /// each candidate once per connect.
@@ -279,36 +274,6 @@ fn the_metrics_tab_queries_return_series_for_a_known_pod_and_the_node(cx: &mut T
         &cluster,
         &node,
     );
-}
-
-fn open_overview(
-    vcx: &mut VisualTestContext,
-    tab: &Entity<ClusterTab>,
-    cluster: &ClusterId,
-) -> Entity<ClusterOverview> {
-    let bus = vcx
-        .update(|_, cx| AppState::global(cx).command_bus().cloned())
-        .expect("the bus");
-    let shown = futures::executor::block_on(bus.dispatch(
-        BusCommand::ClusterShowOverview {
-            cluster: cluster.clone(),
-        },
-        DispatchContext::new(Initiator::Ui, "kind test"),
-    ));
-    assert!(shown.is_ok(), "{shown:?}");
-    let inner = vcx.update(|_, cx| tab.read(cx).workspace().clone());
-    let mut found = None;
-    kind_common::wait(vcx, "the overview to open", |vcx| {
-        found = vcx.update(|_, cx| {
-            inner
-                .read(cx)
-                .items_of_type::<ClusterOverview>()
-                .into_iter()
-                .next()
-        });
-        found.is_some()
-    });
-    found.expect("the overview")
 }
 
 #[gpui::test]
