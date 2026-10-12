@@ -29,6 +29,7 @@ impl DetailView {
                 "metrics-unavailable",
                 format!("metrics unavailable: {reason}"),
                 false,
+                false,
                 cx,
             ),
             MetricsState::Loading => skeleton(
@@ -49,10 +50,10 @@ impl DetailView {
                         self.metrics.range.label()
                     )
                 };
-                self.metrics_note("metrics-empty", text, false, cx)
+                self.metrics_note("metrics-empty", text, false, false, cx)
             }
             MetricsState::Error { message, retryable } => {
-                self.metrics_note("metrics-error", message.clone(), *retryable, cx)
+                self.metrics_note("metrics-error", message.clone(), true, *retryable, cx)
             }
             MetricsState::Ready => div()
                 .debug_selector(|| "metrics-charts".to_owned())
@@ -128,12 +129,12 @@ impl DetailView {
         &self,
         selector: &'static str,
         text: String,
+        error: bool,
         retry: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let tokens = cx.tokens();
         let tones = ToneColors::current(cx);
-        let error = selector == "metrics-error";
         v_flex()
             .debug_selector(move || selector.to_owned())
             .gap(u(tokens.spacing.md))

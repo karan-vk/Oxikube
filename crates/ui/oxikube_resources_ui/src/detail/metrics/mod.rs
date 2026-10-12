@@ -6,6 +6,7 @@
 //! | `handle` | [`MetricsHistory`]: the app's [`MetricsHistoryService`](oxikube_app::MetricsHistoryService) as a GPUI global the binary installs |
 //! | `state` | [`MetricsState`] (the state machine: no endpoint, loading, ready, empty, error) and what the view keeps |
 //! | `tab` | the lifecycle on [`DetailView`](crate::detail::DetailView): offered or not, started when shown, the one loop that fetches and refreshes, the range, Retry |
+//! | `fetch` | one fetch: the charts asked for, the Tokio-bridge task, and the answer turned into state and chart entities |
 //! | `pods` | a workload's pods, followed through the Pod feed to know which names to query |
 //! | `charts` | from a fetched chart to the chart entity: series, axis, request and limit lines, unit format |
 //! | `render` | the range selector, the virtualised chart cards, the loading / empty / error states |
@@ -43,6 +44,7 @@
 //! Charts keep their geometry cache between renders; the card list is virtualised.
 
 mod charts;
+mod fetch;
 mod handle;
 mod pods;
 mod render;

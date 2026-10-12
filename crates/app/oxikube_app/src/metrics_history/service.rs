@@ -2,7 +2,6 @@
 
 use std::sync::Arc;
 
-use futures::StreamExt as _;
 use futures::future::join_all;
 use futures::stream::BoxStream;
 use jiff::Timestamp;
@@ -13,7 +12,9 @@ use oxikube_ports::{
 };
 
 use super::charts::{ChartDef, Measure, Reference};
-use super::data::{ChartData, HistoryError, lines_of, reference_kind, reference_lines};
+use super::data::{
+    ChartData, HistoryError, ReferenceLine, SeriesData, lines_of, reference_kind, reference_lines,
+};
 use crate::metrics_provider::{MetricsProviderService, ProviderStatus};
 
 /// The state key of the range the user chose last: a per-viewer convenience, not per object.
@@ -123,7 +124,7 @@ impl MetricsHistoryService {
 
     /// One item each time `cluster`'s availability may have changed.
     pub fn changes(&self, cluster: &ClusterId) -> BoxStream<'static, ()> {
-        self.source.changes(cluster).boxed()
+        self.source.changes(cluster)
     }
 
     /// The range chosen last, [`RangePreset::DEFAULT`] when none was saved or it cannot be read.
@@ -173,23 +174,30 @@ impl MetricsHistoryService {
         range: RangePreset,
         end: Timestamp,
     ) -> Vec<Result<ChartData, HistoryError>> {
-        let provider = match self.source.availability(cluster) {
-            HistoryAvailability::Ready { provider } => provider,
-            HistoryAvailability::Detecting => {
-                let error = HistoryError {
-                    reason: "still looking for a Prometheus-compatible service".to_owned(),
-                    retryable: true,
-                };
-                return charts.iter().map(|_| Err(error.clone())).collect();
+        let (reason, retryable) = match self.source.availability(cluster) {
+            HistoryAvailability::Ready { provider } => {
+                return self
+                    .fetch_ready(cluster, provider, charts, range, end)
+                    .await;
             }
-            HistoryAvailability::Unavailable { reason } => {
-                let error = HistoryError {
-                    reason,
-                    retryable: false,
-                };
-                return charts.iter().map(|_| Err(error.clone())).collect();
-            }
+            HistoryAvailability::Detecting => (
+                "still looking for a Prometheus-compatible service".to_owned(),
+                true,
+            ),
+            HistoryAvailability::Unavailable { reason } => (reason, false),
         };
+        let error = HistoryError { reason, retryable };
+        charts.iter().map(|_| Err(error.clone())).collect()
+    }
+
+    async fn fetch_ready(
+        &self,
+        cluster: &ClusterId,
+        provider: MetricsProviderKind,
+        charts: &[ChartDef],
+        range: RangePreset,
+        end: Timestamp,
+    ) -> Vec<Result<ChartData, HistoryError>> {
         let plan = RangePlan::ending_at(end, range.span());
         join_all(
             charts
@@ -238,7 +246,7 @@ impl MetricsHistoryService {
         measure: &Measure,
         plan: RangePlan,
         several: bool,
-    ) -> Result<Vec<super::data::SeriesData>, HistoryError> {
+    ) -> Result<Vec<SeriesData>, HistoryError> {
         let query = self
             .catalogue
             .build(provider, &measure.request, plan.rate_window)
@@ -261,7 +269,7 @@ impl MetricsHistoryService {
         provider: MetricsProviderKind,
         reference: &Reference,
         plan: RangePlan,
-    ) -> Vec<super::data::ReferenceLine> {
+    ) -> Vec<ReferenceLine> {
         let query = match self
             .catalogue
             .build(provider, &reference.request, plan.rate_window)

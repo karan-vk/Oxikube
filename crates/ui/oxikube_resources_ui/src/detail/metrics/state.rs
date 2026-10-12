@@ -1,7 +1,8 @@
 //! The Metrics tab's state: the state machine and what the tab keeps. Plain Rust where it can be.
 
+use std::sync::Arc;
+
 use gpui::{Entity, ListAlignment, ListState, SharedString, Task, px};
-use jiff::Timestamp;
 use oxikube_app::store::{ResourceStore, StoreObject, Subscription};
 use oxikube_app::{ChartData, HistoryAvailability, HistoryError, MetricsHistoryService};
 use oxikube_domain::RangePreset;
@@ -77,7 +78,7 @@ pub(in crate::detail) struct PodFeed {
     /// The label selector the subscription was made for.
     pub(in crate::detail) selector: Option<String>,
     pub(in crate::detail) subscription: Option<Subscription>,
-    pub(in crate::detail) items: Vec<std::sync::Arc<StoreObject>>,
+    pub(in crate::detail) items: Vec<Arc<StoreObject>>,
     pub(in crate::detail) ready: bool,
     pub(in crate::detail) task: Option<Task<()>>,
 }
@@ -104,7 +105,6 @@ pub(in crate::detail) struct MetricsTab {
     pub(in crate::detail) pods: PodFeed,
     /// Pods of a workload not drawn (it has more than the cap).
     pub(in crate::detail) pods_left_out: usize,
-    pub(in crate::detail) fetched_at: Option<Timestamp>,
     /// How many fetches were started (tests assert a range change starts one, a render none).
     pub(in crate::detail) fetches: u64,
 }
@@ -125,7 +125,6 @@ impl Default for MetricsTab {
             follower: None,
             pods: PodFeed::default(),
             pods_left_out: 0,
-            fetched_at: None,
             fetches: 0,
         }
     }
@@ -133,8 +132,6 @@ impl Default for MetricsTab {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use oxikube_app::charts_for;
     use oxikube_app::metrics_history::{Sample, SeriesData};
     use oxikube_app::{HistorySubject, SubjectKind};
