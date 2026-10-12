@@ -39,7 +39,7 @@ use crate::tools::metrics::{MetricsAgentDeps, session_for, within_snapshot_deadl
 /// The mention prefix this provider owns: `@metrics/...`.
 pub const METRICS_PREFIX: &str = "metrics";
 
-/// Resolves `@metrics/pod/<namespace>/<name>`: see the [module docs](self).
+/// Resolves `@metrics/pod/<namespace>/<name>`.
 pub struct MetricsContextProvider {
     deps: MetricsAgentDeps,
 }

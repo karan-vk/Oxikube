@@ -1,5 +1,5 @@
 //! Live metrics in the resource views (E13-S03): the app's
-//! [`MetricsService`](oxikube_app::MetricsService) reaching the Pods and Nodes tables and a pod's
+//! [`MetricsService`] reaching the Pods and Nodes tables and a pod's
 //! containers.
 //!
 //! | File | Holds |
@@ -31,7 +31,7 @@ use parking_lot::RwLock;
 pub use badge::metrics_badge;
 pub use table::TableMetrics;
 
-/// Where the kinds' column factories find the service: shared with the [`LiveMetrics`] global,
+/// Where the kinds' column factories find the service: shared with the `LiveMetrics` global,
 /// filled by [`set_service`].
 #[derive(Clone, Default)]
 pub struct MetricsSlot(Arc<RwLock<Option<MetricsService>>>);

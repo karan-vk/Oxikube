@@ -65,7 +65,7 @@ pub struct EnvLine {
 pub struct Section {
     /// Which section.
     pub id: SectionId,
-    /// How many items it lists (rows past [`MAX_ROWS`] are cut, the count is not).
+    /// How many items it lists (rows past `MAX_ROWS` (300) are cut, the count is not).
     pub count: usize,
     /// The rows (empty while the section is collapsed and nothing needs them).
     pub rows: Vec<Row>,

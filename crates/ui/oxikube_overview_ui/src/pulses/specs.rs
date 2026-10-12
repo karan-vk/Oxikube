@@ -80,7 +80,7 @@ const KINDS: [(&str, &str, &str); 14] = [
     ("", "serviceaccounts", "ServiceAccounts"),
 ];
 
-/// The sixteen tiles: cluster CPU and memory first, then the kinds of [`KINDS`].
+/// The sixteen tiles: cluster CPU and memory first, then the fourteen kinds of `KINDS`.
 pub fn tile_specs() -> Vec<TileSpec> {
     let nodes = Gvk::new("", "v1", "Node");
     let mut specs = vec![

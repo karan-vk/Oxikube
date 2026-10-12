@@ -32,7 +32,7 @@ pub struct ResourceUse {
     pub history: Vec<(Timestamp, f64)>,
 }
 
-/// The cluster's CPU and memory use. See the [module docs](self).
+/// The cluster's CPU and memory use, over the nodes that report a reading.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClusterUtilisation {
     /// Nodes in the cluster.

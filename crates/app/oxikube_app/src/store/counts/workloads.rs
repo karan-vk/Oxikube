@@ -45,8 +45,8 @@ impl WorkloadCounters {
         }
     }
 
-    /// The state of each kind, in [`targets`](Self::targets) order, as of the last
-    /// [`follow`](Self::follow) or [`refresh`](Self::refresh).
+    /// The state of each kind, in the order of the `targets` given to [`new`](Self::new), as of
+    /// the last [`follow`](Self::follow) or [`refresh`](Self::refresh).
     pub fn states(&self) -> &[CountState] {
         &self.states
     }

@@ -71,7 +71,8 @@ impl ContainerDetail {
     }
 }
 
-/// The detail of one pod. See the [module docs](self).
+/// The detail of one pod: its containers' environment, mounts and probes, its volumes,
+/// tolerations and affinity, and its node and owners, built from the pod's JSON alone.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PodDetail {
     /// Every container (init and sidecar first, then regular, then ephemeral).

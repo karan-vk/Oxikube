@@ -18,7 +18,7 @@ impl WorkloadService {
     /// The owners of `pod`, nearest first: its ReplicaSet, then the Deployment that owns that
     /// (Pod → ReplicaSet → Deployment). At each level the controller is followed, else the first
     /// owner. The chain ends at an object nobody owns, at one that is gone (it is still listed),
-    /// or after [`MAX_OWNER_DEPTH`] levels.
+    /// or after `MAX_OWNER_DEPTH` (6) levels.
     ///
     /// # Errors
     ///

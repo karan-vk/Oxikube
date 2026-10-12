@@ -9,7 +9,7 @@
 //! |---|---|
 //! | `service` | [`RolloutService`]: `history` (reads, on demand) and `rollback` (runs inside the guarded command) |
 //! | `result` | [`RolloutHistory`] (what the history dialog shows) and [`RollbackResult`] |
-//! | `command` | the `workload::Rollback` handler, installed by [`register_rollback`] |
+//! | `command` | the `workload::Rollback` handler, installed by `register_rollback` |
 //! | `runner` | [`RollbackRunner`]: dispatches `workload::Rollback` as the user for a dialog that already asked |
 //!
 //! | Command | Tool | Does |

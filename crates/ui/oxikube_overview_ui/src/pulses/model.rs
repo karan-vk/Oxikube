@@ -97,7 +97,7 @@ impl TileState {
     }
 }
 
-/// The whole page. See the [module docs](self).
+/// The whole page: every tile, in order.
 #[derive(Debug)]
 pub struct PulsesModel {
     tiles: Vec<TileState>,
