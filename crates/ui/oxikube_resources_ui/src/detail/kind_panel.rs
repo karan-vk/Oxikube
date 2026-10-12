@@ -15,6 +15,7 @@ use oxikube_ports::DiscoveryPort;
 use oxikube_workspace::CommandDispatcher;
 
 use super::state::DetailDeps;
+use super::tabs::DetailTab;
 use super::view::DetailView;
 use crate::kinds::DetailRenderer;
 
@@ -194,6 +195,14 @@ impl DetailView {
     /// The kind's own panel, when its spec has one and it was drawn.
     pub fn kind_panel(&self) -> Option<&AnyView> {
         self.kind_panel.view()
+    }
+
+    /// Whether the kind's panel is on screen: the view is shown (its drawer is open, or its tab
+    /// is the active one in its pane) and the Overview, where the panel sits, is the active tab.
+    /// A panel pauses its own work (a metrics interest, a timer) while this is false; the view
+    /// notifies when either changes.
+    pub fn kind_panel_visible(&self) -> bool {
+        self.shown && self.tab == DetailTab::Overview
     }
 
     /// Builds the kind's panel the first time the view is drawn (the factory needs a window).

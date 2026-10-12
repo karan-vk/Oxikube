@@ -265,3 +265,59 @@ fn the_panel_watches_the_pods_and_shows_a_poll_within_a_second(cx: &mut TestAppC
     assert_eq!(after, builds + 1, "a still second rebuilds nothing");
     assert!(d.shown("pod-container-2-memory-limit-pct"));
 }
+
+#[gpui::test]
+fn a_hidden_detail_stops_watching_and_shows_a_missed_poll_when_shown_again(
+    cx: &mut TestAppContext,
+) {
+    let mut d = Detail::new(cx, [multi_container_pod()]);
+    let service = oxikube_app::MetricsService::new(
+        d.f.sessions.clone(),
+        std::sync::Arc::new(oxikube_testkit::FakeClockPort::default()),
+    );
+    d.f.vcx.update(|_, cx| {
+        crate::kinds::init(cx);
+        crate::metrics::set_service(cx, service.clone());
+    });
+    let view = d.open(&pod_ref("api-0"));
+    let panel = panel(&mut d, &view);
+    let cluster = crate::table::tests::fixture::cluster();
+    let watching = |d: &mut Detail| d.f.vcx.update(|_, cx| panel.read(cx).is_watching());
+    let builds = |d: &mut Detail| d.f.vcx.update(|_, cx| panel.read(cx).builds());
+    assert!(watching(&mut d), "the shown detail watches the pods");
+
+    // The drawer closes (or a pinned tab goes to the background): the view is kept, hidden.
+    d.update(&view, |v, cx| v.set_shown(false, cx));
+    d.f.vcx.run_until_parked();
+    assert!(!watching(&mut d), "a hidden detail keeps no poller alive");
+
+    // A poll lands while hidden: no tick runs, nothing is rebuilt.
+    let before = builds(&mut d);
+    service.usage(&cluster).apply(
+        oxikube_app::MetricsKind::Pods,
+        jiff::Timestamp::UNIX_EPOCH,
+        &Ok(api_reading()),
+    );
+    d.f.vcx.executor().advance_clock(super::USAGE_TICK * 3);
+    d.f.vcx.run_until_parked();
+    assert_eq!(builds(&mut d), before, "the hidden panel has no tick");
+
+    // Shown again: it watches again and shows the missed poll at once.
+    d.update(&view, |v, cx| v.set_shown(true, cx));
+    d.f.vcx.run_until_parked();
+    assert!(watching(&mut d));
+    let api_cpu =
+        d.f.vcx
+            .update(|_, cx| panel.read(cx).rows()[2].cells()[7].to_string());
+    assert_eq!(api_cpu, "180m");
+
+    // Another tab hides the panel too; the Overview shows it again.
+    d.update(&view, |v, cx| v.set_tab(crate::detail::DetailTab::Yaml, cx));
+    d.f.vcx.run_until_parked();
+    assert!(!watching(&mut d), "the panel sits on the Overview only");
+    d.update(&view, |v, cx| {
+        v.set_tab(crate::detail::DetailTab::Overview, cx)
+    });
+    d.f.vcx.run_until_parked();
+    assert!(watching(&mut d));
+}
