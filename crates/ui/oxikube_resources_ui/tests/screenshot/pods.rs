@@ -92,7 +92,9 @@ fn cluster() -> (ClusterId, ClusterContext) {
     (cluster, entry)
 }
 
-fn connected(objects: impl IntoIterator<Item = Resource>) -> (ClusterSessionManager, ClusterId) {
+pub(crate) fn connected(
+    objects: impl IntoIterator<Item = Resource>,
+) -> (ClusterSessionManager, ClusterId) {
     let (cluster, entry) = cluster();
     let connector = Arc::new(FakeClusterConnectorPort::new());
     let ports = connector.ports_for(&cluster);

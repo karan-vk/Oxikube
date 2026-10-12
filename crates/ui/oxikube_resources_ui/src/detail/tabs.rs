@@ -1,5 +1,6 @@
 //! The drawer's tabs.
 
+use oxikube_app::SubjectKind;
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::view::RefKind;
 
@@ -23,6 +24,9 @@ pub enum DetailTab {
     /// The workloads whose Pods name the object (E12-S18). Only a ServiceAccount, ConfigMap,
     /// Secret, PersistentVolumeClaim or PriorityClass has it.
     UsedBy,
+    /// History graphs from the cluster's Prometheus (E13-S08). Pods, nodes, workloads,
+    /// namespaces, PVCs and ingresses have it, and only while a Prometheus endpoint exists.
+    Metrics,
 }
 
 impl DetailTab {
@@ -44,7 +48,7 @@ impl DetailTab {
         DetailTab::Schema,
     ];
 
-    /// [`ALL`](Self::ALL) and the Used by tab: what the five referenced kinds have.
+    /// [`ALL`](Self::ALL) and the Used by tab: what the referenced kinds have.
     const REFERENCED: [DetailTab; 5] = [
         DetailTab::Overview,
         DetailTab::Yaml,
@@ -53,14 +57,43 @@ impl DetailTab {
         DetailTab::UsedBy,
     ];
 
-    /// The tabs of an object of type `gvk`: [`ALL`](Self::ALL), and for a CustomResourceDefinition
-    /// the Schema tab after them, for a ServiceAccount, ConfigMap, Secret, PersistentVolumeClaim
-    /// or PriorityClass the Used by tab.
+    /// [`ALL`](Self::ALL), the Used by tab and the Metrics tab: a PersistentVolumeClaim has both.
+    const REFERENCED_WITH_METRICS: [DetailTab; 6] = [
+        DetailTab::Overview,
+        DetailTab::Yaml,
+        DetailTab::Describe,
+        DetailTab::Events,
+        DetailTab::UsedBy,
+        DetailTab::Metrics,
+    ];
+
+    /// [`ALL`](Self::ALL) and the Metrics tab: what a kind with history graphs has when a
+    /// Prometheus endpoint exists ([`DetailView::tabs`](super::DetailView::tabs) leaves it out
+    /// when there is none).
+    const WITH_METRICS: [DetailTab; 5] = [
+        DetailTab::Overview,
+        DetailTab::Yaml,
+        DetailTab::Describe,
+        DetailTab::Events,
+        DetailTab::Metrics,
+    ];
+
+    /// The tabs of an object of type `gvk`: [`ALL`](Self::ALL), for a CustomResourceDefinition
+    /// the Schema tab after them, for a ServiceAccount, ConfigMap, Secret or PriorityClass the
+    /// Used by tab, and for a kind with history graphs the Metrics tab (whether it is shown
+    /// depends on the cluster having a Prometheus: see
+    /// [`DetailView::tabs`](super::DetailView::tabs)). A PersistentVolumeClaim has both.
     pub fn for_kind(gvk: &Gvk) -> &'static [DetailTab] {
+        let referenced = RefKind::from_gvk(gvk).is_some();
+        let metrics = SubjectKind::of(gvk).is_some();
         if is_crd_kind(gvk) {
             &Self::CRD
-        } else if RefKind::from_gvk(gvk).is_some() {
+        } else if referenced && metrics {
+            &Self::REFERENCED_WITH_METRICS
+        } else if referenced {
             &Self::REFERENCED
+        } else if metrics {
+            &Self::WITH_METRICS
         } else {
             &Self::ALL
         }
@@ -75,6 +108,7 @@ impl DetailTab {
             DetailTab::Events => "Events",
             DetailTab::Schema => "Schema",
             DetailTab::UsedBy => "Used by",
+            DetailTab::Metrics => "Metrics",
         }
     }
 
@@ -87,6 +121,7 @@ impl DetailTab {
             DetailTab::Events => "events",
             DetailTab::Schema => "schema",
             DetailTab::UsedBy => "used-by",
+            DetailTab::Metrics => "metrics",
         }
     }
 }

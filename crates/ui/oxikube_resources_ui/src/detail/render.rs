@@ -42,6 +42,7 @@ impl Render for DetailView {
             DetailTab::UsedBy => self.used_by_body(cx),
             DetailTab::Yaml => self.yaml_body(cx),
             DetailTab::Describe => self.describe_body(cx),
+            DetailTab::Metrics => self.metrics_body(cx),
         };
         v_flex()
             .id("detail-view")
@@ -227,7 +228,7 @@ impl DetailView {
             .gap(u(tokens.spacing.sm))
             .border_b_1()
             .border_color(colors.border_variant)
-            .children(DetailTab::for_kind(&self.target.gvk).iter().map(|&tab| {
+            .children(self.tabs().into_iter().map(|tab| {
                 let active = tab == self.tab;
                 div()
                     .id(("detail-tab", tab as usize))

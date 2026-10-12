@@ -492,6 +492,36 @@ fn thresholds_and_bands_are_drawn_only_inside_the_value_range(cx: &mut TestAppCo
 }
 
 #[gpui::test]
+fn thresholds_can_be_replaced_on_a_chart_on_screen(cx: &mut TestAppContext) {
+    let (chart, cx) = mount(cx, |_| Chart::line("t").y_range(YRange::Fixed(0.0, 10.0)));
+    feed(&chart, cx, vec![minutes("a", 60, 1)]);
+    let count = |chart: &Entity<Chart>, cx: &mut VisualTestContext| {
+        chart.read_with(cx, |c, _| {
+            c.cache
+                .borrow()
+                .layout
+                .as_ref()
+                .map_or(0, |layout| layout.thresholds.len())
+        })
+    };
+    assert_eq!(count(&chart, cx), 0);
+    let lines = vec![
+        Threshold::new(2.0, "requests"),
+        Threshold::new(6.0, "limits"),
+    ];
+    chart.update(cx, |c, cx| c.set_thresholds(lines.clone(), cx));
+    cx.run_until_parked();
+    cx.update(|window, _| window.refresh());
+    cx.run_until_parked();
+    assert_eq!(count(&chart, cx), 2);
+    // The same lines again change nothing (no new geometry).
+    let builds = chart.read_with(cx, |c, _| c.geometry_builds());
+    chart.update(cx, |c, cx| c.set_thresholds(lines, cx));
+    cx.run_until_parked();
+    assert_eq!(chart.read_with(cx, |c, _| c.geometry_builds()), builds);
+}
+
+#[gpui::test]
 fn a_tiny_canvas_draws_nothing_and_does_not_panic(cx: &mut TestAppContext) {
     cx.update(crate::init);
     let chart = cx.new(|_| Chart::line("t"));

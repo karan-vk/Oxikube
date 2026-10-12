@@ -518,6 +518,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     // History metrics (E13-S05): the provider service follows the sessions and the settings, and the
     // page opens in the cluster tab.
     let follow_metrics = crate::metrics_provider::start(&services.metrics, &services.sessions, cx);
+    // The detail panels' Metrics tab (E13-S08) reads the same provider status and PromQL port.
+    oxikube_resources_ui::detail::MetricsHistory::install(services.metrics.history.clone(), cx);
     let metrics_pages = metrics::start_views(
         services.metrics.provider.clone(),
         services.sessions.clone(),

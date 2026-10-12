@@ -50,6 +50,7 @@ pub const RESOURCE_COMMANDS: [CommandId; 25] = [
     CommandId::RESOURCE_PREVIOUS_MATCH,
     CommandId::RESOURCE_VIEW_YAML,
     CommandId::RESOURCE_VIEW_DESCRIBE,
+    CommandId::RESOURCE_VIEW_METRICS,
     CommandId::TABLE_TOGGLE_WIDE,
     CommandId::SERVICE_SHOW_PODS,
     CommandId::RESOURCE_SHOW_USED_BY,
@@ -104,6 +105,8 @@ pub enum ViewRequest {
     /// Show what uses a ServiceAccount, ConfigMap, Secret, claim or PriorityClass: its detail opens
     /// on the "Used by" tab (`resource::ShowUsedBy`, `u`, E12-S18).
     ShowUsedBy(ResourceRef),
+    /// Show `target`'s detail on its Metrics tab (`resource::ViewMetrics`, E13-S08).
+    ViewMetrics(ResourceRef),
     /// Show a Secret's values decoded in its detail, or hide them again (`secret::Reveal`, `x`,
     /// E12-S11): the detail opens on `target`, and `key` (every key when `None`) is toggled.
     RevealSecret {
@@ -199,6 +202,7 @@ impl ResourceCommandSink {
             Command::ResourceViewYaml { target } => ViewRequest::ViewYaml(target.clone()),
             Command::ResourceViewDescribe { target } => ViewRequest::ViewDescribe(target.clone()),
             Command::ResourceShowUsedBy { target } => ViewRequest::ShowUsedBy(target.clone()),
+            Command::ResourceViewMetrics { target } => ViewRequest::ViewMetrics(target.clone()),
             Command::SecretReveal { target, key } => ViewRequest::RevealSecret {
                 target: target.clone(),
                 key: key.clone(),

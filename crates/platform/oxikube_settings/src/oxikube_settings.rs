@@ -54,7 +54,10 @@ pub use cluster::{ClusterSettings, ClusterSettingsContent};
 pub use diagnostics::SettingsDiagnostic;
 pub use global::{init, init_with_dir, update_user_settings};
 pub use kubeconfig::{KubeconfigSettings, KubeconfigSettingsContent};
-pub use metrics::{MetricsSettings, MetricsSettingsContent};
+pub use metrics::{
+    DEFAULT_HISTORY_REFRESH_SECS, MAX_HISTORY_REFRESH_SECS, MIN_HISTORY_REFRESH_SECS,
+    MetricsSettings, MetricsSettingsContent,
+};
 pub use settings::{RegisteredSetting, Settings, SettingsContent, SettingsLocation};
 pub use store::SettingsStore;
 pub use update::new_text_for_update;

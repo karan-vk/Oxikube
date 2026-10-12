@@ -280,6 +280,8 @@ impl CommandId {
     pub const RESOURCE_PREVIOUS_MATCH: CommandId = CommandId::new("resource::PreviousMatch");
     /// `resource::ViewDescribe`: open a resource's `kubectl describe` text.
     pub const RESOURCE_VIEW_DESCRIBE: CommandId = CommandId::new("resource::ViewDescribe");
+    /// `resource::ViewMetrics`: open a resource's detail on its Metrics tab (history graphs).
+    pub const RESOURCE_VIEW_METRICS: CommandId = CommandId::new("resource::ViewMetrics");
     /// `resource::ViewYaml`: open a resource's YAML.
     pub const RESOURCE_VIEW_YAML: CommandId = CommandId::new("resource::ViewYaml");
     /// `resource::ViewYamlInEditor`: open a resource's YAML read-only in a manifest editor tab.
@@ -1388,6 +1390,16 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::RESOURCE_VIEW_DESCRIBE,
         "Describe",
+        CommandScope::Selection,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::One),
+    // Shows the metrics tab of the detail; reads Prometheus through the cluster's own service
+    // proxy or the configured endpoint, changes nothing in the cluster.
+    CommandMeta::read(
+        CommandId::RESOURCE_VIEW_METRICS,
+        "View Metrics",
         CommandScope::Selection,
         NONE,
     )

@@ -682,8 +682,8 @@ crate's `README.md` for its allowed dependencies. Highlights:
   measured (ingress-nginx under `exported_namespace`, Lens' `namespace`, OpenShift's HAProxy router) and in whether the store is
   shared by several clusters (`PromqlCatalogue::is_shared_store`, answered with `MetricRequest::with_label`). Pod and container
   targets return a series per pod or container (`MetricQuery::series_label`). Names are escaped (`\`, `"`, control characters;
-  regex metacharacters for a set of pods); label names of extra matchers are validated. Detail-panel graphs (E13-S08) and the
-  `query_promql` tool (E13-S12) build on it.
+  regex metacharacters for a set of pods); label names of extra matchers are validated. The detail-panel graphs (E13-S08,
+  `oxikube_app::metrics_history`) and the `query_promql` tool (E13-S12) build on it.
 - `oxikube_prometheus::detect` + `proxy` (E13-S05) — finding a cluster's Prometheus-compatible service. `ProviderDetector`
   implements `ProviderDetectorPort`: it lists the Services of the namespaces `detect/catalogue.json` names (data, not code:
   per entry a kind, an exact name or a name prefix, namespaces, ports by preference, a scheme and path prefixes to try), matches
@@ -714,6 +714,18 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `PrometheusPort` at it in the same step, with the credentials' keychain references for a configured URL). Commands:
   `cluster::RedetectMetrics` and `cluster::ToggleMetrics` (`prometheus.enabled`, through the `MetricsSettingsWriter` trait the
   binary implements over `ClusterSettings::set_metrics_enabled`); neither changes a cluster, so neither takes a guard tier.
+- `oxikube_app::metrics_history` (E13-S08) — the history graphs of a detail panel's Metrics tab, plain async Rust over
+  ports. `SubjectKind` / `HistorySubject` name the six kinds that have graphs (Pod, Node, workloads, Namespace, PVC, Ingress)
+  and the object's names (a workload carries its pods, capped at 20); `charts_for` is the one table of which charts each has
+  (a `ChartDef`: measures and reference lines as `MetricRequest`s, so adding a graph is a row). `MetricsHistoryService` reads
+  the provider's availability through the `HistorySource` trait (`MetricsProviderService` implements it), builds each query with
+  the detected stack's `QueryCataloguePort` using `RangePlan` (the step and `rate()` window of `steps_for`), runs all of a
+  panel's queries at once on `PromqlPort::query_range`, and returns `ChartData` (series and request / limit / capacity lines in
+  base units; equal reference values collapse to one line, differing ones are named after their container or pod) or a
+  `HistoryError` whose text is `metrics unavailable: <reason>`. A reference that fails leaves its line out, not the chart. The
+  chosen range is kept in `StatePort` under `metrics.history_range` (a per-viewer convenience). No polling here: the view asks,
+  and dropping the future cancels the queries. The service is built by `bins/oxikube::metrics_provider` and handed to the views
+  as the `oxikube_resources_ui::detail::MetricsHistory` global.
 - `oxikube_settings::cluster::prometheus` (E13-S05) — the `prometheus` block of the per-cluster layer, the settings of
   history metrics: `enabled`, `provider` (`auto` | `manual` | `off`; unset is `manual` when a `url` or `path` is set, else
   `auto`), `kind` (the stack of a manual endpoint), `url` or `path` (`namespace/service:port` through the API server),
@@ -1327,6 +1339,7 @@ layer, **define a narrow port in `oxikube_ports` and inject the implementation f
 | Reaching an in-cluster service (the metrics provider's probe and queries) with the connection's own credentials | `ServiceProxyPort` (part of `ClusterPorts`) | `oxikube_kube::service_proxy` (`KubeServiceProxy`; tests: `FakeServiceProxyPort`) | `oxikube_prometheus` (`ProxyPromqlClient`) |
 | Finding a cluster's Prometheus-compatible service | `ProviderDetectorPort` (`detect`, `check`) | `oxikube_prometheus::ProviderDetector` (tests: `FakeProviderDetectorPort`) | `oxikube_app::metrics_provider` |
 | App writing `prometheus.enabled` back to `settings.json` | `oxikube_app::metrics_provider::MetricsSettingsWriter` (a trait of the app crate) | `bins/oxikube::metrics_provider::SettingsMetricsWriter` over `ClusterSettings::set_metrics_enabled` | `cluster::ToggleMetrics` |
+| History graphs of a detail panel reaching Prometheus | `oxikube_app::metrics_history::HistorySource` + `PromqlPort` + `QueryCataloguePort` | `bins/oxikube::metrics_provider` (`MetricsHistoryService` over the provider service, `PrometheusPort` and `PromqlCatalogue`, installed as `oxikube_resources_ui::detail::MetricsHistory`) | `DetailView` Metrics tab, `resource::ViewMetrics` |
 | The found provider reaching the PromQL port | `oxikube_app::metrics_provider::EndpointSink` | `bins/oxikube::metrics_provider` (over `PrometheusPort::set_endpoint`) | `MetricsProviderService` |
 | Terminal byte streams | `TerminalBackend` (in `oxikube_ports::exec`), opened by `ExecPort` (`exec`, `attach`, `create_debug_container`, `node_shell`) | `oxikube_terminal` (local PTY), `oxikube_kube` (`KubeExec` handing out `KubeStream`), `oxikube_argocd` | `oxikube_terminal` element, `oxikube_app` `ExecService` |
 

@@ -41,6 +41,10 @@
 //! - `exec_debug_dark`, `exec_debug_light` (`exec`): the debug-container dialog of a pod with two
 //!   containers, with the defaults (busybox, `sh`) and the note that the container is permanent
 //!   (E09-S10).
+//! - `detail_metrics_pod_dark`, `detail_metrics_pod_light`, `detail_metrics_error_dark` (`metrics`):
+//!   the Metrics tab of a pod with two containers (a line each, requests and limits as reference
+//!   lines, the range selector) over a scripted Prometheus, and the same tab when Prometheus is
+//!   unreachable (the reason inline with Retry, no chart frame) (E13-S08).
 //! - `pods_columns_dark`, `detail_pod_containers_dark`, `detail_pod_containers_light` (`pods`):
 //!   the Pod kind's own columns with live metrics toned by the thresholds (E13-S03), and a pod's
 //!   detail opening on its containers sub-table with each container's usage (E12-S02, E13-S03);
@@ -106,6 +110,8 @@ mod drain;
 mod exec;
 #[path = "screenshot/namespace_allocation.rs"]
 mod namespace_allocation;
+#[path = "screenshot/metrics.rs"]
+mod metrics;
 #[path = "screenshot/namespaces.rs"]
 mod namespaces;
 #[path = "screenshot/network.rs"]
@@ -307,6 +313,7 @@ fn main() -> ExitCode {
         node::run(),
         drain::run(),
         pods::run(),
+        metrics::run(),
         service::run(),
         namespaces::run(),
         namespace_allocation::run(),

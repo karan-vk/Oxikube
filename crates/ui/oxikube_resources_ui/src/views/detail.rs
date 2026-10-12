@@ -124,6 +124,25 @@ impl ResourceViews {
         }
     }
 
+    /// `resource::ViewMetrics`: shows the detail of `target` on its Metrics tab. When the kind has
+    /// no graphs, or the cluster has no Prometheus, the detail still opens and a toast says why
+    /// there is no Metrics tab (`metrics unavailable: <reason>`), so the command never looks dead.
+    pub(super) fn show_metrics(
+        &mut self,
+        target: &ResourceRef,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(view) = self.open_detail(target, window, cx) else {
+            return;
+        };
+        view.update(cx, |view, cx| view.set_tab(DetailTab::Metrics, cx));
+        let reason = view.read(cx).metrics_unavailable_text();
+        if let Some(text) = reason {
+            self.toast(&target.cluster, Toast::info(text), cx);
+        }
+    }
+
     /// `secret::Reveal`: shows the detail of the Secret `target` (the drawer opens on it, or its
     /// pinned tab is activated) and shows or hides its values decoded: every key when `key` is
     /// `None`, else that key. The values are read once and kept in that detail's memory only.

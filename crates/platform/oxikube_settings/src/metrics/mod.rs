@@ -5,6 +5,7 @@
 //! "metrics": {
 //!   "gpu_vendors": ["nvidia.com/gpu", "amd.com/gpu", "gpu.intel.com/i915", "gpu.intel.com/xe"],
 //!   "poll_interval_secs": 15,
+//!   "history_refresh_secs": 30,
 //!   "thresholds": { "cpu": { "warn": 70, "critical": 90 }, "memory": { "warn": 70, "critical": 90 } }
 //! }
 //! ```
@@ -13,6 +14,11 @@
 //! allocation figures (pods, nodes, namespaces). A GPU is a whole-number count, summed per name.
 //! The list is replaced as a whole by a layer (arrays do not merge); under `clusters.<id>.metrics`
 //! it overrides the list for one cluster. Blank entries and repeats are ignored.
+//!
+//! `history_refresh_secs` (E13-S08) is how often a shown Metrics tab of a detail panel asks
+//! Prometheus again (10 to 300 s; out-of-range values are clamped with a warning). It is read
+//! when the timer fires, so an edit applies to open panels at once; [`MetricsSettings::resolve`]
+//! gives a cluster's value.
 //!
 //! [`MetricsSettings::gpu_table`] hands the app layer (which has no `gpui`) the resolved lists for
 //! every cluster, and [`MetricsSettings::observe`] (from [`Settings`]) tells the binary when to
@@ -58,7 +64,18 @@ pub struct MetricsSettingsContent {
     /// the percent of a pod's or container's limit, or of a node's allocatable.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thresholds: Option<ThresholdsContent>,
+    /// Seconds between refreshes of a shown Metrics tab (10 to 300). Out-of-range values are
+    /// clamped.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub history_refresh_secs: Option<u32>,
 }
+
+/// The default of `metrics.history_refresh_secs`, matching `default.json`.
+pub const DEFAULT_HISTORY_REFRESH_SECS: u32 = 30;
+/// The smallest `metrics.history_refresh_secs`.
+pub const MIN_HISTORY_REFRESH_SECS: u32 = 10;
+/// The largest `metrics.history_refresh_secs`.
+pub const MAX_HISTORY_REFRESH_SECS: u32 = 300;
 
 /// The resolved `metrics` setting.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -71,6 +88,8 @@ pub struct MetricsSettings {
     pub cpu: UsageLevel,
     /// Memory's warn and critical levels.
     pub memory: UsageLevel,
+    /// Seconds between refreshes of a shown Metrics tab, already clamped.
+    pub history_refresh_secs: u32,
 }
 
 impl Settings for MetricsSettings {
@@ -86,13 +105,39 @@ impl Settings for MetricsSettings {
             poll_interval_secs: live::poll_interval(content.poll_interval_secs),
             cpu: UsageLevel::of(thresholds.cpu.as_ref()),
             memory: UsageLevel::of(thresholds.memory.as_ref()),
+            history_refresh_secs: clamp_refresh(content.history_refresh_secs),
         }
     }
+}
+
+fn clamp_refresh(value: Option<u32>) -> u32 {
+    let Some(value) = value else {
+        return DEFAULT_HISTORY_REFRESH_SECS;
+    };
+    let clamped = value.clamp(MIN_HISTORY_REFRESH_SECS, MAX_HISTORY_REFRESH_SECS);
+    if clamped != value {
+        tracing::warn!(
+            value,
+            clamped,
+            "metrics.history_refresh_secs is out of range ({MIN_HISTORY_REFRESH_SECS} to \
+             {MAX_HISTORY_REFRESH_SECS}): clamped"
+        );
+    }
+    clamped
 }
 
 crate::register_settings!(MetricsSettings);
 
 impl MetricsSettings {
+    /// The settings in effect for `cluster` (its `clusters.<id>.metrics` over the user's and the
+    /// defaults), or the shipped defaults without a settings store.
+    pub fn resolve(cluster: &ClusterId, cx: &App) -> Self {
+        cx.try_global::<SettingsStore>()
+            .and_then(|store| store.try_get::<Self>(Some(crate::SettingsLocation { cluster })))
+            .cloned()
+            .unwrap_or_else(|| Self::from_content(MetricsSettingsContent::default()))
+    }
+
     /// The GPU vendor list of every cluster: the global list plus each cluster that overrides
     /// it. Keys of `clusters` that are not cluster ids are skipped (the cluster layer reports
     /// them). Without a store or without this setting registered, the defaults.

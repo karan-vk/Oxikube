@@ -59,9 +59,14 @@
   //                 minutes), and a cluster without metrics-server is asked every five minutes.
   //   thresholds    k9s' thresholds: the percent of a limit (pods, containers) or of a node's
   //                 allocatable at which a usage cell turns amber (`warn`) and red (`critical`).
+  //   history_refresh_secs  how often a shown Metrics tab of a detail panel (Pod, Node,
+  //                 Deployment and other workloads, Namespace, PVC, Ingress) asks Prometheus
+  //                 again, 10 to 300. Nothing is asked while the tab is not shown. Edits apply
+  //                 at once. The 15m / 1h / 6h / 24h range is remembered from your last choice.
   "metrics": {
     "gpu_vendors": ["nvidia.com/gpu", "amd.com/gpu", "gpu.intel.com/i915", "gpu.intel.com/xe"],
     "poll_interval_secs": 15,
+    "history_refresh_secs": 30,
     "thresholds": {
       "cpu": { "warn": 70, "critical": 90 },
       "memory": { "warn": 70, "critical": 90 }

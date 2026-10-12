@@ -705,6 +705,15 @@
             "null"
           ]
         },
+        "history_refresh_secs": {
+          "description": "Seconds between refreshes of a shown Metrics tab (10 to 300). Out-of-range values are\nclamped.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "poll_interval_secs": {
           "description": "Seconds between two polls of metrics-server while a table shows live usage (5 to 600;\ndefault 15). Polling stops while nothing shows it.",
           "format": "uint64",

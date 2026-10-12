@@ -127,6 +127,25 @@ impl Chart {
         self
     }
 
+    /// Replaces the reference lines of a chart already on screen (a pod's request and limit change
+    /// with each fetch). Does nothing when they are the same.
+    pub fn set_thresholds(&mut self, thresholds: Vec<Threshold>, cx: &mut Context<Self>) {
+        if self.spec.thresholds == thresholds {
+            return;
+        }
+        self.update(cx, |spec| spec.thresholds = thresholds);
+    }
+
+    /// The series on the chart, as last set.
+    pub fn series(&self) -> &[Series] {
+        &self.spec.series
+    }
+
+    /// The reference lines on the chart, as last set.
+    pub fn threshold_lines(&self) -> &[Threshold] {
+        &self.spec.thresholds
+    }
+
     /// The kind of chart.
     pub fn kind(&self) -> ChartKind {
         self.spec.kind

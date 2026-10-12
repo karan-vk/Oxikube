@@ -144,6 +144,7 @@ impl ResourceViews {
             ViewRequest::ViewDescribe(target) => {
                 self.show_detail_tab(&target, DetailTab::Describe, window, cx);
             }
+            ViewRequest::ViewMetrics(target) => self.show_metrics(&target, window, cx),
             ViewRequest::Find { target, pattern } => {
                 self.find_in_detail(&target, pattern.as_deref(), window, cx);
             }
@@ -189,6 +190,7 @@ impl ResourceViews {
             | ViewRequest::ViewYaml(_)
             | ViewRequest::ViewDescribe(_)
             | ViewRequest::ShowUsedBy(_)
+            | ViewRequest::ViewMetrics(_)
             | ViewRequest::ShowServicePods(_)
             | ViewRequest::RevealSecret { .. }
             | ViewRequest::JumpToOwner(_)

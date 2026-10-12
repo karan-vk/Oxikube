@@ -28,7 +28,10 @@ use gpui::{App, Subscription, Task};
 use oxikube_app::metrics_provider::Resolved;
 use oxikube_app::store::Spawner;
 use oxikube_app::tools::metrics::MetricsAgentDeps;
-use oxikube_app::{ClusterSessionManager, EndpointSink, MetricsProviderService, MetricsService};
+use oxikube_app::{
+    ClusterSessionManager, EndpointSink, MetricsHistoryService, MetricsProviderService,
+    MetricsService,
+};
 use oxikube_domain::ids::ClusterId;
 use oxikube_ports::{
     ClockPort, PromqlPort, ProviderDetectorPort, QueryCataloguePort, ServiceProxyPort,
@@ -52,6 +55,10 @@ pub struct MetricsServices {
     /// The PromQL of a `MetricRequest` for a detected stack (E13-S06): the graphs ask this, then
     /// run the query through [`promql`](Self::promql).
     pub catalogue: Arc<dyn QueryCataloguePort>,
+    /// The history graphs of the detail panels' Metrics tab (E13-S08): the provider's status, the
+    /// PromQL port and the catalogue behind one service. The binary hands it to
+    /// `oxikube_resources_ui::detail::MetricsHistory` when the window mounts.
+    pub history: MetricsHistoryService,
 }
 
 impl MetricsServices {
@@ -87,10 +94,16 @@ pub fn build(ports: &AppPorts, sessions: &ClusterSessionManager) -> MetricsServi
     );
     let detector: Arc<dyn ProviderDetectorPort> = Arc::new(ProviderDetector::with_client(client));
     let sink = Arc::new(PromqlSink(port.clone()));
+    let provider = MetricsProviderService::new(sessions.clone(), detector, sink);
+    let catalogue: Arc<dyn QueryCataloguePort> = Arc::new(PromqlCatalogue);
+    let history =
+        MetricsHistoryService::new(Arc::new(provider.clone()), port.clone(), catalogue.clone())
+            .with_state(ports.state.clone());
     MetricsServices {
-        provider: MetricsProviderService::new(sessions.clone(), detector, sink),
+        provider,
         promql: port,
-        catalogue: Arc::new(PromqlCatalogue),
+        catalogue,
+        history,
     }
 }
 
