@@ -21,9 +21,11 @@ name: integration
 # IngressClass moved through the bus and guard, read back from the API server), and `kind_sections`
 # (E12-S20: one object of every sidebar kind seeded, each kind's table, columns, row actions,
 # detail panel and guard checked in the app, a CRD's printer columns against `kubectl get`; one
-# test per sidebar section, about 10 s in all). The per-port exec, attach, node shell and debug
-# scenarios (`oxikube_kube/tests/exec_*`, `oxikube_app/tests/kind_smoke/{exec,debug,node_shell}`)
-# run in the `kind` job with everything else. The macOS golden screenshots of the terminal
+# test per sidebar section, about 10 s in all), and `kind_metrics_server` (E13-S13: the Pods and Nodes
+# tables, the live rings and the overview's tiles from metrics-server; the stacks are the
+# nightly's `metrics-stack` job). The per-port exec, attach, node shell and debug scenarios
+# (`oxikube_kube/tests/exec_*`, `oxikube_app/tests/kind_smoke/{exec,debug,node_shell}`) run in the
+# `kind` job with everything else. The macOS golden screenshots of the terminal
 # element are the nightly job's (`nightly.yml`).
 on:
   pull_request:
@@ -125,6 +127,7 @@ jobs:
       TERMINAL_SUITE: >-
         cargo test -p oxikube --features integration --test kind_exec --test kind_terminal --test kind_terminal_data --test kind_assist
         --test kind_templates --test kind_editor --test kind_network --test kind_sections
+        --test kind_metrics_server
         --no-fail-fast
     steps:
       - uses: actions/checkout@v7

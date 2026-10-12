@@ -51,6 +51,9 @@ jiff.workspace = true
 k8s-openapi.workspace = true
 kube.workspace = true
 oxikube_kube.workspace = true
+# `kind_smoke::metrics_absent` (E13-S13): a client layer that hides `metrics.k8s.io` from the adapter.
+http.workspace = true
+tower.workspace = true
 # The recents survive a restart of the real SQLite adapter (`tests/recents_sqlite.rs`, E11-S11).
 oxikube_state_sqlite.workspace = true
 tempfile.workspace = true

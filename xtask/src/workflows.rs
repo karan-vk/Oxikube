@@ -313,3 +313,43 @@ fn nightly_compares_the_six_e12_detail_panel_goldens() {
         "the nightly no longer runs the resource views' screenshot test"
     );
 }
+
+/// The metrics path against real stacks (E13-S13): the nightly installs the pinned stack into its
+/// throwaway kind cluster, turns both stack tiers on and runs the app-level suites, and a failure
+/// reaches the tracking issue; the PR suite runs the metrics-server tier.
+#[test]
+fn nightly_runs_the_metrics_stack_tiers_and_prs_run_the_metrics_server_tier() {
+    let nightly = read(".github/workflows/nightly.yml");
+    for (needle, why) in [
+        ("  metrics-stack:\n", "the metrics-stack job"),
+        (
+            "kind-metrics-stack --name oxikube",
+            "the pinned stack install",
+        ),
+        (
+            "OXIKUBE_TEST_PROMETHEUS_STACK: \"1\"",
+            "the kube-prometheus-stack tier",
+        ),
+        (
+            "OXIKUBE_TEST_VICTORIA_METRICS: \"1\"",
+            "the VictoriaMetrics tier",
+        ),
+        ("--test kind_metrics_stack", "the stack suite"),
+        ("--test kind_metrics_server", "the metrics-server suite"),
+        ("--test metrics_kind", "the metrics-server adapter suite"),
+        (
+            "needs: [matrix, perf, metrics-stack]",
+            "failure reporting for the job",
+        ),
+    ] {
+        assert!(
+            nightly.contains(needle),
+            "nightly.yml lost {why} (`{needle}`)"
+        );
+    }
+    let integration = read(".github/workflows/integration.yml");
+    assert!(
+        integration.contains("--test kind_metrics_server"),
+        "integration.yml no longer runs the metrics-server tier of the app"
+    );
+}

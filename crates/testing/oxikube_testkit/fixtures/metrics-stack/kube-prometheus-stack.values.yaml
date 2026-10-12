@@ -1,0 +1,25 @@
+# kube-prometheus-stack for the nightly metrics suite (E13-S13): Prometheus, the operator,
+# kube-state-metrics and node-exporter, the series the query catalogue's kube_prometheus profile
+# reads. Release `kube-prometheus-stack` in `monitoring` gives the Service
+# `kube-prometheus-stack-prometheus` (port `http-web`), the first entry of the detector's
+# catalogue. What a kind node cannot serve or the suite does not read is off, to keep the
+# install small and quick to become ready.
+alertmanager:
+  enabled: false
+grafana:
+  enabled: false
+defaultRules:
+  create: false
+kubeEtcd:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+prometheus:
+  prometheusSpec:
+    scrapeInterval: 15s
+    evaluationInterval: 15s
+    retention: 2h

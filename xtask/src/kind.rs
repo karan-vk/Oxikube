@@ -2,7 +2,7 @@
 //!
 //! `kind-up` creates a cluster (if missing), pre-pulls every test image into its nodes
 //! (`kind_images.rs`, list in `fixtures/test-images.txt`), installs a pinned metrics-server (insecure
-//! kubelet TLS for kind), waits for it, and applies the fixtures under
+//! kubelet TLS for kind), waits for it to serve `metrics.k8s.io`, and applies the fixtures under
 //! `crates/testing/oxikube_testkit/fixtures/` (sample CRD with printer columns, workloads in
 //! several states). It is idempotent and every kubectl call carries `--context kind-<name>`
 //! so it can never touch another cluster. (`load-pods` lives in `load_pods.rs`.)
@@ -69,6 +69,14 @@ pub fn up(name: &str) -> Result<()> {
     )
     .run()
     .context("wait for metrics-server rollout")?;
+    // The `kubectl top` readiness: the aggregated API is served once the APIService is
+    // Available, which can lag the rollout while the API server's discovery catches up.
+    cmd!(
+        sh,
+        "kubectl --context {ctx} wait --for=condition=Available --timeout=180s apiservice/v1beta1.metrics.k8s.io"
+    )
+    .run()
+    .context("wait for the metrics.k8s.io APIService")?;
 
     // Fixtures, stage by stage; CRDs are established before any CR is applied.
     for stage in fixture_stages(&fixtures.join("cluster")) {

@@ -1,0 +1,13 @@
+# VictoriaMetrics single-node for the nightly manual-endpoint check (E13-S13, epic E13 done-when
+# item 4). It lives in `oxikube-vm`, a namespace the detector's catalogue does not list, so only
+# a manual `prometheus.path` reaches it, and it serves under the path prefix `/vm` (the suite
+# sets `prometheus.path_prefix`). It scrapes itself and the kubelets' cAdvisor, so pod queries
+# answer too.
+server:
+  fullnameOverride: vmsingle-test
+  extraArgs:
+    http.pathPrefix: /vm
+  persistentVolume:
+    enabled: false
+  scrape:
+    enabled: true
