@@ -462,6 +462,15 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
                 "api",
             ),
         },
+        "workload::Rollback" => Command::WorkloadRollback {
+            target: ResourceRef::namespaced(
+                cluster,
+                Gvk::new("apps", "v1", "Deployment"),
+                "default",
+                "api",
+            ),
+            to_revision: None,
+        },
         "workload::SetImage" => Command::WorkloadSetImage {
             target: ResourceRef::namespaced(
                 cluster,

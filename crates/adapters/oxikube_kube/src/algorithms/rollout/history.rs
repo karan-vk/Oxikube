@@ -1,15 +1,13 @@
 //! `rollout history`: the Deployment's revisions.
 
 use oxikube_domain::OxiResult;
+use oxikube_domain::rollout::deployment_history;
 use oxikube_ports::ResourcePort;
 use tracing::debug;
 
 use super::RolloutRevision;
-use super::revisions::{images, revision_of, revisions};
+use super::revisions::revisions;
 use crate::algorithms::api::deployment_gvk;
-
-/// The annotation `kubectl annotate` / `--record` use to say why a revision exists.
-const CHANGE_CAUSE: &str = "kubernetes.io/change-cause";
 
 /// The rollout history of the Deployment `namespace/name`, oldest revision first.
 ///
@@ -26,23 +24,19 @@ pub async fn rollout_history(
     name: &str,
 ) -> OxiResult<Vec<RolloutRevision>> {
     let deployment = port.get(&deployment_gvk(), Some(namespace), name).await?;
-    let current = revision_of(&deployment);
     debug!(op = "rollout_history", namespace, name, "algorithm");
     let history = revisions(port, &deployment).await?;
-    Ok(history
+    // The domain lists newest first; this API has always been oldest first.
+    Ok(deployment_history(&deployment, &history)
         .into_iter()
-        .map(|(revision, rs)| RolloutRevision {
-            revision,
-            replica_set: rs.name().to_owned(),
-            change_cause: rs
-                .meta
-                .annotations
-                .get(CHANGE_CAUSE)
-                .map(|cause| cause.to_string())
-                .filter(|cause| !cause.is_empty()),
-            images: rs.get("/spec/template").map(images).unwrap_or_default(),
-            created: rs.meta.creation,
-            current: current == Some(revision),
+        .rev()
+        .map(|revision| RolloutRevision {
+            revision: revision.revision,
+            replica_set: revision.name.to_string(),
+            change_cause: revision.change_cause,
+            images: revision.images,
+            created: revision.created,
+            current: revision.current,
         })
         .collect())
 }

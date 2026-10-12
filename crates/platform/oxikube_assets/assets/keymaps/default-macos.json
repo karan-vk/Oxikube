@@ -321,6 +321,15 @@
     }
   },
   {
+    // k9s: ctrl-l rolls a workload back (E12-S06). Bound for the kinds that keep a revision
+    // history: Deployments (their ReplicaSets), StatefulSets and DaemonSets (their
+    // ControllerRevisions), and ReplicaSets (which roll their Deployment back to that revision).
+    "context": "ResourceTable && !Editing && (kind == Deployment || kind == StatefulSet || kind == DaemonSet || kind == ReplicaSet)",
+    "bindings": {
+      "ctrl-l": "resource_table::RollbackSelected"
+    }
+  },
+  {
     // The table's filter field has the focus: escape clears the filter and returns to the rows
     // (enter returns without clearing; the field handles it).
     "context": "ResourceTable && Editing",

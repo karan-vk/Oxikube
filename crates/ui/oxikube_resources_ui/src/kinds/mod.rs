@@ -87,8 +87,9 @@ pub use spec::KindSpec;
 pub use specs::KindSpecs;
 pub use storage::storage_row_actions;
 pub use workloads::{
-    ContainerField, RESTART_ORDER, SCALE_ORDER, SET_IMAGE_ORDER, ScaleDialog, ScaleFlow,
-    ScaleStage, SetImageDialog, SetImageFlow, SetImageStage, WorkloadPanel, rollout_row_actions,
+    ContainerField, RESTART_ORDER, ROLLBACK_ORDER, RollbackDialog, RollbackFlow, RollbackStage,
+    SCALE_ORDER, SET_IMAGE_ORDER, ScaleDialog, ScaleFlow, ScaleStage, SetImageDialog, SetImageFlow,
+    SetImageStage, WorkloadPanel, can_rollback, rollback_row_actions, rollout_row_actions,
     scale_row_actions,
 };
 
@@ -106,6 +107,7 @@ pub fn row_actions() -> Vec<RowActionSpec> {
         .chain(storage_row_actions())
         .chain(pods::row_actions())
         .chain(rollout_row_actions())
+        .chain(rollback_row_actions())
         .collect()
 }
 

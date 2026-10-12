@@ -33,6 +33,7 @@ actions!(
         ScaleSelected,
         RestartSelected,
         SetImageSelected,
+        RollbackSelected,
         AttachSelected,
         CordonSelected,
         UncordonSelected,
@@ -772,6 +773,40 @@ fn r_restarts_and_i_sets_the_image_on_the_workloads_a_template_change_rolls(
     };
     assert_eq!(keys(cx, CommandId::WORKLOAD_RESTART), ["r"]);
     assert_eq!(keys(cx, CommandId::WORKLOAD_SET_IMAGE), ["i"]);
+}
+
+#[gpui::test]
+fn ctrl_l_rolls_back_the_workloads_that_keep_a_history(cx: &mut TestAppContext) {
+    for platform in [MAC, LINUX] {
+        install(cx, platform, "");
+        for kind in ["Deployment", "StatefulSet", "DaemonSet", "ReplicaSet"] {
+            assert_eq!(
+                runs(cx, "ctrl-l", &strs(&table(kind, ""))),
+                Some("resource_table::RollbackSelected"),
+                "{kind} on {platform:?}"
+            );
+        }
+        // A ReplicationController has no history; a Pod's ctrl-l is not a rollback.
+        for kind in ["ReplicationController", "Pod", "Node"] {
+            assert_ne!(
+                runs(cx, "ctrl-l", &strs(&table(kind, ""))),
+                Some("resource_table::RollbackSelected"),
+                "{kind} on {platform:?}"
+            );
+        }
+        // Typing into the table's filter field is text, not a rollback.
+        let editing = table("Deployment", "Editing");
+        assert_eq!(press(cx, "ctrl-l", &strs(&editing)), Resolution::Unbound);
+    }
+    // The palette shows the key next to the command.
+    install(cx, MAC, "");
+    let keys = cx.read(|cx| {
+        bindings_for_command(cx, CommandId::WORKLOAD_ROLLBACK)
+            .into_iter()
+            .map(|info| info.keystrokes_text())
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(keys, ["ctrl-l"]);
 }
 
 #[gpui::test]

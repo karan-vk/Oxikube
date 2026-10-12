@@ -411,8 +411,8 @@ impl oxikube_workspace::command_surface::CommandSurface for DetailView {
             .selecting(vec![self.target.clone()])
     }
 
-    /// Scale and Set image ask in their dialogs (E12-S04, E12-S05), so the palette runs them here;
-    /// Restart goes through the bus like the header's button does.
+    /// Scale, Set image and Rollback ask in their dialogs (E12-S04, E12-S05, E12-S06), so the palette
+    /// runs them here; Restart goes through the bus like the header's button does.
     fn own_commands(&self, _: &App) -> Vec<oxikube_domain::command::CommandId> {
         use oxikube_domain::command::CommandId;
         let mut own = Vec::new();
@@ -422,6 +422,9 @@ impl oxikube_workspace::command_surface::CommandSurface for DetailView {
         if self.rollout_state() == Some(None) {
             own.push(CommandId::WORKLOAD_RESTART);
             own.push(CommandId::WORKLOAD_SET_IMAGE);
+        }
+        if self.rollback_state() == Some(None) {
+            own.push(CommandId::WORKLOAD_ROLLBACK);
         }
         own
     }
@@ -438,6 +441,7 @@ impl oxikube_workspace::command_surface::CommandSurface for DetailView {
             CommandId::WORKLOAD_SCALE => self.open_scale(window, cx),
             CommandId::WORKLOAD_RESTART => self.restart(cx),
             CommandId::WORKLOAD_SET_IMAGE => self.open_set_image(window, cx),
+            CommandId::WORKLOAD_ROLLBACK => self.open_rollback(window, cx),
             _ => return false,
         }
         true

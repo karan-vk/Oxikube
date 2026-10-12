@@ -36,6 +36,7 @@ mod namespaces;
 mod node_shell;
 mod nodes;
 mod pods;
+mod rollback;
 mod rollout;
 mod scale;
 mod scoped_feeds;

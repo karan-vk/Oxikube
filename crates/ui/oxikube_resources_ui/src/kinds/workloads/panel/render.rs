@@ -126,6 +126,33 @@ impl WorkloadPanel {
         )
     }
 
+    /// The Rollback button (E12-S06): opens the rollout history dialog. Only for the kinds that
+    /// keep a history, disabled with the reason on a read-only cluster.
+    fn rollback_button(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let blocked = self.rollback_state(cx)?;
+        let tooltip: SharedString = blocked
+            .clone()
+            .unwrap_or_else(|| "Show the rollout history and roll back to a revision".to_owned())
+            .into();
+        Some(
+            div()
+                .debug_selector(|| "workload-rollback".into())
+                .child(
+                    Button::new("workload-rollback")
+                        .xsmall()
+                        .ghost()
+                        .icon(Icon::new(IconName::RotateCcw).size(u(px(14.))))
+                        .label("Rollback")
+                        .tooltip(tooltip)
+                        .disabled(blocked.is_some())
+                        .on_click(
+                            cx.listener(|this, _, window, cx| this.open_rollback(window, cx)),
+                        ),
+                )
+                .into_any_element(),
+        )
+    }
+
     fn owned_section(
         &self,
         tokens: &Tokens,
@@ -222,7 +249,12 @@ impl Render for WorkloadPanel {
                     .justify_between()
                     .items_center()
                     .child(heading(&tokens, "workload-replicas", "Replicas".to_owned()))
-                    .children(self.scale_button(cx)),
+                    .child(
+                        h_flex()
+                            .gap(u(tokens.spacing.sm))
+                            .children(self.rollback_button(cx))
+                            .children(self.scale_button(cx)),
+                    ),
             )
             .child(self.stats_row(&tokens, &tones, &model));
         if let Some(strategy) = &model.strategy {

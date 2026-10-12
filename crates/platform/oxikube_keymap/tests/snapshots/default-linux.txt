@@ -146,6 +146,8 @@
 [ResourceTable && !Editing && (kind == Deployment || kind == StatefulSet || kind == DaemonSet)]
   i                resource_table::SetImageSelected
   r                resource_table::RestartSelected
+[ResourceTable && !Editing && (kind == Deployment || kind == StatefulSet || kind == DaemonSet || kind == ReplicaSet)]
+  ctrl-l           resource_table::RollbackSelected
 [ResourceTable && Editing]
   escape           resource_table::ClearFilter
 [DetailDrawer && !Editing]

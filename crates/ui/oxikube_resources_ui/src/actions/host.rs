@@ -5,8 +5,8 @@ use std::sync::Arc;
 use oxikube_app::namespaces::NamespaceCreator;
 use oxikube_app::{
     ActionContext, ActionState, ClusterSessionManager, CommandBus, DebugRunner, DeleteFlow,
-    ExecService, RowAction, RowActionRegistry, RowActions, ScaleRunner, SetImageRunner,
-    WorkloadService,
+    ExecService, RollbackRunner, RolloutService, RowAction, RowActionRegistry, RowActions,
+    ScaleRunner, SetImageRunner, WorkloadService,
 };
 use oxikube_domain::Capabilities;
 use oxikube_domain::command::CommandId;
@@ -66,6 +66,10 @@ pub struct ResourceActions {
     storage: StorageFlows,
     /// Runs `workload::SetImage` for the set-image dialog (E12-S05).
     set_image: SetImageRunner,
+    /// Reads a workload's rollout history and runs `workload::Rollback` for the rollback dialog
+    /// (E12-S06).
+    rollouts: Arc<RolloutService>,
+    rollback: RollbackRunner,
 }
 
 impl ResourceActions {
@@ -108,6 +112,8 @@ impl ResourceActions {
             workloads: Arc::new(WorkloadService::new(sessions.clone())),
             scale: ScaleRunner::new(bus.clone(), who.clone()),
             set_image: SetImageRunner::new(bus.clone(), who.clone()),
+            rollback: RollbackRunner::new(bus.clone(), who.clone()),
+            rollouts: Arc::new(RolloutService::new(sessions.clone())),
             storage: StorageFlows::new(bus, &sessions, &who),
             namespace_creator: NamespaceCreator::new(bus.clone(), who),
         }
@@ -167,6 +173,15 @@ impl ResourceActions {
         workspace: gpui::WeakEntity<oxikube_workspace::Workspace>,
     ) -> crate::kinds::SetImageFlow {
         crate::kinds::SetImageFlow::new(self.workloads.clone(), self.set_image.clone(), workspace)
+    }
+
+    /// The flow that opens the rollback dialog in `workspace` (E12-S06): the table's "Rollback"
+    /// action and the workload panel's button.
+    pub fn rollback_flow(
+        &self,
+        workspace: gpui::WeakEntity<oxikube_workspace::Workspace>,
+    ) -> crate::kinds::RollbackFlow {
+        crate::kinds::RollbackFlow::new(self.rollouts.clone(), self.rollback.clone(), workspace)
     }
 
     /// The delete flow.

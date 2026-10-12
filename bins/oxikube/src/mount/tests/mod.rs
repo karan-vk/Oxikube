@@ -28,6 +28,7 @@ mod node_actions;
 mod node_shell;
 mod palette;
 mod resources;
+mod rollback;
 mod rollout;
 mod scale;
 mod secrets;

@@ -1115,6 +1115,19 @@ pub enum Command {
         /// The containers (or init containers) to change and their new images.
         images: Vec<ImageChange>,
     },
+    /// Restore a workload's pod template from an earlier revision of its rollout history, as
+    /// `kubectl rollout undo` does (E12-S06): a Deployment from the ReplicaSet of that revision, a
+    /// StatefulSet or DaemonSet from its ControllerRevision. Given a ReplicaSet, the Deployment
+    /// that owns it is rolled back to that ReplicaSet's revision.
+    #[serde(rename = "workload::Rollback")]
+    WorkloadRollback {
+        /// The Deployment, StatefulSet, DaemonSet or ReplicaSet (of a Deployment).
+        target: ResourceRef,
+        /// The revision to restore; `None` is the previous one (the second newest), as kubectl's
+        /// default.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        to_revision: Option<i64>,
+    },
     /// Open the logs of every pod of a workload or Service merged by time, one colour per pod
     /// (stern-style). The pods are the ones the object's selector matches.
     #[serde(rename = "workload::ViewLogs")]
@@ -1394,6 +1407,7 @@ impl Command {
             Command::WorkloadScale { .. } => CommandId::WORKLOAD_SCALE,
             Command::WorkloadRestart { .. } => CommandId::WORKLOAD_RESTART,
             Command::WorkloadSetImage { .. } => CommandId::WORKLOAD_SET_IMAGE,
+            Command::WorkloadRollback { .. } => CommandId::WORKLOAD_ROLLBACK,
             Command::WorkloadViewLogs { .. } => CommandId::WORKLOAD_VIEW_LOGS,
             Command::NodeCordon { .. } => CommandId::NODE_CORDON,
             Command::NodeShell { .. } => CommandId::NODE_SHELL,
@@ -1494,6 +1508,7 @@ impl Command {
             | Command::WorkloadScale { target, .. }
             | Command::WorkloadRestart { target }
             | Command::WorkloadSetImage { target, .. }
+            | Command::WorkloadRollback { target, .. }
             | Command::WorkloadViewLogs { target, .. }
             | Command::NamespaceDelete { target, .. }
             | Command::NodeCordon { target }
@@ -1943,6 +1958,10 @@ mod tests {
             Command::WorkloadSetImage {
                 target: deployment(),
                 images: vec![ImageChange::new("web", "nginx:1.27")],
+            },
+            Command::WorkloadRollback {
+                target: deployment(),
+                to_revision: Some(2),
             },
             Command::NodeCordon { target: node() },
             Command::NodeShell { target: node() },

@@ -352,6 +352,8 @@ impl CommandId {
     pub const WINDOW_NEW: CommandId = CommandId::new("window::New");
     /// `workload::Restart`: rolling-restart a workload.
     pub const WORKLOAD_RESTART: CommandId = CommandId::new("workload::Restart");
+    /// `workload::Rollback`: restore a workload's pod template from an earlier revision.
+    pub const WORKLOAD_ROLLBACK: CommandId = CommandId::new("workload::Rollback");
     /// `workload::Scale`: set a workload's replica count.
     pub const WORKLOAD_SCALE: CommandId = CommandId::new("workload::Scale");
     /// `workload::SetImage`: change the image of containers of a workload's pod template.
@@ -1670,6 +1672,17 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::One),
+    // E12-S06. Medium: it replaces the pod template, so every pod of the workload is replaced by
+    // a rolling update, but the revision it leaves is still in the history to go forward again.
+    CommandMeta::mutation(
+        CommandId::WORKLOAD_ROLLBACK,
+        "Rollback Workload",
+        CommandScope::Selection,
+        Risk::Medium,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::One),
     // Low for N > 0, raised to Medium for N = 0 by `Command::effective_risk` (E12-S04).
     CommandMeta::mutation(
         CommandId::WORKLOAD_SCALE,
@@ -1845,6 +1858,12 @@ mod tests {
         assert_eq!(get(CommandId::RESOURCE_DELETE).confirm, ConfirmTier::Simple);
         assert_eq!(get(CommandId::NODE_DRAIN).confirm, ConfirmTier::TypeName);
         assert_eq!(get(CommandId::WORKLOAD_SCALE).confirm, ConfirmTier::Simple);
+        // A rollback replaces the pod template: medium risk, one simple confirmation (E12-S06).
+        let rollback = get(CommandId::WORKLOAD_ROLLBACK);
+        assert!(rollback.mutating);
+        assert_eq!(rollback.risk, Some(Risk::Medium));
+        assert_eq!(rollback.confirm, ConfirmTier::Simple);
+        assert_eq!(rollback.id.tool_name(), "k8s.workload_rollback");
         assert_eq!(get(CommandId::POD_VIEW_LOGS).needs, Capabilities::LOGS);
         assert!(!get(CommandId::POD_PORT_FORWARD).mutating);
         // A debug container is a low-risk mutation with a simple confirm that ends in a terminal.

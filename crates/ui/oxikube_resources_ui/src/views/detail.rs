@@ -80,6 +80,13 @@ impl ResourceViews {
             .actions
             .as_ref()
             .map(|actions| actions.set_image_flow(workspace.downgrade()));
+        // The panel's Rollback button opens the rollback dialog the same way.
+        deps.rollback = self
+            .deps
+            .table
+            .actions
+            .as_ref()
+            .map(|actions| actions.rollback_flow(workspace.downgrade()));
         let target = target.clone();
         let origin = self
             .tables(&target.cluster, &target.gvk, cx)
