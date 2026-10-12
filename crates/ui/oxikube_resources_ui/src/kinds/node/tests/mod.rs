@@ -4,8 +4,8 @@
 //! `#[gpui::test]`s over testkit fakes, through the real bus where a command is sent.
 
 mod actions;
-mod drain;
 mod allocation;
+mod drain;
 mod panel;
 mod table;
 
