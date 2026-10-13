@@ -52,9 +52,11 @@
 //! integration tests, or RBAC that covers only the core group); `Both` keeps the two watches
 //! and merges them, for diagnostics.
 //!
-//! RBAC differs per API group, so a refusal is a reason to move on, not a final answer: see
-//! `plan` for the stages. When the running stage stops for good before listing anything (every
-//! watch forbidden), the next one starts: `core/v1` after `events.k8s.io/v1`, then, for a
+//! RBAC differs per API group (and per namespace), so a refusal is a reason to move on, not a
+//! final answer: see `plan` for the stages. A watch that stops for good before listing
+//! anything is replaced by one on the other API for the same namespace (`core/v1` after
+//! `events.k8s.io/v1`), so a namespace that only grants `core` still works next to one that
+//! grants `events.k8s.io`. When the whole running stage fails, the next starts: for a
 //! cluster-wide scope with [`EventsOptions::fallback_namespaces`], one watch per namespace
 //! the caller named (the "may list events in my namespaces but not cluster-wide" case). The
 //! scopes the user may not read are on [`EventFeed::forbidden`] / the port's
@@ -256,29 +258,31 @@ impl KubeEvents {
                 OxiError::unsupported("the cluster serves no events API to watch")
             }));
         }
-        // `Both` watches every served API at once; the others try them one after the other.
-        let groups: Vec<&[(EventApi, _)]> = if choice == EventApiChoice::Both {
-            vec![&served[..]]
+        // `Both` watches every served API at once; the others start on the first and keep the
+        // rest for a namespace whose watch is refused (see `plan`).
+        let (first, rest) = if choice == EventApiChoice::Both {
+            (served, Vec::new())
         } else {
-            served.chunks(1).collect()
+            let mut served = served;
+            let rest = served.split_off(1);
+            (served, rest)
         };
         let mut stages = VecDeque::new();
         for scope in [namespaces, fallback] {
             if scope.is_empty() {
                 continue;
             }
-            for group in &groups {
-                stages.push_back(
-                    group
-                        .iter()
-                        .map(|(api, resource)| Member {
-                            api: *api,
-                            resource: resource.clone(),
-                            namespaces: scope.clone(),
-                        })
-                        .collect(),
-                );
-            }
+            stages.push_back(
+                first
+                    .iter()
+                    .map(|(api, resource)| Member {
+                        api: *api,
+                        resource: resource.clone(),
+                        namespaces: scope.clone(),
+                        then: rest.clone(),
+                    })
+                    .collect(),
+            );
         }
         Ok(stages)
     }

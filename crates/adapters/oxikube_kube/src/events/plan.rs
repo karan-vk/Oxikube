@@ -1,18 +1,23 @@
 //! What a feed watches, and in what order: [`Stage`]s of [`Member`]s, and the [`Spawner`]
 //! that starts a stage's watches.
 //!
-//! A feed starts its first stage and holds the others back. When every watch of the running
-//! stage has stopped for good before listing anything (the API is forbidden, or not really
-//! served), the pump starts the next stage; see `pump`. That is how one API per cluster is
-//! watched and still survives an RBAC rule that covers only the other one.
+//! A feed starts its first stage and holds the others back. A stage is a scope (the caller's,
+//! then the fallback namespaces). Within it, each watch (one per namespace) starts on the
+//! preferred API and carries the other APIs as [`Member::then`]: when that watch stops for
+//! good before listing anything (the API is forbidden, or not really served), the pump
+//! replaces it by one on the next API for the same namespace, see `pump`. That is how one
+//! API per cluster is watched and still survives an RBAC rule that covers only the other one,
+//! even when the rule differs per namespace (`events.k8s.io` readable in one namespace, only
+//! `core` in another). When every watch of the stage has failed, the pump starts the next
+//! stage.
 //!
-//! | Choice | Stages (each only if the cluster serves the API) |
+//! | Choice | Watches of a stage (each API only if the cluster serves it) |
 //! |---|---|
-//! | `Auto` | `events.k8s.io/v1` in the scope, `core/v1` in the scope, then the same two per fallback namespace |
-//! | `CoreOnly`, `EventsV1Only` | that API in the scope, then per fallback namespace |
-//! | `Both` | both APIs together in the scope, then both per fallback namespace |
+//! | `Auto` | per namespace: `events.k8s.io/v1`, else `core/v1` |
+//! | `CoreOnly`, `EventsV1Only` | per namespace: that API |
+//! | `Both` | per namespace: both APIs together |
 //!
-//! The per-namespace stages exist only for a cluster-wide scope with
+//! The second stage exists only for a cluster-wide scope with
 //! [`fallback_namespaces`](oxikube_ports::EventsWatchOptions::fallback_namespaces): the usual
 //! "may list events in my namespaces but not cluster-wide" RBAC.
 
@@ -34,11 +39,16 @@ use crate::feed::FeedConfig;
 use crate::feed::source::watcher_config;
 use crate::feed::transport::watch_client;
 
+/// An API a namespace's watch moves to when the one before it is refused.
+pub(super) type Alternative = (EventApi, ApiResource);
+
 /// One API watched over some namespaces (`None`: the whole cluster).
 pub(super) struct Member {
     pub(super) api: EventApi,
     pub(super) resource: ApiResource,
     pub(super) namespaces: Vec<Option<Arc<str>>>,
+    /// The APIs to try, in order, for a namespace whose watch on `api` fails before listing.
+    pub(super) then: Vec<Alternative>,
 }
 
 /// Watches that start together.
@@ -69,41 +79,57 @@ impl Spawner {
             api,
             resource,
             namespaces,
+            then,
         } in stage
         {
-            let options = WatchOptions {
-                field_selector: self
-                    .regarding_uid
-                    .as_deref()
-                    .map(|uid| api.uid_selector(uid)),
-                ..WatchOptions::default()
-            };
-            let watcher_config = watcher_config(&options, &self.feed_config, self.streaming);
             for namespace in namespaces {
-                let (client, accepted) = watch_client(&self.client);
-                let kube_api: Api<DynamicObject> = match &namespace {
-                    Some(ns) => Api::namespaced_with(client, ns, &resource),
-                    None => Api::all_with(client, &resource),
-                };
-                tasks.spawn(
-                    Source {
-                        index: first_index + watches.len(),
-                        api,
-                        kube_api,
-                        resource: resource.clone(),
-                        accepted,
-                        watcher_config: watcher_config.clone(),
-                        config: self.feed_config.clone(),
-                        cluster: self.cluster.clone(),
-                        regarding_uid: self.regarding_uid.clone(),
-                        counters: self.counters.clone(),
-                        tx: self.tx.clone(),
-                    }
-                    .run(),
-                );
-                watches.push(Watch::new(api, namespace));
+                let index = first_index + watches.len();
+                let target = (api, resource.clone());
+                watches.push(self.spawn(target, namespace, then.clone(), index, tasks));
             }
         }
         watches
+    }
+
+    /// Spawns the watch of `target` over `namespace`, numbered `index`; `then` is what it
+    /// falls back to.
+    pub(super) fn spawn(
+        &self,
+        (api, resource): Alternative,
+        namespace: Option<Arc<str>>,
+        then: Vec<Alternative>,
+        index: usize,
+        tasks: &mut JoinSet<()>,
+    ) -> Watch {
+        let options = WatchOptions {
+            field_selector: self
+                .regarding_uid
+                .as_deref()
+                .map(|uid| api.uid_selector(uid)),
+            ..WatchOptions::default()
+        };
+        let watcher_config = watcher_config(&options, &self.feed_config, self.streaming);
+        let (client, accepted) = watch_client(&self.client);
+        let kube_api: Api<DynamicObject> = match &namespace {
+            Some(ns) => Api::namespaced_with(client, ns, &resource),
+            None => Api::all_with(client, &resource),
+        };
+        tasks.spawn(
+            Source {
+                index,
+                api,
+                kube_api,
+                resource,
+                accepted,
+                watcher_config,
+                config: self.feed_config.clone(),
+                cluster: self.cluster.clone(),
+                regarding_uid: self.regarding_uid.clone(),
+                counters: self.counters.clone(),
+                tx: self.tx.clone(),
+            }
+            .run(),
+        );
+        Watch::new(api, namespace, then)
     }
 }

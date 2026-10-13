@@ -112,6 +112,34 @@ async fn a_forbidden_cluster_wide_watch_falls_back_to_the_named_namespaces() {
         "the namespace the user may not read is reported, the cluster-wide refusal is not"
     );
     assert_eq!(api.hits(CORE_A), 0, "one API per namespace");
+    assert!(
+        api.hits(CORE_B) >= 1,
+        "b is tried on core before it is called forbidden on both APIs"
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_namespace_refused_on_events_k8s_io_is_read_on_core_next_to_one_that_works() {
+    let api = server(true);
+    api.reply(V1, 403, forbidden());
+    api.reply(CORE, 403, forbidden());
+    api.reply(V1_A, 200, list(vec![v1_event("a1", "web-0", T1, 1)]));
+    api.reply(V1_B, 403, forbidden());
+    api.reply(CORE_B, 200, list(vec![core_event("b1", "web-1", T2, 1)]));
+    let options = EventsOptions::default().fallback_namespaces(["a".to_owned(), "b".to_owned()]);
+    let mut feed = auto(&api, &options).await;
+    let mut uids = restart_uids(&next_batch(&mut feed).await);
+    uids.sort();
+    assert_eq!(uids, ["a1", "b1"], "the opening list holds both namespaces");
+    settle().await;
+    assert_eq!(feed.apis(), [EventApi::EventsV1, EventApi::Core]);
+    assert!(
+        feed.forbidden().is_empty(),
+        "b is readable on core, nothing is hidden"
+    );
+    assert_eq!(api.hits(V1_B), 1, "the refused watch is not retried");
+    assert_eq!(api.hits(CORE_A), 0, "a stays on its one API");
+    assert_eq!(*feed.state().borrow(), FeedState::Live);
 }
 
 #[tokio::test(start_paused = true)]

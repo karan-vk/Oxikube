@@ -34,7 +34,7 @@ use tokio::task::JoinSet;
 use tokio::time::{Instant, sleep_until};
 
 use super::handle::Counters;
-use super::plan::{Spawner, Stage};
+use super::plan::{Alternative, Spawner, Stage};
 use super::ring::{EventRing, Key};
 use super::source::{Msg, Tagged};
 use crate::feed::FeedState;
@@ -55,10 +55,12 @@ pub(super) struct Watch {
     state: FeedState,
     /// Keys of the list in progress, to retire what it does not return.
     seen: Option<HashSet<Key>>,
+    /// The APIs to try for this namespace, in order, if this watch fails before listing.
+    then: Vec<Alternative>,
 }
 
 impl Watch {
-    pub(super) fn new(api: EventApi, namespace: Option<Arc<str>>) -> Self {
+    pub(super) fn new(api: EventApi, namespace: Option<Arc<str>>, then: Vec<Alternative>) -> Self {
         Self {
             api,
             namespace,
@@ -68,6 +70,7 @@ impl Watch {
             retired: false,
             state: FeedState::Warming,
             seen: None,
+            then,
         }
     }
 }
@@ -204,10 +207,14 @@ impl Merge {
                 let watch = &mut self.watches[index];
                 watch.ended = true;
                 watch.forbidden = error.kind() == ErrorKind::Forbidden;
-                run.last_fatal = Some(error);
-                if self.stage_failed() {
-                    self.start_next_stage();
+                if self.try_next_api(index) {
                     run.last_fatal = None;
+                } else {
+                    run.last_fatal = Some(error);
+                    if self.stage_failed() {
+                        self.start_next_stage();
+                        run.last_fatal = None;
+                    }
                 }
                 self.publish_status();
                 self.publish_state();
@@ -246,6 +253,24 @@ impl Merge {
         }
     }
 
+    /// Replaces the watch `index`, which stopped for good before listing anything, by one on
+    /// the next API for the same namespace. False when it listed, or has no API left to try.
+    fn try_next_api(&mut self, index: usize) -> bool {
+        let watch = &mut self.watches[index];
+        if watch.synced || watch.then.is_empty() {
+            return false;
+        }
+        watch.retired = true;
+        let mut then = mem::take(&mut watch.then);
+        let next = then.remove(0);
+        let namespace = watch.namespace.clone();
+        let started =
+            self.spawner
+                .spawn(next, namespace, then, self.watches.len(), &mut self.tasks);
+        self.watches.push(started);
+        true
+    }
+
     /// Whether the running stage has stopped for good without listing anything, so the next
     /// stage (another API, or the fallback namespaces) is worth a try.
     fn stage_failed(&self) -> bool {
@@ -273,8 +298,10 @@ impl Merge {
     /// Publishes the running APIs and the scopes the user may not read.
     pub(super) fn publish_status(&self) {
         let live = || self.watches.iter().filter(|w| !w.retired);
+        // The APIs still read; once nothing is, the ones that were tried last.
+        let running = live().any(|w| !w.ended);
         let mut apis: Vec<_> = Vec::new();
-        for watch in live() {
+        for watch in live().filter(|w| !running || !w.ended) {
             if !apis.contains(&watch.api) {
                 apis.push(watch.api);
             }
