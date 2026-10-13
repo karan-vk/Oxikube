@@ -17,9 +17,9 @@ use std::sync::Arc;
 
 use gpui::{App, Subscription};
 use oxikube_app::OsNotificationService;
+use oxikube_events_ui::EventsSettings;
 use oxikube_notify_os::OsNotifier;
 use oxikube_ports::NotifierPort;
-use oxikube_events_ui::EventsSettings;
 use oxikube_settings::Settings as _;
 
 pub use writer::SettingsOsNotificationWriter;
