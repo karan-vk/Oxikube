@@ -33,11 +33,11 @@ use kube::runtime::watcher::{self, Event as Watched, InitialListStrategy};
 use oxikube_domain::OxiError;
 use oxikube_domain::event::Event;
 use oxikube_domain::ids::ClusterId;
+use oxikube_ports::EventApi;
 use tokio::sync::mpsc;
 use tokio::time::{Instant, sleep_until};
 use tracing::debug;
 
-use super::config::EventApi;
 use super::handle::Counters;
 use crate::feed::FeedConfig;
 use crate::feed::FeedState;

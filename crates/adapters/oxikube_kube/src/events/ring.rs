@@ -47,7 +47,7 @@ use oxikube_domain::event::Event;
 use oxikube_domain::ids::ResourceRef;
 use oxikube_ports::Delta;
 
-use super::config::EventApi;
+use super::config::{EventApi, EventApiExt};
 use super::shed::ShedSet;
 
 /// Identity of one event across both APIs.
@@ -87,7 +87,7 @@ struct Entry {
     origin: EventApi,
     /// The namespace watch that delivered it (`None` for a cluster-wide watch).
     namespace: Option<Arc<str>>,
-    /// The APIs that delivered it ([`EventApi::bit`]).
+    /// The APIs that delivered it (`EventApiExt::bit`).
     holders: u8,
     order: Order,
 }

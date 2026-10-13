@@ -19,15 +19,15 @@ use crate::fake_api::{FakeApi, status_body};
 use crate::feed::{FeedConfig, FeedState, StreamingLists};
 use crate::resources::KubeResources;
 
-const CORE: &str = "/api/v1/events";
-const V1: &str = "/apis/events.k8s.io/v1/events";
-const CORE_DEFAULT: &str = "/api/v1/namespaces/default/events";
-const CORE_OTHER: &str = "/api/v1/namespaces/other/events";
-const T1: &str = "2026-10-03T11:01:00Z";
-const T2: &str = "2026-10-03T11:02:00Z";
-const T3: &str = "2026-10-03T11:03:00Z";
-const T4: &str = "2026-10-03T11:04:00Z";
-const T5: &str = "2026-10-03T11:05:00Z";
+pub(super) const CORE: &str = "/api/v1/events";
+pub(super) const V1: &str = "/apis/events.k8s.io/v1/events";
+pub(super) const CORE_DEFAULT: &str = "/api/v1/namespaces/default/events";
+pub(super) const CORE_OTHER: &str = "/api/v1/namespaces/other/events";
+pub(super) const T1: &str = "2026-10-03T11:01:00Z";
+pub(super) const T2: &str = "2026-10-03T11:02:00Z";
+pub(super) const T3: &str = "2026-10-03T11:03:00Z";
+pub(super) const T4: &str = "2026-10-03T11:04:00Z";
+pub(super) const T5: &str = "2026-10-03T11:05:00Z";
 
 fn resource(name: &str, kind: &str) -> Value {
     json!({"name": name, "singularName": "", "namespaced": true, "kind": kind,
@@ -36,7 +36,7 @@ fn resource(name: &str, kind: &str) -> Value {
 
 /// A server whose discovery serves `Event` on the core group and, with `with_v1`, on
 /// `events.k8s.io/v1`.
-fn server(with_v1: bool) -> FakeApi {
+pub(super) fn server(with_v1: bool) -> FakeApi {
     let api = FakeApi::new();
     let gv = json!({"groupVersion": "events.k8s.io/v1", "version": "v1"});
     let groups = if with_v1 {
@@ -71,7 +71,7 @@ fn server(with_v1: bool) -> FakeApi {
     api
 }
 
-fn feed_config() -> FeedConfig {
+pub(super) fn feed_config() -> FeedConfig {
     FeedConfig {
         streaming_lists: StreamingLists::Never,
         backoff_min: Duration::from_millis(100),
@@ -81,7 +81,7 @@ fn feed_config() -> FeedConfig {
     }
 }
 
-fn events(api: &FakeApi, config: EventsConfig) -> KubeEvents {
+pub(super) fn events(api: &FakeApi, config: EventsConfig) -> KubeEvents {
     let discovery = KubeDiscovery::with_config(
         api.client(),
         DiscoveryConfig {
@@ -93,41 +93,59 @@ fn events(api: &FakeApi, config: EventsConfig) -> KubeEvents {
     KubeEvents::new(resources, cluster()).with_config(config)
 }
 
-fn list(items: Vec<Value>) -> Value {
+pub(super) fn list(items: Vec<Value>) -> Value {
     json!({"kind": "EventList", "apiVersion": "v1",
         "metadata": {"resourceVersion": "10"}, "items": items})
 }
 
-fn watch_event(kind: &str, object: Value) -> Value {
+pub(super) fn watch_event(kind: &str, object: Value) -> Value {
     json!({"type": kind, "object": object})
 }
 
-fn forbidden() -> Value {
+pub(super) fn forbidden() -> Value {
     status_body(403, "Forbidden", "events is forbidden")
 }
 
-async fn open(api: &FakeApi, scope: &WatchScope, options: &EventsOptions) -> EventFeed {
-    events(api, EventsConfig::default())
+pub(super) async fn open(api: &FakeApi, scope: &WatchScope, options: &EventsOptions) -> EventFeed {
+    open_with(
+        api,
+        scope,
+        options,
+        EventsConfig {
+            apis: EventApis::Both,
+            ..EventsConfig::default()
+        },
+    )
+    .await
+}
+
+pub(super) async fn open_with(
+    api: &FakeApi,
+    scope: &WatchScope,
+    options: &EventsOptions,
+    config: EventsConfig,
+) -> EventFeed {
+    events(api, config)
         .watch(scope, options)
         .await
         .expect("the feed opens")
 }
 
-async fn next(feed: &mut EventFeed) -> OxiResult<DeltaBatch<Event>> {
+pub(super) async fn next(feed: &mut EventFeed) -> OxiResult<DeltaBatch<Event>> {
     tokio::time::timeout(Duration::from_secs(600), feed.next())
         .await
         .expect("a feed item in time")
         .expect("the feed is still open")
 }
 
-async fn next_batch(feed: &mut EventFeed) -> DeltaBatch<Event> {
+pub(super) async fn next_batch(feed: &mut EventFeed) -> DeltaBatch<Event> {
     next(feed)
         .await
         .unwrap_or_else(|e| panic!("expected a batch, got {e}"))
 }
 
 /// The events of the opening `Restarted`, by uid.
-fn restart_uids(batch: &DeltaBatch<Event>) -> Vec<String> {
+pub(super) fn restart_uids(batch: &DeltaBatch<Event>) -> Vec<String> {
     let [Delta::Restarted(all)] = batch.deltas.as_slice() else {
         panic!("expected one Restarted, got {:?}", batch.deltas);
     };
@@ -138,10 +156,10 @@ fn restart_uids(batch: &DeltaBatch<Event>) -> Vec<String> {
 
 /// What a consumer folding the deltas holds: uid to count.
 #[derive(Default, Debug, PartialEq)]
-struct Folded(BTreeMap<String, u32>);
+pub(super) struct Folded(BTreeMap<String, u32>);
 
 impl Folded {
-    fn apply(&mut self, batch: DeltaBatch<Event>) {
+    pub(super) fn apply(&mut self, batch: DeltaBatch<Event>) {
         for delta in batch {
             match delta {
                 Delta::Restarted(all) => {
@@ -158,16 +176,16 @@ impl Folded {
     }
 }
 
-fn uid(e: &Event) -> String {
+pub(super) fn uid(e: &Event) -> String {
     e.uid.as_deref().unwrap().to_owned()
 }
 
 /// Lets the paused clock run the feed's tasks until they are idle.
-async fn settle() {
+pub(super) async fn settle() {
     tokio::time::sleep(Duration::from_secs(1)).await;
 }
 
-fn cluster_scope() -> WatchScope {
+pub(super) fn cluster_scope() -> WatchScope {
     WatchScope::Cluster
 }
 
@@ -194,7 +212,7 @@ async fn both_apis_are_merged_into_one_event_each() {
         ]),
     );
     let mut feed = open(&api, &cluster_scope(), &EventsOptions::default()).await;
-    assert_eq!(feed.apis(), [EventApi::Core, EventApi::EventsV1]);
+    assert_eq!(feed.apis(), [EventApi::EventsV1, EventApi::Core]);
 
     let first = next_batch(&mut feed).await;
     // Oldest last-seen first.

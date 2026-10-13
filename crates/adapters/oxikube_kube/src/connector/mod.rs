@@ -64,6 +64,7 @@ pub use self::describe::{DescribeConnection, DescribeFactory};
 use crate::auth::{CredentialRefresh, ExecInteractivePolicy};
 use crate::budget::{BudgetConfig, BudgetedResources, FeedRegistry};
 use crate::discovery::KubeDiscovery;
+use crate::events::KubeEvents;
 use crate::health::{DEFAULT_RULES_TTL, LivenessConfig, RulesCache};
 use crate::kubeconfig::LoadedKubeconfig;
 use crate::logs::KubeLogs;
@@ -365,6 +366,7 @@ impl ClusterConnectorPort for KubeConnector {
         );
         let registry =
             FeedRegistry::for_resources(request.cluster.clone(), resources.clone(), budget);
+        let events = KubeEvents::new(resources.clone(), request.cluster.clone());
         let budgeted = Arc::new(BudgetedResources::new(resources, registry.clone()));
         let state = Arc::new(ConnectionState::start(
             registry,
@@ -397,6 +399,7 @@ impl ClusterConnectorPort for KubeConnector {
             access: Arc::new(access),
             warnings: Arc::new(WarningHub::global().port(&request.context)),
             schemas: Arc::new(schemas),
+            events: Arc::new(events),
         };
         Ok(ClusterConnection {
             ports,

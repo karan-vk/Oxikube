@@ -58,6 +58,9 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `StatePort`, `IntegrationPort`, `ToolPort`, `AgentPort`, …) with the transport types they
   exchange (`Delta`, `Table`, `ToolDef`, …). One module per port; each names its adapter. `DrainPort` (E12-S10) is
   stateless: each `drain` call gets a reader and the guard's writer and returns a `DrainStream` of `DrainProgress`.
+  `EventsPort` (E14-S01, `ClusterPorts::events`) opens the cluster's normalised `Event` feed (`EventsFeed`: a `WatchFeed<Event>`
+  plus an `EventsMonitor` for `EventsStatus`: the API watched, the ring's counters and the `ForbiddenScope`s); its adapter
+  is `oxikube_kube::KubeEvents` and its fakes `FakeEventsPort` / `FakeEventFeed` (with the `event()` builder).
 - `oxikube_testkit` — a `Fake*` for every port, fixtures and builders, `TestPorts` (the seeded fakes
   `AppState::test` is built from), and the GPUI test harness (`gpui_test::TestApp` / `TestWindow`,
   `ScreenshotApp` with golden compare; `docs/testing-gpui.md`; the logs test matrix is `docs/testing-logs.md`).
@@ -1156,7 +1159,11 @@ crate's `README.md` for its allowed dependencies. Highlights:
   one group-version document on first use, flattening `$ref`/`allOf` through
   `oxikube_domain::schema`, with a memory cache, single-flight per document and a disk cache of the
   raw documents under `<data dir>/cache/openapi/<cluster>/<server version>/` keyed by the index's
-  document hash). `KubeDrain` (E12-S10) is the `DrainPort` over the `kubectl drain` algorithm (`drain_with`: reads through
+  document hash). `KubeEvents` (E04-S12, E14-S01; module `events`) is the `EventsPort`: it watches exactly one of
+  `events.k8s.io/v1` / `core/v1` per cluster (discovery picks `events.k8s.io/v1`, else `core/v1`; a forbidden API or
+  cluster-wide scope falls through to the next *stage*, down to per-namespace watches over the caller's fallback
+  namespaces, and `forbidden()` reports what the user may not read), normalises through `Event::from_core_v1` /
+  `from_events_v1`, dedupes and bounds the ring, and batches deltas. `KubeDrain` (E12-S10) is the `DrainPort` over the `kubectl drain` algorithm (`drain_with`: reads through
   the reader, cordons and evicts through the writer it is given, the guard's in the app). Every session's
   `KubeResources` sends evictions through a client without retries, built on the first eviction from the connector's
   `ClientPool::without_retries` sibling pool (`with_unretried_pool`), so a PodDisruptionBudget's 429 reaches the drain at

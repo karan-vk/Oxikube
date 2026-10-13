@@ -8,12 +8,23 @@ use std::task::{Context, Poll};
 use futures::Stream;
 use oxikube_domain::OxiResult;
 use oxikube_domain::event::Event;
-use oxikube_ports::{DeltaBatch, WatchFeed};
+use oxikube_ports::{
+    DeltaBatch, EventApi, EventsFeed, EventsMonitor, EventsStatus, ForbiddenScope, WatchFeed,
+};
+use parking_lot::Mutex;
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
 
-use super::config::EventApi;
 use crate::feed::FeedState;
+
+/// What the pump learns about the running watches and the handle reports.
+#[derive(Default)]
+pub(super) struct Report {
+    /// The APIs of the running stage.
+    pub(super) apis: Vec<EventApi>,
+    /// Scopes the user may not read.
+    pub(super) forbidden: Vec<ForbiddenScope>,
+}
 
 /// Counters the pump and the sources update and the handle reads.
 #[derive(Default)]
@@ -21,6 +32,31 @@ pub(super) struct Counters {
     pub(super) len: AtomicUsize,
     pub(super) evicted: AtomicU64,
     pub(super) skipped: AtomicU64,
+    pub(super) report: Mutex<Report>,
+}
+
+/// Reads a feed's [`EventsStatus`] after the feed itself has been handed on as a stream.
+struct Monitor {
+    capacity: usize,
+    counters: Arc<Counters>,
+}
+
+impl EventsMonitor for Monitor {
+    fn status(&self) -> EventsStatus {
+        status_of(self.capacity, &self.counters)
+    }
+}
+
+fn status_of(capacity: usize, counters: &Counters) -> EventsStatus {
+    let report = counters.report.lock();
+    EventsStatus {
+        apis: report.apis.clone(),
+        capacity,
+        len: counters.len.load(Ordering::Relaxed),
+        evicted: counters.evicted.load(Ordering::Relaxed),
+        skipped: counters.skipped.load(Ordering::Relaxed),
+        forbidden: report.forbidden.clone(),
+    }
 }
 
 /// A point-in-time reading of an [`EventFeed`], for a "showing the latest N" line.
@@ -48,7 +84,6 @@ pub struct EventFeedStats {
 /// Dropping the handle aborts the feed task and every watch with it (abort-on-drop, as for
 /// `oxikube_runtime::spawn_kube`).
 pub struct EventFeed {
-    pub(super) apis: Vec<EventApi>,
     pub(super) capacity: usize,
     pub(super) batches: mpsc::Receiver<OxiResult<DeltaBatch<Event>>>,
     pub(super) state: watch::Receiver<FeedState>,
@@ -57,9 +92,21 @@ pub struct EventFeed {
 }
 
 impl EventFeed {
-    /// The APIs being watched: those of the configuration that the cluster serves.
-    pub fn apis(&self) -> &[EventApi] {
-        &self.apis
+    /// The APIs being watched now: with the default choice exactly one, the preferred one the
+    /// cluster serves and the user may read.
+    pub fn apis(&self) -> Vec<EventApi> {
+        self.counters.report.lock().apis.clone()
+    }
+
+    /// Scopes whose events the user may not read (a namespace or the whole cluster); empty
+    /// when everything asked for is readable.
+    pub fn forbidden(&self) -> Vec<ForbiddenScope> {
+        self.counters.report.lock().forbidden.clone()
+    }
+
+    /// The whole status, as the port reports it.
+    pub fn status(&self) -> EventsStatus {
+        status_of(self.capacity, &self.counters)
     }
 
     /// The feed's state, updated as it changes: the worst of its watches.
@@ -86,6 +133,18 @@ impl EventFeed {
     pub fn into_watch_feed(self) -> WatchFeed<Event> {
         Box::pin(self)
     }
+
+    /// The feed and its monitor, as [`EventsPort`](oxikube_ports::EventsPort) returns them.
+    pub fn into_events_feed(self) -> EventsFeed {
+        let monitor = Arc::new(Monitor {
+            capacity: self.capacity,
+            counters: self.counters.clone(),
+        });
+        EventsFeed {
+            feed: self.into_watch_feed(),
+            monitor,
+        }
+    }
 }
 
 impl Stream for EventFeed {
@@ -105,7 +164,7 @@ impl Drop for EventFeed {
 impl std::fmt::Debug for EventFeed {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("EventFeed")
-            .field("apis", &self.apis)
+            .field("apis", &self.apis())
             .field("stats", &self.stats())
             .field("state", &*self.state.borrow())
             .finish_non_exhaustive()

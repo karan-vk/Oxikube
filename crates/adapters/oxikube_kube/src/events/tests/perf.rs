@@ -10,8 +10,8 @@ use std::time::Instant;
 use oxikube_ports::Delta;
 
 use super::*;
-use crate::events::config::EventApi::Core;
 use crate::events::ring::{EventRing, Key};
+use oxikube_ports::EventApi::Core;
 
 const CAPACITY: usize = 5_000;
 const STORM: usize = 1_000_000;
