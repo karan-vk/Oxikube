@@ -1,25 +1,29 @@
-//! The events feed (E04-S12): `core/v1` and `events.k8s.io/v1` events merged into one stream
-//! of domain [`Event`](oxikube_domain::event::Event)s in a fixed-size ring.
+//! The events feed (E04-S12, E14-S01): the cluster's `Event`s as one stream of domain
+//! [`Event`](oxikube_domain::event::Event)s in a fixed-size ring.
 //!
-//! [`KubeEvents::watch`] opens an [`EventFeed`] over a [`WatchScope`]. It watches both APIs,
-//! maps every object with the domain's JSON mapping, de-duplicates and keeps the newest
-//! [`EventsConfig::capacity`] events, reporting changes as `DeltaBatch<Event>`s like any other
-//! feed (the port layer's `WatchFeed<Event>`). kube types stay in this module.
+//! [`KubeEvents::watch`] opens an [`EventFeed`] over a [`WatchScope`]. It watches **one** of
+//! the two event APIs by default ([`EventApiChoice::Auto`]), maps every object with the
+//! domain's JSON mapping, de-duplicates and keeps the newest [`EventsConfig::capacity`]
+//! events, reporting changes as `DeltaBatch<Event>`s like any other feed (the port layer's
+//! `WatchFeed<Event>`). [`KubeEvents`] is the adapter of
+//! [`EventsPort`](oxikube_ports::EventsPort), served to the app as `ClusterPorts::events`.
+//! kube types stay in this module.
 //!
 //! ```text
-//!  watcher core/v1 (ns a) ───┐
-//!  watcher events.k8s.io (a) ┼─▶ mpsc ─▶ Pump ─▶ EventRing ─▶ bounded mpsc ─▶ EventFeed
-//!  (one per API and namespace)│        (dedup, coalesce)  (capacity N, evictions)
+//!  stage 1: events.k8s.io/v1 ──┐   (stage 2: core/v1, stage 3+: per-namespace fallbacks,
+//!           watcher per scope  ┼─▶ mpsc ─▶ Pump ─▶ EventRing ─▶ bounded mpsc ─▶ EventFeed
+//!                              │        (dedup, coalesce)  (capacity N, evictions)
 //! ```
 //!
 //! | Piece | Where |
 //! |---|---|
 //! | capacity, which APIs, per-object option | [`EventsConfig`], [`EventApis`], [`EventsOptions`] (`config`) |
+//! | stages (API order, namespace fallbacks), starting a stage's watches | `plan` |
 //! | one watcher per API and namespace, no reflector store | `source` |
-//! | merge, window/size batching, backpressure, failures | `pump` |
+//! | merge, window/size batching, backpressure, failures, moving to the next stage | `pump` |
 //! | de-duplication, eviction, evicted count | `ring` |
 //! | bounded memory of shed keys | `shed` |
-//! | the handle: stream, state, counters, abort on drop | [`EventFeed`] (`handle`) |
+//! | the handle: stream, state, counters, forbidden scopes, abort on drop | [`EventFeed`] (`handle`) |
 //!
 //! # Field mapping
 //!
@@ -39,13 +43,27 @@
 //!
 //! (The full table, with every fallback, is in the domain module.)
 //!
-//! # One event, two APIs
+//! # One API per cluster
 //!
 //! The API server stores one object per event and serves it on both APIs, so a feed over both
-//! sees every event twice. The ring keeps one: events are the same when their `metadata.uid`
-//! is, and when two views differ, the one from the same API as the stored one wins, or the
-//! other API's if strictly newer by (`last_seen`, `count`); see `ring` for the rule and for
-//! events without a uid.
+//! would receive every event twice. [`EventApiChoice::Auto`] (the default) therefore watches
+//! exactly one: `events.k8s.io/v1` when discovery serves it (the cached registry decides, never
+//! a failed watch), else `core/v1`. [`EventApiChoice::CoreOnly`] forces the fallback (for the
+//! integration tests, or RBAC that covers only the core group); `Both` keeps the two watches
+//! and merges them, for diagnostics.
+//!
+//! RBAC differs per API group, so a refusal is a reason to move on, not a final answer: see
+//! `plan` for the stages. When the running stage stops for good before listing anything (every
+//! watch forbidden), the next one starts: `core/v1` after `events.k8s.io/v1`, then, for a
+//! cluster-wide scope with [`EventsOptions::fallback_namespaces`], one watch per namespace
+//! the caller named (the "may list events in my namespaces but not cluster-wide" case). The
+//! scopes the user may not read are on [`EventFeed::forbidden`] / the port's
+//! `EventsStatus::forbidden`, so a view can say so instead of showing nothing.
+//!
+//! When two views of one event do arrive (`Both`), the ring keeps one: events are the same when
+//! their `metadata.uid` is, and when two views differ, the one from the same API as the stored
+//! one wins, or the other API's if strictly newer by (`last_seen`, `count`); see `ring` for the
+//! rule and for events without a uid.
 //!
 //! # Per-object feeds
 //!
@@ -53,7 +71,9 @@
 //! `involvedObject.uid` on `core/v1` and `regarding.uid` on `events.k8s.io/v1` (each API
 //! rejects the other's field name; verified on a 1.37 server). The client filters again, so
 //! a server without the selector (it answers 400) still gives the right events; the feed then
-//! drops the selector and reads everything.
+//! drops the selector and reads everything. The app's `EventService` opens one cluster-wide
+//! feed and indexes by involved-object uid instead; per-object feeds are for tools that have
+//! no service.
 //!
 //! # Bounded memory
 //!
@@ -62,13 +82,15 @@
 //! honest. The watches keep no reflector store, the initial list is read page by page (or as a
 //! stream), and a full output channel stops the pump reading: a cluster emitting thousands
 //! of events a minute holds the same memory as a quiet one (the evicted count's memory of shed
-//! events is bounded too, see `shed`). The consumer's copy is one `Event` per delta.
+//! events is bounded too, see `shed`). The consumer's copy is one `Event` per delta. Deltas
+//! reach the consumer in coalesced batches (`FeedConfig::window` / `max_batch`), never one
+//! message per event.
 //!
 //! # No subscriber, no feed
 //!
 //! Nothing runs until [`KubeEvents::watch`] is called, and dropping the [`EventFeed`] aborts
-//! every watch, so a cluster nobody looks at costs no events watch. Sharing one feed between
-//! several consumers, and the per-cluster watch budget, are E04-S13 and the app's `EventService`.
+//! every watch, so a cluster nobody looks at costs no events watch. One watcher per cluster is
+//! the app's `EventService` (E14-S02), which opens a single feed and fans it out.
 //!
 //! # Errors
 //!
@@ -79,6 +101,7 @@
 
 mod config;
 mod handle;
+mod plan;
 mod pump;
 mod ring;
 mod shed;
@@ -86,26 +109,25 @@ mod source;
 #[cfg(test)]
 mod tests;
 
+use std::collections::VecDeque;
 use std::sync::Arc;
 
-use kube::Api;
+use async_trait::async_trait;
 use oxikube_domain::ErrorKind;
 use oxikube_domain::ids::ClusterId;
 use oxikube_domain::kinds::Verb;
 use oxikube_domain::session::WatchScope;
 use oxikube_domain::{OxiError, OxiResult};
-use oxikube_ports::WatchOptions;
+use oxikube_ports::{EventApiChoice, EventsFeed, EventsPort, EventsWatchOptions};
 use tokio::sync::{mpsc, watch as state_channel};
 use tokio::task::JoinSet;
 
 use crate::feed::FeedState;
-use crate::feed::source::watcher_config;
-use crate::feed::transport::watch_client;
 use crate::resources::KubeResources;
 use handle::Counters;
-use pump::{Merge, Pump, Watch};
+use plan::{Member, Spawner, Stage};
+use pump::{Merge, Pump};
 use ring::EventRing;
-use source::Source;
 
 pub use config::{DEFAULT_EVENT_CAPACITY, EventApi, EventApis, EventsConfig, EventsOptions};
 pub use handle::{EventFeed, EventFeedStats};
@@ -146,8 +168,8 @@ impl KubeEvents {
 
     /// Opens an events feed over `scope`.
     ///
-    /// Returns once the event kinds are resolved; listing and watching happen on tasks owned by
-    /// the returned handle.
+    /// Returns once the event kinds are resolved (a cached discovery lookup, never a failed
+    /// watch); listing and watching happen on tasks owned by the returned handle.
     ///
     /// # Errors
     ///
@@ -155,111 +177,155 @@ impl KubeEvents {
     /// cluster serves none of the configured APIs; resolution failures as for any request.
     /// Failures after that arrive on the feed.
     pub async fn watch(&self, scope: &WatchScope, options: &EventsOptions) -> OxiResult<EventFeed> {
-        let namespaces: Vec<Option<Arc<str>>> = match scope {
-            WatchScope::Cluster => vec![None],
-            WatchScope::Namespaces(names)
-                if names.is_empty() || names.iter().any(String::is_empty) =>
-            {
-                return Err(OxiError::validation(
-                    "a namespaced watch scope needs at least one non-empty namespace",
-                ));
-            }
-            WatchScope::Namespaces(names) => {
-                names.iter().map(|n| Some(n.as_str().into())).collect()
-            }
+        let namespaces = scope_namespaces(scope)?;
+        let fallback = fallback_namespaces(scope, options)?;
+        let choice = match options.api {
+            EventApiChoice::Auto => self.config.apis,
+            chosen => chosen,
         };
+        let mut stages = self.stages(choice, namespaces, fallback).await?;
+        let first = stages.pop_front().expect("stages() never returns none");
+
         let feed_config = self.resources.feed_config().clone();
-        let streaming = self.resources.streaming_lists().await;
         let counters = Arc::new(Counters::default());
         let (tx, rx) = mpsc::channel(WATCH_MESSAGE_BUFFER);
-        let regarding_uid: Option<Arc<str>> = options.regarding_uid.as_deref().map(Arc::from);
-
+        let spawner = Spawner {
+            client: self.resources.client().clone(),
+            streaming: self.resources.streaming_lists().await,
+            feed_config: feed_config.clone(),
+            cluster: self.cluster.clone(),
+            regarding_uid: options.regarding_uid.as_deref().map(Arc::from),
+            counters: counters.clone(),
+            tx,
+        };
         let mut tasks = JoinSet::new();
-        let mut watches = Vec::new();
-        let mut apis = Vec::new();
-        let mut not_served = None;
-        for &api in self.config.apis.list() {
-            let mut targets = Vec::with_capacity(namespaces.len());
-            for namespace in &namespaces {
-                match self
-                    .resources
-                    .target(&api.gvk(), namespace.as_deref(), Verb::Watch, false)
-                    .await
-                {
-                    Ok(resource) => targets.push((namespace.clone(), resource)),
-                    Err(err) if err.kind() == ErrorKind::Unsupported => {
-                        not_served = Some(err);
-                        targets.clear();
-                        break;
-                    }
-                    Err(err) => return Err(err),
-                }
-            }
-            if targets.is_empty() {
-                continue;
-            }
-            apis.push(api);
-            let selector = regarding_uid.as_deref().map(|uid| api.uid_selector(uid));
-            let watch_options = WatchOptions {
-                field_selector: selector,
-                ..WatchOptions::default()
-            };
-            let watcher_config = watcher_config(&watch_options, &feed_config, streaming);
-            for (namespace, resource) in targets {
-                let (client, accepted) = watch_client(self.resources.client());
-                let kube_api = match &namespace {
-                    Some(ns) => Api::namespaced_with(client, ns, &resource),
-                    None => Api::all_with(client, &resource),
-                };
-                tasks.spawn(
-                    Source {
-                        index: watches.len(),
-                        api,
-                        kube_api,
-                        resource,
-                        accepted,
-                        watcher_config: watcher_config.clone(),
-                        config: feed_config.clone(),
-                        cluster: self.cluster.clone(),
-                        regarding_uid: regarding_uid.clone(),
-                        counters: counters.clone(),
-                        tx: tx.clone(),
-                    }
-                    .run(),
-                );
-                watches.push(Watch::new(api, namespace));
-            }
-        }
-        if watches.is_empty() {
-            return Err(not_served.unwrap_or_else(|| {
-                OxiError::unsupported("the cluster serves no events API to watch")
-            }));
-        }
+        let watches = spawner.start(first, 0, &mut tasks);
 
         let capacity = options.capacity.unwrap_or(self.config.capacity).max(1);
         let (batches_tx, batches_rx) = mpsc::channel(feed_config.channel_capacity.max(1));
         let (state_tx, state_rx) = state_channel::channel(FeedState::Warming);
+        let merge = Merge {
+            state: state_tx,
+            ring: EventRing::new(capacity),
+            counters: counters.clone(),
+            watches,
+            window: feed_config.window,
+            max_batch: feed_config.max_batch.max(1),
+            later: stages,
+            spawner,
+            tasks,
+        };
+        merge.publish_status();
         let pump = Pump {
             rx,
             out: batches_tx,
-            merge: Merge {
-                state: state_tx,
-                ring: EventRing::new(capacity),
-                counters: counters.clone(),
-                watches,
-                window: feed_config.window,
-                max_batch: feed_config.max_batch.max(1),
-            },
-            tasks,
+            merge,
         };
         Ok(EventFeed {
-            apis,
             capacity,
             batches: batches_rx,
             state: state_rx,
             counters,
             task: tokio::spawn(pump.run()),
         })
+    }
+
+    /// The stages of a feed (see `plan`), at least one. Each API is resolved once, from the
+    /// discovery cache; one the cluster does not serve is left out.
+    async fn stages(
+        &self,
+        choice: EventApiChoice,
+        namespaces: Vec<Option<Arc<str>>>,
+        fallback: Vec<Option<Arc<str>>>,
+    ) -> OxiResult<VecDeque<Stage>> {
+        let mut served = Vec::new();
+        let mut not_served = None;
+        for &api in config::preference(choice) {
+            match self
+                .resources
+                .target(&api.gvk(), None, Verb::Watch, false)
+                .await
+            {
+                Ok(resource) => served.push((api, resource)),
+                Err(err) if err.kind() == ErrorKind::Unsupported => not_served = Some(err),
+                Err(err) => return Err(err),
+            }
+        }
+        if served.is_empty() {
+            return Err(not_served.unwrap_or_else(|| {
+                OxiError::unsupported("the cluster serves no events API to watch")
+            }));
+        }
+        // `Both` watches every served API at once; the others try them one after the other.
+        let groups: Vec<&[(EventApi, _)]> = if choice == EventApiChoice::Both {
+            vec![&served[..]]
+        } else {
+            served.chunks(1).collect()
+        };
+        let mut stages = VecDeque::new();
+        for scope in [namespaces, fallback] {
+            if scope.is_empty() {
+                continue;
+            }
+            for group in &groups {
+                stages.push_back(
+                    group
+                        .iter()
+                        .map(|(api, resource)| Member {
+                            api: *api,
+                            resource: resource.clone(),
+                            namespaces: scope.clone(),
+                        })
+                        .collect(),
+                );
+            }
+        }
+        Ok(stages)
+    }
+}
+
+/// The namespaces of `scope`: `None` for the whole cluster.
+fn scope_namespaces(scope: &WatchScope) -> OxiResult<Vec<Option<Arc<str>>>> {
+    match scope {
+        WatchScope::Cluster => Ok(vec![None]),
+        WatchScope::Namespaces(names) if names.is_empty() || names.iter().any(String::is_empty) => {
+            Err(OxiError::validation(
+                "a namespaced watch scope needs at least one non-empty namespace",
+            ))
+        }
+        WatchScope::Namespaces(names) => {
+            Ok(names.iter().map(|n| Some(n.as_str().into())).collect())
+        }
+    }
+}
+
+/// The namespaces to try when a cluster-wide watch is refused; none for a namespace scope.
+fn fallback_namespaces(
+    scope: &WatchScope,
+    options: &EventsOptions,
+) -> OxiResult<Vec<Option<Arc<str>>>> {
+    if *scope != WatchScope::Cluster || options.fallback_namespaces.is_empty() {
+        return Ok(Vec::new());
+    }
+    if options.fallback_namespaces.iter().any(String::is_empty) {
+        return Err(OxiError::validation(
+            "a fallback namespace must not be empty",
+        ));
+    }
+    let mut names: Vec<_> = options.fallback_namespaces.clone();
+    names.sort();
+    names.dedup();
+    Ok(names.into_iter().map(|n| Some(n.as_str().into())).collect())
+}
+
+#[async_trait]
+impl EventsPort for KubeEvents {
+    async fn watch_events(
+        &self,
+        scope: &WatchScope,
+        options: &EventsWatchOptions,
+    ) -> OxiResult<EventsFeed> {
+        Ok(self.watch(scope, options).await?.into_events_feed())
     }
 }
 

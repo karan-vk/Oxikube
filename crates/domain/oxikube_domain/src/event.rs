@@ -13,6 +13,7 @@
 //! | `Event` field | `core/v1` | `events.k8s.io/v1` |
 //! |---|---|---|
 //! | `uid` | `metadata.uid` | `metadata.uid` |
+//! | `namespace` | `metadata.namespace` | `metadata.namespace` |
 //! | `event_type` | `type` | `type` |
 //! | `reason` | `reason` | `reason` |
 //! | `message` | `message` | `note` |
@@ -26,8 +27,11 @@
 //! | `reporting_instance` | `reportingInstance`, else `source.host` | `reportingInstance`, else `deprecatedSource.host` |
 //! | `action` | `action` | `action` |
 //!
-//! Empty strings count as absent. The event's own namespace and name are not
-//! kept: events are identified by `uid` and shown against `regarding`.
+//! Empty strings count as absent. The event's own name is not kept: events are identified by
+//! `uid` and shown against `regarding`. The event's own `namespace` is kept because it is not
+//! the object's: an event about a `Node` or another cluster-scoped object lives in `default`
+//! (or the reporter's namespace), and "events in namespace X" is how `kubectl` and the events
+//! view filter.
 //!
 //! # Bounds
 //!
@@ -79,6 +83,10 @@ pub struct Event {
     /// `metadata.uid`; distinguishes events that share a reason and object.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub uid: Option<Arc<str>>,
+    /// `metadata.namespace`: where the event is stored. For an event about a namespaced object
+    /// it is the object's namespace; for a cluster-scoped one (`Node`) it is usually `default`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub namespace: Option<Arc<str>>,
     /// Severity class. Serialised as `type`.
     #[serde(rename = "type")]
     pub event_type: EventType,
@@ -258,6 +266,10 @@ impl Event {
                 .get("metadata")
                 .and_then(|m| str_field(m, "uid"))
                 .map(Arc::from),
+            namespace: json
+                .get("metadata")
+                .and_then(|m| str_field(m, "namespace"))
+                .map(Arc::from),
             event_type: EventType::from_api(str_field(json, "type").unwrap_or_default()),
             reason: Arc::from(str_field(json, "reason").unwrap_or_default()),
             message,
@@ -388,6 +400,7 @@ mod tests {
         );
         assert_eq!(e.event_type, EventType::Warning);
         assert!(e.is_warning());
+        assert_eq!(e.namespace.as_deref(), Some("default"));
         assert_eq!(&*e.reason, "BackOff");
         assert_eq!(e.message, "Back-off restarting failed container");
         assert!(!e.truncated);
@@ -476,6 +489,96 @@ mod tests {
         assert_eq!(e.event_type, EventType::Normal);
     }
 
+    /// The optional-field matrix of both shapes: what `count`, `first_seen` and `last_seen`
+    /// become when the writer left parts out (E14-S01 normalisation rules).
+    #[test]
+    fn missing_optional_fields_fall_back_in_order() {
+        let c = cluster();
+        let t = |s: &str| Some(s.parse::<Timestamp>().unwrap());
+        let (created, event_time, first, last) = (
+            "2026-10-03T10:00:00Z",
+            "2026-10-03T10:30:00Z",
+            "2026-10-03T10:40:00Z",
+            "2026-10-03T10:50:00Z",
+        );
+        let core = |extra: Value| {
+            let mut doc = json!({
+                "metadata": {"creationTimestamp": created, "namespace": "ns"},
+                "involvedObject": {"kind": "Pod", "name": "p"},
+            });
+            doc.as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            Event::from_core_v1(&c, &doc).unwrap()
+        };
+        let v1 = |extra: Value| {
+            let mut doc = json!({
+                "metadata": {"creationTimestamp": created, "namespace": "ns"},
+                "regarding": {"kind": "Pod", "name": "p"},
+            });
+            doc.as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            Event::from_events_v1(&c, &doc).unwrap()
+        };
+
+        // core/v1: lastTimestamp -> eventTime -> creationTimestamp when empty or null.
+        let e =
+            core(json!({"firstTimestamp": first, "lastTimestamp": last, "eventTime": event_time}));
+        assert_eq!((e.first_seen, e.last_seen), (t(first), t(last)));
+        let e =
+            core(json!({"firstTimestamp": first, "lastTimestamp": "", "eventTime": event_time}));
+        assert_eq!((e.first_seen, e.last_seen), (t(first), t(event_time)));
+        let e = core(json!({"firstTimestamp": null, "lastTimestamp": null, "eventTime": null}));
+        assert_eq!((e.first_seen, e.last_seen), (t(created), t(created)));
+        let e = core(json!({"lastTimestamp": last}));
+        assert_eq!((e.first_seen, e.last_seen), (t(created), t(last)));
+        // core/v1: count 0 / absent is one occurrence; a series wins over the legacy count.
+        assert_eq!(core(json!({"count": 0})).count, 1);
+        assert_eq!(core(json!({})).count, 1);
+        let e = core(json!({"count": 2, "series": {"count": 9, "lastObservedTime": last}}));
+        assert_eq!((e.count, e.last_seen), (9, t(last)));
+
+        // events.k8s.io/v1: eventTime alone; a series; deprecated fields of a converted event.
+        let e = v1(json!({"eventTime": event_time}));
+        assert_eq!(
+            (e.first_seen, e.last_seen, e.count),
+            (t(event_time), t(event_time), 1)
+        );
+        let e =
+            v1(json!({"eventTime": event_time, "series": {"count": 4, "lastObservedTime": last}}));
+        assert_eq!(
+            (e.first_seen, e.last_seen, e.count),
+            (t(event_time), t(last), 4)
+        );
+        let e = v1(json!({
+            "deprecatedCount": 3,
+            "deprecatedFirstTimestamp": first,
+            "deprecatedLastTimestamp": last,
+        }));
+        assert_eq!((e.first_seen, e.last_seen, e.count), (t(first), t(last), 3));
+        let e = v1(json!({"series": {"count": 2}, "deprecatedCount": 5}));
+        assert_eq!(e.count, 2, "series.count wins over deprecatedCount");
+        assert_eq!(
+            e.last_seen,
+            t(created),
+            "no timestamps at all: the creation time"
+        );
+        assert_eq!(v1(json!({"deprecatedCount": 7})).count, 7);
+        assert_eq!(v1(json!({})).count, 1);
+    }
+
+    #[test]
+    fn the_events_own_namespace_is_kept_apart_from_the_objects() {
+        let doc = json!({
+            "metadata": {"namespace": "default"},
+            "involvedObject": {"kind": "Node", "name": "worker-1"},
+        });
+        let e = Event::from_core_v1(&cluster(), &doc).unwrap();
+        assert_eq!(e.namespace.as_deref(), Some("default"));
+        assert_eq!(e.regarding.namespace(), None);
+    }
+
     #[test]
     fn related_object_is_mapped() {
         let mut doc = events_v1_fixture();
@@ -561,6 +664,7 @@ mod tests {
         let json = serde_json::to_value(&minimal).unwrap();
         for absent in [
             "uid",
+            "namespace",
             "regarding_uid",
             "related",
             "first_seen",

@@ -37,7 +37,6 @@ use tokio::sync::mpsc;
 use tokio::time::{Instant, sleep_until};
 use tracing::debug;
 
-use super::config::EventApi;
 use super::handle::Counters;
 use crate::feed::FeedConfig;
 use crate::feed::FeedState;
@@ -45,6 +44,7 @@ use crate::feed::error::feed_error;
 use crate::feed::source::{self, EventStream, is_streaming};
 use crate::feed::transport::Accepted;
 use crate::resources::dynamic_json;
+use oxikube_ports::EventApi;
 
 /// What a [`Source`] tells the pump.
 pub(super) enum Msg {

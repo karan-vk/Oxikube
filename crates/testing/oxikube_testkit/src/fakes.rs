@@ -52,6 +52,7 @@
 //! | `ClusterConnectorPort` | [`FakeClusterConnectorPort`] (ports bundle: [`FakeClusterPorts`]) |
 //! | `AccessReviewPort` | [`FakeAccessReviewPort`] |
 //! | `WarningPort` | [`FakeWarningPort`] |
+//! | `EventsPort` | [`FakeEventsPort`] (scripted [`FakeEventFeed`], [`event`] builder) |
 //! | `SchemaPort` | [`FakeSchemaPort`] |
 //! | `DrainPort` | [`FakeDrainPort`] (scripted [`DrainRun`]s) |
 
@@ -83,6 +84,7 @@ mod clock;
 mod cluster;
 mod data;
 mod drain;
+mod events;
 mod infra;
 mod integration;
 mod merge;
@@ -110,6 +112,10 @@ pub use data::{
     LogScripts, TableCall, TableScripts,
 };
 pub use drain::{DrainCall, DrainRun, DrainScripts, FakeDrainPort};
+pub use events::{
+    EventBuilder, EventsCall, EventsScripts, FakeEventFeed, FakeEventsMonitor, FakeEventsPort,
+    event,
+};
 pub use infra::{
     CrashCall, CrashScripts, DescribeCall, DescribeScripts, FakeCrashReporterPort,
     FakeDescribePort, FakeHelmPort, FakeMetricsPort, FakeNotifierPort, FakePromqlPort,

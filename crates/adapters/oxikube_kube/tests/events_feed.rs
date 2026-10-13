@@ -24,7 +24,7 @@ use oxikube_domain::event::{Event, EventType};
 use oxikube_domain::ids::ClusterId;
 use oxikube_domain::session::WatchScope;
 use oxikube_kube::{EventApi, EventApis, EventFeed, EventsConfig, EventsOptions, KubeEvents};
-use oxikube_ports::Delta;
+use oxikube_ports::{Delta, EventApiChoice};
 use oxikube_testkit::integration::TestNamespace;
 
 use common::resources::{adapter, unschedulable_pod};
@@ -119,12 +119,19 @@ async fn a_failing_pod_has_a_warning_and_the_object_feed_isolates_it() {
     let broken_uid = broken.metadata.uid.expect("pod uid");
 
     // The namespace feed: both APIs, until both pods have a Warning.
-    let events = kube_events(&client, &kind, EventsConfig::default());
+    let events = kube_events(
+        &client,
+        &kind,
+        EventsConfig {
+            apis: EventApis::Both,
+            ..EventsConfig::default()
+        },
+    );
     let mut feed = events
         .watch(&scope(&ns), &EventsOptions::default())
         .await
         .expect("open the namespace feed");
-    assert_eq!(feed.apis(), [EventApi::Core, EventApi::EventsV1]);
+    assert_eq!(feed.apis(), [EventApi::EventsV1, EventApi::Core]);
     let mut all = Folded::default();
     all.until(&mut feed, "a Warning for each pod", |f| {
         ["broken", "stuck"].iter().all(|pod| {
@@ -258,6 +265,122 @@ async fn each_api_alone_agrees_with_the_merged_feed() {
     }
     assert_eq!(sets[0], sets[1], "merged vs core/v1");
     assert_eq!(sets[0], sets[2], "merged vs events.k8s.io/v1");
+}
+
+/// The default feed (`Auto`) watches exactly one API, `events.k8s.io/v1` on a current
+/// cluster, and sees the same events as the merged feed of both; forcing `core/v1` gives
+/// the same again.
+#[tokio::test]
+async fn the_default_feed_watches_one_api_and_sees_the_same_events() {
+    let Some(kind) = common::kind().await else {
+        return;
+    };
+    let ns = TestNamespace::create(kind.context.as_str()).expect("test namespace");
+    let client = kind.admin_client().await;
+    let pods = Api::<Pod>::namespaced((*client).clone(), ns.name());
+    pods.create(&PostParams::default(), &unschedulable_pod("stuck", &[]))
+        .await
+        .expect("create the unschedulable pod");
+
+    let mut feed = kube_events(&client, &kind, EventsConfig::default())
+        .watch(&scope(&ns), &EventsOptions::default())
+        .await
+        .expect("open the default feed");
+    assert_eq!(
+        feed.apis(),
+        [EventApi::EventsV1],
+        "one API, the preferred one"
+    );
+    let mut auto = Folded::default();
+    auto.until(&mut feed, "a Warning", |f| {
+        f.0.values().any(Event::is_warning)
+    })
+    .await;
+
+    let mut forced = kube_events(&client, &kind, EventsConfig::default())
+        .watch(
+            &scope(&ns),
+            &EventsOptions::default().api(EventApiChoice::CoreOnly),
+        )
+        .await
+        .expect("open the forced core feed");
+    assert_eq!(forced.apis(), [EventApi::Core]);
+    let mut core = Folded::default();
+    core.until(&mut forced, "a Warning", |f| {
+        f.0.values().any(Event::is_warning)
+    })
+    .await;
+    let who = |f: &Folded| {
+        f.0.values()
+            .filter(|e| e.is_warning())
+            .map(|e| (e.regarding.name.to_string(), e.reason.to_string()))
+            .collect::<BTreeSet<_>>()
+    };
+    assert_eq!(
+        who(&auto),
+        who(&core),
+        "events.k8s.io/v1 and the forced core/v1 agree"
+    );
+    assert!(feed.forbidden().is_empty() && forced.forbidden().is_empty());
+}
+
+/// The app reaches the feed through the connection's ports (`ClusterPorts::events`), as the
+/// `EventService` will: a connected cluster serves a failing pod's Warning, with the monitor.
+#[tokio::test]
+async fn the_connections_events_port_serves_a_warning() {
+    use oxikube_kube::{ConnectorConfig, KubeConnector, PoolConfig};
+    use oxikube_ports::{
+        ClusterConnectorPort, ConnectRequest, ExecInteractivity, HealthReporter, HealthSignal,
+    };
+
+    struct Ignore;
+    impl HealthReporter for Ignore {
+        fn report(&self, _: HealthSignal) {}
+    }
+
+    let Some(kind) = common::kind().await else {
+        return;
+    };
+    let ns = TestNamespace::create(kind.context.as_str()).expect("test namespace");
+    let client = kind.admin_client().await;
+    Api::<Pod>::namespaced((*client).clone(), ns.name())
+        .create(&PostParams::default(), &unschedulable_pod("stuck", &[]))
+        .await
+        .expect("create the unschedulable pod");
+
+    let connector = KubeConnector::new(
+        kind.kubeconfig.clone(),
+        PoolConfig::default(),
+        ConnectorConfig::default(),
+    );
+    let connection = connector
+        .connect(ConnectRequest {
+            cluster: ClusterId::new("kind-test", &kind.context),
+            context: kind.context.clone(),
+            exec_interactivity: ExecInteractivity::Never,
+            health: std::sync::Arc::new(Ignore),
+        })
+        .await
+        .expect("connect");
+    let mut served = connection
+        .ports
+        .events
+        .watch_events(&scope(&ns), &oxikube_ports::EventsWatchOptions::default())
+        .await
+        .expect("open the events feed through the port");
+    let deadline = tokio::time::Instant::now() + DEADLINE * 2;
+    let mut seen = Folded::default();
+    while !seen.0.values().any(Event::is_warning) {
+        let batch = tokio::time::timeout_at(deadline, served.feed.next())
+            .await
+            .expect("a Warning in time")
+            .expect("the feed is open")
+            .expect("no feed error");
+        batch.into_iter().for_each(|d| seen.apply(d));
+    }
+    let status = served.monitor.status();
+    assert_eq!(status.apis, [EventApi::EventsV1]);
+    assert!(status.forbidden.is_empty() && status.len >= 1);
 }
 
 /// A storm of distinct events never holds more than the capacity and the newest survive.

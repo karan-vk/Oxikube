@@ -1,9 +1,10 @@
 //! Events feed tests: the ring (`ring`), the merge pump over scripted event APIs (`feed`),
-//! and the storm (`perf`).
+//! the one-API-per-cluster stages and their fallbacks (`stages`), and the storm (`perf`).
 
 mod feed;
 mod perf;
 mod ring;
+mod stages;
 
 use oxikube_domain::event::Event;
 use oxikube_domain::ids::{ClusterId, ContextName};

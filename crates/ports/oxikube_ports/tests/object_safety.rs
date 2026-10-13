@@ -180,6 +180,17 @@ impl TableFeedPort for Stub {
 }
 
 #[async_trait]
+impl EventsPort for Stub {
+    async fn watch_events(
+        &self,
+        _: &oxikube_domain::session::WatchScope,
+        _: &EventsWatchOptions,
+    ) -> OxiResult<EventsFeed> {
+        stub()
+    }
+}
+
+#[async_trait]
 impl LogPort for Stub {
     async fn stream_logs(&self, _: &str, _: &str, _: &LogOptions) -> OxiResult<LogStream> {
         stub()
@@ -290,6 +301,8 @@ fn every_port_is_dyn_send_sync() {
     assert_send_sync::<dyn DiscoveryPort>();
     assert_send_sync::<dyn TableFeedPort>();
     assert_send_sync::<dyn LogPort>();
+    assert_send_sync::<dyn EventsPort>();
+    assert_send_sync::<dyn EventsMonitor>();
     assert_send_sync::<dyn ExecPort>();
     assert_send_sync::<dyn ExecStreamPort>();
     assert_send_sync::<dyn TerminalBackend>();
@@ -372,6 +385,7 @@ fn other_ports_are_callable_through_arc_dyn() {
     let discovery: Arc<dyn DiscoveryPort + Send + Sync> = Arc::new(Stub);
     let table: Arc<dyn TableFeedPort + Send + Sync> = Arc::new(Stub);
     let logs: Arc<dyn LogPort + Send + Sync> = Arc::new(Stub);
+    let events: Arc<dyn EventsPort> = Arc::new(Stub);
     let exec: Arc<dyn ExecPort + Send + Sync> = Arc::new(Stub);
     let forward: Arc<dyn PortForwardPort + Send + Sync> = Arc::new(Stub);
     let kind = pod();
@@ -389,6 +403,13 @@ fn other_ports_are_callable_through_arc_dyn() {
         );
         assert_unsupported(
             assert_send(logs.stream_logs("d", "web-0", &LogOptions::follow())).await,
+        );
+        assert_unsupported(
+            assert_send(events.watch_events(
+                &oxikube_domain::session::WatchScope::Cluster,
+                &EventsWatchOptions::default(),
+            ))
+            .await,
         );
         let pod = ResourceRef::new(
             ClusterId::new("kubeconfig", &ContextName::new("kind")),

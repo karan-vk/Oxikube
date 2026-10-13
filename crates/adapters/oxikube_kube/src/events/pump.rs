@@ -20,24 +20,25 @@
 //! watch, which is how an API that is forbidden or missing drops out while the other
 //! carries on; it is passed on, as the last item, only when no watch is left.
 
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::mem;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use oxikube_domain::OxiError;
 use oxikube_domain::event::Event;
-use oxikube_ports::{Delta, DeltaBatch};
+use oxikube_domain::{ErrorKind, OxiError};
+use oxikube_ports::{Delta, DeltaBatch, ForbiddenScope};
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinSet;
 use tokio::time::{Instant, sleep_until};
 
-use super::config::EventApi;
 use super::handle::Counters;
+use super::plan::{Spawner, Stage};
 use super::ring::{EventRing, Key};
 use super::source::{Msg, Tagged};
 use crate::feed::FeedState;
+use oxikube_ports::EventApi;
 
 /// What the consumer receives.
 pub(super) type Output = oxikube_domain::OxiResult<DeltaBatch<Event>>;
@@ -48,6 +49,10 @@ pub(super) struct Watch {
     pub(super) namespace: Option<Arc<str>>,
     synced: bool,
     ended: bool,
+    /// The watch ended because the server refused it (HTTP 403).
+    forbidden: bool,
+    /// Replaced by the next stage; no longer part of what is reported.
+    retired: bool,
     state: FeedState,
     /// Keys of the list in progress, to retire what it does not return.
     seen: Option<HashSet<Key>>,
@@ -60,6 +65,8 @@ impl Watch {
             namespace,
             synced: false,
             ended: false,
+            forbidden: false,
+            retired: false,
             state: FeedState::Warming,
             seen: None,
         }
@@ -71,9 +78,6 @@ pub(super) struct Pump {
     pub(super) rx: mpsc::Receiver<Tagged>,
     pub(super) out: mpsc::Sender<Output>,
     pub(super) merge: Merge,
-    /// The watch tasks, only held: dropping the pump aborts them.
-    #[expect(dead_code, reason = "held for its abort-on-drop")]
-    pub(super) tasks: JoinSet<()>,
 }
 
 /// What the messages are applied to.
@@ -84,6 +88,11 @@ pub(super) struct Merge {
     pub(super) watches: Vec<Watch>,
     pub(super) window: Duration,
     pub(super) max_batch: usize,
+    /// Stages to start, in order, when the running one fails before listing anything.
+    pub(super) later: VecDeque<Stage>,
+    pub(super) spawner: Spawner,
+    /// The watch tasks; dropping the pump aborts them.
+    pub(super) tasks: JoinSet<()>,
 }
 
 /// Mutable bookkeeping of a running pump.
@@ -193,8 +202,15 @@ impl Merge {
                 run.flush_due = true;
             }
             Msg::Fatal(error) => {
-                self.watches[index].ended = true;
+                let watch = &mut self.watches[index];
+                watch.ended = true;
+                watch.forbidden = error.kind() == ErrorKind::Forbidden;
                 run.last_fatal = Some(error);
+                if self.stage_failed() {
+                    self.start_next_stage();
+                    run.last_fatal = None;
+                }
+                self.publish_status();
                 self.publish_state();
             }
         }
@@ -229,6 +245,57 @@ impl Merge {
             run.flush_due = true;
             run.done = true;
         }
+    }
+
+    /// Whether the running stage has stopped for good without listing anything, so the next
+    /// stage (another API, or the fallback namespaces) is worth a try.
+    fn stage_failed(&self) -> bool {
+        !self.later.is_empty()
+            && self
+                .watches
+                .iter()
+                .filter(|w| !w.retired)
+                .all(|w| w.ended && !w.synced)
+    }
+
+    /// Replaces the running stage by the next one.
+    fn start_next_stage(&mut self) {
+        let Some(stage) = self.later.pop_front() else {
+            return;
+        };
+        for watch in &mut self.watches {
+            watch.retired = true;
+        }
+        let first = self.watches.len();
+        let started = self.spawner.start(stage, first, &mut self.tasks);
+        self.watches.extend(started);
+    }
+
+    /// Publishes the running APIs and the scopes the user may not read.
+    pub(super) fn publish_status(&self) {
+        let live = || self.watches.iter().filter(|w| !w.retired);
+        let mut apis: Vec<_> = Vec::new();
+        for watch in live() {
+            if !apis.contains(&watch.api) {
+                apis.push(watch.api);
+            }
+        }
+        let scope = |w: &Watch| match &w.namespace {
+            Some(ns) => ForbiddenScope::Namespace(ns.to_string()),
+            None => ForbiddenScope::ClusterWide,
+        };
+        // A scope another running watch reads (the other API) is not hidden.
+        let readable: HashSet<_> = live().filter(|w| !w.forbidden).map(scope).collect();
+        let mut forbidden: Vec<_> = live()
+            .filter(|w| w.forbidden)
+            .map(scope)
+            .filter(|s| !readable.contains(s))
+            .collect();
+        forbidden.sort();
+        forbidden.dedup();
+        let mut at = self.counters.at.lock();
+        at.apis = apis;
+        at.forbidden = forbidden;
     }
 
     /// The worst state of the watches still running.

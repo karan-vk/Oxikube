@@ -21,6 +21,7 @@
 //! | [`CrashReporterPort`] | [`crash`] | `oxikube_crash` |
 //! | [`FsPort`] | [`fs`] | `oxikube_runtime` (std fs) or the testkit fake |
 //! | [`ClockPort`] | [`clock`] | `oxikube_runtime` (system clock) or `FakeClockPort` |
+//! | [`EventsPort`] (the cluster's normalised `Event`s as one feed, E14-S01) | [`events`] | `oxikube_kube::KubeEvents` |
 //! | [`DrainPort`] (`kubectl drain` over a reader and the guard's writer, E12-S10) | [`drain`] | `oxikube_kube::KubeDrain` |
 //!
 //! Every trait is declared with `#[async_trait]` and is object-safe, so the app
@@ -100,6 +101,7 @@ pub mod crash;
 pub mod describe;
 pub mod discovery;
 pub mod drain;
+pub mod events;
 pub mod exec;
 pub mod feed;
 pub mod feed_stats;
@@ -154,6 +156,10 @@ pub use discovery::{
     CrdWatchStatus, DiscoveryEvent, DiscoveryEvents, DiscoveryPort, KindsChange, ServerVersion,
 };
 pub use drain::{DrainPort, DrainStream};
+pub use events::{
+    EventApi, EventApiChoice, EventsFeed, EventsMonitor, EventsPort, EventsStatus,
+    EventsWatchOptions, ForbiddenScope,
+};
 pub use exec::{
     AttachTarget, BackendEvent, DEFAULT_NODE_SHELL_IMAGE, DEFAULT_NODE_SHELL_NAMESPACE,
     DEFAULT_NSENTER_ARGS, DebugContainerSpec, ExecOptions, ExecPort, ExecSession, ExecStreamPort,

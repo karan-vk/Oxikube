@@ -7,8 +7,8 @@ use oxikube_domain::event::Event;
 use oxikube_ports::Delta;
 
 use super::*;
-use crate::events::config::EventApi::{Core, EventsV1};
 use crate::events::ring::{EventRing, Key};
+use oxikube_ports::EventApi::{Core, EventsV1};
 
 const NONE: Option<Arc<str>> = None;
 

@@ -14,7 +14,7 @@
 //! | [`budget`] | E04-S13 | [`FeedRegistry`]: the per-cluster watch budget. Shared, ref-counted feeds with idle teardown, feed and object caps (evict idle, degrade to metadata, refuse), per-namespace feeds for a namespace set, tracing spans and [`FeedStats`](oxikube_ports::FeedStats) counters; [`BudgetedResources`], the connection ports that open every feed through it (E04-F543) |
 //! | [`auth`] | E03-S04 | `kube::Error` classification, exec-plugin interactivity policy, deadline-bounded client build, retry-once helper |
 //! | [`feed`] | E04-S02 | [`ReflectorFeed`]: `watcher` + reflector store per (cluster, gvk, scope), coalesced delta batches on a bounded channel, relist diffs, backoff and [`FeedState`] |
-//! | [`events`] | E04-S12 | [`KubeEvents`]: `core/v1` and `events.k8s.io/v1` events merged and de-duplicated into domain `Event`s in a fixed-size ring, with per-object (UID) feeds |
+//! | [`events`] | E04-S12, E14-S01 | [`KubeEvents`] (the `EventsPort` adapter): one of `events.k8s.io/v1` / `core/v1` (discovery picks, RBAC falls back, per-namespace when cluster-wide is forbidden) normalised into domain `Event`s in a fixed-size ring, with per-object (UID) feeds |
 //! | [`discovery`] | E03-S06 | `DiscoveryPort` over aggregated discovery, the shared kind registry and the CRD watcher |
 //! | [`pool`] | E03-S03 | [`ClientPool`]: one lazily built, shared kube client per context, with invalidation and LRU eviction |
 //! | [`logs`] | E04-S08 | [`KubeLogs`]: `LogPort` with reconnect, overlap and dedup, plus multi-container and label-selector fan-in |
