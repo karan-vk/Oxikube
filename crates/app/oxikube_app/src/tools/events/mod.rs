@@ -66,6 +66,7 @@ pub use bounds::{
     MAX_SENT_EVENTS,
 };
 pub use get_events::{GET_EVENTS, GetEventsTool};
-pub use install::{EventsAgentDeps, InstallError, install, register_commands};
+pub use install::{EventsAgentDeps, InstallError, install};
 pub use mention::EventsMention;
 pub use provider::{EVENTS_PREFIX, EventsContextProvider};
+pub use send::register_commands;

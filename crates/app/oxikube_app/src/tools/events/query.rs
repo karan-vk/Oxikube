@@ -2,11 +2,11 @@
 
 use std::sync::Arc;
 
+use oxikube_domain::AliasTarget;
 use oxikube_domain::event::Event;
 use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
 
-use oxikube_domain::AliasTarget;
-
+use super::render::object_label;
 use crate::events::{EventFilter, EventService};
 use crate::search::aliases::AliasRegistry;
 
@@ -41,10 +41,7 @@ impl Involved {
 
     /// `Pod/shop/web-0`, or `Node/worker-1`.
     pub(super) fn label(&self) -> String {
-        match &self.namespace {
-            Some(ns) => format!("{}/{ns}/{}", self.kind, self.name),
-            None => format!("{}/{}", self.kind, self.name),
-        }
+        object_label(&self.kind, self.namespace.as_deref(), &self.name)
     }
 }
 
@@ -63,23 +60,20 @@ impl Found {
     }
 }
 
-/// The events of `cluster` that match `filter` (and are about `object`, when given): the newest
-/// `limit` of them and the count of all. One pass over the filter's narrowest index under the
-/// service's lock, copying only reference counts.
+/// The events of `cluster` that match `filter` and `keep`: the newest `limit` of them and the
+/// count of all. One pass over the filter's narrowest index under the service's lock, copying
+/// only reference counts.
 pub(super) fn find(
     events: &EventService,
     cluster: &ClusterId,
     filter: &EventFilter,
-    object: Option<&Involved>,
+    keep: impl Fn(&Event) -> bool,
     limit: usize,
 ) -> Found {
     events
         .read(cluster, |buffer| {
             let mut found = Found::default();
-            for event in buffer
-                .query(filter)
-                .filter(|event| object.is_none_or(|o| o.matches(event)))
-            {
+            for event in buffer.query(filter).filter(|event| keep(event)) {
                 found.total += 1;
                 if found.events.len() < limit {
                     found.events.push(event.clone());
@@ -88,6 +82,23 @@ pub(super) fn find(
             found
         })
         .unwrap_or_default()
+}
+
+/// [`find`] for the events about `object`.
+pub(super) fn find_about(
+    events: &EventService,
+    cluster: &ClusterId,
+    object: &Involved,
+    limit: usize,
+) -> Found {
+    let filter = EventFilter::new().kinds([object.kind.as_str()]);
+    find(
+        events,
+        cluster,
+        &filter,
+        |event| object.matches(event),
+        limit,
+    )
 }
 
 /// The type a kind word stands for in this cluster (`deploy` is `apps/v1 Deployment`), as its

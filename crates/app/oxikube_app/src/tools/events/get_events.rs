@@ -3,8 +3,9 @@
 use std::fmt::Write as _;
 
 use async_trait::async_trait;
-use oxikube_domain::OxiResult;
+use oxikube_domain::ids::ClusterId;
 use oxikube_domain::redact::redact;
+use oxikube_domain::{ErrorKind, OxiResult};
 use oxikube_ports::{
     ContentPart, ToolAnnotations, ToolContext, ToolDef, ToolName, ToolOutput, ToolPort,
 };
@@ -55,7 +56,7 @@ impl ToolPort for GetEventsTool {
         let call = GetEventsArgs::parse(&args, now)?;
         let session = match session_for(&self.deps.sessions, ctx.cluster.as_ref()) {
             Ok(session) => session,
-            Err(error) if error.kind() == oxikube_domain::ErrorKind::Validation => {
+            Err(error) if error.kind() == ErrorKind::Validation => {
                 return Err(error);
             }
             Err(error) => {
@@ -70,18 +71,18 @@ impl ToolPort for GetEventsTool {
 
         let (filter, object) = build_filter(&self.deps, &cluster, &call);
         let feed = open(&self.deps, &cluster).await;
+        if feed.unavailable() {
+            return Ok(unavailable(&title, feed.note().unwrap_or_default()));
+        }
         let found = find(
             &self.deps.events,
             &cluster,
             &filter,
-            object.as_ref(),
+            |event| object.as_ref().is_none_or(|o| o.matches(event)),
             call.limit,
         );
 
         let mut notes: Vec<String> = feed.note().into_iter().collect();
-        if feed.unavailable() {
-            return Ok(unavailable(&title, notes.pop().unwrap_or_default()));
-        }
         if found.total == 0 {
             notes.push(
                 "no events match: the cluster keeps events for about an hour, and only those \
@@ -110,7 +111,7 @@ impl ToolPort for GetEventsTool {
 /// The filter and the post-filter an `involved` object needs.
 fn build_filter(
     deps: &EventsAgentDeps,
-    cluster: &oxikube_domain::ids::ClusterId,
+    cluster: &ClusterId,
     call: &GetEventsArgs,
 ) -> (EventFilter, Option<Involved>) {
     let mut filter = EventFilter::new();

@@ -21,13 +21,27 @@ pub(super) fn type_text(event: &Event) -> &'static str {
     }
 }
 
-/// `Pod/shop/web-0`, or `Node/worker-1` for a cluster-scoped object.
+/// `Pod/shop/web-0`, or `Node/worker-1` when there is no namespace.
+pub(super) fn object_label(kind: &str, namespace: Option<&str>, name: &str) -> String {
+    match namespace {
+        Some(ns) => format!("{kind}/{ns}/{name}"),
+        None => format!("{kind}/{name}"),
+    }
+}
+
+/// The object `event` is about, as [`object_label`].
 pub(super) fn object_text(event: &Event) -> String {
     let regarding = &event.regarding;
-    match &regarding.namespace {
-        Some(ns) => format!("{}/{ns}/{}", regarding.gvk.kind, regarding.name),
-        None => format!("{}/{}", regarding.gvk.kind, regarding.name),
-    }
+    object_label(
+        &regarding.gvk.kind,
+        regarding.namespace.as_deref(),
+        &regarding.name,
+    )
+}
+
+/// `event` or `events`, for a count of `n`.
+pub(super) fn event_noun(n: usize) -> &'static str {
+    if n == 1 { "event" } else { "events" }
 }
 
 /// `text` redacted, on one line, and at most `max` characters (a longer one ends in `…`).

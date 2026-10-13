@@ -11,7 +11,7 @@ use oxikube_domain::agent::{ContextBlock, MAX_CONTEXT_BLOCK_BYTES};
 use oxikube_domain::event::Event;
 
 use super::bounds::MAX_BLOCK_MESSAGE_CHARS;
-use super::render::block_line;
+use super::render::{block_line, event_noun};
 
 /// Bytes kept back from the budget for the closing note.
 const FOOTER_RESERVE: usize = 192;
@@ -62,9 +62,9 @@ impl EventsBlock<'_> {
         let left_out = self.total.saturating_sub(shown);
         if left_out > 0 {
             body.push_str(&format!(
-                "# note: {left_out} older event{} left out ({shown} of {} shown); ask for a \
+                "# note: {left_out} older {} left out ({shown} of {} shown); ask for a \
                  narrower selection or use the k8s.get_events tool with `since` or `involved`\n",
-                if left_out == 1 { "" } else { "s" },
+                event_noun(left_out),
                 self.total,
             ));
         }

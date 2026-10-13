@@ -15,9 +15,10 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use jiff::Timestamp;
+use oxikube_domain::agent::MAX_CONTEXT_BLOCK_BYTES;
 use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::event::Event;
-use oxikube_domain::ids::ResourceRef;
+use oxikube_domain::ids::{ClusterId, ResourceRef};
 use oxikube_domain::{OxiError, OxiResult};
 use serde_json::json;
 
@@ -25,18 +26,25 @@ use super::block::EventsBlock;
 use super::bounds::MAX_SENT_EVENTS;
 use super::feed::open;
 use super::install::EventsAgentDeps;
-use super::query::{Found, Involved, find};
-use super::render::one_line;
+use super::query::{Found, Involved, find, find_about};
+use super::render::{event_noun, one_line};
 use crate::command_bus::{CommandOutput, CommandRegistry, HandlerContext, RegisterError};
 use crate::context::{ContextSource, PendingContext, QueuedContext, Sent};
 use crate::events::EventFilter;
-use oxikube_domain::agent::MAX_CONTEXT_BLOCK_BYTES;
 
-pub(super) fn register_command(
+/// Registers `events::SendToAgent` (and its MCP tool stub, `k8s.events_send_to_agent`) on
+/// `registry`, reading through `deps` and queueing into `pending` until the agent panel (E27)
+/// takes the items. The binary installs it as `oxikube_app::tools::events`.
+///
+/// # Errors
+///
+/// A [`RegisterError`] when the id is already taken.
+pub fn register_commands(
     registry: &mut CommandRegistry,
-    deps: EventsAgentDeps,
+    deps: &EventsAgentDeps,
     pending: PendingContext,
 ) -> Result<(), RegisterError> {
+    let deps = deps.clone();
     let meta = *command::lookup(CommandId::EVENTS_SEND_TO_AGENT)
         .ok_or(RegisterError::Undeclared(CommandId::EVENTS_SEND_TO_AGENT))?;
     registry.register(meta, move |command: Command, _: HandlerContext| {
@@ -142,7 +150,7 @@ async fn send(
         },
     };
     let subject = item.source.subject.clone();
-    let noun = if count == 1 { "event" } else { "events" };
+    let noun = event_noun(count);
     let (message, delivery) = match pending.send(item) {
         Sent::Delivered => (format!("Sent {count} {noun} to the agent"), "delivered"),
         Sent::Queued(waiting) => (
@@ -167,43 +175,24 @@ async fn send(
 /// The events `selection` names, what to call them, and their namespace (for the source).
 fn read(
     deps: &EventsAgentDeps,
-    cluster: &oxikube_domain::ids::ClusterId,
+    cluster: &ClusterId,
     selection: &Selection,
 ) -> (Found, String, Option<String>) {
     match selection {
         Selection::Uids(uids) => {
-            let found = deps
-                .events
-                .read(cluster, |buffer| {
-                    let mut found = Found::default();
-                    for event in buffer.query(&EventFilter::new()) {
-                        if event.uid.as_deref().is_some_and(|uid| uids.contains(uid)) {
-                            found.total += 1;
-                            if found.events.len() < MAX_SENT_EVENTS {
-                                found.events.push(event.clone());
-                            }
-                            if found.total == uids.len() {
-                                break;
-                            }
-                        }
-                    }
-                    found
-                })
-                .unwrap_or_default();
-            let noun = if found.total == 1 { "event" } else { "events" };
-            let subject = format!("{} selected {noun}", found.total);
+            let found = find(
+                &deps.events,
+                cluster,
+                &EventFilter::new(),
+                |event| event.uid.as_deref().is_some_and(|uid| uids.contains(uid)),
+                MAX_SENT_EVENTS,
+            );
+            let subject = format!("{} selected {}", found.total, event_noun(found.total));
             (found, subject, None)
         }
         Selection::Object(object) => {
             let involved = Involved::of(object);
-            let filter = EventFilter::new().kinds([involved.kind.as_str()]);
-            let found = find(
-                &deps.events,
-                cluster,
-                &filter,
-                Some(&involved),
-                MAX_SENT_EVENTS,
-            );
+            let found = find_about(&deps.events, cluster, &involved, MAX_SENT_EVENTS);
             let subject = format!("events of {}", involved.label());
             (found, subject, involved.namespace)
         }
@@ -212,7 +201,7 @@ fn read(
                 &deps.events,
                 cluster,
                 &EventFilter::warnings(),
-                None,
+                |_| true,
                 MAX_SENT_EVENTS,
             );
             (found, "the newest warning events".to_owned(), None)

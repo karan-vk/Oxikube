@@ -32,7 +32,7 @@ use super::bounds::{MAX_MENTION_EVENTS, READ_DEADLINE};
 use super::feed::{OpenFeed, open};
 use super::install::EventsAgentDeps;
 use super::mention::EventsMention;
-use super::query::{Found, Involved, find, resolve_gvk};
+use super::query::{Found, Involved, find, find_about, resolve_gvk};
 use super::render::one_line;
 use crate::events::EventFilter;
 use crate::session::ClusterSession;
@@ -139,7 +139,7 @@ impl EventsContextProvider {
             &self.deps.events,
             cluster,
             &filter,
-            None,
+            |_| true,
             MAX_MENTION_EVENTS,
         );
         finish(title, header, &feed, &found, Vec::new(), cap)
@@ -182,19 +182,13 @@ impl EventsContextProvider {
                 &self.deps.events,
                 cluster,
                 &EventFilter::new().object(uid),
-                None,
+                |_| true,
                 MAX_MENTION_EVENTS,
             )
         });
         if found.total == 0 {
             // No uid, or the writer did not set the involved uid: find them by name.
-            found = find(
-                &self.deps.events,
-                cluster,
-                &EventFilter::new().kinds([involved.kind.as_str()]),
-                Some(&involved),
-                MAX_MENTION_EVENTS,
-            );
+            found = find_about(&self.deps.events, cluster, &involved, MAX_MENTION_EVENTS);
         }
         match lookup {
             Lookup::Found(_) => {}

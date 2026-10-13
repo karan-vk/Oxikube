@@ -6,9 +6,7 @@ use oxikube_ports::ClockPort;
 
 use super::GetEventsTool;
 use super::provider::EventsContextProvider;
-use super::send::register_command;
-use crate::command_bus::{CommandRegistry, RegisterError};
-use crate::context::{ContextRegistry, PendingContext, RegisterProviderError};
+use crate::context::{ContextRegistry, RegisterProviderError};
 use crate::events::EventService;
 use crate::search::aliases::AliasRegistry;
 use crate::session::ClusterSessionManager;
@@ -59,19 +57,4 @@ pub fn install(
     tools.register(Arc::new(GetEventsTool::new(deps.clone())))?;
     contexts.register(Arc::new(EventsContextProvider::new(deps.clone())))?;
     Ok(())
-}
-
-/// Registers `events::SendToAgent` (and its MCP tool stub, `k8s.events_send_to_agent`) on
-/// `registry`, reading through `deps` and queueing into `pending` until the agent panel (E27)
-/// takes the items. The binary installs it as `oxikube_app::tools::events`.
-///
-/// # Errors
-///
-/// A [`RegisterError`] when the id is already taken.
-pub fn register_commands(
-    registry: &mut CommandRegistry,
-    deps: &EventsAgentDeps,
-    pending: PendingContext,
-) -> Result<(), RegisterError> {
-    register_command(registry, deps.clone(), pending)
 }
