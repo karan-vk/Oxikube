@@ -14,6 +14,7 @@ mod chrome;
 mod create;
 mod editor;
 mod events;
+mod events_agent;
 mod exec;
 mod help;
 mod immediate;
@@ -276,6 +277,10 @@ fn the_bus_holds_every_command_of_the_mounted_ui(cx: &mut TestAppContext) {
         (CommandId::LOGS_MARK, "oxikube_logs_ui"),
         (CommandId::LOGS_COPY, "oxikube_logs_ui"),
         (CommandId::LOGS_SEND_TO_AGENT, "oxikube_logs_ui"),
+        (
+            CommandId::EVENTS_SEND_TO_AGENT,
+            "oxikube_app::tools::events",
+        ),
         (CommandId::LOGS_TAIL_IN_TERMINAL, "oxikube_logs_ui"),
         (CommandId::LOGS_CLEAR, "oxikube_logs_ui"),
         (CommandId::LOGS_SAVE, "oxikube_logs_ui"),

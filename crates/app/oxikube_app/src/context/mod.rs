@@ -11,6 +11,7 @@
 //! | providers by mention prefix; one resolution within a byte budget | [`ContextRegistry`] (`registry`) |
 //! | `@logs/<ns>/<pod>[/--since/10m]` and a viewer's selection as a block | [`LogContextProvider`], [`LogMention`], [`selection_context`] (`logs`) |
 //! | `@metrics/pod/<ns>/<name>`: a pod's recent CPU and memory, requests and limits as a block | [`MetricsContextProvider`], [`MetricsMention`] (`metrics`) |
+//! | `@events/<kind>/<ns>/<name>`: an object's events as a block, and `events::SendToAgent` (E14-S08) | [`EventsContextProvider`](crate::tools::events::EventsContextProvider) (in `tools::events`, over the `EventService`) |
 //! | context waiting for the agent panel, with its source | [`PendingContext`], [`QueuedContext`], [`ContextSource`], [`ContextConsumer`] (`pending`) |
 //!
 //! # Redaction and budgets

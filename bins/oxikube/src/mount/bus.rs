@@ -23,6 +23,7 @@
 //! | `oxikube_app::workloads` | `cronjob::Trigger` (a Job from the CronJob's template), `cronjob::Suspend` / `cronjob::Resume`, `job::Suspend` / `job::Resume` (guarded: blocked read-only, risk low so a simple confirm, a server dry run first, audit with the created Job's name; E12-S08), `workload::Scale` (E12-S04: the `scale` subresource, risk low and medium for zero, audit with `before=` and `after=`), `workload::Rollback` (E12-S06: `kubectl rollout undo` from a Deployment's ReplicaSets or a StatefulSet's / DaemonSet's ControllerRevisions, risk medium, a server dry run first, audit with `from=` and `to=`), `workload::Restart` and `workload::SetImage` (E12-S05: the pod template's `restartedAt` merge patch and a strategic image patch, risk low, audit with the time or the old and new images and the server's `rv=`), `pod::Evict`, `pod::Delete` (risk medium, a simple confirm naming the pod), `pod::ForceDelete` (high: the pod's name typed), `pod::Sanitize` (the Completed and Failed pods of a view; one audit record per pod under a batch id; E12-S03) |
 //! | `oxikube_resources_ui` | `resource::OpenList` (read-only navigation to a kind's list, E07-S11); `resource::Open`, `resource::CopyName`, `resource::SelectAll` (the resource tables, E07-S03), `resource::RetryFeed` (restart a table's feed, E07-S10), `secret::Reveal` (a Secret's values decoded in memory in its detail, `x`, E12-S11); `pod::JumpToOwner`, `pod::ShowNode` (read the pod, open its owner or node in the drawer; E12-S03) |
 //! | `oxikube_logs_ui` | `pod::ViewLogs` (open a pod's log view), `workload::ViewLogs` (a workload's or Service's pods merged, E08-S04) and the log view's `logs::SetRange`, `SelectContainer`, `TogglePrevious`, `ToggleWrap`, `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen`, `ToggleSource` (E08-S02, S04; reads only), and its search's `logs::Find`, `NextMatch`, `PreviousMatch`, `ToggleCase`, `ToggleInverse`, `ToggleFilterMode`, `CloseSearch` (E08-S03; reads only) |
+//! | `oxikube_app::tools::events` | `events::SendToAgent` (the selected events, an object's events or the newest warnings, queued as agent context from the `EventService`'s buffer; reads only; E14-S08) |
 //! | `oxikube_app::exec` | `node::Shell` (guarded: blocked read-only, a confirmation naming the node and the image, a server dry run of the pod, audit; E09-S09) |
 //! | `oxikube_palette` | `palette::Toggle` (the palette: opens or closes it, E11-S03), `palette::ToggleShowAll` (lists the commands that cannot run here too) |
 //! | `oxikube_palette` | `palette::OpenJump` (the `:` jump bar, E11-S05), `jump::Back`, `jump::Forward`, `jump::Last` (its history: `[`, `]`, `-`) |
@@ -84,6 +85,10 @@ pub const VIEWS: [&str; 3] = [CATALOG_VIEW, SOURCES_VIEW, CHART_GALLERY_VIEW];
 
 /// What the registry's handlers run on.
 pub struct BusParts {
+    /// What `events::SendToAgent` reads (the app's `EventService`; E14-S08).
+    pub events_agent: oxikube_app::tools::events::EventsAgentDeps,
+    /// The queue `events::SendToAgent` fills until the agent panel takes it.
+    pub agent_pending: oxikube_app::context::PendingContext,
     /// The cluster commands' handler.
     pub cluster_commands: ClusterCommands,
     /// The namespace commands' service.
@@ -250,6 +255,9 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     registry.install("oxikube_overview_ui", |r| {
         oxikube_overview_ui::pulses::register_commands(r, parts.pulses_pages)?;
         oxikube_overview_ui::register_commands(r, parts.overview_pages)
+    })?;
+    registry.install("oxikube_app::tools::events", |r| {
+        oxikube_app::tools::events::register_commands(r, &parts.events_agent, parts.agent_pending)
     })?;
     registry.install("oxikube_editor", |r| {
         oxikube_editor::view::register_commands(r, parts.editors)

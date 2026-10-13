@@ -63,4 +63,4 @@ pub use top_nodes::{TOP_NODES, TopNodesTool};
 pub use top_pods::{TOP_PODS, TopPodsTool};
 
 pub(crate) use cluster::session_for;
-pub(crate) use deadline::within_snapshot_deadline;
+pub(crate) use deadline::{within, within_snapshot_deadline};

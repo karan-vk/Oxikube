@@ -499,6 +499,21 @@ crate's `README.md` for its allowed dependencies. Highlights:
   containers; a cluster nobody is watching has no ring, so it takes one reading and says it has no history; a pod that does not
   exist or metrics that are unavailable are a block whose body says so. `tools::metrics::install` registers all four, and
   `mount::logs::install_agent_hooks` calls it with `MetricsServices::agent_deps`.
+  `tools::events` (E14-S08) adds `k8s.get_events`, `@events` and `events::SendToAgent`, all reading the app's one `EventService`
+  and none opening a watch: a call subscribes through the service's ref-counted subscription (starting the cluster's feed
+  if nobody else did) and waits, up to a deadline on the app clock, for a feed that is still warming. `k8s.get_events` takes
+  `ns` (the event's namespace; default all), `involved` (`{kind, name}` with a kind word the cluster's alias table knows, or
+  `{uid}`), `since` (a duration up to 7 d, or an RFC 3339 timestamp), `type` and `limit` (1 to 100, default 30); it answers
+  with newest-first rows (type, reason, object, count, first/last seen, age, message cut to 240 characters, reporter) as a
+  table and as JSON with `total`, `returned`, `truncated` and a `note`. An empty buffer is an empty list with a note, and a
+  disconnected cluster or a feed that failed for good is `status: "unavailable"` with the reason (never an `Err`); a bad
+  `since`, `limit` or `involved` is. Every string from the cluster passes through `oxikube_domain::redact`. `@events/<kind>/<ns>/<name>`
+  (`@events/node/<name>` for a cluster-scoped object, `@events/<ns>` and `@events` for the newest events of a namespace) reads
+  the object once for its uid so the events come from the involved-object index and a missing object is an `# error:` block
+  (a gone object that still has events is quoted with a note); the block is cut to the caller's byte budget oldest event first.
+  `events::SendToAgent` (`{cluster, target?, events?}`: selected event uids, else the object's events, else the newest
+  warnings; reads only, no guard tier, stub `k8s.events_send_to_agent`) queues the same block in the `PendingContext`.
+  `mount::logs::install_agent_hooks` registers the tool and the provider, `mount::bus` the command.
   Module `churn` (E08-S07, reconnect and churn following): every followed stream (a session's, an aggregate's)
   reads through `Resumable`, which reopens a stream that broke while its pod runs after a backoff with deterministic
   jitter (`ReconnectPolicy::Backoff`: 500 ms doubling to 30 s; `logs.reconnect_retries`, default 5, failures in a row,
@@ -1505,7 +1520,7 @@ weaken `cargo xtask lint-deps`.
   settings) with the window's `LogViews` and the tables' row actions ("View Logs" on pods, E08-S02, and on
   workloads and Services, E08-S04), and the app's `AgentHooks` (E08-S09, `mount::logs::install_agent_hooks`, stored with
   `AppState::set_agent_hooks`): the `ContextRegistry` holding `@logs`, the `ToolRegistry` holding `k8s.get_logs`, and the
-  `PendingContext` queue the viewer's "Send to agent" fills until the agent panel (E27) attaches. Since E13-S12 the same hooks hold `@metrics` and `k8s.top_pods`, `k8s.top_nodes`, `k8s.query_promql`.
+  `PendingContext` queue the viewer's "Send to agent" fills until the agent panel (E27) attaches. Since E13-S12 the same hooks hold `@metrics` and `k8s.top_pods`, `k8s.top_nodes`, `k8s.query_promql`, and (E14-S08) `@events` and `k8s.get_events`.
   The app's one `ExecService` (E09-S08, `mount::exec_service`, stored with `AppState::set_exec_service`) backs the pod
   actions and the terminal's `ClusterLauncher`; `mount::bus` registers `pod::Shell` / `Attach` / `Exec` and
   (E09-S10, with the same `ExecService`) `pod::Debug` under `oxikube_terminal`, and (E09-S09) `node::Shell`

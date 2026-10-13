@@ -39,8 +39,8 @@ fn the_mount_registers_the_log_provider_and_the_get_logs_tool(cx: &mut TestAppCo
     let hooks = hooks(&mut app);
     assert_eq!(
         hooks.contexts.prefixes(),
-        ["logs", "metrics"],
-        "@logs and @metrics are registered"
+        ["events", "logs", "metrics"],
+        "@events, @logs and @metrics are registered"
     );
     let defs = hooks.tools.defs();
     let def = defs
