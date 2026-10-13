@@ -1,8 +1,10 @@
-//! The `events` settings (E14-S02): how many events each cluster keeps.
+//! The `events` settings: how many events each cluster keeps (E14-S02) and the opt-in for
+//! desktop notifications (`os_notifications`, E14-S06; see [`os`]).
 //!
 //! ```json
 //! "events": {
-//!   "buffer": 10000
+//!   "buffer": 10000,
+//!   "os_notifications": false
 //! }
 //! ```
 //!
@@ -13,6 +15,7 @@
 //! events, and the cluster's feed is opened again with the new bound.
 
 mod follow;
+mod os;
 #[cfg(test)]
 mod tests;
 
@@ -36,6 +39,12 @@ pub struct EventsContent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(range(min = 100, max = 50_000))]
     pub buffer: Option<i64>,
+    /// Show Warning notifications on the desktop as well as in Oxikube (opt-in; default off).
+    /// Turning this on asks the OS for permission where it has such a thing. Notifications
+    /// carry the same redacted text as the in-app ones and never a secret. It is a per-user
+    /// choice about the desktop: a `clusters.<id>.events` block does not change it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub os_notifications: Option<bool>,
 }
 
 /// The resolved `events` settings.
@@ -43,6 +52,8 @@ pub struct EventsContent {
 pub struct EventsSettings {
     /// Events each cluster keeps, already clamped.
     pub buffer: usize,
+    /// Whether desktop (OS) notifications are on (E14-S06).
+    pub os_notifications: bool,
 }
 
 impl Settings for EventsSettings {
@@ -52,6 +63,7 @@ impl Settings for EventsSettings {
     fn from_content(content: EventsContent) -> Self {
         Self {
             buffer: clamp(content.buffer),
+            os_notifications: content.os_notifications.unwrap_or(false),
         }
     }
 }

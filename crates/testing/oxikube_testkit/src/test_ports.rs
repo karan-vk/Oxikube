@@ -26,8 +26,8 @@ use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_ports::{ClusterContext, ClusterSource, SourceId, SourceKind};
 
 use crate::{
-    FakeClockPort, FakeClusterConnectorPort, FakeClusterSourcePort, FakeFsPort, FakeResourcePort,
-    FakeSecretStorePort, FakeStatePort, fixtures,
+    FakeClockPort, FakeClusterConnectorPort, FakeClusterSourcePort, FakeFsPort, FakeNotifierPort,
+    FakeResourcePort, FakeSecretStorePort, FakeStatePort, fixtures,
 };
 
 /// The fakes that make up a test app. See the [module docs](self).
@@ -49,6 +49,9 @@ pub struct TestPorts {
     /// The virtual clock the fakes replay streams on. It is independent of GPUI's test clock:
     /// advance both (`FakeClockPort::advance` and `TestApp::advance_clock`) when a test needs both.
     pub clock: Arc<FakeClockPort>,
+    /// The desktop notifier (`NotifierPort`): off until the app turns it on, records what it
+    /// would have shown and lets a test click a notification.
+    pub notifier: Arc<FakeNotifierPort>,
 }
 
 impl TestPorts {
@@ -68,6 +71,7 @@ impl TestPorts {
             fs: Arc::new(FakeFsPort::new()),
             resources: Arc::new(FakeResourcePort::with_clock(clock.clone())),
             clock,
+            notifier: Arc::new(FakeNotifierPort::new()),
         }
     }
 

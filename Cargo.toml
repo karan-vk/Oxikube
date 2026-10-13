@@ -150,6 +150,9 @@ log = "0.4"
 rusqlite = { version = "0.40", features = ["bundled"] }
 keyring = { version = "4", features = ["apple-native", "linux-native", "windows-native"] }
 notify-rust = "4"
+# macOS only (oxikube_notify_os): the NSUserNotificationCenter bridge `notify-rust` wraps, used
+# directly because `notify-rust` never waits for a plain click. Already in the tree through it.
+mac-notification-sys = "0.6"
 # macOS only (oxikube's `os_motion` probe: NSWorkspace reduce-motion + its change notification).
 # The versions GPUI's macOS platform already links, so no second copy enters the tree.
 objc2 = "0.6"

@@ -16,6 +16,10 @@ use crate::safety::Risk;
 impl CommandId {
     /// `app::Quit`: quit the application (confirms first while operations run).
     pub const APP_QUIT: CommandId = CommandId::new("app::Quit");
+    /// `app::SendTestNotification`: show one OS notification, to check that they reach the desktop.
+    pub const APP_SEND_TEST_NOTIFICATION: CommandId = CommandId::new("app::SendTestNotification");
+    /// `app::ToggleOsNotifications`: turn desktop (OS) notifications on or off (the opt-in).
+    pub const APP_TOGGLE_OS_NOTIFICATIONS: CommandId = CommandId::new("app::ToggleOsNotifications");
     /// `charts::OpenGallery`: open the chart gallery, every chart state on one page (a reference
     /// page for the metrics views and their reviewers).
     pub const CHARTS_OPEN_GALLERY: CommandId = CommandId::new("charts::OpenGallery");
@@ -408,6 +412,22 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::APP_QUIT,
         "Quit Oxikube",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Shows one notification through the OS notifier (only when the user opted in); changes nothing
+    // in any cluster and carries no cluster data.
+    CommandMeta::read(
+        CommandId::APP_SEND_TEST_NOTIFICATION,
+        "Send Test OS Notification",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Edits the user's own `events.os_notifications` setting (the opt-in); not a cluster mutation,
+    // so it runs on a read-only cluster.
+    CommandMeta::read(
+        CommandId::APP_TOGGLE_OS_NOTIFICATIONS,
+        "Toggle OS Notifications",
         CommandScope::Global,
         NONE,
     ),

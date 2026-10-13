@@ -25,7 +25,11 @@ fn cluster(name: &str) -> ClusterId {
 }
 
 fn buffer(value: Option<i64>) -> usize {
-    EventsSettings::from_content(EventsContent { buffer: value }).buffer
+    EventsSettings::from_content(EventsContent {
+        buffer: value,
+        ..Default::default()
+    })
+    .buffer
 }
 
 #[test]

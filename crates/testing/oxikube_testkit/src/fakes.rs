@@ -88,6 +88,7 @@ mod events;
 mod infra;
 mod integration;
 mod merge;
+mod notifier;
 mod promql_endpoint;
 mod provider;
 mod query_catalogue;
@@ -118,14 +119,15 @@ pub use events::{
 };
 pub use infra::{
     CrashCall, CrashScripts, DescribeCall, DescribeScripts, FakeCrashReporterPort,
-    FakeDescribePort, FakeHelmPort, FakeMetricsPort, FakeNotifierPort, FakePromqlPort,
-    FakeUpdaterPort, HelmCall, HelmScripts, MetricsCall, MetricsScripts, NotifierCall,
-    NotifierScripts, PromqlCall, PromqlScripts, UpdaterCall, UpdaterScripts,
+    FakeDescribePort, FakeHelmPort, FakeMetricsPort, FakePromqlPort, FakeUpdaterPort, HelmCall,
+    HelmScripts, MetricsCall, MetricsScripts, PromqlCall, PromqlScripts, UpdaterCall,
+    UpdaterScripts,
 };
 pub use integration::{
     ContextProviderCall, ContextProviderScripts, FakeContextProviderPort, FakeIntegrationPort,
     FakeToolPort, IntegrationCall, IntegrationScripts, ToolCall, ToolScripts,
 };
+pub use notifier::{FakeNotifierPort, NotifierCall, NotifierScripts};
 pub use promql_endpoint::{FakePromqlEndpointPort, PromqlEndpointCall, PromqlEndpointScripts};
 pub use provider::{
     FakeProviderDetectorPort, FakeServiceProxyPort, ProviderDetectorCall, ProviderDetectorScripts,

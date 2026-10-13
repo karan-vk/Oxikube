@@ -12,6 +12,21 @@ path = "src/oxikube_notify_os.rs"
 doctest = false
 
 [dependencies]
+async-trait.workspace = true
+futures.workspace = true
+oxikube_domain.workspace = true
+oxikube_ports.workspace = true
+parking_lot.workspace = true
+tracing.workspace = true
+
+# macOS: NSUserNotificationCenter through mac-notification-sys (click callbacks need its
+# `wait_for_click`, which `notify-rust` does not expose for a plain click).
+[target.'cfg(target_os = "macos")'.dependencies]
+mac-notification-sys.workspace = true
+
+# Linux and the BSDs: freedesktop notifications over D-Bus (zbus, no C library).
+[target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
+notify-rust.workspace = true
 
 [lints]
 workspace = true

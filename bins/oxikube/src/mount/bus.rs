@@ -29,6 +29,7 @@
 //! | `oxikube_workspace` (quit) | `app::Quit`: asks first while operations run, like `cmd-q` (E11-S05, for `:q`, the palette and agents) |
 //! | `oxikube_palette` | `help::Show` (the `?` overlay of the keys that apply where the focus is; read-only, E11-S10) |
 //! | `oxikube_app::metrics_provider` | `cluster::RedetectMetrics` (run provider detection again, or re-check the configured endpoint), `cluster::ToggleMetrics` (`prometheus.enabled` in `settings.json`); neither changes a cluster (E13-S05) |
+//! | `oxikube_app::os_notifications` | `app::ToggleOsNotifications` (the `events.os_notifications` opt-in in `settings.json`), `app::SendTestNotification` (one desktop notification, only once opted in); neither changes a cluster (E14-S06) |
 //! | `oxikube_settings_ui` | `cluster::ShowMetricsSettings` (the cluster's metrics page, a tab of its tab; E13-S05) |
 //! | `oxikube_overview_ui` | `cluster::ShowPulses` (the cluster's pulses page, `:pulses`; E13-S10) |
 //! | `oxikube_overview_ui` | `cluster::ShowOverview` (the cluster's overview, a tab of its tab; reads only; E13-S09) |
@@ -145,6 +146,11 @@ pub struct BusParts {
     /// Where `cluster::ShowOverview` sends the cluster whose overview to open (applied on the UI
     /// thread; E13-S09).
     pub overview_pages: oxikube_overview_ui::OverviewRequestSink,
+    /// The desktop notification service (`app::ToggleOsNotifications`, `app::SendTestNotification`;
+    /// E14-S06).
+    pub os_notifications: oxikube_app::OsNotificationService,
+    /// Where `app::ToggleOsNotifications` persists (`settings.json`).
+    pub os_notification_settings: Arc<dyn oxikube_app::os_notifications::OsNotificationSettings>,
 }
 
 /// Every handler of the app, each installed under its owner (see the [module docs](self)).
@@ -230,6 +236,13 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     })?;
     registry.install("oxikube_app::metrics_provider", |r| {
         oxikube_app::metrics_provider::register_commands(r, parts.metrics, parts.metrics_settings)
+    })?;
+    registry.install("oxikube_app::os_notifications", |r| {
+        oxikube_app::os_notifications::register_commands(
+            r,
+            parts.os_notifications,
+            parts.os_notification_settings,
+        )
     })?;
     registry.install("oxikube_settings_ui", |r| {
         oxikube_settings_ui::metrics::register_commands(r, parts.metrics_pages)

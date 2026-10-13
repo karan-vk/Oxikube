@@ -176,7 +176,10 @@ pub use integration::{
 };
 pub use log::{LogOptions, LogPort, LogSince, LogStream};
 pub use metrics::{MetricsOutcome, MetricsPort};
-pub use notifier::{Notification, NotificationLevel, NotifierPort};
+pub use notifier::{
+    ActivationHandler, MAX_BODY_CHARS, MAX_TITLE_CHARS, Notification, NotificationActivation,
+    NotificationLevel, NotifierPort, NotifierStatus, is_unavailable, unavailable,
+};
 pub use portforward::{DuplexStream, PortForwardConnection, PortForwardPort};
 pub use promql::{
     DEFAULT_MAX_RESPONSE_BYTES, DEFAULT_TIMEOUT, PromAuth, PromEndpoint, PromSecret, PromTls,

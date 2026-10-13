@@ -49,6 +49,13 @@ pub const DEFERRED: &[Deferred] = &[
                      cluster whose settings turn metrics off",
     },
     Deferred {
+        name: "os_notifications",
+        owner: "E14-S06",
+        started_by: "the user turning `events.os_notifications` on (or finding it on at launch): \
+                     the adapter connects to the notification service on a thread of its own, \
+                     the OS is never contacted while the opt-in is off",
+    },
+    Deferred {
         name: "extension_host",
         owner: "E23",
         started_by: "the first extension command, view or the extensions page (wasmtime engine \

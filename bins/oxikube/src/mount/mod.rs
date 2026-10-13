@@ -102,6 +102,7 @@ mod jump;
 mod keymap;
 mod logs;
 mod metrics;
+mod notifications;
 mod overview;
 mod palette;
 mod pulses;
@@ -200,6 +201,9 @@ pub struct Wiring {
     _overview_pages: Task<()>,
     /// Tells the overviews whether their cluster's tab is shown (E13-S09).
     _follow_overviews: Subscription,
+    /// Brings the window to the front and opens the object when an OS notification is clicked
+    /// (E14-S06).
+    _notification_clicks: Task<()>,
 }
 
 /// Mounts the cluster UI in the main window. See the [module docs](self).
@@ -225,6 +229,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let dispatcher_for_keymap = dispatcher.clone();
     let dispatcher_for_metrics = dispatcher.clone();
     let dispatcher_for_pulses = dispatcher.clone();
+    let dispatcher_for_notifications = dispatcher.clone();
 
     // The log service every log viewer opens its sessions on (E08-S01); `logs.buffer_lines` follows
     // the settings.
@@ -354,6 +359,10 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         metrics_pages: metrics_sink,
         pulses_pages: pulses_sink,
         overview_pages: overview_sink,
+        os_notifications: services.os_notifications.clone(),
+        os_notification_settings: Arc::new(
+            crate::os_notifications::SettingsOsNotificationWriter::new(cx),
+        ),
     });
     let registry = match registry {
         Ok(registry) => registry,
@@ -576,6 +585,12 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let overview_pages =
         overview::start_views(overview_deps, tabs.downgrade(), overview_rx, window, cx);
     let follow_overviews = overview::follow_tabs(&tabs, cx);
+    let notification_clicks = notifications::serve_clicks(
+        &services.os_notifications,
+        dispatcher_for_notifications,
+        window,
+        cx,
+    );
     let wiring = cx.new(|_| Wiring {
         tabs,
         bus,
@@ -603,6 +618,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _live_metrics: live_metrics,
         _overview_pages: overview_pages,
         _follow_overviews: follow_overviews,
+        _notification_clicks: notification_clicks,
     });
     workspace.update(cx, |ws, _| ws.attach(wiring));
 }

@@ -305,6 +305,19 @@ pub enum Command {
     /// Quit the application; asks first while operations are running.
     #[serde(rename = "app::Quit")]
     AppQuit,
+    /// Show one OS (desktop) notification, to check that they reach the desktop and that a click
+    /// brings Oxikube to the front (E14-S06). Shows nothing while OS notifications are off.
+    #[serde(rename = "app::SendTestNotification")]
+    AppSendTestNotification,
+    /// Turn OS (desktop) notifications on or off: writes `events.os_notifications` in the user's
+    /// settings. Turning them on is the opt-in, and the only moment the OS is asked for
+    /// permission. Not a cluster mutation, so it runs on a read-only cluster.
+    #[serde(rename = "app::ToggleOsNotifications")]
+    AppToggleOsNotifications {
+        /// Desired state; `None` flips the current one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        enabled: Option<bool>,
+    },
     /// Run the previous command of the jump bar's history again (`[`).
     #[serde(rename = "jump::Back")]
     JumpBack,
@@ -1357,6 +1370,8 @@ impl Command {
             Command::KeymapOpenUser => CommandId::KEYMAP_OPEN_USER,
             Command::ChartsOpenGallery => CommandId::CHARTS_OPEN_GALLERY,
             Command::AppQuit => CommandId::APP_QUIT,
+            Command::AppSendTestNotification => CommandId::APP_SEND_TEST_NOTIFICATION,
+            Command::AppToggleOsNotifications { .. } => CommandId::APP_TOGGLE_OS_NOTIFICATIONS,
             Command::IngressClassSetDefault { .. } => CommandId::INGRESS_CLASS_SET_DEFAULT,
             Command::JumpBack => CommandId::JUMP_BACK,
             Command::JumpForward => CommandId::JUMP_FORWARD,
@@ -1798,6 +1813,8 @@ mod tests {
             Command::KeymapOpenUser,
             Command::ChartsOpenGallery,
             Command::AppQuit,
+            Command::AppSendTestNotification,
+            Command::AppToggleOsNotifications { enabled: None },
             Command::JumpBack,
             Command::JumpForward,
             Command::JumpLast,
@@ -2277,6 +2294,8 @@ mod tests {
                     | Command::KeymapOpenUser
                     | Command::ChartsOpenGallery
                     | Command::AppQuit
+                    | Command::AppSendTestNotification
+                    | Command::AppToggleOsNotifications { .. }
                     | Command::JumpBack
                     | Command::JumpForward
                     | Command::JumpLast

@@ -521,6 +521,13 @@
             "integer",
             "null"
           ]
+        },
+        "os_notifications": {
+          "description": "Show Warning notifications on the desktop as well as in Oxikube (opt-in; default off).\nTurning this on asks the OS for permission where it has such a thing. Notifications\ncarry the same redacted text as the in-app ones and never a secret. It is a per-user\nchoice about the desktop: a `clusters.<id>.events` block does not change it.",
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       },
       "type": "object"

@@ -67,6 +67,10 @@ pub const FEATURES: &[Feature] = &[
         init: follow_metrics_settings,
     },
     Feature {
+        name: "os_notifications",
+        init: follow_os_notifications,
+    },
+    Feature {
         name: "aliases",
         init: crate::aliases::start,
     },
@@ -93,6 +97,15 @@ fn follow_metrics_settings(cx: &mut App) {
     if let Some(state) = crate::app_state::AppState::try_global(cx) {
         let vendors = state.services().utilisation.vendors().clone();
         crate::metrics_settings::follow_gpu_vendors(cx, vendors).detach();
+    }
+}
+
+/// `events.os_notifications` follows into the OS notification service (E14-S06) for the life of the
+/// app. While the opt-in is off (the default) this touches nothing but a settings read.
+fn follow_os_notifications(cx: &mut App) {
+    if let Some(state) = crate::app_state::AppState::try_global(cx) {
+        let service = state.services().os_notifications.clone();
+        crate::os_notifications::follow_setting(&service, cx).detach();
     }
 }
 
