@@ -5,3 +5,4 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc 7736c17bad2148c2e60b0039e1efdefc2996861505e4f24a8f5ea675224fa1c9 # shrinks to v = Map([("{!", Null)])
+cc cc082ddc9910a4ccd637a20bcba838d9cea57ccdbb313a7cde3e1b1a34b0f1cb # shrinks to trailing = [None, None, None, None, None, None, None, None], between = [None, None, None, None, None, None, None, None]

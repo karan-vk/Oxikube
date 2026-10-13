@@ -8,7 +8,7 @@
 //! * **Opt-in.** Nothing reaches the port while the `events.os_notifications` setting is off, and
 //!   the port is told to switch on only when the user turns the setting on ([`apply`]); the
 //!   adapter contacts the OS then and not before, so start-up pays nothing for it.
-//! * **Safe text.** Every notification is redacted, flattened and capped ([`Notification::sanitised`])
+//! * **Safe text.** Every notification is redacted, flattened and capped ([`oxikube_ports::Notification::sanitised`])
 //!   before the port sees it: no secrets and no raw payloads leave the process.
 //! * **No platform service is not an error.** A system without a notification daemon yields
 //!   [`Delivery::Unavailable`] with a one-time hint text, never a panic or a retry loop.

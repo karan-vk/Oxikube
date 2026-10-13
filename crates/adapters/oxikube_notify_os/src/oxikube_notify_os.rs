@@ -6,12 +6,12 @@
 //! |---|---|---|
 //! | macOS | `NSUserNotificationCenter` through `mac-notification-sys` (what `notify-rust` wraps) | `wait_for_click`: the body click comes back as an activation |
 //! | Linux, BSDs | freedesktop notifications over D-Bus (`notify-rust`, pure-Rust `zbus`) | the `default` action, offered only when the server advertises the `actions` capability |
-//! | other | none: `set_enabled(true)` reports [`NotifierStatus::Unavailable`] | none |
+//! | other | none: `set_enabled(true)` reports [`oxikube_ports::NotifierStatus::Unavailable`] | none |
 //!
 //! # Opt-in, startup and threads
 //!
 //! Nothing is initialised when the notifier is built: no D-Bus connection, no notification
-//! centre, no permission prompt. [`NotifierPort::set_enabled`] with `true` is the user turning
+//! centre, no permission prompt. [`oxikube_ports::NotifierPort::set_enabled`] with `true` is the user turning
 //! OS notifications on, and the only place a backend connects. Every call into the OS runs on
 //! a short-lived thread of its own (never the caller's, so never the UI thread); a thread that
 //! waits for a click ends when the notification is clicked or dismissed, and at most
