@@ -127,6 +127,15 @@
     "max_streams": 20,
     "reconnect_retries": 5
   },
+  // Kubernetes events (E14). Can also be set under "clusters.<id>.events". A number out of
+  // range is clamped (a warning goes to the log), never refused.
+  //   buffer   events each cluster keeps in memory, newest by last seen (100 to 50,000); older
+  //            ones are dropped. 10,000 events hold about 11 MB. One events watch per cluster
+  //            feeds the events view, a resource's Events tab, the warning badges and the
+  //            overview's warnings. Applies at once (a smaller value drops the oldest events).
+  "events": {
+    "buffer": 10000
+  },
   // The Describe tab of a resource's detail (`kubectl describe`-style text). `backend`:
   //   "auto"     render in process (deskribe: 36 specialised kinds, a generic layout for custom
   //              resources), and run the `kubectl` binary for a kind deskribe does not cover

@@ -118,6 +118,9 @@
         "editor": {
           "$ref": "#/$defs/EditorSettingsContent"
         },
+        "events": {
+          "$ref": "#/$defs/EventsContent"
+        },
         "exec_in_read_only": {
           "description": "Allow a shell, attach or exec into a pod (`pod::Shell`, `pod::Attach`) while `read_only`\nis on. Off by default: a shell can change anything the container's user can, so a\nread-only cluster blocks it. Takes effect at once. Set it under `clusters.<id>` to let one\nread-only cluster keep its shells.",
           "type": [
@@ -499,6 +502,23 @@
           "description": "Check the manifest against the cluster's schemas as you type (squiggles, the problem\ncount). Turn it off for a very large manifest or a cluster whose schemas are slow. Turning\nit on checks every open editor at once.",
           "type": [
             "boolean",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "EventsContent": {
+      "additionalProperties": false,
+      "description": "What one settings layer says about events: the `events` object of `settings.json`.",
+      "properties": {
+        "buffer": {
+          "description": "Events each cluster keeps in memory (100 to 50,000; out of range is clamped), newest by\nlast seen; older ones are dropped. A full buffer of 10,000 holds about 11 MB. A change\napplies at once; set it under `clusters.<id>.events` to give one cluster its own bound.",
+          "format": "int64",
+          "maximum": 50000,
+          "minimum": 100,
+          "type": [
+            "integer",
             "null"
           ]
         }
@@ -1521,6 +1541,9 @@
     },
     "editor": {
       "$ref": "#/$defs/EditorSettingsContent"
+    },
+    "events": {
+      "$ref": "#/$defs/EventsContent"
     },
     "exec_in_read_only": {
       "description": "Allow a shell, attach or exec into a pod (`pod::Shell`, `pod::Attach`) while `read_only`\nis on. Off by default: a shell can change anything the container's user can, so a\nread-only cluster blocks it. Takes effect at once. Set it under `clusters.<id>` to let one\nread-only cluster keep its shells.",
