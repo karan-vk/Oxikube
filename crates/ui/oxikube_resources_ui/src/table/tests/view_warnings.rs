@@ -263,3 +263,23 @@ fn events_tables_have_no_badge_column(cx: &mut TestAppContext) {
     });
     assert!(!has, "an event is not about itself");
 }
+
+#[gpui::test]
+fn hovering_the_icon_shows_the_tooltip(cx: &mut TestAppContext) {
+    let mut f = Fixture::new(cx);
+    let (_table, _rig) = warned_table(&mut f);
+    draw(&mut f);
+    assert!(f.vcx.debug_bounds("row-warning-tooltip").is_none());
+    let icon = f.vcx.debug_bounds("row-warning-0").expect("a has the icon");
+    f.vcx
+        .simulate_mouse_move(icon.center(), None, Default::default());
+    f.vcx
+        .executor()
+        .advance_clock(std::time::Duration::from_millis(600));
+    f.vcx.run_until_parked();
+    draw(&mut f);
+    assert!(
+        f.vcx.debug_bounds("row-warning-tooltip").is_some(),
+        "the badge's tooltip opens on hover"
+    );
+}

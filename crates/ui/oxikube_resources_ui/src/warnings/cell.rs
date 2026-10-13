@@ -57,11 +57,62 @@ pub(crate) fn badge_cell(
         .cursor_pointer()
         .text_color(color)
         .child(Icon::new(IconName::TriangleAlert).size(u(px(14.))))
-        .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
+        .tooltip(move |window, cx| {
+            let tip = tip.clone();
+            Tooltip::element(move |_, _| {
+                div()
+                    .debug_selector(|| "row-warning-tooltip".to_owned())
+                    .child(tip.clone())
+            })
+            .build(window, cx)
+        })
         .on_click(move |_, _, cx| {
             cx.stop_propagation();
             view.update(cx, |table, cx| table.view_events(key.clone(), cx))
                 .ok();
         })
         .into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use jiff::{SignedDuration, Timestamp};
+
+    use super::*;
+
+    fn badge(count: u32, message: &str, last_seen: Timestamp) -> WarningBadge {
+        let mut event = oxikube_testkit::event()
+            .uid("e")
+            .warning()
+            .reason("BackOff")
+            .message(message)
+            .regarding("Pod", Some("x"), "a", "uid-a")
+            .build();
+        event.count = count;
+        event.last_seen = Some(last_seen);
+        WarningBadge {
+            event: std::sync::Arc::new(event),
+        }
+    }
+
+    #[test]
+    fn the_tooltip_names_the_reason_count_age_message_and_the_click() {
+        let now = Timestamp::now();
+        let seen = now - SignedDuration::from_mins(2);
+        let text = tooltip_text(&badge(3, "Back-off restarting failed container", seen), now);
+        assert_eq!(
+            text,
+            "Warning: BackOff x3, 2m ago\nBack-off restarting failed container\nClick to show the object's events."
+        );
+    }
+
+    #[test]
+    fn a_single_event_has_no_count_and_no_message_no_line() {
+        let now = Timestamp::now();
+        let text = tooltip_text(&badge(1, "", now - SignedDuration::from_secs(30)), now);
+        assert_eq!(
+            text,
+            "Warning: BackOff, 30s ago\nClick to show the object's events."
+        );
+    }
 }

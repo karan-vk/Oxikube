@@ -28,9 +28,15 @@ impl DetailView {
         self.subscribe_events(cx);
     }
 
-    /// The object arrived (the first delta): a tab shown before that can follow its events now.
+    /// A version of the object arrived: a tab shown before the object was known can follow its
+    /// events now, and a tab following an object that was deleted and recreated under the same
+    /// name (a new uid) follows the new one.
     pub(super) fn object_known_for_events(&mut self, cx: &mut Context<Self>) {
-        if self.events.started && self.events.feed.is_none() {
+        if !self.events.started {
+            return;
+        }
+        let uid = self.object.as_ref().and_then(|o| o.meta().uid.clone());
+        if self.events.feed.is_none() || self.events.uid != uid {
             self.subscribe_events(cx);
         }
     }
@@ -54,6 +60,7 @@ impl DetailView {
             cluster_scoped_name,
         );
         self.events.feed = Some(feed);
+        self.events.uid = meta.uid.clone();
         self.events.error = None;
         self.refresh_events(cx);
         self.events.task = Some(Self::poll(Feed::Events, cx));

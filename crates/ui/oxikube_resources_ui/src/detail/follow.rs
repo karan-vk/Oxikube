@@ -218,8 +218,8 @@ impl DetailView {
             self.rebuild_schema();
             if first {
                 cx.emit(ItemEvent::UpdateTab);
-                self.object_known_for_events(cx);
             }
+            self.object_known_for_events(cx);
         } else {
             // The version is the same but the feed may have recomputed cells (a Table row's
             // age): the chip follows them.

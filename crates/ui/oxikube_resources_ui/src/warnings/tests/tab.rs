@@ -228,3 +228,70 @@ fn view_events_opens_the_drawer_on_the_events_tab(cx: &mut TestAppContext) {
     assert_eq!(d.read(&view, |v| v.tab()), DetailTab::Events);
     assert_eq!(reasons(&mut d, &view), ["Pulled"]);
 }
+
+#[gpui::test]
+fn a_pod_recreated_under_the_same_name_shows_its_new_events(cx: &mut TestAppContext) {
+    use std::time::Duration;
+
+    use oxikube_ports::{Delta, DeltaBatch};
+    use oxikube_testkit::Timeline;
+
+    let old = pod_with_uid();
+    let new = edited(web_pod(), |json| {
+        json["metadata"]["uid"] = json!("uid-web-0-b");
+        json["metadata"]["resourceVersion"] = json!("9999");
+    });
+    let feed = FakeEventFeed::new()
+        .initial([warning_event(
+            "e1",
+            "shop",
+            "web-0",
+            "uid-web-0",
+            "Killing",
+            5 * MIN,
+        )])
+        .add(
+            1,
+            warning_event(
+                "e2",
+                "shop",
+                "web-0",
+                "uid-web-0-b",
+                "BackOff",
+                SignedDuration::from_secs(1),
+            ),
+        );
+    let (mut d, rig) = Detail::with_events(cx, [old.clone()], feed);
+    d.f.ports().resources.script().watch.push_ok(
+        Timeline::immediate([DeltaBatch::from_deltas(vec![Delta::Restarted(vec![
+            old.clone(),
+        ])])])
+        .ok_at(
+            Duration::from_secs(1),
+            DeltaBatch::from_deltas(vec![Delta::Deleted(old)]),
+        )
+        .ok_at(
+            Duration::from_secs(2),
+            DeltaBatch::from_deltas(vec![Delta::Applied(new)]),
+        )
+        .keep_open(),
+    );
+    let view = d.open(&pod_ref("web-0"));
+    d.click("detail-tab-events");
+    d.settle();
+    assert_eq!(reasons(&mut d, &view), ["Killing"]);
+
+    // The pod is deleted and comes back with a new uid, and the new pod's events arrive.
+    d.f.ports()
+        .resources
+        .clock()
+        .advance(Duration::from_secs(2));
+    d.settle();
+    rig.tick();
+    d.settle();
+    assert_eq!(
+        reasons(&mut d, &view),
+        ["BackOff"],
+        "the tab follows the new uid, not the deleted pod's"
+    );
+}

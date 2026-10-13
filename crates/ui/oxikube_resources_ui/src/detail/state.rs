@@ -123,6 +123,8 @@ pub(super) struct EventsTab {
     /// The object's events in the app's index; `None` until the tab was shown and the object
     /// is known.
     pub(super) feed: Option<ObjectEventsFeed>,
+    /// The uid `feed` follows: an object recreated under the same name has a new one.
+    pub(super) uid: Option<std::sync::Arc<str>>,
     pub(super) rows: Vec<EventRow>,
     pub(super) ready: bool,
     pub(super) error: Option<String>,
