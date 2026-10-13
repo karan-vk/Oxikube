@@ -130,6 +130,11 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "cluster::ShowMetricsSettings" => Command::ClusterShowMetricsSettings { cluster },
         "cluster::ShowPulses" => Command::ClusterShowPulses { cluster },
         "cluster::ShowOverview" => Command::ClusterShowOverview { cluster },
+        "events::SendToAgent" => Command::EventsSendToAgent {
+            cluster,
+            target: None,
+            events: Vec::new(),
+        },
         "cluster::SwitchTab" => Command::ClusterSwitchTab { index: 1 },
         "cluster::ToggleFavourite" => Command::ClusterToggleFavourite {
             cluster,

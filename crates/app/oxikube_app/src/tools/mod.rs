@@ -11,7 +11,9 @@
 //! | the schema subset arguments are checked against | [`validate_args`] (`schema`) |
 //! | `k8s.get_logs`: a pod's or a selector's newest log lines, bounded and redacted | [`k8s::get_logs`] |
 //! | `k8s.top_pods`, `k8s.top_nodes`, `k8s.query_promql` (E13-S12): live usage and Prometheus history, bounded, with absence as a visible result | [`metrics`] |
+//! | `k8s.get_events`, `@events` and `events::SendToAgent` (E14-S08): the events the user reads, from the `EventService`, bounded and redacted | [`events`] |
 
+pub mod events;
 pub mod k8s;
 pub mod metrics;
 mod registry;

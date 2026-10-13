@@ -9,7 +9,7 @@ use oxikube_ports::ClockPort;
 
 /// `work`'s output, or `None` when `limit` passes first (and `work` is dropped, which cancels
 /// the request in flight).
-pub(super) async fn within<T>(
+pub(crate) async fn within<T>(
     clock: &dyn ClockPort,
     limit: Duration,
     work: impl Future<Output = T>,

@@ -198,6 +198,22 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         enabled: Option<bool>,
     },
+    /// Queue Kubernetes events as context for the hosted agent (E14-S08), with where they came
+    /// from: the events named in `events` (the events view's selection, by uid), else every held
+    /// event about `target` (a resource's Events tab, a table row), else the cluster's newest
+    /// Warning events. The agent panel (E27) drains the queue; until then it waits locally.
+    /// Reads the app's event buffer and changes nothing in the cluster.
+    #[serde(rename = "events::SendToAgent")]
+    EventsSendToAgent {
+        /// The cluster whose events to send.
+        cluster: ClusterId,
+        /// The object whose events to send.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<ResourceRef>,
+        /// The uids of the events to send; empty: use `target`.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        events: Vec<String>,
+    },
     /// Give a cluster a named posture: its colour and, for production, read-only mode on.
     /// A preset never lowers protection (see [`ClusterPreset`]).
     #[serde(rename = "cluster::ApplyPreset")]
@@ -1352,6 +1368,7 @@ impl Command {
             Command::ClusterShowOverview { .. } => CommandId::CLUSTER_SHOW_OVERVIEW,
             Command::ClusterRedetectMetrics { .. } => CommandId::CLUSTER_REDETECT_METRICS,
             Command::ClusterToggleMetrics { .. } => CommandId::CLUSTER_TOGGLE_METRICS,
+            Command::EventsSendToAgent { .. } => CommandId::EVENTS_SEND_TO_AGENT,
             Command::ClusterApplyPreset { .. } => CommandId::CLUSTER_APPLY_PRESET,
             Command::NamespaceSelect { .. } => CommandId::NAMESPACE_SELECT,
             Command::NamespaceToggleFavourite { .. } => CommandId::NAMESPACE_TOGGLE_FAVOURITE,
@@ -1751,6 +1768,16 @@ mod tests {
             Command::ClusterToggleMetrics {
                 cluster: cluster(),
                 enabled: None,
+            },
+            Command::EventsSendToAgent {
+                cluster: cluster(),
+                target: Some(pod()),
+                events: Vec::new(),
+            },
+            Command::EventsSendToAgent {
+                cluster: cluster(),
+                target: None,
+                events: vec!["uid-1".into()],
             },
             Command::ClusterToggleMetrics {
                 cluster: cluster(),
@@ -2406,6 +2433,7 @@ mod tests {
                     | Command::ClusterShowOverview { .. }
                     | Command::ClusterRedetectMetrics { .. }
                     | Command::ClusterToggleMetrics { .. }
+                    | Command::EventsSendToAgent { .. }
                     | Command::ClusterApplyPreset { .. }
             ) {
                 assert!(!command.is_mutating(), "{}", command.id());

@@ -241,11 +241,20 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         &services.live_metrics,
         ports.clusters.clock.clone(),
     );
+    // `k8s.get_events`, `@events` and "Send events to agent" (E14-S08) read the app's one
+    // `EventService`, never a watch of their own.
+    let events_agent = oxikube_app::tools::events::EventsAgentDeps {
+        sessions: services.sessions.clone(),
+        events: services.events.clone(),
+        aliases: services.aliases.clone(),
+        clock: ports.clusters.clock.clone(),
+    };
     let agent = logs::install_agent_hooks(
         &state,
         services.sessions.clone(),
         log_service.clone(),
         &metrics_agent,
+        &events_agent,
     );
 
     // Shells, attaches and commands in pod containers (E09-S08): one service per app, so the
@@ -332,6 +341,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (pulses_sink, pulses_rx) = oxikube_overview_ui::pulses::PulsesRequestSink::channel();
     let (overview_sink, overview_rx) = oxikube_overview_ui::OverviewRequestSink::channel();
     let registry = bus::build_registry(bus::BusParts {
+        events_agent,
+        agent_pending: agent.pending.clone(),
         nodes: nodes.clone(),
         cluster_commands: services.cluster_commands.clone(),
         namespaces: services.namespaces.clone(),

@@ -111,6 +111,9 @@ impl CommandId {
     pub const EDITOR_SHOW_HOVER: CommandId = CommandId::new("editor::ShowHover");
     /// `editor::TriggerCompletion`: open the completion menu at the cursor.
     pub const EDITOR_TRIGGER_COMPLETION: CommandId = CommandId::new("editor::TriggerCompletion");
+    /// `events::SendToAgent`: queue the selected events (or an object's events) as context for the
+    /// hosted agent.
+    pub const EVENTS_SEND_TO_AGENT: CommandId = CommandId::new("events::SendToAgent");
     /// `help::Show`: show the key bindings that apply where the focus is (the `?` overlay).
     pub const HELP_SHOW: CommandId = CommandId::new("help::Show");
     /// `ingressclass::SetDefault`: make an IngressClass the cluster's default (annotation patch).
@@ -764,6 +767,14 @@ pub static COMMANDS: &[CommandMeta] = &[
         NONE,
     )
     .in_views(EDITOR_VIEW),
+    // Queues local context for the agent panel (E14-S08); the events are read from the
+    // `EventService`'s buffer (its feed is started on demand). Changes nothing in the cluster.
+    CommandMeta::read(
+        CommandId::EVENTS_SEND_TO_AGENT,
+        "Events: Send to Agent",
+        CommandScope::Cluster,
+        NONE,
+    ),
     // Lists the bindings of the focused view; reads nothing from a cluster.
     CommandMeta::read(
         CommandId::HELP_SHOW,
