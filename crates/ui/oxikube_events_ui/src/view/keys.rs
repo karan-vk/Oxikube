@@ -4,9 +4,12 @@
 //! [`EventsViews`](crate::EventsViews), so a key, the palette and an agent run one behaviour.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use gpui::{ClipboardItem, Context, Window};
 use oxikube_domain::command::Command;
+use oxikube_domain::event::Event;
+use oxikube_domain::ids::ClusterId;
 use oxikube_runtime::spawn_kube;
 use oxikube_ui::table::{RowClick, TableEvent};
 use oxikube_workspace::Toast;
@@ -67,9 +70,11 @@ impl EventsView {
             .dispatch(Command::ResourceOpen { target }, cx);
     }
 
-    /// Sends `command` for this view's cluster on the bus.
-    pub(super) fn dispatch(&self, command: Command, cx: &mut Context<Self>) {
-        self.deps.dispatcher.dispatch(command, cx);
+    /// Sends on the bus the `events::*` command `make` builds for this view's cluster.
+    pub(super) fn dispatch_events(&self, make: fn(ClusterId) -> Command, cx: &mut Context<Self>) {
+        self.deps
+            .dispatcher
+            .dispatch(make(self.cluster.clone()), cx);
     }
 
     /// `events::CopyRow` / `events::CopyRowJson`: the selected row on the clipboard, as one
@@ -114,12 +119,7 @@ impl EventsView {
     }
 
     /// Writes `events` to `path`: serialised and written on the Tokio bridge.
-    pub fn write_export(
-        &mut self,
-        path: PathBuf,
-        events: Vec<std::sync::Arc<oxikube_domain::event::Event>>,
-        cx: &mut Context<Self>,
-    ) {
+    fn write_export(&mut self, path: PathBuf, events: Vec<Arc<Event>>, cx: &mut Context<Self>) {
         let fs = self.deps.fs.clone();
         let count = events.len();
         let target = path.clone();

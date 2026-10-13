@@ -47,6 +47,8 @@ use super::{FRAMES, WINDOW_SIZE, window_root};
 
 /// The scenario's name.
 pub(super) const NAME: &str = "events-stream";
+/// Overrides the frames of each phase (clamped to `FRAMES`).
+const FRAMES_ENV: &str = "OXIKUBE_PERF_EVENTS_FRAMES";
 
 /// Events held: a full buffer at the default `events.buffer`.
 const HELD: usize = 10_000;
@@ -168,7 +170,7 @@ impl Stage {
 }
 
 fn frames() -> usize {
-    std::env::var("OXIKUBE_PERF_EVENTS_FRAMES")
+    std::env::var(FRAMES_ENV)
         .ok()
         .and_then(|v| v.parse().ok())
         .map_or(FRAMES, |n: usize| n.clamp(1, FRAMES))

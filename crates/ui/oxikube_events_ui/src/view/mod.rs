@@ -36,7 +36,9 @@ use gpui::{
     App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable, SharedString,
     Subscription, Task, WeakEntity, Window,
 };
-use oxikube_app::events::{EventFilter, EventService, EventsState, EventsSubscription};
+use oxikube_app::events::{
+    EventFilter, EventService, EventsChanged, EventsState, EventsSubscription,
+};
 use oxikube_app::{ClusterSessionManager, CommandTarget};
 use oxikube_domain::command::ViewContext;
 use oxikube_domain::ids::ClusterId;
@@ -117,7 +119,7 @@ pub struct EventsView {
     pub(crate) feed: EventsState,
     /// A list being read off the UI thread: changes wait in `held` until it lands.
     pub(crate) reading: bool,
-    pub(crate) held: Vec<oxikube_app::events::EventsChanged>,
+    pub(crate) held: Vec<EventsChanged>,
     /// Names the newest read; an older one that lands late is dropped.
     pub(crate) generation: u64,
     /// Whether the view is the displayed tab (the relative cells tick only then).

@@ -156,11 +156,7 @@ impl EventsModel {
     /// selection stays on its event when the list still has it. Counts nothing as unseen.
     pub fn install(&mut self, set: RowSet) {
         self.set = set;
-        if let Some(key) = &self.selected
-            && !self.set.by_key.contains_key(key)
-        {
-            self.selected = None;
-        }
+        self.drop_selection_if_gone();
         self.unseen.clear();
         self.stale = false;
     }
@@ -196,12 +192,29 @@ impl EventsModel {
                 self.upsert(event.clone());
             }
         }
+        self.drop_selection_if_gone();
+        true
+    }
+
+    fn drop_selection_if_gone(&mut self) {
         if let Some(key) = &self.selected
             && !self.set.by_key.contains_key(key)
         {
             self.selected = None;
         }
-        true
+    }
+
+    /// The arrival number of the event with `key`: the one it has, or the next free one. Whether
+    /// the event is already in the set comes with it.
+    fn arrival(&mut self, key: &EventKey) -> (u64, bool) {
+        match self.set.by_key.get(key) {
+            Some((id, _)) => (*id, true),
+            None => {
+                let id = self.set.next_id;
+                self.set.next_id += 1;
+                (id, false)
+            }
+        }
     }
 
     fn count_unseen(&mut self, changed: &EventsChanged) {
@@ -237,18 +250,10 @@ impl EventsModel {
 
     fn upsert(&mut self, event: Arc<Event>) {
         let key = EventKey::of(&event);
-        let id = match self.set.by_key.get(&key) {
-            Some((id, _)) => {
-                let id = *id;
-                self.remove(&key);
-                id
-            }
-            None => {
-                let id = self.set.next_id;
-                self.set.next_id += 1;
-                id
-            }
-        };
+        let (id, known) = self.arrival(&key);
+        if known {
+            self.remove(&key);
+        }
         let sort = self.sort;
         let at = self
             .set
@@ -265,17 +270,10 @@ impl EventsModel {
         let mut fresh = Vec::with_capacity(changed.added.len() + changed.updated.len());
         for event in changed.updated.iter().chain(&changed.added) {
             let key = EventKey::of(event);
-            let id = match self.set.by_key.get(&key) {
-                Some((id, _)) => {
-                    gone.insert(key.clone());
-                    *id
-                }
-                None => {
-                    let id = self.set.next_id;
-                    self.set.next_id += 1;
-                    id
-                }
-            };
+            let (id, known) = self.arrival(&key);
+            if known {
+                gone.insert(key.clone());
+            }
             fresh.push(Box::new(EventRow::new(id, key, event.clone())));
         }
         self.set.rows.retain(|row| !gone.contains(&row.key));

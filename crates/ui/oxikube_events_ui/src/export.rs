@@ -14,7 +14,7 @@ use jiff::Timestamp;
 use oxikube_domain::event::Event;
 use oxikube_domain::redact::redact;
 
-use crate::model::{object_label, type_label};
+use crate::model::{object_label, one_line, type_label};
 
 /// `event` with its message redacted (borrowed when nothing needed it).
 fn redacted(event: &Event) -> Cow<'_, Event> {
@@ -35,11 +35,6 @@ pub fn row_text(event: &Event) -> String {
         .last_seen
         .or(event.first_seen)
         .map_or_else(|| "-".to_owned(), |t: Timestamp| t.to_string());
-    let message: String = event
-        .message
-        .chars()
-        .map(|c| if c.is_control() { ' ' } else { c })
-        .collect();
     [
         time,
         type_label(event.event_type).to_owned(),
@@ -52,7 +47,7 @@ pub fn row_text(event: &Event) -> String {
             .unwrap_or("-")
             .to_owned(),
         event.count.to_string(),
-        message,
+        one_line(&event.message, usize::MAX),
     ]
     .join("\t")
 }

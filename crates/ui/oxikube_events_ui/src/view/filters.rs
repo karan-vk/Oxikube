@@ -40,6 +40,10 @@ pub(super) fn fields(window: &mut Window, cx: &mut Context<EventsView>) -> Field
     }
 }
 
+impl Field {
+    const ALL: [Field; 4] = [Field::Reason, Field::Kind, Field::Namespace, Field::Text];
+}
+
 impl Fields {
     pub(crate) fn get(&self, field: Field) -> &Entity<InputState> {
         match field {
@@ -52,6 +56,15 @@ impl Fields {
 }
 
 impl EventsFilters {
+    fn field(&self, field: Field) -> &str {
+        match field {
+            Field::Reason => &self.reason,
+            Field::Kind => &self.kind,
+            Field::Namespace => &self.namespace,
+            Field::Text => &self.text,
+        }
+    }
+
     fn field_mut(&mut self, field: Field) -> &mut String {
         match field {
             Field::Reason => &mut self.reason,
@@ -64,7 +77,7 @@ impl EventsFilters {
 
 impl EventsView {
     pub(super) fn subscribe_fields(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        for field in [Field::Reason, Field::Kind, Field::Namespace, Field::Text] {
+        for field in Field::ALL {
             let input = self.fields.get(field).clone();
             let subscription = cx.subscribe_in(
                 &input,
@@ -143,13 +156,8 @@ impl EventsView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        for (field, text) in [
-            (Field::Reason, &filters.reason),
-            (Field::Kind, &filters.kind),
-            (Field::Namespace, &filters.namespace),
-            (Field::Text, &filters.text),
-        ] {
-            let text = text.clone();
+        for field in Field::ALL {
+            let text = filters.field(field).to_owned();
             self.fields
                 .get(field)
                 .update(cx, |input, cx| input.set_value(text, window, cx));

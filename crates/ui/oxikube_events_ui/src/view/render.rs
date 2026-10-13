@@ -7,6 +7,7 @@ use gpui::{
 };
 use oxikube_app::events::EventsState;
 use oxikube_domain::command::Command;
+use oxikube_domain::ids::ClusterId;
 use oxikube_keymap::{KeyContextBuilder, contexts};
 use oxikube_ui::button::{Button, ButtonVariants as _};
 use oxikube_ui::input::Input;
@@ -54,7 +55,7 @@ impl EventsView {
         action: &dyn Action,
         on: bool,
         cx: &mut Context<Self>,
-        click: fn(&mut EventsView, &mut Context<EventsView>),
+        command: fn(ClusterId) -> Command,
     ) -> AnyElement {
         let title = label.clone();
         div()
@@ -68,7 +69,7 @@ impl EventsView {
                     .ghost()
                     .xsmall()
                     .selected(on)
-                    .on_click(cx.listener(move |view, _, _, cx| click(view, cx))),
+                    .on_click(cx.listener(move |view, _, _, cx| view.dispatch_events(command, cx))),
             )
             .into_any_element()
     }
@@ -129,10 +130,7 @@ impl EventsView {
                 &ToggleFaults,
                 self.filters.faults_only,
                 cx,
-                |view, cx| {
-                    let cluster = view.cluster.clone();
-                    view.dispatch(Command::EventsToggleFaults { cluster }, cx);
-                },
+                |cluster| Command::EventsToggleFaults { cluster },
             ))
             .child(self.field(Field::Reason, "events-filter-reason", 110.))
             .child(self.field(Field::Kind, "events-filter-kind", 100.))
@@ -163,10 +161,7 @@ impl EventsView {
                 &TogglePause,
                 paused,
                 cx,
-                |view, cx| {
-                    let cluster = view.cluster.clone();
-                    view.dispatch(Command::EventsTogglePause { cluster }, cx);
-                },
+                |cluster| Command::EventsTogglePause { cluster },
             ))
             .child(self.toggle(
                 "events-copy",
@@ -174,10 +169,7 @@ impl EventsView {
                 &CopyRow,
                 false,
                 cx,
-                |view, cx| {
-                    let cluster = view.cluster.clone();
-                    view.dispatch(Command::EventsCopyRow { cluster }, cx);
-                },
+                |cluster| Command::EventsCopyRow { cluster },
             ))
             .child(self.toggle(
                 "events-export",
@@ -185,10 +177,7 @@ impl EventsView {
                 &ExportJson,
                 false,
                 cx,
-                |view, cx| {
-                    let cluster = view.cluster.clone();
-                    view.dispatch(Command::EventsExportJson { cluster }, cx);
-                },
+                |cluster| Command::EventsExportJson { cluster },
             ))
             .into_any_element()
     }
@@ -260,24 +249,19 @@ impl Render for EventsView {
             .bg(tokens.colors.background)
             .text_color(tokens.colors.text)
             .on_action(cx.listener(|view, _: &ToggleFaults, _, cx| {
-                let cluster = view.cluster.clone();
-                view.dispatch(Command::EventsToggleFaults { cluster }, cx);
+                view.dispatch_events(|cluster| Command::EventsToggleFaults { cluster }, cx);
             }))
             .on_action(cx.listener(|view, _: &TogglePause, _, cx| {
-                let cluster = view.cluster.clone();
-                view.dispatch(Command::EventsTogglePause { cluster }, cx);
+                view.dispatch_events(|cluster| Command::EventsTogglePause { cluster }, cx);
             }))
             .on_action(cx.listener(|view, _: &CopyRow, _, cx| {
-                let cluster = view.cluster.clone();
-                view.dispatch(Command::EventsCopyRow { cluster }, cx);
+                view.dispatch_events(|cluster| Command::EventsCopyRow { cluster }, cx);
             }))
             .on_action(cx.listener(|view, _: &CopyRowJson, _, cx| {
-                let cluster = view.cluster.clone();
-                view.dispatch(Command::EventsCopyRowJson { cluster }, cx);
+                view.dispatch_events(|cluster| Command::EventsCopyRowJson { cluster }, cx);
             }))
             .on_action(cx.listener(|view, _: &ExportJson, _, cx| {
-                let cluster = view.cluster.clone();
-                view.dispatch(Command::EventsExportJson { cluster }, cx);
+                view.dispatch_events(|cluster| Command::EventsExportJson { cluster }, cx);
             }))
             .on_action(cx.listener(|view, _: &OpenSelected, _, cx| view.open_selected(cx)))
             .on_action(cx.listener(|view, _: &SelectNext, _, cx| view.step(1, cx)))

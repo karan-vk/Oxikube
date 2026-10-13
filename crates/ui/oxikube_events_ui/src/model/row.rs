@@ -1,7 +1,6 @@
 //! [`EventRow`]: one event as the table draws it, its cell text worked out once, and the
 //! [`EventColumn`]s.
 
-use std::fmt::Write as _;
 use std::sync::Arc;
 
 use gpui::SharedString;
@@ -203,10 +202,7 @@ pub const fn type_label(event_type: EventType) -> &'static str {
 
 /// `Kind/name` of the involved object.
 pub fn object_label(event: &Event) -> String {
-    let regarding = &event.regarding;
-    let mut out = String::with_capacity(regarding.gvk.kind.len() + regarding.name.len() + 1);
-    let _ = write!(out, "{}/{}", regarding.gvk.kind, regarding.name);
-    out
+    format!("{}/{}", event.regarding.gvk.kind, event.regarding.name)
 }
 
 /// `3m` since `at` (kubectl's style); `-` without a time.
@@ -218,7 +214,7 @@ fn since(at: Option<Timestamp>, now: Timestamp) -> SharedString {
 
 /// `text` on one line (line breaks and tabs as spaces), at most `max` chars with an ellipsis.
 pub fn one_line(text: &str, max: usize) -> String {
-    let mut out = String::with_capacity(text.len().min(max * 4));
+    let mut out = String::with_capacity(text.len().min(max.saturating_mul(4)));
     for (n, ch) in text.chars().enumerate() {
         if n == max {
             out.push('…');
