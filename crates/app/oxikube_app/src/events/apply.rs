@@ -25,17 +25,12 @@ impl Inner {
         batch: DeltaBatch<Event>,
     ) {
         let mut deltas = batch.deltas;
+        // Everything before the last relist is replaced by it.
         let rebuilt = deltas.iter().rposition(|d| d.is_restart()).map(|at| {
-            let capacity = self.state.lock().config.buffer_for(cluster);
-            let rest = deltas.split_off(at + 1);
-            let mut buffer = EventBuffer::new(capacity);
-            if let Some(restart) = deltas.pop() {
-                buffer.apply(restart);
-            }
-            for delta in rest {
+            let mut buffer = EventBuffer::new(self.state.lock().config.buffer_for(cluster));
+            for delta in deltas.drain(at..) {
                 buffer.apply(delta);
             }
-            deltas.clear();
             buffer
         });
         let mut changes: Vec<Change> = Vec::new();

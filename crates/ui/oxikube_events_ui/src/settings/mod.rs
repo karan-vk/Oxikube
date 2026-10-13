@@ -104,7 +104,7 @@ impl EventsSettings {
     }
 
     /// [`config`](Self::config) from the app's store, or `base` without one.
-    pub fn config_in(cx: &App, base: EventsConfig) -> EventsConfig {
+    fn config_in(cx: &App, base: EventsConfig) -> EventsConfig {
         match cx.try_global::<SettingsStore>() {
             Some(store) => Self::config(store, base),
             None => base,

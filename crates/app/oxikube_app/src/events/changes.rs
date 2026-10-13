@@ -37,14 +37,6 @@ pub struct EventsChanged {
 }
 
 impl EventsChanged {
-    /// The item that says "read everything again".
-    pub fn reset() -> Self {
-        Self {
-            reset: true,
-            ..Self::default()
-        }
-    }
-
     /// Whether there is nothing to tell.
     pub fn is_empty(&self) -> bool {
         !self.reset

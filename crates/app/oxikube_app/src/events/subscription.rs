@@ -117,11 +117,6 @@ impl std::fmt::Debug for EventsSubscription {
 }
 
 impl EventsSubscription {
-    /// The cluster.
-    pub fn cluster(&self) -> &ClusterId {
-        &self.cluster
-    }
-
     /// The filter changes are reported through.
     pub fn filter(&self) -> EventFilter {
         self.shared.filter()

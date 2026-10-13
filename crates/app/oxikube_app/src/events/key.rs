@@ -30,14 +30,6 @@ impl EventKey {
             )))),
         }
     }
-
-    /// The event's uid, when it has one.
-    pub fn uid(&self) -> Option<&str> {
-        match &self.0 {
-            Repr::Uid(uid) => Some(uid),
-            Repr::Content(_) => None,
-        }
-    }
 }
 
 /// Where an event sits in a buffer: its last-seen time, then its arrival. Ascending is oldest

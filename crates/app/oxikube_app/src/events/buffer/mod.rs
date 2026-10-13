@@ -206,16 +206,13 @@ impl EventBuffer {
                 event: event.clone(),
             },
         );
-        let kind = if previous.is_some() {
-            ChangeKind::Updated
+        let (kind, upserted) = if previous.is_some() {
+            (ChangeKind::Updated, Upserted::Updated)
         } else {
-            ChangeKind::Added
+            (ChangeKind::Added, Upserted::Added)
         };
         out.push(change(key, kind, event, previous));
-        match kind {
-            ChangeKind::Updated => Upserted::Updated,
-            _ => Upserted::Added,
-        }
+        upserted
     }
 
     fn evict_oldest(&mut self, out: &mut Vec<Change>) {
