@@ -28,7 +28,7 @@ use std::time::Duration;
 
 use oxikube_domain::event::Event;
 use oxikube_domain::{ErrorKind, OxiError};
-use oxikube_ports::{Delta, DeltaBatch, ForbiddenScope};
+use oxikube_ports::{Delta, DeltaBatch, EventApi, ForbiddenScope};
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinSet;
 use tokio::time::{Instant, sleep_until};
@@ -38,7 +38,6 @@ use super::plan::{Spawner, Stage};
 use super::ring::{EventRing, Key};
 use super::source::{Msg, Tagged};
 use crate::feed::FeedState;
-use oxikube_ports::EventApi;
 
 /// What the consumer receives.
 pub(super) type Output = oxikube_domain::OxiResult<DeltaBatch<Event>>;
@@ -293,9 +292,9 @@ impl Merge {
             .collect();
         forbidden.sort();
         forbidden.dedup();
-        let mut at = self.counters.at.lock();
-        at.apis = apis;
-        at.forbidden = forbidden;
+        let mut report = self.counters.report.lock();
+        report.apis = apis;
+        report.forbidden = forbidden;
     }
 
     /// The worst state of the watches still running.

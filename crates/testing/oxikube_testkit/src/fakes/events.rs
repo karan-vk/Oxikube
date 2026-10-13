@@ -272,13 +272,13 @@ impl std::fmt::Debug for FakeEventsPort {
 }
 
 impl FakeEventsPort {
-    /// A fake with its own clock and a status reporting the core API, nothing forbidden.
+    /// A fake with its own clock and a status reporting the `events.k8s.io/v1` API, nothing
+    /// forbidden.
     pub fn new() -> Self {
-        let monitor = FakeEventsMonitor::default();
-        monitor.set(EventsStatus {
+        let monitor = FakeEventsMonitor(Mutex::new(EventsStatus {
             apis: vec![EventApi::EventsV1],
             ..EventsStatus::default()
-        });
+        }));
         Self {
             script: EventsScripts::default(),
             calls: CallLog::default(),

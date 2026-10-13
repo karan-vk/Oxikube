@@ -33,6 +33,7 @@ use kube::runtime::watcher::{self, Event as Watched, InitialListStrategy};
 use oxikube_domain::OxiError;
 use oxikube_domain::event::Event;
 use oxikube_domain::ids::ClusterId;
+use oxikube_ports::EventApi;
 use tokio::sync::mpsc;
 use tokio::time::{Instant, sleep_until};
 use tracing::debug;
@@ -44,7 +45,6 @@ use crate::feed::error::feed_error;
 use crate::feed::source::{self, EventStream, is_streaming};
 use crate::feed::transport::Accepted;
 use crate::resources::dynamic_json;
-use oxikube_ports::EventApi;
 
 /// What a [`Source`] tells the pump.
 pub(super) enum Msg {

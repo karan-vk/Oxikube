@@ -9,18 +9,17 @@ use futures::Stream;
 use oxikube_domain::OxiResult;
 use oxikube_domain::event::Event;
 use oxikube_ports::{
-    DeltaBatch, EventsFeed, EventsMonitor, EventsStatus, ForbiddenScope, WatchFeed,
+    DeltaBatch, EventApi, EventsFeed, EventsMonitor, EventsStatus, ForbiddenScope, WatchFeed,
 };
 use parking_lot::Mutex;
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
 
 use crate::feed::FeedState;
-use oxikube_ports::EventApi;
 
 /// What the pump learns about the running watches and the handle reports.
 #[derive(Default)]
-pub(super) struct Where {
+pub(super) struct Report {
     /// The APIs of the running stage.
     pub(super) apis: Vec<EventApi>,
     /// Scopes the user may not read.
@@ -33,7 +32,7 @@ pub(super) struct Counters {
     pub(super) len: AtomicUsize,
     pub(super) evicted: AtomicU64,
     pub(super) skipped: AtomicU64,
-    pub(super) at: Mutex<Where>,
+    pub(super) report: Mutex<Report>,
 }
 
 /// Reads a feed's [`EventsStatus`] after the feed itself has been handed on as a stream.
@@ -49,14 +48,14 @@ impl EventsMonitor for Monitor {
 }
 
 fn status_of(capacity: usize, counters: &Counters) -> EventsStatus {
-    let at = counters.at.lock();
+    let report = counters.report.lock();
     EventsStatus {
-        apis: at.apis.clone(),
+        apis: report.apis.clone(),
         capacity,
         len: counters.len.load(Ordering::Relaxed),
         evicted: counters.evicted.load(Ordering::Relaxed),
         skipped: counters.skipped.load(Ordering::Relaxed),
-        forbidden: at.forbidden.clone(),
+        forbidden: report.forbidden.clone(),
     }
 }
 
@@ -96,13 +95,13 @@ impl EventFeed {
     /// The APIs being watched now: with the default choice exactly one, the preferred one the
     /// cluster serves and the user may read.
     pub fn apis(&self) -> Vec<EventApi> {
-        self.counters.at.lock().apis.clone()
+        self.counters.report.lock().apis.clone()
     }
 
     /// Scopes whose events the user may not read (a namespace or the whole cluster); empty
     /// when everything asked for is readable.
     pub fn forbidden(&self) -> Vec<ForbiddenScope> {
-        self.counters.at.lock().forbidden.clone()
+        self.counters.report.lock().forbidden.clone()
     }
 
     /// The whole status, as the port reports it.

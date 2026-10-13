@@ -11,7 +11,8 @@ use oxikube_ports::{Delta, EventApiChoice, EventsPort, ForbiddenScope};
 
 use super::feed::*;
 use super::*;
-use crate::events::{EventApi, EventsConfig, EventsOptions};
+use crate::events::{EventApi, EventFeed, EventsConfig, EventsOptions};
+use crate::fake_api::FakeApi;
 use crate::feed::FeedState;
 
 const V1_A: &str = "/apis/events.k8s.io/v1/namespaces/a/events";
@@ -19,7 +20,7 @@ const V1_B: &str = "/apis/events.k8s.io/v1/namespaces/b/events";
 const CORE_A: &str = "/api/v1/namespaces/a/events";
 const CORE_B: &str = "/api/v1/namespaces/b/events";
 
-async fn auto(api: &crate::fake_api::FakeApi, options: &EventsOptions) -> crate::events::EventFeed {
+async fn auto(api: &FakeApi, options: &EventsOptions) -> EventFeed {
     open_with(api, &cluster_scope(), options, EventsConfig::default()).await
 }
 

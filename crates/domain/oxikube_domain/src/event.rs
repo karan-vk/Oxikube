@@ -501,26 +501,18 @@ mod tests {
             "2026-10-03T10:40:00Z",
             "2026-10-03T10:50:00Z",
         );
-        let core = |extra: Value| {
+        let doc = |object: &str, extra: Value| {
             let mut doc = json!({
                 "metadata": {"creationTimestamp": created, "namespace": "ns"},
-                "involvedObject": {"kind": "Pod", "name": "p"},
+                object: {"kind": "Pod", "name": "p"},
             });
             doc.as_object_mut()
                 .unwrap()
                 .extend(extra.as_object().unwrap().clone());
-            Event::from_core_v1(&c, &doc).unwrap()
+            doc
         };
-        let v1 = |extra: Value| {
-            let mut doc = json!({
-                "metadata": {"creationTimestamp": created, "namespace": "ns"},
-                "regarding": {"kind": "Pod", "name": "p"},
-            });
-            doc.as_object_mut()
-                .unwrap()
-                .extend(extra.as_object().unwrap().clone());
-            Event::from_events_v1(&c, &doc).unwrap()
-        };
+        let core = |extra: Value| Event::from_core_v1(&c, &doc("involvedObject", extra)).unwrap();
+        let v1 = |extra: Value| Event::from_events_v1(&c, &doc("regarding", extra)).unwrap();
 
         // core/v1: lastTimestamp -> eventTime -> creationTimestamp when empty or null.
         let e =
