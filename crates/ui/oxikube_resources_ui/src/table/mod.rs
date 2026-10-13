@@ -27,6 +27,7 @@
 //! | `actions` | the key actions of the `ResourceTable` context |
 //! | `row_actions` | the row actions (E07-S08): the targets of a menu or key, the entries the palette lists, running an action, the delete key |
 //! | `verbs` | the k9s verbs (E11-S07): `y` YAML, `d` describe, `e` edit, `l` logs, `f` / `shift-f` port forwards, `ctrl-w` wide columns, each a view action standing for a command |
+//! | `badges` | the warning badge column's side of the table (E14-S04): whether it has the column, the redraw when badges change and the tick that notices an expired one |
 //! | `batch` | the CronJob and Job keys (E12-S08): `t` trigger, `s` suspend or resume, view actions standing for `cronjob::*` and `job::*` commands |
 //! | `namespaces` | the Namespaces table's keys (E12-S16): `u` use, `p` pin, `0`-`9` All or the nth favourite, and the create dialog |
 //! | `pod_keys` | the pod keys (E12-S03): `ctrl-k` force delete, `z` sanitize, `o` show node, `shift-j` jump to owner, and the sweep of the table's view |
@@ -48,6 +49,7 @@
 //! [`Table`]: oxikube_ui::Table
 
 pub mod actions;
+mod badges;
 mod batch;
 mod bulk_open;
 mod cell_cache;

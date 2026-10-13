@@ -81,3 +81,4 @@ pub use key::EventKey;
 pub use service::EventService;
 pub use state::EventsState;
 pub use subscription::EventsSubscription;
+pub(crate) use warnings::warning_row;

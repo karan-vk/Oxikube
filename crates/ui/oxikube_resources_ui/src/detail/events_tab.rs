@@ -1,5 +1,6 @@
-//! The Events tab: the events about the object, newest first, in a virtualised list. Warnings
-//! stand out; a repeated event shows its count.
+//! The Events tab: the events about the object, newest first, in a virtualised list: Type,
+//! Reason, count, Age and message, the columns of the events view. Warnings stand out; a repeated
+//! event shows its count.
 
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
@@ -83,6 +84,14 @@ impl DetailView {
             .child(
                 h_flex()
                     .gap(u(tokens.spacing.md))
+                    // The type is a word as well as a colour, as the events view's Type column.
+                    .child(
+                        div()
+                            .debug_selector(move || format!("detail-event-type-{ix}"))
+                            .text_color(color)
+                            .text_size(u(tokens.font.small))
+                            .child(event.type_label()),
+                    )
                     .child(
                         div()
                             .font_semibold()

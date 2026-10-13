@@ -44,7 +44,7 @@ impl ResourceTable {
     /// Applies the saved layout (once, when it has been read).
     fn apply_prefs(&mut self, prefs: &ColumnPrefs, cx: &mut Context<Self>) {
         self.prefs_loaded = true;
-        let scope = ColumnScope::of(&self.deps, &self.cluster, &self.kind);
+        let scope = ColumnScope::of(&self.deps, &self.cluster, &self.kind, self.has_badges(cx));
         let gvk = self.kind.gvk.clone();
         self.table.update(cx, |d| {
             d.layout = ColumnLayout::new(scope.columns(&*d.provider, &gvk), prefs);
@@ -83,7 +83,7 @@ impl ResourceTable {
         provider: Option<Arc<dyn ColumnProvider>>,
         cx: &mut Context<Self>,
     ) {
-        let scope = ColumnScope::of(&self.deps, &self.cluster, &self.kind);
+        let scope = ColumnScope::of(&self.deps, &self.cluster, &self.kind, self.has_badges(cx));
         let gvk = self.kind.gvk.clone();
         let changed = self.table.update_quiet(cx, |d| {
             let swapped = provider.is_some();
@@ -164,8 +164,9 @@ pub(super) fn initial_provider(
 }
 
 /// What decides which of the provider's columns the table offers right now: what the session
-/// serves (metrics columns come and go with it) and whether the list is scoped to one namespace
-/// (the Namespace column would repeat that one name on every row, so it is not offered).
+/// serves (metrics columns come and go with it), whether the list is scoped to one namespace
+/// (the Namespace column would repeat that one name on every row, so it is not offered) and
+/// whether the app has an events index (the warning badge column, E14-S04, follows the name).
 ///
 /// The column is left out of the layout, not hidden in it: a layout saved with the Namespace
 /// column keeps its place, width and visibility and applies again when the scope widens.
@@ -173,15 +174,25 @@ pub(super) fn initial_provider(
 pub(super) struct ColumnScope {
     caps: Capabilities,
     one_namespace: bool,
+    warnings: bool,
 }
 
 impl ColumnScope {
     /// The scope of `kind` in `cluster`'s session (none while it has no session).
-    pub(super) fn of(deps: &ResourceTableDeps, cluster: &ClusterId, kind: &ResourceKind) -> Self {
+    pub(super) fn of(
+        deps: &ResourceTableDeps,
+        cluster: &ClusterId,
+        kind: &ResourceKind,
+        warnings: bool,
+    ) -> Self {
         let Some(session) = deps.sessions.get(cluster) else {
-            return Self::default();
+            return Self {
+                warnings,
+                ..Self::default()
+            };
         };
         Self {
+            warnings,
             caps: session.capabilities(),
             one_namespace: matches!(
                 session.watch_scope(kind.scope()),
@@ -193,12 +204,23 @@ impl ColumnScope {
     /// `provider`'s columns of `gvk` that this scope offers.
     pub(super) fn columns(&self, provider: &dyn ColumnProvider, gvk: &Gvk) -> Arc<[Column]> {
         let all = provider.columns(gvk, self.caps);
-        if !self.one_namespace || !all.iter().any(|c| c.id == ColumnId::NAMESPACE) {
+        let hide_namespace = self.one_namespace && all.iter().any(|c| c.id == ColumnId::NAMESPACE);
+        if !hide_namespace && !self.warnings {
             return all;
         }
-        all.iter()
-            .filter(|c| c.id != ColumnId::NAMESPACE)
+        let mut columns: Vec<Column> = all
+            .iter()
+            .filter(|c| !(hide_namespace && c.id == ColumnId::NAMESPACE))
             .cloned()
-            .collect()
+            .collect();
+        if self.warnings {
+            // Right after the name, where the eye is; one narrow column, not sortable.
+            let at = columns
+                .iter()
+                .position(|c| c.id == ColumnId::NAME)
+                .map_or(0, |ix| ix + 1);
+            columns.insert(at, crate::warnings::badge_column());
+        }
+        columns.into()
     }
 }

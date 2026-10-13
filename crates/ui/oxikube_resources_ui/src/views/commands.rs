@@ -30,7 +30,7 @@ use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
 
 /// The commands this crate handles.
-pub const RESOURCE_COMMANDS: [CommandId; 26] = [
+pub const RESOURCE_COMMANDS: [CommandId; 27] = [
     CommandId::RESOURCE_OPEN,
     CommandId::RESOURCE_COPY_NAME,
     CommandId::RESOURCE_RETRY_FEED,
@@ -50,6 +50,7 @@ pub const RESOURCE_COMMANDS: [CommandId; 26] = [
     CommandId::RESOURCE_PREVIOUS_MATCH,
     CommandId::RESOURCE_VIEW_YAML,
     CommandId::RESOURCE_VIEW_DESCRIBE,
+    CommandId::RESOURCE_VIEW_EVENTS,
     CommandId::RESOURCE_VIEW_METRICS,
     CommandId::TABLE_TOGGLE_WIDE,
     CommandId::SERVICE_SHOW_PODS,
@@ -102,6 +103,9 @@ pub enum ViewRequest {
     ViewYaml(ResourceRef),
     /// Show `target`'s detail on its Describe tab (`resource::ViewDescribe`, `d`).
     ViewDescribe(ResourceRef),
+    /// Show `target`'s detail on its Events tab (`resource::ViewEvents`, the warning badge of a
+    /// row, E14-S04).
+    ViewEvents(ResourceRef),
     /// Show what uses a ServiceAccount, ConfigMap, Secret, claim or PriorityClass: its detail opens
     /// on the "Used by" tab (`resource::ShowUsedBy`, `u`, E12-S18).
     ShowUsedBy(ResourceRef),
@@ -201,6 +205,7 @@ impl ResourceCommandSink {
             Command::ResourceCopyName { target } => ViewRequest::CopyName(target.clone()),
             Command::ResourceViewYaml { target } => ViewRequest::ViewYaml(target.clone()),
             Command::ResourceViewDescribe { target } => ViewRequest::ViewDescribe(target.clone()),
+            Command::ResourceViewEvents { target } => ViewRequest::ViewEvents(target.clone()),
             Command::ResourceShowUsedBy { target } => ViewRequest::ShowUsedBy(target.clone()),
             Command::ResourceViewMetrics { target } => ViewRequest::ViewMetrics(target.clone()),
             Command::SecretReveal { target, key } => ViewRequest::RevealSecret {

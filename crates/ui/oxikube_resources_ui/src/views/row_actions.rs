@@ -15,11 +15,14 @@ const VIEW_YAML_ORDER: u16 = 10;
 /// Where "Describe" sits: after "View YAML".
 const VIEW_DESCRIBE_ORDER: u16 = 20;
 
-/// Where "View Metrics" sits: after "Describe".
+/// Where "View Events" sits (E14-S04): after "Describe".
+const VIEW_EVENTS_ORDER: u16 = 25;
+
+/// Where "View Metrics" sits: after "View Events".
 const VIEW_METRICS_ORDER: u16 = 30;
 
-/// The row actions this module adds: `resource::ViewYaml` and `resource::ViewDescribe`, for every
-/// kind, and `resource::ViewMetrics` for the kinds that have history graphs (pods, nodes,
+/// The row actions this module adds: `resource::ViewYaml`, `resource::ViewDescribe` and
+/// `resource::ViewEvents`, for every kind, and `resource::ViewMetrics` for the kinds that have history graphs (pods, nodes,
 /// workloads, namespaces, PVCs, ingresses), one object at a time.
 pub fn view_row_actions() -> Vec<RowActionSpec> {
     vec![
@@ -37,6 +40,13 @@ pub fn view_row_actions() -> Vec<RowActionSpec> {
         })
         .label("Describe")
         .order(VIEW_DESCRIBE_ORDER),
+        RowActionSpec::new(CommandId::RESOURCE_VIEW_EVENTS, |target| {
+            Command::ResourceViewEvents {
+                target: target.clone(),
+            }
+        })
+        .label("View Events")
+        .order(VIEW_EVENTS_ORDER),
         RowActionSpec::new(CommandId::RESOURCE_VIEW_METRICS, |target| {
             Command::ResourceViewMetrics {
                 target: target.clone(),

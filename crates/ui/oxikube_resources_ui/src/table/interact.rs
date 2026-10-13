@@ -143,6 +143,15 @@ impl ResourceTable {
             .dispatch(Command::ResourceOpen { target }, cx);
     }
 
+    /// The warning badge of the object `key` was clicked: dispatches `resource::ViewEvents`,
+    /// which shows the object's detail on its Events tab.
+    pub fn view_events(&mut self, key: ObjectKey, cx: &mut Context<Self>) {
+        let target = self.resource_ref(key);
+        self.deps
+            .dispatcher
+            .dispatch(Command::ResourceViewEvents { target }, cx);
+    }
+
     /// Copies row `row`'s name: dispatches `resource::CopyName`.
     pub fn copy_row_name(&mut self, row: usize, cx: &mut Context<Self>) {
         if let Some(key) = self.row_key(row, cx) {

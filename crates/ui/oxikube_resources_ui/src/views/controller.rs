@@ -126,8 +126,8 @@ impl ResourceViews {
     }
 
     /// Applies one request, with the window it opens views in: what [`Self::apply`] does, plus
-    /// opening the detail drawer for `Open`, pinning it for `PinDetail`, showing its YAML or
-    /// Describe tab for `ViewYaml` and `ViewDescribe`, and focusing the filter bar for
+    /// opening the detail drawer for `Open`, pinning it for `PinDetail`, showing its YAML,
+    /// Describe or Events tab for `ViewYaml`, `ViewDescribe` and `ViewEvents`, and focusing the filter bar for
     /// `FocusFilter`.
     pub fn apply_in(&mut self, request: ViewRequest, window: &mut Window, cx: &mut Context<Self>) {
         match request {
@@ -143,6 +143,9 @@ impl ResourceViews {
             }
             ViewRequest::ViewDescribe(target) => {
                 self.show_detail_tab(&target, DetailTab::Describe, window, cx);
+            }
+            ViewRequest::ViewEvents(target) => {
+                self.show_detail_tab(&target, DetailTab::Events, window, cx);
             }
             ViewRequest::ViewMetrics(target) => self.show_metrics(&target, window, cx),
             ViewRequest::Find { target, pattern } => {
@@ -189,6 +192,7 @@ impl ResourceViews {
             ViewRequest::PinDetail(_)
             | ViewRequest::ViewYaml(_)
             | ViewRequest::ViewDescribe(_)
+            | ViewRequest::ViewEvents(_)
             | ViewRequest::ShowUsedBy(_)
             | ViewRequest::ViewMetrics(_)
             | ViewRequest::ShowServicePods(_)

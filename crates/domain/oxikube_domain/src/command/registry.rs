@@ -291,6 +291,8 @@ impl CommandId {
     pub const RESOURCE_PREVIOUS_MATCH: CommandId = CommandId::new("resource::PreviousMatch");
     /// `resource::ViewDescribe`: open a resource's `kubectl describe` text.
     pub const RESOURCE_VIEW_DESCRIBE: CommandId = CommandId::new("resource::ViewDescribe");
+    /// `resource::ViewEvents`: open a resource's detail on its Events tab.
+    pub const RESOURCE_VIEW_EVENTS: CommandId = CommandId::new("resource::ViewEvents");
     /// `resource::ViewMetrics`: open a resource's detail on its Metrics tab (history graphs).
     pub const RESOURCE_VIEW_METRICS: CommandId = CommandId::new("resource::ViewMetrics");
     /// `resource::ViewYaml`: open a resource's YAML.
@@ -1461,6 +1463,16 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::One),
+    // Shows the events tab of the detail (E14-S04); reads the app's events index, changes
+    // nothing in the cluster.
+    CommandMeta::read(
+        CommandId::RESOURCE_VIEW_EVENTS,
+        "View Events",
+        CommandScope::Selection,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::One),
     // Shows the metrics tab of the detail; reads Prometheus through the cluster's own service
     // proxy or the configured endpoint, changes nothing in the cluster.
     CommandMeta::read(
@@ -2058,6 +2070,19 @@ mod tests {
             assert_eq!(id.tool_name(), tool);
             assert!(meta.availability.selection.needs_selection(), "{id}");
         }
+    }
+
+    #[test]
+    fn view_events_is_a_read_with_a_tool_stub() {
+        // E14-S04: the warning badge of a row opens the Events tab, which reads the app's
+        // events index and changes nothing, so no guard tier and no confirmation.
+        let id = CommandId::RESOURCE_VIEW_EVENTS;
+        let meta = lookup(id).expect("declared");
+        assert!(!meta.mutating && !meta.privileged && !meta.exec);
+        assert_eq!(meta.confirm, ConfirmTier::None);
+        assert!(!meta.availability.requires_writable);
+        assert!(meta.availability.selection.needs_selection());
+        assert_eq!(id.tool_name(), "k8s.resource_view_events");
     }
 
     #[test]

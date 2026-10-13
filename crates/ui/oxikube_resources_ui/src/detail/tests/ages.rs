@@ -10,6 +10,8 @@ use serde_json::json;
 use super::fixture::{Detail, edited, pod_ref};
 use crate::detail::ages::TICK;
 use crate::detail::{DetailTab, DetailView};
+use crate::warnings::tests::warning_event;
+use oxikube_testkit::FakeEventFeed;
 
 fn ago(age: SignedDuration) -> String {
     (Timestamp::now() - age).to_string()
@@ -24,6 +26,7 @@ fn pod_aged(created: SignedDuration, condition: SignedDuration) -> Resource {
             .created(ago(created))
             .build(),
         |json| {
+            json["metadata"]["uid"] = json!("uid-web-0");
             json["status"]["conditions"] = json!([
                 {"type": "Ready", "status": "True", "lastTransitionTime": ago(condition)}
             ]);
@@ -34,20 +37,8 @@ fn pod_aged(created: SignedDuration, condition: SignedDuration) -> Resource {
 }
 
 /// A `BackOff` event about `shop/web-0`, last seen `seen` ago.
-fn event_aged(seen: SignedDuration) -> Resource {
-    oxikube_testkit::resource("v1", "Event")
-        .namespace("shop")
-        .name("web-0.backoff")
-        .field("type", json!("Warning"))
-        .field("reason", json!("BackOff"))
-        .field("message", json!("Back-off restarting failed container"))
-        .field("lastTimestamp", json!(ago(seen)))
-        .field(
-            "involvedObject",
-            json!({"apiVersion": "v1", "kind": "Pod", "name": "web-0",
-                   "namespace": "shop", "uid": "u-web-0"}),
-        )
-        .build()
+fn event_aged(seen: SignedDuration) -> oxikube_domain::event::Event {
+    warning_event("e1", "shop", "web-0", "uid-web-0", "BackOff", seen)
 }
 
 const DAYS_30: SignedDuration = SignedDuration::from_hours(30 * 24);
@@ -122,13 +113,10 @@ fn a_young_condition_ticks_on_the_overview_only(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn a_young_event_ticks_on_the_events_tab_only(cx: &mut TestAppContext) {
-    let (mut d, view) = open(
-        cx,
-        [
-            pod_aged(DAYS_30, DAYS_30),
-            event_aged(SignedDuration::from_secs(20)),
-        ],
-    );
+    let feed = FakeEventFeed::new().initial([event_aged(SignedDuration::from_secs(20))]);
+    let (mut d, _rig) = Detail::with_events(cx, [pod_aged(DAYS_30, DAYS_30)], feed);
+    let view = d.open(&pod_ref("web-0"));
+    d.settle();
     let before = renders(&mut d, &view);
     for _ in 0..5 {
         tick(&mut d, &view, SignedDuration::from_secs(1));

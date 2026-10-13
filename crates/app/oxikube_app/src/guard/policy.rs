@@ -120,6 +120,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ResourceViewYaml { target }
         | Command::ResourceViewYamlInEditor { target }
         | Command::ResourceViewDescribe { target }
+        | Command::ResourceViewEvents { target }
         | Command::ResourceViewMetrics { target }
         | Command::ResourceEdit { target }
         | Command::SecretReveal { target, .. }

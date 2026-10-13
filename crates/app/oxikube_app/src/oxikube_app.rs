@@ -32,6 +32,7 @@
 //! | [`logs`] | E08-S01 | [`LogService`](logs::LogService): bounded, batched log sessions over the `LogPort` (`LogSession`, `LogBuffer` ring with seq index and a truncated marker, `LogDeltas`, `Connecting` / `Streaming` / `Ended` / `Failed`), cancelled on drop; `logs::aggregate` (E08-S04): the pods of a workload, Service or selector merged by server timestamp into one session |
 //! | [`context`] | E08-S09 | [`ContextRegistry`]: `@`-mentions routed to their [`ContextProviderPort`](oxikube_ports::ContextProviderPort) within a byte budget; [`LogContextProvider`] (`@logs`), [`MetricsContextProvider`] (`@metrics/pod/<ns>/<name>`, E13-S12), [`selection_context`] (the viewer's selection as a block) and the [`PendingContext`] queue "Send to agent" fills until the agent panel exists |
 //! | [`events`] | E14-S02 | [`EventService`]: every cluster's events from one feed per cluster in a bounded [`EventBuffer`] (`events.buffer`, default 10 000) de-duplicated by [`EventKey`] (count and last seen updated in place) and indexed by involved object, namespace and warnings; [`EventFilter`] queries newest first, [`EventsSubscription`] streams coalesced [`EventsChanged`]; it is the overview's [`RecentWarnings`] |
+//! | [`warning_badges`] | E14-S04 | [`WarningBadges`]: the newest `Warning` per involved object within `events.warning_window` (default 1 h), kept from a warnings-only [`EventService`] subscription ([`BadgeTrack`]) and read `O(1)` per table row ([`ClusterBadges`]), [`BadgeChanges`] to redraw, [`ObjectEventsFeed`] for a resource's Events tab, and the Workloads overview's [`RecentWarnings`] over the window |
 //! | [`tools`] | E08-S09 | [`ToolRegistry`]: read-only tools by name, listed, hidden without their capabilities and invoked after a schema check; `tools::k8s::get_logs` (`k8s.get_logs`: a pod's or a selector's newest lines, bounded and redacted); `tools::metrics` (E13-S12: `k8s.top_pods`, `k8s.top_nodes`, `k8s.query_promql`, bounded, with absence as a visible `unavailable` result); `tools::events` (E14-S08: `k8s.get_events`, the `@events` mention and `events::SendToAgent`, read from the [`EventService`], bounded and redacted, the feed started on demand) |
 //! | [`rollout`] | E12-S06 | [`RolloutService`]: a Deployment's, StatefulSet's or DaemonSet's revision history (ReplicaSets or ControllerRevisions, read on demand through the pure algorithm of `oxikube_domain::rollout`) and `kubectl rollout undo` as the guarded `workload::Rollback` (medium risk, a server dry run first, audit with `from=` and `to=`); [`RollbackRunner`] runs it from a dialog |
 //! | [`workloads`] | E12-S08, E12-S04, E12-S03 | [`WorkloadService`]: trigger a CronJob (a Job from its template, `kubectl create job --from`), suspend and resume CronJobs and Jobs, and scale the replica controllers (`workload::Scale`, low risk, medium for zero: [`WorkloadService::plan_scale`] reads the `scale` subresource and any autoscaler, [`WorkloadService::scale`] patches `spec.replicas` through it, [`ScaleRunner`] runs it from a dialog); the `cronjob::*`, `job::*` and `workload::Scale` handlers (guarded, audited with the Job's name or the replica counts); evict, delete, force delete and sweep pods (`pod::Evict`, `pod::Delete`, `pod::ForceDelete`, `pod::Sanitize`: medium, high for the force delete, one audit record per pod under a batch id); the pod panel's reads (owner chain, node, environment sources) |
@@ -83,6 +84,7 @@ pub mod storage;
 pub mod store;
 pub mod templates;
 pub mod tools;
+pub mod warning_badges;
 pub mod workloads;
 
 #[cfg(test)]
@@ -188,6 +190,10 @@ pub use templates::{
     Prefill, SkippedTemplate, Template, TemplateCatalog, TemplateOrigin, TemplateService,
 };
 pub use tools::ToolRegistry;
+pub use warning_badges::{
+    BadgeChanges, BadgeTrack, ClusterBadges, DEFAULT_WARNING_WINDOW, ObjectEventsFeed,
+    WarningBadge, WarningBadges,
+};
 pub use workloads::{
     MAX_REPLICAS, RestartResult, ScalePlan, ScaleReport, ScaleResult, ScaleRunner, SetImagePlan,
     SetImageReport, SetImageResult, SetImageRunner, SuspendOutcome, Triggered, WorkloadService,

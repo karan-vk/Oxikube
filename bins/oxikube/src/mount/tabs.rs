@@ -11,8 +11,8 @@ use std::sync::Arc;
 use gpui::{App, AppContext as _, Entity, WeakEntity, Window};
 use oxikube_app::session::namespaces::NamespaceService;
 use oxikube_app::{
-    ClusterSession, ClusterSessionManager, EventService, IntegrationRegistry, RecentWarnings,
-    ResourceStores,
+    ClusterSession, ClusterSessionManager, IntegrationRegistry, RecentWarnings, ResourceStores,
+    WarningBadges,
 };
 use oxikube_catalog_ui::connect::{self, ConnectDeps};
 use oxikube_catalog_ui::namespaces::{
@@ -46,9 +46,10 @@ pub struct TabDeps {
     pub stores: Arc<ResourceStores>,
     /// The newest warning events for the overviews' panels (E12-S07): the `EventService`.
     pub warnings: Arc<dyn RecentWarnings>,
-    /// The app's events (E14-S02): each tab subscribes to its cluster's warnings while it is
-    /// open, which is what runs the cluster's events feed for the overviews.
-    pub events: EventService,
+    /// The app's warning badges over its events (E14-S02, E14-S04): each tab tracks its cluster's
+    /// warnings while it is open, which is what runs the cluster's events feed for the badges,
+    /// the Events tab and the overviews.
+    pub events: WarningBadges,
     /// What the cluster overview (E13-S09), the tab's first screen, reads.
     pub overview: oxikube_overview_ui::OverviewDeps,
 }

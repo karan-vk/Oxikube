@@ -4,6 +4,7 @@
 use futures::StreamExt as _;
 use futures::channel::mpsc::{UnboundedSender, unbounded};
 use gpui::{App, AppContext as _, Subscription};
+use oxikube_app::WarningBadges;
 use oxikube_app::events::{EventService, EventsConfig};
 use oxikube_settings::Settings as _;
 
@@ -31,6 +32,17 @@ pub fn follow_settings(service: &EventService, cx: &mut App) -> Subscription {
     let base = service.config();
     send(&tx, &base, cx);
     EventsSettings::observe(cx, move |cx| send(&tx, &base, cx))
+}
+
+/// Sets the badges' window from `events.warning_window` now and on every change of it. Keep the
+/// returned subscription for as long as the badges should follow. Cheap (an atomic store and a
+/// wake), so it runs in the settings observer.
+pub fn follow_warning_window(badges: &WarningBadges, cx: &mut App) -> Subscription {
+    let badges = badges.clone();
+    badges.set_window(EventsSettings::window_in(cx));
+    EventsSettings::observe(cx, move |cx| {
+        badges.set_window(EventsSettings::window_in(cx));
+    })
 }
 
 fn send(tx: &UnboundedSender<EventsConfig>, base: &EventsConfig, cx: &App) {

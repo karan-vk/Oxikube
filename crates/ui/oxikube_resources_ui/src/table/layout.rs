@@ -234,6 +234,8 @@ impl ColumnLayout {
             (ColumnId::NAME, _, _) => 210.,
             (ColumnId::NAMESPACE, _, _) => 120.,
             (ColumnId::LABELS, _, _) => 240.,
+            // The warning badge (E14-S04): an icon, and the header's own sort-free title.
+            (crate::warnings::BADGE_COLUMN, _, _) => 44.,
             // Long phases: `ContainerCreating`, `CrashLoopBackOff`.
             ("status", _, _) => 140.,
             // `12 (279d ago)`: the count and the age of the last restart.

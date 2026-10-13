@@ -528,6 +528,14 @@
             "boolean",
             "null"
           ]
+        },
+        "warning_window": {
+          "description": "How long a `Warning` event keeps its object's badge in the tables, and the age of the\nwarnings the overviews list: a number and a unit, `m`inutes, `h`ours or `d`ays (`30m`,\n`1h`, `2d`); between 1 minute and 7 days, else the nearest. A change applies at once, to\nevery cluster (a value under `clusters.<id>.events` is not read).",
+          "pattern": "^\\s*\\d+\\s*[mhd]\\s*$",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "type": "object"

@@ -69,6 +69,10 @@
 //!   the summary and the workloads that use it (a Deployment through its ReplicaSet, a StatefulSet, a
 //!   CronJob and a lone Pod) (E12-S18).
 //!
+//! - `pods_table_warning_badges_dark`, `pods_table_warning_badges_light`, `detail_events_tab_dark`,
+//!   `detail_events_tab_light` (`warnings`): the warning icon column of the pods table (rows with a
+//!   `Warning` event within the hour) and a pod's Events tab over the app's events index (E14-S04).
+//!
 //! The Age and Restarts columns (ages, last-restart times) are hidden through a saved layout so
 //! the picture does not change with the clock. `harness = false`: on macOS the platform text system can only be created on the
 //! process main thread. Needs a GPU device (Metal, or Vulkan such as Mesa lavapipe on Linux), so
@@ -132,6 +136,8 @@ mod service;
 mod storage;
 #[path = "screenshot/used_by.rs"]
 mod used_by;
+#[path = "screenshot/warnings.rs"]
+mod warnings;
 
 const WIDTH: f32 = 960.0;
 /// Narrower than the default columns (Name, Status, Ready, Node, IP: 740 px).
@@ -324,6 +330,7 @@ fn main() -> ExitCode {
         storage::run(),
         used_by::run(),
         bulk::run(),
+        warnings::run(),
     ];
     let mut failed = false;
     for result in results {

@@ -1,21 +1,22 @@
-//! The Events tab's feed: the namespace's `Event` objects from the store, filtered to the ones
-//! about this object.
+//! The Events tab's feed: the object's events from the app's `EventService` index.
 //!
-//! It starts the first time the tab is shown (the Overview alone costs no watch). The query
-//! shares the feed any other view of the namespace's events has; the object's events are picked
-//! out of the delta as it arrives, off render. An object that is cluster-scoped has its events in
-//! the `default` namespace.
+//! It starts the first time the tab is shown (the Overview alone costs nothing) and needs the
+//! object's uid, so it waits for the object when the tab is shown first. It is a read of the
+//! service's one cluster-wide feed (`ObjectEventsFeed`): no watch, no API call. The service
+//! follows a reconnect by itself, so the view has nothing to re-subscribe.
 
+use std::pin::Pin;
+use std::task::Poll;
+
+use futures::Stream as _;
 use gpui::Context;
-use oxikube_app::store::{FeedState, StoreDelta, StoreQuery};
-use oxikube_domain::ids::Gvk;
+use oxikube_app::EventsState;
+use oxikube_runtime::notify_coalesced;
 
-use super::events::events_about;
+use super::events::rows_of;
 use super::follow::Feed;
 use super::view::DetailView;
-
-/// Where the events about a cluster-scoped object are recorded.
-const CLUSTER_SCOPED_EVENTS_NAMESPACE: &str = "default";
+use crate::warnings::ObjectEvents;
 
 impl DetailView {
     /// Starts the Events feed, once.
@@ -27,66 +28,77 @@ impl DetailView {
         self.subscribe_events(cx);
     }
 
-    /// Re-subscribes the Events feed after a reconnect (a new store), when it was started.
-    pub(super) fn restart_events(&mut self, cx: &mut Context<Self>) {
-        if !self.events.started {
-            return;
-        }
-        let same = self
-            .store
-            .as_ref()
-            .zip(self.events_store.as_ref())
-            .is_some_and(|(a, b)| a.is_same(b));
-        if !same || self.events.subscription.is_none() {
+    /// The object arrived (the first delta): a tab shown before that can follow its events now.
+    pub(super) fn object_known_for_events(&mut self, cx: &mut Context<Self>) {
+        if self.events.started && self.events.feed.is_none() {
             self.subscribe_events(cx);
         }
     }
 
     fn subscribe_events(&mut self, cx: &mut Context<Self>) {
-        let Some(store) = self.connected_store() else {
+        let Some(events) = ObjectEvents::get(cx) else {
+            self.events.error = Some("the events service is not running".to_owned());
+            cx.notify();
             return;
         };
-        let namespace = self
-            .target
-            .namespace()
-            .unwrap_or(CLUSTER_SCOPED_EVENTS_NAMESPACE);
-        let events = Gvk::new("", "v1", "Event");
-        let scope = self.scope_for(&store, &events, Some(namespace));
-        let query = StoreQuery::new(events, scope);
-        self.events.subscription = Some(store.subscribe(query));
-        self.events_store = Some(store);
-        self.events.feed.clear();
-        self.events.rows.clear();
-        self.events.ready = false;
+        // Without the object there is no uid to follow: the skeleton shows until it arrives.
+        let Some(object) = self.object.as_ref() else {
+            return;
+        };
+        let meta = object.meta();
+        // A Node's events are recorded under its name as well as its uid.
+        let cluster_scoped_name = self.target.namespace().is_none().then_some(&*meta.name);
+        let feed = events.object_feed(
+            &self.target.cluster,
+            meta.uid.as_deref(),
+            cluster_scoped_name,
+        );
+        self.events.feed = Some(feed);
         self.events.error = None;
+        self.refresh_events(cx);
         self.events.task = Some(Self::poll(Feed::Events, cx));
     }
 
-    /// Applies one delta of the events feed.
-    pub(super) fn apply_events(&mut self, delta: StoreDelta, cx: &mut Context<Self>) {
-        delta.apply_to(&mut self.events.feed);
-        match &delta.state {
-            FeedState::Ready => {
-                self.events.ready = true;
-                self.events.error = None;
+    /// Polls the feed for changes; whether to keep polling.
+    pub(super) fn drain_events(
+        &mut self,
+        task_cx: &mut std::task::Context<'_>,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(feed) = self.events.feed.as_mut() else {
+            return false;
+        };
+        let mut changed = false;
+        loop {
+            match Pin::new(&mut *feed).poll_next(task_cx) {
+                Poll::Ready(Some(())) => changed = true,
+                Poll::Ready(None) => return false,
+                Poll::Pending => break,
             }
-            FeedState::Forbidden { message }
-            | FeedState::Unauthorized { message }
-            | FeedState::Failed { message, .. } => {
-                self.events.error = Some(message.clone());
-            }
-            FeedState::Warming | FeedState::Retrying { .. } => {}
         }
-        let uid = self
-            .object
-            .as_ref()
-            .and_then(|object| object.meta().uid.clone());
-        let rows = events_about(
-            &self.target.cluster,
-            &self.target,
-            uid.as_deref(),
-            &self.events.feed,
-        );
+        if changed {
+            self.refresh_events(cx);
+            notify_coalesced(cx);
+        }
+        true
+    }
+
+    /// Reads the object's events and the feed's state into the tab.
+    fn refresh_events(&mut self, cx: &mut Context<Self>) {
+        let Some(feed) = self.events.feed.as_ref() else {
+            return;
+        };
+        let rows = rows_of(&feed.events());
+        let state = feed.state();
+        self.events.error = match &state {
+            EventsState::Failed { message, .. } => Some(message.clone()),
+            _ => None,
+        };
+        // Events the service holds already show at once; the skeleton is for a feed that has
+        // listed nothing yet.
+        self.events.ready = feed.is_empty()
+            || !rows.is_empty()
+            || matches!(state, EventsState::Ready | EventsState::Retrying { .. });
         // New events arrive at the top: splicing at the front keeps the scroll where it is.
         let old = self.events_list.item_count();
         match rows.len().cmp(&old) {

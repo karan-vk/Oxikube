@@ -79,8 +79,6 @@ pub struct DetailView {
     /// The Metrics tab (E13-S08): history graphs from the cluster's Prometheus.
     pub(super) metrics: super::metrics::MetricsTab,
     pub(super) store: Option<ResourceStore>,
-    /// The store the Events feed is subscribed on.
-    pub(super) events_store: Option<ResourceStore>,
     pub(super) subscription: Option<Subscription>,
     pub(super) feed_task: Option<Task<()>>,
     pub(super) full_task: Option<Task<()>>,
@@ -158,7 +156,6 @@ impl DetailView {
             secret: Default::default(),
             metrics: Default::default(),
             store: None,
-            events_store: None,
             subscription: None,
             feed_task: None,
             full_task: None,
@@ -378,7 +375,7 @@ impl DetailView {
         self.describe.task = None;
         self.yaml.task = None;
         self.events.task = None;
-        self.events.subscription = None;
+        self.events.feed = None;
         // The lease on the Pods subscription goes with the view.
         self.used_by_tab_closed();
         self.metrics_tab_closed();

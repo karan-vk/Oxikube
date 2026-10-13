@@ -276,8 +276,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let pulses_stores = stores.clone();
     // The events of every cluster (E14-S02): one feed per cluster, started by its tab; the
     // overviews' warnings panels read the newest warnings from it.
-    crate::events::start(&services.events, cx);
-    let warnings: Arc<dyn oxikube_app::RecentWarnings> = Arc::new(services.events.clone());
+    let badges = crate::events::start(&services.events, ports.clusters.clock.clone(), cx);
+    let warnings: Arc<dyn oxikube_app::RecentWarnings> = Arc::new(badges.clone());
     // The cluster overview (E13-S09): every cluster tab's first screen.
     let overview_deps = overview::deps(
         &services,
@@ -294,7 +294,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         workspace: workspace.downgrade(),
         stores: stores.clone(),
         warnings,
-        events: services.events.clone(),
+        events: badges,
         resources: resources_slot.clone(),
         overview: overview_deps.clone(),
     };
