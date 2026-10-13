@@ -231,6 +231,26 @@
   r                pulses::Refresh
   right            pulses::SelectRight
   up               pulses::SelectUp
+[EventsView]
+  ctrl-s           events_view::ExportJson
+  ctrl-z           events_view::ToggleFaults
+[EventsView && !Editing]
+  /                events_view::FocusFilter
+  c                events_view::CopyRow
+  cmd-c            events_view::CopyRow
+  down             events_view::SelectNext
+  end              events_view::SelectLast
+  enter            events_view::OpenSelected
+  g                events_view::SelectFirst
+  home             events_view::SelectFirst
+  j                events_view::SelectNext
+  k                events_view::SelectPrevious
+  p                events_view::TogglePause
+  shift-c          events_view::CopyRowJson
+  shift-g          events_view::SelectLast
+  up               events_view::SelectPrevious
+[EventsView && Editing]
+  escape           events_view::FocusTable
 [(everywhere)]
   ctrl-`           terminal_panel::TogglePanel
   ctrl-~           terminal::New

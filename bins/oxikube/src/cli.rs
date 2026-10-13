@@ -28,8 +28,8 @@ Options:
   --perf-logs-workload    Treat the last part of --perf-logs as a Deployment: open the merged log
                           of its pods (workload::ViewLogs) instead of one pod's
   --perf-scenario <NAME>  Run a headless perf scenario and exit: startup, scroll-10k (or
-                          table-scroll-10k), palette, logs-stream, editor-5mb, charts, pulses (needs --features
-                          perf-scenarios; use `cargo xtask perf`)
+                          table-scroll-10k), palette, logs-stream, editor-5mb, charts, pulses,
+                          events-stream (needs --features perf-scenarios; use `cargo xtask perf`)
   --perf-scenario-window <NAME>
                           Run a scripted scenario in the real window over synthetic clusters,
                           measured against ADR 0016, and exit: pods-table, table-filter,

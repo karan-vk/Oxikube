@@ -156,6 +156,13 @@ pub const STANDS_FOR: &[(&str, CommandId)] = &[
         "resource_detail::PreviousMatch",
         CommandId::RESOURCE_PREVIOUS_MATCH,
     ),
+    // The events view (E14-S03): `enter` opens the event's object, the rest are its commands.
+    ("events_view::OpenSelected", CommandId::RESOURCE_OPEN),
+    ("events_view::ToggleFaults", CommandId::EVENTS_TOGGLE_FAULTS),
+    ("events_view::TogglePause", CommandId::EVENTS_TOGGLE_PAUSE),
+    ("events_view::CopyRow", CommandId::EVENTS_COPY_ROW),
+    ("events_view::CopyRowJson", CommandId::EVENTS_COPY_ROW_JSON),
+    ("events_view::ExportJson", CommandId::EVENTS_EXPORT_JSON),
     // The pulses page (E13-S10): `enter` opens the selected tile's table.
     ("pulses::Open", CommandId::RESOURCE_OPEN_LIST),
     // The catalog home (E06-S03).

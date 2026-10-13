@@ -14,18 +14,42 @@ doctest = false
 [dependencies]
 futures.workspace = true
 gpui.workspace = true
+jiff.workspace = true
 oxikube_app.workspace = true
 oxikube_domain.workspace = true
+oxikube_keymap.workspace = true
+oxikube_ports.workspace = true
+# `notify_coalesced` (the live tail redraws at frame cadence) and `spawn_kube` (the export's write).
+oxikube_runtime.workspace = true
 oxikube_settings.workspace = true
+oxikube_ui.workspace = true
+oxikube_workspace.workspace = true
 schemars.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+anyhow.workspace = true
 gpui = { workspace = true, features = ["test-support"] }
+gpui_platform = { workspace = true, features = ["test-support"] }
 oxikube_assets.workspace = true
-oxikube_testkit = { workspace = true, features = ["gpui-test"] }
-serde_json.workspace = true
+oxikube_testkit = { workspace = true, features = ["gpui-test", "gpui-screenshot"] }
+oxikube_workspace = { workspace = true, features = ["test-support"] }
+proptest.workspace = true
+
+[features]
+default = []
+# Headless GPU screenshots of the events view (`tests/screenshot.rs`, harness = false so it runs on
+# the process main thread). Needs Metal / Vulkan, so never part of the default gate; the nightly
+# workflow runs it: `cargo test -p oxikube_events_ui --features screenshot --test screenshot`.
+screenshot = []
+
+[[test]]
+name = "screenshot"
+path = "tests/screenshot.rs"
+harness = false
+required-features = ["screenshot"]
 
 [lints]
 workspace = true

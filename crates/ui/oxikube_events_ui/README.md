@@ -4,12 +4,18 @@
 
 Cluster-wide events view and per-resource events tab.
 
+- `settings` (E14-S02): `events.buffer`, followed into the app's `EventService`.
+- `view`, `model`, `filter`, `persist`, `export`, `commands` (E14-S03): the events view. `:ev`, the sidebar's Events heading
+  or the palette's "Show Events" (`events::Open`) open it in the cluster's tab. See the crate docs.
+
 ## Allowed internal dependencies
 
 - `oxikube_domain`
 - `oxikube_ports`
 - `oxikube_app`
 - `oxikube_settings` (the `events` settings)
+- `oxikube_keymap` (the `EventsView` key context)
+- `oxikube_runtime` (`notify_coalesced`, `spawn_kube`)
 - `oxikube_ui`
 - `oxikube_workspace`
 

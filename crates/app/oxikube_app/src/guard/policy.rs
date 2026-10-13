@@ -87,6 +87,12 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ClusterSetColour { cluster, .. }
         | Command::ClusterShowMetricsSettings { cluster }
         | Command::ClusterShowPulses { cluster }
+        | Command::EventsOpen { cluster, .. }
+        | Command::EventsToggleFaults { cluster }
+        | Command::EventsTogglePause { cluster }
+        | Command::EventsCopyRow { cluster }
+        | Command::EventsCopyRowJson { cluster }
+        | Command::EventsExportJson { cluster }
         | Command::ClusterShowOverview { cluster }
         | Command::EventsSendToAgent { cluster, .. }
         | Command::ClusterRedetectMetrics { cluster }

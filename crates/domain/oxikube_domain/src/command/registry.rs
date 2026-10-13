@@ -114,6 +114,18 @@ impl CommandId {
     /// `events::SendToAgent`: queue the selected events (or an object's events) as context for the
     /// hosted agent.
     pub const EVENTS_SEND_TO_AGENT: CommandId = CommandId::new("events::SendToAgent");
+    /// `events::CopyRow`: copy the selected row of the events view as text.
+    pub const EVENTS_COPY_ROW: CommandId = CommandId::new("events::CopyRow");
+    /// `events::CopyRowJson`: copy the selected event of the events view as JSON.
+    pub const EVENTS_COPY_ROW_JSON: CommandId = CommandId::new("events::CopyRowJson");
+    /// `events::ExportJson`: write the events the events view lists to a JSON file.
+    pub const EVENTS_EXPORT_JSON: CommandId = CommandId::new("events::ExportJson");
+    /// `events::Open`: open a cluster's events view (`:ev`).
+    pub const EVENTS_OPEN: CommandId = CommandId::new("events::Open");
+    /// `events::ToggleFaults`: show only `Warning` events in the events view, or every event.
+    pub const EVENTS_TOGGLE_FAULTS: CommandId = CommandId::new("events::ToggleFaults");
+    /// `events::TogglePause`: pause the events view's live tail, or resume it.
+    pub const EVENTS_TOGGLE_PAUSE: CommandId = CommandId::new("events::TogglePause");
     /// `help::Show`: show the key bindings that apply where the focus is (the `?` overlay).
     pub const HELP_SHOW: CommandId = CommandId::new("help::Show");
     /// `ingressclass::SetDefault`: make an IngressClass the cluster's default (annotation patch).
@@ -410,6 +422,8 @@ const LOG_VIEW: &[ViewContext] = &[ViewContext::Logs];
 const TERMINAL_VIEW: &[ViewContext] = &[ViewContext::Terminal];
 /// Commands of the manifest editor.
 const EDITOR_VIEW: &[ViewContext] = &[ViewContext::Editor];
+/// Commands of the events view.
+const EVENTS_VIEW: &[ViewContext] = &[ViewContext::Events];
 
 /// Every declared command, **sorted by id** (lookup is a binary search; a test
 /// enforces the order).
@@ -777,6 +791,50 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Cluster,
         NONE,
     ),
+    // The events view (E14-S03): it reads the app's `EventService` (one events feed per
+    // cluster), never the cluster itself, and changes nothing in it. Copying and exporting
+    // write the clipboard or a file the user picks; the messages are redacted on the way out.
+    CommandMeta::read(
+        CommandId::EVENTS_COPY_ROW,
+        "Events: Copy Row",
+        CommandScope::Cluster,
+        NONE,
+    )
+    .in_views(EVENTS_VIEW),
+    CommandMeta::read(
+        CommandId::EVENTS_COPY_ROW_JSON,
+        "Events: Copy Row as JSON",
+        CommandScope::Cluster,
+        NONE,
+    )
+    .in_views(EVENTS_VIEW),
+    CommandMeta::read(
+        CommandId::EVENTS_EXPORT_JSON,
+        "Events: Export JSON",
+        CommandScope::Cluster,
+        NONE,
+    )
+    .in_views(EVENTS_VIEW),
+    CommandMeta::read(
+        CommandId::EVENTS_OPEN,
+        "Show Events",
+        CommandScope::Cluster,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::EVENTS_TOGGLE_FAULTS,
+        "Events: Toggle Faults Only",
+        CommandScope::Cluster,
+        NONE,
+    )
+    .in_views(EVENTS_VIEW),
+    CommandMeta::read(
+        CommandId::EVENTS_TOGGLE_PAUSE,
+        "Events: Pause or Resume Live Tail",
+        CommandScope::Cluster,
+        NONE,
+    )
+    .in_views(EVENTS_VIEW),
     // Lists the bindings of the focused view; reads nothing from a cluster.
     CommandMeta::read(
         CommandId::HELP_SHOW,

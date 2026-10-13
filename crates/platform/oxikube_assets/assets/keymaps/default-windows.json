@@ -494,6 +494,41 @@
     }
   },
   {
+    // The events view (E14-S03, `:ev`): k9s' ctrl-z shows only the faults (Warning events), and
+    // the rest move over the rows, open the event's object, pause the live tail, copy and export.
+    // ctrl-z works from the filter fields too; the bare letters only while no field has focus.
+    "context": "EventsView",
+    "bindings": {
+      "ctrl-z": "events_view::ToggleFaults",
+      "ctrl-s": "events_view::ExportJson"
+    }
+  },
+  {
+    "context": "EventsView && !Editing",
+    "bindings": {
+      "up": "events_view::SelectPrevious",
+      "k": "events_view::SelectPrevious",
+      "down": "events_view::SelectNext",
+      "j": "events_view::SelectNext",
+      "home": "events_view::SelectFirst",
+      "g": "events_view::SelectFirst",
+      "end": "events_view::SelectLast",
+      "shift-g": "events_view::SelectLast",
+      "enter": "events_view::OpenSelected",
+      "p": "events_view::TogglePause",
+      "c": "events_view::CopyRow",
+      "ctrl-c": "events_view::CopyRow",
+      "shift-c": "events_view::CopyRowJson",
+      "/": "events_view::FocusFilter"
+    }
+  },
+  {
+    "context": "EventsView && Editing",
+    "bindings": {
+      "escape": "events_view::FocusTable"
+    }
+  },
+  {
     // Terminals (E09-S07): ctrl-` shows (and focuses) the shown cluster's terminal panel in the
     // bottom dock or hides it; ctrl-~ opens a new shell there (a plain shell tab when no cluster
     // tab is shown).

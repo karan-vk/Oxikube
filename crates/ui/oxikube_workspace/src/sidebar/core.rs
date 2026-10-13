@@ -8,6 +8,7 @@
 
 use gpui::App;
 use oxikube_domain::access::AccessRequirement;
+use oxikube_domain::command::CommandId;
 use oxikube_domain::ids::{Gvk, Scope};
 use oxikube_ui::IconName;
 
@@ -126,13 +127,16 @@ pub fn core_sections() -> Vec<SidebarSection> {
             "",
             "namespaces",
         )])),
-        // `events` exists in the core group and in `events.k8s.io`; either is enough.
+        // `events` exists in the core group and in `events.k8s.io`; either is enough. The heading
+        // opens the events view (E14-S03, `events::Open`), which reads the app's one events feed
+        // of the cluster, so the section has no count badge of its own (that would be a second
+        // watch of the cluster's events).
         section(8, "events", "Events", IconName::Bell)
             .with_requires([
                 AccessRequirement::list("", "events"),
                 AccessRequirement::list("events.k8s.io", "events"),
             ])
-            .with_target(SidebarTarget::kind("", "events")),
+            .with_target(SidebarTarget::Command(CommandId::EVENTS_OPEN)),
         // Helm 3 keeps its releases in Secrets (or ConfigMaps, depending on the storage driver).
         section(9, "helm", "Helm", IconName::Package).with_entries([SidebarEntry {
             requires: vec![

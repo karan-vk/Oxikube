@@ -16,6 +16,7 @@
 //! | `:ctx prod` | `cluster::Select { prod }` (or `cluster::Connect`) |
 //! | `:ns` | `resource::OpenList { Namespace }` |
 //! | `:pulses` | `cluster::ShowPulses` (E13-S10) |
+//! | `:ev`, `:events kube-system /BackOff` | `events::Open { namespace, filter }`: the events view (E14-S03), not the generic table |
 //! | `:ns kube-system` | `namespace::Select { [kube-system] }` |
 //! | `:q` | `app::Quit` (which asks first while operations are running) |
 //! | `-`, `[`, `]` | `jump::Last`, `jump::Back`, `jump::Forward` |
@@ -156,6 +157,10 @@ fn resource_plan(
         Err(error) => return Err(error),
     };
 
+    if is_event_kind(&gvk) {
+        return events_plan(jump, target, cluster, env);
+    }
+
     let mut rest = Vec::new();
     if let Some(ns) = &jump.namespace {
         rest.push(Command::NamespaceSelect {
@@ -175,6 +180,40 @@ fn resource_plan(
         });
     }
     Ok(switch_cluster(target, cluster, rest))
+}
+
+/// Whether `gvk` is a Kubernetes event (`core/v1` or `events.k8s.io`): `:ev` opens the events
+/// view (E14-S03), not the generic table.
+fn is_event_kind(gvk: &Gvk) -> bool {
+    &*gvk.kind == "Event" && (gvk.group.is_empty() || &*gvk.group == "events.k8s.io")
+}
+
+/// `:ev [ns] [/text] [@ctx]`: `events::Open` with the namespace and the text as the view's
+/// filters. The namespace is the view's own filter, not the cluster's selection; `all` (or no
+/// namespace) is every namespace. A label selector means nothing for events and is refused.
+fn events_plan(
+    jump: &ResourceJump,
+    target: Option<&JumpContext>,
+    cluster: ClusterId,
+    env: &dyn JumpEnv,
+) -> Result<JumpPlan, ParseError> {
+    if let Some(labels) = &jump.labels {
+        return Err(ParseError::new(
+            ParseErrorKind::Unexpected,
+            labels.span,
+            "Events have no labels to select by: filter them with `/text`",
+        ));
+    }
+    let namespace = match &jump.namespace {
+        Some(ns) => namespace_names(ns, &cluster, env)?.into_iter().next(),
+        None => None,
+    };
+    let open = Command::EventsOpen {
+        cluster: cluster.clone(),
+        namespace,
+        filter: jump.filter.as_ref().map(|f| f.value.as_str().to_owned()),
+    };
+    Ok(switch_cluster(target, cluster, vec![open]))
 }
 
 /// What an alias leads to.

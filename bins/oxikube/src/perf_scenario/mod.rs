@@ -24,6 +24,8 @@
 //!   points: repaint, a data tick on every frame, a hover sweep (E13-S07).
 //! - `pulses` ([`pulses`]): the pulses page, 16 tiles with 14 sparklines: repaint, and every tile
 //!   taking a new sample on every frame (E13-S10).
+//! - `events-stream` ([`events_stream`]): the events view over a full 10 000-event buffer while
+//!   events stream in: live tail, scrolling, typing a filter, the faults toggle, bursts (E14-S03).
 //!
 //! The view-driving scenarios mount their view as the app's window does ([`window_root`]), so it
 //! is drawn with the app's text style; a sample fails if its text falls back to another family
@@ -33,6 +35,7 @@
 
 mod charts;
 mod editor_5mb;
+mod events_stream;
 mod logs_stream;
 mod palette;
 mod pulses;
@@ -69,10 +72,11 @@ pub fn run(name: &str, report: Option<&Path>, probe: bool, launched: Instant) ->
         editor_5mb::NAME => editor_5mb::run(probe),
         charts::NAME => charts::run(probe),
         pulses::NAME => pulses::run(probe),
+        events_stream::NAME => events_stream::run(probe),
         other => {
             eprintln!(
                 "oxikube: unknown perf scenario `{other}` (startup, scroll-10k or \
-                 table-scroll-10k, palette, logs-stream, editor-5mb, charts, pulses)"
+                 table-scroll-10k, palette, logs-stream, editor-5mb, charts, pulses, events-stream)"
             );
             return ExitCode::from(2);
         }

@@ -42,6 +42,8 @@ pub enum CommandCategory {
     Storage,
     /// The log viewer (`logs::*`).
     Logs,
+    /// Kubernetes events (`events::*`).
+    Events,
     /// Terminals (`terminal::*`).
     Terminal,
     /// The manifest editor (`editor::*`).
@@ -67,6 +69,7 @@ impl CommandCategory {
         CommandCategory::Service,
         CommandCategory::Storage,
         CommandCategory::Logs,
+        CommandCategory::Events,
         CommandCategory::Terminal,
         CommandCategory::Editor,
         CommandCategory::Events,
@@ -102,6 +105,7 @@ impl CommandCategory {
             ("pvc", CommandCategory::Storage),
             ("storageclass", CommandCategory::Storage),
             ("logs", CommandCategory::Logs),
+            ("events", CommandCategory::Events),
             ("terminal", CommandCategory::Terminal),
             ("editor", CommandCategory::Editor),
             ("events", CommandCategory::Events),
@@ -131,6 +135,7 @@ impl CommandCategory {
             CommandCategory::Service => "Service",
             CommandCategory::Storage => "Storage",
             CommandCategory::Logs => "Logs",
+            CommandCategory::Events => "Events",
             CommandCategory::Terminal => "Terminal",
             CommandCategory::Editor => "Editor",
             CommandCategory::Events => "Events",

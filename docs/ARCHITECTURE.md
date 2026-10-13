@@ -843,6 +843,20 @@ crate's `README.md` for its allowed dependencies. Highlights:
   the displayed tab. `cluster::ShowPulses` (a read, tool `app.cluster_show_pulses`) opens it: the palette's "Show Pulses", the
   `:pulses` / `:pulse` / `:pu` reserved words of the jump bar, and the sidebar's Metrics > Pulses entry; the window's
   `PulsesViews` applies it (`mount::pulses`).
+- `oxikube_events_ui` (E14-S03) — the cluster's events view (`:ev` / `:event` / `:events`, the sidebar's Events heading, the
+  palette's "Show Events"; `events::Open`, tool `k8s.events_open`): `EventsView`, a workspace item of the cluster's tab (key
+  `events`, key context `EventsView`) with a virtualised table (Type, Reason, Namespace, Object, Source, Count, Age, Last seen,
+  Message; sort by last seen newest first, every header sortable) and a toolbar of filters (type, reason, kind, namespace, text
+  as substring or regex; a bad regex is shown while the last good rows stay), the faults toggle (`ctrl-z`,
+  `events::ToggleFaults`), the live tail's pause (`p`, `events::TogglePause`; scrolling away from the top pauses it, back
+  resumes; paused arrivals are counted, "N new events"), copy (`c` / `shift-c`, `events::CopyRow` / `CopyRowJson`) and export
+  (`ctrl-s`, `events::ExportJson`, through the save panel and the `FsPort`), messages redacted on the way out; `enter` opens the
+  event's object (`resource::Open`). It reads only the app's `EventService` through one `EventsSubscription` (the filter
+  compiled once per edit); a reset is read and turned into rows on the background executor, each coalesced change is placed by
+  binary search in `EventsModel` (boxed rows, one sorting pass for a burst over 64), redraws are `notify_coalesced`. The filters
+  are saved per cluster in the `StatePort` (`events.filter.<cluster>`). `EventsViews` (one per window, `mount::events`)
+  applies the `events::*` requests; `perf_scenario::events_stream` measures it; `tests/screenshot.rs` (`--features
+  screenshot`) photographs it.
 - `oxikube_ui::editor` (E07-S06, E10-S04) — gpui-component's editor (`tree-sitter-yaml` feature) behind our own API. `EditorApi`
   is the trait feature views use, in UTF-8 byte offsets and our types (`text`/`set_text`, `version`, `selections`/`select`,
   `set_read_only`, `set_soft_wrap`, `set_diagnostics(Vec<EditorDiagnostic>)`, `add_decoration`/`decorations`/

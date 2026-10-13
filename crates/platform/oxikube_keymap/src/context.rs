@@ -23,6 +23,7 @@
 //! | `Help` | the help overlay (E11-S10); its search field is `Help > Picker > Input` | `empty` while the field is empty |
 //! | `Modal` | a dialog or sheet | |
 //! | `Catalog` | the cluster catalog home (E06-S03) | `Editing` while its search field has focus |
+//! | `EventsView` | the cluster's events view (E14-S03) | `Editing` while a filter field has focus, `faults`, `paused` |
 //!
 //! The stack of a focused table is `Workspace > Dock > ClusterTab > Workspace > Pane >
 //! ResourceTable` (each cluster tab hosts a workspace of its own), so a binding in `ClusterTab`
@@ -95,6 +96,8 @@ pub mod contexts {
     pub const CATALOG: &str = "Catalog";
     /// The pulses page (E13-S10): a grid of gauges, one tile selected.
     pub const PULSES: &str = "Pulses";
+    /// The cluster's events view (E14-S03); carries `Editing`, `faults` and `paused`.
+    pub const EVENTS: &str = "EventsView";
     /// The contexts of the Phase 1 views, the ones the default keymaps define sections for
     /// (E11-S07), in the order of the table in the [module docs](super). A new view that takes
     /// keys adds its name here so the defaults tests cover it.
@@ -194,6 +197,7 @@ mod tests {
             contexts::TERMINAL,
             contexts::MANIFEST_EDITOR,
             contexts::PALETTE,
+            contexts::EVENTS,
         ];
         let named: Vec<_> = ViewContext::ALL.iter().map(|v| v.key_context()).collect();
         assert_eq!(named, standard);
