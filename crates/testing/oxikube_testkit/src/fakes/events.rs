@@ -139,7 +139,7 @@ impl EventBuilder {
 }
 
 /// A scripted events feed: the initial list at tick 0 and the changes of each later tick.
-/// See the [module docs](self).
+/// See the module docs of `fakes::events`.
 #[derive(Debug, Clone, Default)]
 pub struct FakeEventFeed {
     initial: Vec<Event>,

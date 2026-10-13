@@ -6,7 +6,7 @@
 //! domain's JSON mapping, de-duplicates and keeps the newest [`EventsConfig::capacity`]
 //! events, reporting changes as `DeltaBatch<Event>`s like any other feed (the port layer's
 //! `WatchFeed<Event>`). [`KubeEvents`] is the adapter of
-//! [`EventsPort`](oxikube_ports::EventsPort), served to the app as `ClusterPorts::events`.
+//! [`EventsPort`], served to the app as `ClusterPorts::events`.
 //! kube types stay in this module.
 //!
 //! ```text
