@@ -31,7 +31,7 @@ mod service;
 
 pub use click::{ClickAction, ClickSink};
 pub use commands::{OsNotificationSettings, register_commands};
-pub use service::{Delivery, OsNotificationService, TEST_TAG};
+pub use service::{Delivery, OsNotificationService};
 
 #[cfg(test)]
 mod tests;

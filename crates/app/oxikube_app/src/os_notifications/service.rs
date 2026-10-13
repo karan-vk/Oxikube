@@ -2,7 +2,6 @@
 
 use std::sync::Arc;
 
-use oxikube_domain::OxiResult;
 use oxikube_ports::{
     Notification, NotificationLevel, NotifierPort, NotifierStatus, is_unavailable,
 };
@@ -11,7 +10,7 @@ use parking_lot::Mutex;
 use super::click::{ClickAction, ClickSink};
 
 /// The tag of the test notification: sending it again replaces the one on screen.
-pub const TEST_TAG: &str = "oxikube/test";
+const TEST_TAG: &str = "oxikube/test";
 
 /// What became of a notification handed to [`OsNotificationService::notify`].
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -154,15 +153,6 @@ impl OsNotificationService {
             }));
     }
 
-    /// Removes the shown notification with `tag`, where the platform allows it.
-    ///
-    /// # Errors
-    ///
-    /// The port's error.
-    pub async fn clear(&self, tag: &str) -> OxiResult<()> {
-        self.inner.notifier.clear(tag).await
-    }
-
     fn gate(&self) -> Gate {
         let state = self.inner.state.lock();
         if !state.wanted {
@@ -178,10 +168,7 @@ impl OsNotificationService {
         let mut state = self.inner.state.lock();
         let hint = (!state.hinted).then(|| {
             state.hinted = true;
-            format!(
-                "OS notifications are on, but this system cannot show them ({reason}). \
-                 Notifications still appear in Oxikube."
-            )
+            unavailable_notice(reason)
         });
         Delivery::Unavailable { hint }
     }
@@ -191,4 +178,12 @@ enum Gate {
     Off,
     Unavailable(String),
     Open,
+}
+
+/// The sentence telling the user the opt-in stands but this system cannot show OS notifications.
+pub(super) fn unavailable_notice(reason: &str) -> String {
+    format!(
+        "OS notifications are on, but this system cannot show them ({reason}). \
+         Notifications still appear in Oxikube."
+    )
 }

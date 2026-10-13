@@ -12,7 +12,7 @@ use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::NotifierStatus;
 use serde_json::json;
 
-use super::service::{Delivery, OsNotificationService};
+use super::service::{Delivery, OsNotificationService, unavailable_notice};
 use crate::command_bus::{CommandOutput, CommandRegistry, HandlerContext, RegisterError};
 
 /// Writes `events.os_notifications` to the user's settings.
@@ -87,7 +87,7 @@ impl Commands {
                     ),
                     Delivery::Unavailable { hint } => (
                         hint.clone().unwrap_or_else(|| {
-                            format!("This system cannot show OS notifications ({})", status_text(&self.service))
+                            format!("This system cannot show OS notifications ({})", self.service.status())
                         }),
                         false,
                     ),
@@ -124,17 +124,10 @@ fn unavailable_reason(status: &NotifierStatus) -> Option<&str> {
     }
 }
 
-fn status_text(service: &OsNotificationService) -> String {
-    service.status().to_string()
-}
-
 fn toggle_message(enabled: bool, status: &NotifierStatus) -> String {
     match (enabled, status) {
         (false, _) => "OS notifications are off".to_owned(),
-        (true, NotifierStatus::Unavailable(reason)) => format!(
-            "OS notifications are on, but this system cannot show them ({reason}). \
-             Notifications still appear in Oxikube."
-        ),
+        (true, NotifierStatus::Unavailable(reason)) => unavailable_notice(reason),
         (true, _) => {
             "OS notifications are on. \"Send Test OS Notification\" checks that they arrive."
                 .to_owned()
