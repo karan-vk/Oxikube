@@ -78,6 +78,7 @@ pub use config::{
 };
 pub use filter::{EventFilter, EventFilterError};
 pub use key::EventKey;
+pub(crate) use key::seen_at;
 pub use service::EventService;
 pub use state::EventsState;
 pub use subscription::EventsSubscription;

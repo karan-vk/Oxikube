@@ -9,15 +9,7 @@ use jiff::{SignedDuration, Timestamp};
 use oxikube_domain::event::Event;
 use parking_lot::RwLock;
 
-use crate::events::EventKey;
-
-/// When `event` was last seen: `last_seen`, else `first_seen`, else the oldest time.
-pub(crate) fn seen_at(event: &Event) -> Timestamp {
-    event
-        .last_seen
-        .or(event.first_seen)
-        .unwrap_or(Timestamp::MIN)
-}
+use crate::events::{EventKey, seen_at};
 
 /// The warning behind a badge: the newest `Warning` event about the object.
 #[derive(Debug, Clone, PartialEq)]

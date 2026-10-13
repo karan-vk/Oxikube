@@ -11,24 +11,16 @@ use crate::store::{TaskGuard, spawn_guarded};
 /// warnings-only subscription to the service (which runs the cluster's one events feed) and the
 /// task that applies what it reports. Dropping it stops both; the badges stay as they were.
 pub struct BadgeTrack {
-    cluster: ClusterId,
     _task: TaskGuard,
 }
 
 impl std::fmt::Debug for BadgeTrack {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("BadgeTrack")
-            .field("cluster", &self.cluster)
-            .finish_non_exhaustive()
+        f.debug_struct("BadgeTrack").finish_non_exhaustive()
     }
 }
 
 impl BadgeTrack {
-    /// The cluster tracked.
-    pub fn cluster(&self) -> &ClusterId {
-        &self.cluster
-    }
-
     pub(super) fn start(badges: &WarningBadges, cluster: &ClusterId) -> Self {
         let mut subscription = badges
             .shared
@@ -41,10 +33,7 @@ impl BadgeTrack {
                 handle.apply(&tracked, change);
             }
         });
-        Self {
-            cluster: cluster.clone(),
-            _task: task,
-        }
+        Self { _task: task }
     }
 }
 

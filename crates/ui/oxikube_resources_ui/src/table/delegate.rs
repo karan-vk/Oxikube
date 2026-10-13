@@ -14,9 +14,9 @@ use gpui::{
     WeakEntity, Window, div, px,
 };
 use jiff::Timestamp;
-use oxikube_app::ColumnProvider;
 use oxikube_app::columns::Align;
 use oxikube_app::store::{FeedState, ObjectKey, StoreObject};
+use oxikube_app::{Column, ColumnProvider};
 use oxikube_ui::menu::{PopupMenu, PopupMenuItem};
 use oxikube_ui::table::SortDirection;
 use oxikube_ui::table::TextCell;
@@ -117,10 +117,14 @@ impl RowsDelegate {
         self.warnings.as_ref()?.badge(row, self.now)
     }
 
+    /// Whether `column` is the warning badge column this table offers.
+    fn is_badge_column(&self, column: &Column) -> bool {
+        column.id == BADGE_COLUMN && self.warnings.is_some()
+    }
+
     /// The cell of the badge column, when that is the column at `col_ix`.
     fn badge_td(&self, row_ix: usize, col_ix: usize, colors: &ToneColors) -> Option<AnyElement> {
-        let column = self.layout.visible(col_ix)?;
-        if column.id != BADGE_COLUMN || self.warnings.is_none() {
+        if !self.is_badge_column(self.layout.visible(col_ix)?) {
             return None;
         }
         let row = self.rows.get(row_ix)?;
@@ -200,7 +204,7 @@ impl TableDelegate for RowsDelegate {
     ) -> Option<TextCell> {
         let colors = self.colors(cx);
         let (row, column) = (self.rows.get(row_ix)?, self.layout.visible(col_ix)?);
-        if column.id == BADGE_COLUMN && self.warnings.is_some() {
+        if self.is_badge_column(column) {
             // Drawn by `render_td`: an icon with a tooltip, not text.
             return None;
         }
@@ -304,7 +308,7 @@ impl TableDelegate for RowsDelegate {
 
     fn cell_text(&self, row_ix: usize, col_ix: usize, _: &App) -> String {
         match (self.rows.get(row_ix), self.layout.visible(col_ix)) {
-            (Some(row), Some(column)) if column.id == BADGE_COLUMN && self.warnings.is_some() => {
+            (Some(row), Some(column)) if self.is_badge_column(column) => {
                 crate::warnings::cell_text(self.badge_of(row).as_ref())
             }
             (Some(row), Some(column)) => self

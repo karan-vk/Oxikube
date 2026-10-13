@@ -8,7 +8,7 @@ use futures::Stream;
 use oxikube_domain::event::Event;
 use oxikube_domain::ids::ClusterId;
 
-use crate::events::{EventFilter, EventService, EventsState, EventsSubscription};
+use crate::events::{EventFilter, EventService, EventsState, EventsSubscription, seen_at};
 
 /// Most events the Events tab lists.
 pub const MAX_OBJECT_EVENTS: usize = 200;
@@ -67,7 +67,7 @@ impl ObjectEventsFeed {
             .flat_map(|s| s.latest(MAX_OBJECT_EVENTS))
             .collect();
         if self.subscriptions.len() > 1 {
-            events.sort_by_key(|e| std::cmp::Reverse(e.last_seen.or(e.first_seen)));
+            events.sort_by_key(|e| std::cmp::Reverse(seen_at(e)));
             events.truncate(MAX_OBJECT_EVENTS);
         }
         events

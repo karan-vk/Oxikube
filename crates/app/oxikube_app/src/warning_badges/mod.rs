@@ -45,7 +45,7 @@ use oxikube_domain::ids::ClusterId;
 use oxikube_ports::ClockPort;
 use parking_lot::RwLock;
 
-use crate::events::{EventService, warning_row};
+use crate::events::{EventService, seen_at, warning_row};
 use crate::overview::{RecentWarnings, WarningRow};
 use crate::store::Spawner;
 
@@ -184,7 +184,7 @@ impl RecentWarnings for WarningBadges {
             .read(cluster, |buffer| {
                 buffer
                     .warnings()
-                    .take_while(|event| cluster::seen_at(event) >= cutoff)
+                    .take_while(|event| seen_at(event) >= cutoff)
                     .take(n)
                     .map(|event| warning_row(event))
                     .collect()
