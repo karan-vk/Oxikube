@@ -42,6 +42,11 @@ struct State {
     handler: Option<ActivationHandler>,
     /// Tag to the platform id of the notification showing it (for in-place replacement).
     ids: HashMap<String, u32>,
+    /// Platform id to what a click on it opens, for the notifications someone is waiting on. One
+    /// waiter per id: a notification that replaces another in place (same id) hands its target
+    /// to the waiter already there instead of starting a second one, which would see the same
+    /// click and activate twice.
+    live: HashMap<u32, NotificationActivation>,
 }
 
 impl OsNotifier {
@@ -59,6 +64,7 @@ impl OsNotifier {
                     status: NotifierStatus::Off,
                     handler: None,
                     ids: HashMap::new(),
+                    live: HashMap::new(),
                 }),
                 waiting: AtomicUsize::new(0),
             }),
@@ -121,7 +127,57 @@ impl Drop for WaitSlot {
     }
 }
 
+/// A thread waiting for the user to answer one notification.
+struct Waiter {
+    _slot: WaitSlot,
+    /// The platform id the shared target is filed under, if the platform has ids.
+    id: Option<u32>,
+    /// The target of a notification without a platform id.
+    own: Option<NotificationActivation>,
+}
+
 impl Inner {
+    /// Decides who waits for the user's answer to a notification that was just shown. `None`
+    /// when nobody needs to: no free slot, or a waiter on the same id already exists and now
+    /// answers for this notification's target.
+    fn waiter(
+        &self,
+        id: Option<u32>,
+        activation: NotificationActivation,
+        slot: Option<WaitSlot>,
+    ) -> Option<Waiter> {
+        let Some(id) = id else {
+            return slot.map(|_slot| Waiter {
+                _slot,
+                id: None,
+                own: Some(activation),
+            });
+        };
+        let mut state = self.state.lock();
+        if let Some(live) = state.live.get_mut(&id) {
+            *live = activation;
+            return None;
+        }
+        let _slot = slot?;
+        state.live.insert(id, activation);
+        Some(Waiter {
+            _slot,
+            id: Some(id),
+            own: None,
+        })
+    }
+
+    /// The user answered: a click runs the handler with the newest target filed for the id.
+    fn answered(&self, waiter: Waiter, response: Response) {
+        let activation = match waiter.id {
+            Some(id) => self.state.lock().live.remove(&id),
+            None => waiter.own,
+        };
+        if let (Response::Clicked, Some(activation)) = (response, activation) {
+            self.activated(activation);
+        }
+    }
+
     fn activated(&self, activation: NotificationActivation) {
         let handler = self.state.lock().handler.clone();
         if let Some(handler) = handler {
@@ -162,15 +218,20 @@ impl NotifierPort for OsNotifier {
     }
 
     async fn notify(&self, notification: &Notification) -> OxiResult<()> {
-        let replaces = {
+        let (replaces, shared_wait) = {
             let state = self.inner.state.lock();
             match &state.status {
                 NotifierStatus::Off => return Ok(()),
                 NotifierStatus::Unavailable(reason) => return Err(unavailable(reason.clone())),
-                NotifierStatus::Ready => notification
-                    .tag
-                    .as_ref()
-                    .and_then(|tag| state.ids.get(tag).copied()),
+                NotifierStatus::Ready => {
+                    let replaces = notification
+                        .tag
+                        .as_ref()
+                        .and_then(|tag| state.ids.get(tag).copied());
+                    // The waiter on the id being replaced takes this notification's clicks too.
+                    let shared = replaces.is_some_and(|id| state.live.contains_key(&id));
+                    (replaces, shared)
+                }
             }
         };
         let payload = Payload::of(notification, replaces);
@@ -182,7 +243,8 @@ impl NotifierPort for OsNotifier {
         std::thread::Builder::new()
             .name("oxikube-notify".to_owned())
             .spawn(move || {
-                let shown = match inner.backend.show(&payload, slot.is_some()) {
+                let clickable = slot.is_some() || shared_wait;
+                let shown = match inner.backend.show(&payload, clickable) {
                     Ok(shown) => shown,
                     Err(error) => {
                         let _ = shown_tx.send(Err(error));
@@ -193,11 +255,10 @@ impl NotifierPort for OsNotifier {
                     inner.remember(tag, id);
                 }
                 let _ = shown_tx.send(Ok(()));
-                match slot {
-                    Some(_slot) => {
-                        if shown.wait() == Response::Clicked {
-                            inner.activated(activation);
-                        }
+                match inner.waiter(shown.id(), activation, slot) {
+                    Some(waiter) => {
+                        let response = shown.wait();
+                        inner.answered(waiter, response);
                     }
                     None => shown.detach(),
                 }

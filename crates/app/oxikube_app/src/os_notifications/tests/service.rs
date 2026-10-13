@@ -165,3 +165,69 @@ fn the_test_notification_replaces_itself_and_clicks_to_nothing() {
     let activation = notifier.shown()[0].activation();
     assert_eq!(ClickAction::from(activation).commands(), vec![]);
 }
+
+/// A port whose `set_enabled(true)` answers only when the test says so, like an adapter that is
+/// still connecting to the OS.
+struct SlowPort {
+    answer: Mutex<Option<futures::channel::oneshot::Receiver<NotifierStatus>>>,
+    switches: std::sync::atomic::AtomicUsize,
+    notified: std::sync::atomic::AtomicUsize,
+}
+
+#[async_trait::async_trait]
+impl oxikube_ports::NotifierPort for SlowPort {
+    async fn set_enabled(&self, enabled: bool) -> oxikube_domain::OxiResult<NotifierStatus> {
+        self.switches
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let answer = self.answer.lock().take();
+        match (enabled, answer) {
+            (true, Some(answer)) => Ok(answer.await.unwrap_or(NotifierStatus::Ready)),
+            (true, None) => Ok(NotifierStatus::Ready),
+            (false, _) => Ok(NotifierStatus::Off),
+        }
+    }
+
+    async fn notify(&self, _: &oxikube_ports::Notification) -> oxikube_domain::OxiResult<()> {
+        self.notified
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(())
+    }
+
+    async fn clear(&self, _: &str) -> oxikube_domain::OxiResult<()> {
+        Ok(())
+    }
+
+    fn on_activated(&self, _: oxikube_ports::ActivationHandler) {}
+}
+
+#[test]
+fn an_overlapping_apply_returns_the_status_the_first_arrived_at() {
+    let (answer, answered) = futures::channel::oneshot::channel();
+    let port = Arc::new(SlowPort {
+        answer: Mutex::new(Some(answered)),
+        switches: Default::default(),
+        notified: Default::default(),
+    });
+    let service = crate::os_notifications::OsNotificationService::new(port.clone());
+    let unavailable = NotifierStatus::Unavailable("no daemon".into());
+
+    // The settings observer and the toggle command both apply `true` for one change.
+    let observer = service.apply(true);
+    let command = service.apply(true);
+    let meanwhile = async {
+        // The port is still connecting: nothing is sent to it, and nothing claims it was.
+        assert_eq!(service.notify(&warning("early")).await, Delivery::Off);
+        answer.send(unavailable.clone()).unwrap();
+    };
+    let (first, second, ()) = block_on(async { futures::join!(observer, command, meanwhile) });
+
+    assert_eq!(first, unavailable);
+    assert_eq!(second, unavailable, "not the half-done `Off`");
+    assert_eq!(port.switches.load(std::sync::atomic::Ordering::SeqCst), 1);
+    assert_eq!(port.notified.load(std::sync::atomic::Ordering::SeqCst), 0);
+    // The user is told about the missing daemon, once.
+    assert!(matches!(
+        block_on(service.notify(&warning("later"))),
+        Delivery::Unavailable { hint: Some(_) }
+    ));
+}

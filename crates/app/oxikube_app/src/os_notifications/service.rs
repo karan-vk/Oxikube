@@ -41,6 +41,9 @@ pub struct OsNotificationService {
 struct Inner {
     notifier: Arc<dyn NotifierPort>,
     state: Mutex<State>,
+    /// Held for the whole of an [`apply`](OsNotificationService::apply): switches run one at a
+    /// time, so a second caller sees the first one's answer, not its half-done state.
+    switching: futures::lock::Mutex<()>,
 }
 
 struct State {
@@ -50,6 +53,10 @@ struct State {
     status: NotifierStatus,
     /// Whether the "no notification service" hint was handed out.
     hinted: bool,
+    /// The port is being turned on: it has not answered yet, so nothing is sent to it.
+    connecting: bool,
+    /// How many switches have finished: tells a waiting caller that another one answered.
+    switched: u64,
 }
 
 impl OsNotificationService {
@@ -62,7 +69,10 @@ impl OsNotificationService {
                     wanted: false,
                     status: NotifierStatus::Off,
                     hinted: false,
+                    connecting: false,
+                    switched: 0,
                 }),
+                switching: futures::lock::Mutex::new(()),
             }),
         }
     }
@@ -83,12 +93,22 @@ impl OsNotificationService {
     /// user may have started a daemon). Returns the resulting status; a port error becomes
     /// `Unavailable`, because the user's opt-in stands and a later toggle retries.
     pub async fn apply(&self, wanted: bool) -> NotifierStatus {
+        // Serialised: the setting's observer and the toggle command both call this for one
+        // change, and the second must return the status the first arrived at.
+        let seen = self.inner.state.lock().switched;
+        let _switch = self.inner.switching.lock().await;
         {
             let mut state = self.inner.state.lock();
-            if state.wanted == wanted && !matches!(state.status, NotifierStatus::Unavailable(_)) {
+            // Another switch answered while this one waited its turn: its answer is this one's,
+            // even `Unavailable` (asking again straight away would only repeat the question).
+            let answered_meanwhile = state.switched != seen;
+            if state.wanted == wanted
+                && (answered_meanwhile || !matches!(state.status, NotifierStatus::Unavailable(_)))
+            {
                 return state.status.clone();
             }
             state.wanted = wanted;
+            state.connecting = wanted;
             if !wanted {
                 state.status = NotifierStatus::Off;
                 state.hinted = false;
@@ -101,12 +121,10 @@ impl OsNotificationService {
             (true, Err(error)) => NotifierStatus::Unavailable(error.message().to_owned()),
         };
         let mut state = self.inner.state.lock();
-        // The user may have flipped the setting again while the port was answering: the newest
-        // wish wins, and the port gets its own `apply` for it.
-        if state.wanted == wanted {
-            state.status = status.clone();
-            state.hinted = false;
-        }
+        state.status = status.clone();
+        state.hinted = false;
+        state.connecting = false;
+        state.switched += 1;
         status
     }
 
@@ -155,7 +173,9 @@ impl OsNotificationService {
 
     fn gate(&self) -> Gate {
         let state = self.inner.state.lock();
-        if !state.wanted {
+        // While the port connects it is not yet showing anything: a notification now would be
+        // reported as sent and dropped.
+        if !state.wanted || state.connecting {
             return Gate::Off;
         }
         match &state.status {

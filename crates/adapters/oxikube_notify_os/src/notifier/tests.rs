@@ -68,7 +68,8 @@ impl Backend for Arc<Scripted> {
             rx
         });
         Ok(Box::new(ScriptedShown {
-            id: 100 + shows.len() as u32,
+            // Like a freedesktop server: a replacement keeps the id it replaces.
+            id: payload.replaces.unwrap_or(100 + shows.len() as u32),
             user,
             backend: self.clone(),
         }))
@@ -215,6 +216,63 @@ fn the_same_tag_replaces_until_cleared() {
         .map(|(p, _)| p.replaces)
         .collect();
     assert_eq!(replaces, vec![None, Some(101), None, None]);
+}
+
+#[test]
+fn a_replacement_shares_the_waiter_so_one_click_activates_once() {
+    let (notifier, backend) = setup();
+    let (clicks, seen) = mpsc::channel();
+    notifier.on_activated(Arc::new(move |activation| {
+        clicks.send(activation).unwrap();
+    }));
+    block_on(notifier.set_enabled(true)).unwrap();
+
+    let first = warning("x").with_action_target(target());
+    let newer = warning("x").with_action_target(
+        "3f2a9c01b7d4e865/apps/v1/Deployment/prod/web"
+            .parse()
+            .unwrap(),
+    );
+    block_on(notifier.notify(&first)).unwrap();
+    block_on(notifier.notify(&newer)).unwrap();
+    {
+        let shows = backend.shows.lock();
+        assert_eq!(shows[1].0.replaces, Some(101), "replaced in place");
+        assert!(shows[1].1, "the replacement still carries the click action");
+    }
+    assert_eq!(
+        notifier.inner.waiting.load(Ordering::SeqCst),
+        1,
+        "one waiter, one slot, for the one notification on screen"
+    );
+
+    // Every thread waiting on the id would see this click.
+    let senders: Vec<_> = backend.users.lock().clone();
+    for user in senders {
+        // The replacement's own channel has no reader: only a second waiter would answer.
+        let _ = user.send(Response::Clicked);
+    }
+    let activation = seen.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert_eq!(activation, newer.activation(), "the notification on screen");
+    assert!(
+        seen.recv_timeout(Duration::from_millis(200)).is_err(),
+        "activated once"
+    );
+}
+
+#[test]
+fn re_sending_a_tag_does_not_use_up_the_waiting_slots() {
+    let (notifier, backend) = setup();
+    block_on(notifier.set_enabled(true)).unwrap();
+    for _ in 0..MAX_WAITING * 2 {
+        block_on(notifier.notify(&warning("same"))).unwrap();
+    }
+    assert_eq!(notifier.inner.waiting.load(Ordering::SeqCst), 1);
+    block_on(notifier.notify(&warning("other"))).unwrap();
+    assert!(
+        backend.shows.lock().last().unwrap().1,
+        "a different notification is still clickable"
+    );
 }
 
 #[test]
