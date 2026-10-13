@@ -13,6 +13,7 @@ mod charts;
 mod chrome;
 mod create;
 mod editor;
+mod events;
 mod exec;
 mod help;
 mod immediate;

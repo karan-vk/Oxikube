@@ -166,6 +166,13 @@ crate's `README.md` for its allowed dependencies. Highlights:
   the health tally moves one counter per bucket (`KindCount::buckets`, O(1) per delta), `WorkloadCounters` holds the lease of
   the overview's kinds and reports whether a read changed anything, and the `-s <bucket>` filter (`StoreFilter::status`) lists
   the objects in a bucket. Module `overview` holds `RecentWarnings`, the hook the Events feed (E14) implements.
+  Module `events` (E14-S02): `EventService`, every cluster's events from **one** `EventsPort` feed per cluster (started by
+  the first `EventsSubscription` of a connected cluster, stopped after a 30 s idle grace or at once on disconnect, reopened
+  on reconnect) in an `EventBuffer`: a ring ordered by (last seen, arrival) bounded by `events.buffer` (default 10 000,
+  per cluster), de-duplicated by `EventKey` (uid; count, last seen and message updated in place) and indexed by involved-object
+  uid (with a warning count, the `O(1)` badge lookup), namespace and warnings, every index updated in the same step.
+  `EventFilter` (types, reasons, kinds, namespaces, object, since, text compiled once) queries newest first; subscribers get
+  `EventsChanged` coalesced per poll. It implements `RecentWarnings`. `cargo bench -p oxikube_app --bench event_buffer`.
   Module `columns` (E07-S02): `ColumnProvider`, the one question a table asks of a kind (`columns(kind,
   caps)` and `cell(object, column, now)`), with two implementations (ADR 0006). `CoreColumns` is a
   table-driven catalogue of ~40 core kinds (computed `Ready` / `Status` / `Restarts` from the domain
@@ -765,8 +772,8 @@ crate's `README.md` for its allowed dependencies. Highlights:
   never a guess from a cloud alone). `fetch_cluster_history` runs the cluster-scope CPU and memory queries (usage and requests,
   the last hour) of the provider's catalogue on the `PromqlPort`; `HistoryAvailability` reads a `ProviderStatus` through
   `ProviderSource` (implemented by `MetricsProviderService`). `cargo bench -p oxikube_app --bench cluster_overview`.
-- `oxikube_app::overview` (E12-S07, E13-S09) — `RecentWarnings`, the warnings hook the Events feed (E14) implements;
-  `NoRecentWarnings` until then.
+- `oxikube_app::overview` (E12-S07, E13-S09) — `RecentWarnings`, the warnings hook the `EventService` (E14-S02)
+  implements; `NoRecentWarnings` and `FixedWarnings` for tests and previews.
 - `oxikube_overview_ui` (E13-S09) — `ClusterOverview`, a cluster tab's landing page (a workspace item, key
   `cluster-overview`): health tiles (nodes ready / not ready, pods by phase; a click sends `resource::OpenList`), capacity and
   allocation bars (requests fill, limits mark, live usage bar; CPU, memory, pods), top CPU and memory pods and namespaces (a
@@ -1689,6 +1696,9 @@ Events (`oxikube_kube::events`) are the exception to the reflector store: `core/
 `events.k8s.io/v1` are watched together, merged by `metadata.uid` into domain `Event`s and kept in
 a fixed-size ring (oldest `last_seen` evicted, evictions reported as `Deleted` deltas and counted),
 so a noisy cluster cannot grow memory. A per-object feed filters by the involved object's UID.
+The app opens one such feed per cluster, in `oxikube_app::events::EventService` (E14-S02), and every
+events consumer (overview warnings, events view, Events tab, badges, notifications, tools) reads its
+indexed buffer; nothing else watches events.
 
 Resource feeds (reflector, metadata-only, Table) are opened through their cluster's watch budget
 (`oxikube_kube::budget::FeedRegistry`, E04-S13): equal requests share one feed and count

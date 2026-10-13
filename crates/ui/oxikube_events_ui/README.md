@@ -9,6 +9,7 @@ Cluster-wide events view and per-resource events tab.
 - `oxikube_domain`
 - `oxikube_ports`
 - `oxikube_app`
+- `oxikube_settings` (the `events` settings)
 - `oxikube_ui`
 - `oxikube_workspace`
 

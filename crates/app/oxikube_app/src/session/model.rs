@@ -7,7 +7,7 @@ use oxikube_domain::session::{ClusterSessionState, NamespaceSelection, SessionPh
 use oxikube_domain::{Capabilities, Capability, ClusterColour};
 use oxikube_ports::{
     AccessReviewPort, ClusterPorts, ClusterPrefs, CrdWatchStatus, DescribePort, DiscoveryPort,
-    ExecInteractivity, ExecPort, LogPort, MetricsPort, PortForwardPort, ResourceReader,
+    EventsPort, ExecInteractivity, ExecPort, LogPort, MetricsPort, PortForwardPort, ResourceReader,
     ResourceWriter, SchemaPort, ServiceProxyPort, TableFeedPort, WarningPort,
 };
 
@@ -210,6 +210,12 @@ impl ClusterSession {
     /// validation (`None` while not connected). Read-only.
     pub fn schemas(&self) -> Option<Arc<dyn SchemaPort>> {
         self.ports.as_ref().map(|p| p.schemas.clone())
+    }
+
+    /// The cluster's events feed (`None` while not connected). Read-only; the app opens it only
+    /// through `EventService`, one feed per cluster.
+    pub fn events(&self) -> Option<Arc<dyn EventsPort>> {
+        self.ports.as_ref().map(|p| p.events.clone())
     }
 
     /// The access review port, to re-probe capabilities for a namespace.

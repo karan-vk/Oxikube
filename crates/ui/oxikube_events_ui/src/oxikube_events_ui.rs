@@ -4,3 +4,11 @@
 //!
 //! See `README.md` in this crate and `docs/ARCHITECTURE.md` for the allowed
 //! dependency direction. `cargo xtask lint-deps` enforces it.
+//!
+//! | Module | Story | Holds |
+//! |---|---|---|
+//! | [`settings`] | E14-S02 | the `events` settings ([`EventsSettings`]: `events.buffer`, global and per cluster) and [`follow_settings`], which pushes them into the app's `EventService` now and on every change |
+
+pub mod settings;
+
+pub use settings::{EventsContent, EventsSettings, follow_settings};

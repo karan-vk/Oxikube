@@ -11,6 +11,9 @@
 //!
 //! - [`aliases`]: keeps the `:` jump bar's alias tables in step with the clusters' discovery and
 //!   the user's `aliases.json`, hot reloaded (E11-S04).
+//! - [`events`]: starts the app's `EventService` (its feeds on the Tokio bridge, its session
+//!   follower, `events.buffer` hot reloaded) and makes each cluster tab a subscriber of its
+//!   cluster's warnings, which the overviews' warnings panels read (E14-S02).
 //! - [`history`]: loads the command recents and the jump history from the state db, writes them back
 //!   after changes and flushes them on quit (E11-S11).
 //! - [`cluster_prefs`]: pushes the per-cluster settings into the `ClusterSessionManager` and
@@ -35,6 +38,7 @@
 pub mod aliases;
 pub mod app_state;
 pub mod cluster_prefs;
+pub mod events;
 pub mod history;
 pub mod kube_ports;
 pub mod live_metrics;

@@ -26,6 +26,7 @@ mod crd_watch;
 mod debug;
 mod delete;
 mod drain;
+mod events;
 mod exec;
 mod filter_selector;
 mod live_metrics;

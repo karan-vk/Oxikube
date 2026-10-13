@@ -260,8 +260,10 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let resources_slot = ResourceViewsSlot::new();
     let stores = resources::stores(&state, ports.clusters.clock.clone(), cx);
     let pulses_stores = stores.clone();
-    // The Events feed (E14) replaces this; until then the overviews say there are none.
-    let warnings: Arc<dyn oxikube_app::RecentWarnings> = Arc::new(oxikube_app::NoRecentWarnings);
+    // The events of every cluster (E14-S02): one feed per cluster, started by its tab; the
+    // overviews' warnings panels read the newest warnings from it.
+    crate::events::start(&services.events, cx);
+    let warnings: Arc<dyn oxikube_app::RecentWarnings> = Arc::new(services.events.clone());
     // The cluster overview (E13-S09): every cluster tab's first screen.
     let overview_deps = overview::deps(
         &services,
@@ -278,6 +280,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         workspace: workspace.downgrade(),
         stores: stores.clone(),
         warnings,
+        events: services.events.clone(),
         resources: resources_slot.clone(),
         overview: overview_deps.clone(),
     };

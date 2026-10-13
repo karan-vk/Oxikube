@@ -2,8 +2,8 @@
 
 use oxikube_app::session::namespaces::NamespaceService;
 use oxikube_app::{
-    AliasRegistry, ClusterCatalog, ClusterCommands, ClusterSessionManager, IntegrationRegistry,
-    MetricsService, MutationGuard, UtilisationAggregator,
+    AliasRegistry, ClusterCatalog, ClusterCommands, ClusterSessionManager, EventService,
+    EventsConfig, IntegrationRegistry, MetricsService, MutationGuard, UtilisationAggregator,
 };
 
 use super::AppPorts;
@@ -41,6 +41,10 @@ pub struct ClusterServices {
     /// Live CPU and memory from metrics-server, polled per cluster while a table shows it
     /// (E13-S03). Idle until `live_metrics::start`.
     pub live_metrics: MetricsService,
+    /// Every cluster's Kubernetes events, one feed per cluster (E14-S02): what the overview's
+    /// warnings panel reads, and the events view, Events tab, badges, notifications and tools
+    /// after it. Idle until `events::start`; its bound follows `events.buffer`.
+    pub events: EventService,
 }
 
 impl ClusterServices {
@@ -64,6 +68,11 @@ impl ClusterServices {
         );
         let metrics = metrics_provider::build(ports, &sessions);
         let live_metrics = MetricsService::new(sessions.clone(), clusters.clock.clone());
+        let events = EventService::new(
+            sessions.clone(),
+            clusters.clock.clone(),
+            EventsConfig::default(),
+        );
         Self {
             cluster_commands: ClusterCommands::new(sessions.clone(), catalog.clone()),
             sessions,
@@ -74,6 +83,7 @@ impl ClusterServices {
             utilisation: UtilisationAggregator::default(),
             metrics,
             live_metrics,
+            events,
         }
     }
 

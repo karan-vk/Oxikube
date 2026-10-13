@@ -2,7 +2,8 @@
 //! panel (E09-S07) in its bottom dock, the connect
 //! lifecycle views (E06-S06), the namespace selector (E06-S07) in its toolbar, the resource
 //! views (E07-S11, see `resources`), the cluster overview as its first screen (E13-S09, see
-//! `overview`) and the sidebar's navigation to the resource tables (E07-S03).
+//! `overview`), the sidebar's navigation to the resource tables (E07-S03) and the subscription
+//! to the cluster's warnings that runs its events feed (E14-S02, see `crate::events`).
 
 use std::rc::Rc;
 use std::sync::Arc;
@@ -10,7 +11,8 @@ use std::sync::Arc;
 use gpui::{App, AppContext as _, Entity, WeakEntity, Window};
 use oxikube_app::session::namespaces::NamespaceService;
 use oxikube_app::{
-    ClusterSession, ClusterSessionManager, IntegrationRegistry, RecentWarnings, ResourceStores,
+    ClusterSession, ClusterSessionManager, EventService, IntegrationRegistry, RecentWarnings,
+    ResourceStores,
 };
 use oxikube_catalog_ui::connect::{self, ConnectDeps};
 use oxikube_catalog_ui::namespaces::{
@@ -42,9 +44,11 @@ pub struct TabDeps {
     pub resources: ResourceViewsSlot,
     /// The resource stores the sidebar's badges and the overview read (E07-S11).
     pub stores: Arc<ResourceStores>,
-    /// The newest warning events for the Workloads overview's panel (E12-S07): the Events feed
-    /// when E14 provides one.
+    /// The newest warning events for the overviews' panels (E12-S07): the `EventService`.
     pub warnings: Arc<dyn RecentWarnings>,
+    /// The app's events (E14-S02): each tab subscribes to its cluster's warnings while it is
+    /// open, which is what runs the cluster's events feed for the overviews.
+    pub events: EventService,
     /// What the cluster overview (E13-S09), the tab's first screen, reads.
     pub overview: oxikube_overview_ui::OverviewDeps,
 }
@@ -91,6 +95,7 @@ pub fn tab_setup(
         super::overview::install(tab, session, &deps.overview, window, cx);
         super::metrics::install_tab(tab, session, &deps, window, cx);
         super::pulses::install_tab(tab, session, &deps, window, cx);
+        crate::events::install_tab(tab, session, &deps.events, cx);
     }
 }
 
