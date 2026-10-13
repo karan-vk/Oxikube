@@ -3,7 +3,8 @@
 use oxikube_app::session::namespaces::NamespaceService;
 use oxikube_app::{
     AliasRegistry, ClusterCatalog, ClusterCommands, ClusterSessionManager, EventService,
-    EventsConfig, IntegrationRegistry, MetricsService, MutationGuard, UtilisationAggregator,
+    EventsConfig, IntegrationRegistry, MetricsService, MutationGuard, OsNotificationService,
+    UtilisationAggregator,
 };
 
 use super::AppPorts;
@@ -45,6 +46,10 @@ pub struct ClusterServices {
     /// warnings panel reads, and the events view, Events tab, badges, notifications and tools
     /// after it. Idle until `events::start`; its bound follows `events.buffer`.
     pub events: EventService,
+    /// Desktop notifications behind the opt-in (E14-S06): the `app::ToggleOsNotifications` and
+    /// `app::SendTestNotification` commands run on it, and the notification centre hands it the
+    /// Warning events (E14-S05). Idle, and the OS untouched, until `events.os_notifications`.
+    pub os_notifications: OsNotificationService,
 }
 
 impl ClusterServices {
@@ -84,6 +89,7 @@ impl ClusterServices {
             metrics,
             live_metrics,
             events,
+            os_notifications: OsNotificationService::new(ports.notifier.clone()),
         }
     }
 

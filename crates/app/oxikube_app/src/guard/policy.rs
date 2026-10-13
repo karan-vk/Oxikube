@@ -198,6 +198,8 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::KeymapOpenUser
         | Command::ChartsOpenGallery
         | Command::AppQuit
+        | Command::AppSendTestNotification
+        | Command::AppToggleOsNotifications { .. }
         | Command::JumpBack
         | Command::JumpForward
         | Command::JumpLast

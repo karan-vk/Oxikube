@@ -1,5 +1,5 @@
 //! Infrastructure fakes for scripted, mostly read-only ports: [`FakeMetricsPort`],
-//! [`FakePromqlPort`], [`FakeDescribePort`], [`FakeHelmPort`], [`FakeNotifierPort`],
+//! [`FakePromqlPort`], [`FakeDescribePort`], [`FakeHelmPort`],
 //! [`FakeUpdaterPort`] and [`FakeCrashReporterPort`].
 
 use async_trait::async_trait;
@@ -9,8 +9,8 @@ use oxikube_domain::session::NamespaceSelection;
 use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::{
     CrashId, CrashReport, CrashReporterPort, DescribeOutput, DescribePort, DownloadedUpdate,
-    HelmPort, HelmRelease, HelmReleaseRef, MetricsOutcome, MetricsPort, Notification, NotifierPort,
-    PromqlPort, PromqlSeries, TimeRange, UpdateChannel, UpdateInfo, UpdaterPort,
+    HelmPort, HelmRelease, HelmReleaseRef, MetricsOutcome, MetricsPort, PromqlPort, PromqlSeries,
+    TimeRange, UpdateChannel, UpdateInfo, UpdaterPort,
 };
 use parking_lot::Mutex;
 
@@ -405,70 +405,6 @@ impl HelmPort for FakeHelmPort {
     }
 }
 
-// --- NotifierPort ------------------------------------------------------------------------
-
-/// Queued responses for each [`FakeNotifierPort`] method.
-#[derive(Debug, Default)]
-pub struct NotifierScripts {
-    /// `notify`.
-    pub notify: Script<()>,
-    /// `clear`.
-    pub clear: Script<()>,
-}
-
-/// One call made on a [`FakeNotifierPort`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum NotifierCall {
-    /// `notify(notification)`.
-    Notify(Notification),
-    /// `clear(tag)`.
-    Clear(String),
-}
-
-/// Fake `NotifierPort`. Fallback: both methods succeed; the notifications are in
-/// [`recorded_calls`](Self::recorded_calls) and [`notifications`](Self::notifications).
-#[derive(Debug, Default)]
-pub struct FakeNotifierPort {
-    script: NotifierScripts,
-    calls: CallLog<NotifierCall>,
-}
-
-fake_plumbing!(FakeNotifierPort, NotifierScripts, NotifierCall);
-
-impl FakeNotifierPort {
-    /// A fake that accepts every notification.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Every notification passed to `notify`, in order (including ones whose scripted
-    /// response was an error).
-    pub fn notifications(&self) -> Vec<Notification> {
-        self.calls
-            .calls()
-            .into_iter()
-            .filter_map(|c| match c {
-                NotifierCall::Notify(n) => Some(n),
-                NotifierCall::Clear(_) => None,
-            })
-            .collect()
-    }
-}
-
-#[async_trait]
-impl NotifierPort for FakeNotifierPort {
-    async fn notify(&self, notification: &Notification) -> OxiResult<()> {
-        self.calls
-            .record(NotifierCall::Notify(notification.clone()));
-        self.script.notify.next_or_else(|| Ok(()))
-    }
-
-    async fn clear(&self, tag: &str) -> OxiResult<()> {
-        self.calls.record(NotifierCall::Clear(tag.to_owned()));
-        self.script.clear.next_or_else(|| Ok(()))
-    }
-}
-
 // --- UpdaterPort -------------------------------------------------------------------------
 
 /// Queued responses for each [`FakeUpdaterPort`] method.
@@ -643,7 +579,7 @@ mod tests {
     use oxikube_domain::ErrorKind;
     use oxikube_domain::ids::{ContextName, Gvk};
     use oxikube_domain::metrics::MissingReason;
-    use oxikube_ports::{DescribeSource, HelmReleaseStatus, NotificationLevel};
+    use oxikube_ports::{DescribeSource, HelmReleaseStatus};
 
     fn cluster() -> ClusterId {
         ClusterId::new("/kubeconfig", &ContextName::new("kind-oxikube"))
@@ -822,29 +758,6 @@ mod tests {
         let calls = fake.recorded_calls();
         assert_eq!(calls.len(), 7);
         assert_eq!(calls.iter().filter(|c| c.is_mutating()).count(), 3);
-    }
-
-    #[test]
-    fn notifier_succeeds_by_default_and_scripts_errors() {
-        let fake = FakeNotifierPort::new();
-        let note = Notification {
-            title: "Pod crashed".into(),
-            body: "web restarted".into(),
-            level: NotificationLevel::Warning,
-            cluster: None,
-            tag: Some("crash/web".into()),
-        };
-        block_on(fake.notify(&note)).unwrap();
-        fake.script()
-            .notify
-            .push_err(OxiError::unsupported("no daemon"));
-        assert!(block_on(fake.notify(&note)).is_err());
-        block_on(fake.clear("crash/web")).unwrap();
-        assert_eq!(fake.notifications(), vec![note.clone(), note]);
-        assert_eq!(
-            fake.recorded_calls()[2],
-            NotifierCall::Clear("crash/web".into())
-        );
     }
 
     #[test]

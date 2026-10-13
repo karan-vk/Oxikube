@@ -108,6 +108,8 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
     let target = || pod(name, "web-0");
     match command.as_str() {
         "app::Quit" => Command::AppQuit,
+        "app::SendTestNotification" => Command::AppSendTestNotification,
+        "app::ToggleOsNotifications" => Command::AppToggleOsNotifications { enabled: None },
         "cluster::ApplyPreset" => Command::ClusterApplyPreset {
             cluster,
             preset: ClusterPreset::Staging,

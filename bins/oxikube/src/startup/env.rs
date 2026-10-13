@@ -103,7 +103,8 @@ impl StartupEnv {
     pub fn test_with(ports: &oxikube_testkit::TestPorts) -> Self {
         let clusters = crate::app_state::ClusterAdapters::fakes(ports);
         let bundle = AppPorts::new(ports.state.clone(), clusters)
-            .with_secrets(Arc::clone(&ports.secrets) as _);
+            .with_secrets(Arc::clone(&ports.secrets) as _)
+            .with_notifier(Arc::clone(&ports.notifier) as _);
         Self {
             config: ConfigSource::Memory,
             runtime: RuntimeChoice::Deterministic,

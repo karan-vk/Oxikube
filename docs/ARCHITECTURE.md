@@ -684,6 +684,20 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `describe.kubectl_path` settings, hot reloaded by the binary). `oxikube_kube::KubeConnector::set_describe_factory` hands each
   connection's client and discovery to the factory the binary supplies (`bins/oxikube::kube_ports::SourcesConnector`), which
   fills `ClusterPorts::describe` and points `kubectl` at the file that defines the context.
+- `oxikube_notify_os` (E14-S06) — the `NotifierPort` adapter for desktop notifications. `OsNotifier` is off until the user opts in
+  (`events.os_notifications`): `set_enabled(true)` is the only call that contacts the OS, on a thread of its own, and a system without a
+  notification service answers `NotifierStatus::Unavailable`, never a panic. One `Backend` per platform behind a trait: macOS
+  `NSUserNotificationCenter` through `mac-notification-sys` (its `wait_for_click` reports a body click; `notify-rust` does not wait
+  for one without an action button), Linux and the BSDs freedesktop notifications over D-Bus through `notify-rust` (zbus; the `default`
+  action is offered only when the server advertises `actions`), other platforms an always-unavailable backend. `Payload` redacts,
+  flattens and caps the text (`Notification::sanitised`, 80 / 240 characters); the click target (`Notification::action_target`) never
+  leaves the process. At most 16 threads wait for a click at once. A dev build outside an `.app` bundle is attributed to Terminal
+  and may be suppressed by macOS (`UNUserNotificationCenter` is `notify-rust`'s `preview-macos-un`, needs a signed bundle; replacing
+  `backend/macos.rs` is the whole change). `oxikube_app::os_notifications::OsNotificationService` is the policy over the port:
+  the opt-in gate, the one-time "no notification service" hint, `ClickAction` (the cluster to select and the object to open) and the
+  commands `app::ToggleOsNotifications` / `app::SendTestNotification`; `bins/oxikube::os_notifications` follows the setting and
+  `mount::notifications` brings the window to the front and dispatches the click's commands. Tests: `FakeNotifierPort`
+  (off until enabled, `shown()`, `click_last()`), `TestPorts::notifier`.
 - `oxikube_prometheus` (E13-S04) — the PromQL HTTP adapter. `PromqlClient` implements `PromqlEndpointPort` (instant and range
   queries against one explicit `PromEndpoint`: base URL, path prefix such as Mimir's `/prometheus`, none/bearer/basic auth
   whose secret is in memory or a keychain reference read per request, a custom CA or an insecure toggle, a request deadline
@@ -1410,6 +1424,7 @@ layer, **define a narrow port in `oxikube_ports` and inject the implementation f
 | Per-kind JSON Schemas of a connected cluster (manifest editor validation, hover, completion) | `SchemaPort` (`schema_for`, `invalidate`; part of `ClusterPorts`) | `oxikube_kube::openapi` (`OpenApiSchemas`; tests: `FakeSchemaPort`) | `oxikube_editor` (E10-S03 onwards); `oxikube_app::session` calls `invalidate` on `KindsChanged` and `SchemasChanged` |
 | Reaching an in-cluster service (the metrics provider's probe and queries) with the connection's own credentials | `ServiceProxyPort` (part of `ClusterPorts`) | `oxikube_kube::service_proxy` (`KubeServiceProxy`; tests: `FakeServiceProxyPort`) | `oxikube_prometheus` (`ProxyPromqlClient`) |
 | Finding a cluster's Prometheus-compatible service | `ProviderDetectorPort` (`detect`, `check`) | `oxikube_prometheus::ProviderDetector` (tests: `FakeProviderDetectorPort`) | `oxikube_app::metrics_provider` |
+| Showing a desktop (OS) notification, once the user opted in; reporting its click | `NotifierPort` (`set_enabled`, `notify`, `clear`, `on_activated`) | `oxikube_notify_os::OsNotifier` (tests: `FakeNotifierPort`) | `oxikube_app::os_notifications` (`OsNotificationService`) |
 | App writing `prometheus.enabled` back to `settings.json` | `oxikube_app::metrics_provider::MetricsSettingsWriter` (a trait of the app crate) | `bins/oxikube::metrics_provider::SettingsMetricsWriter` over `ClusterSettings::set_metrics_enabled` | `cluster::ToggleMetrics` |
 | History graphs of a detail panel reaching Prometheus | `oxikube_app::metrics_history::HistorySource` + `PromqlPort` + `QueryCataloguePort` | `bins/oxikube::metrics_provider` (`MetricsHistoryService` over the provider service, `PrometheusPort` and `PromqlCatalogue`, installed as `oxikube_resources_ui::detail::MetricsHistory`) | `DetailView` Metrics tab, `resource::ViewMetrics` |
 | The found provider reaching the PromQL port | `oxikube_app::metrics_provider::EndpointSink` | `bins/oxikube::metrics_provider` (over `PrometheusPort::set_endpoint`) | `MetricsProviderService` |

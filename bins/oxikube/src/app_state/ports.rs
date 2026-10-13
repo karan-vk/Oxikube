@@ -5,7 +5,8 @@ use std::sync::Arc;
 
 use oxikube_describe::DescribePreference;
 use oxikube_ports::{
-    ClockPort, ClusterConnectorPort, ClusterSourcePort, FsPort, SecretStorePort, StatePort,
+    ClockPort, ClusterConnectorPort, ClusterSourcePort, FsPort, NotifierPort, SecretStorePort,
+    StatePort,
 };
 
 use crate::kube_ports::WatchBudgets;
@@ -21,6 +22,10 @@ pub struct AppPorts {
     /// The OS keychain. `None` until the keychain adapter is wired (E24 agent tokens); code that
     /// needs it treats `None` as "no secure storage available".
     pub secrets: Option<Arc<dyn SecretStorePort>>,
+    /// Desktop notifications (`oxikube_notify_os` in the app): off until the user opts in with
+    /// `events.os_notifications`, and nothing contacts the OS before that (E14-S06). Tests swap in
+    /// `FakeNotifierPort` with [`AppPorts::with_notifier`].
+    pub notifier: Arc<dyn NotifierPort>,
     /// The cluster side: the kubeconfig catalog and the connector (`oxikube_kube` in the app,
     /// testkit fakes in tests).
     pub clusters: ClusterAdapters,
@@ -50,13 +55,21 @@ pub struct ClusterAdapters {
 }
 
 impl AppPorts {
-    /// A bundle with the state port, the cluster adapters and no secret store.
+    /// A bundle with the state port, the cluster adapters, no secret store and the platform
+    /// notifier (inert until the user opts in).
     pub fn new(state: Arc<dyn StatePort>, clusters: ClusterAdapters) -> Self {
         Self {
             state,
             secrets: None,
+            notifier: crate::os_notifications::build(),
             clusters,
         }
+    }
+
+    /// Replaces the notifier (tests pass a `FakeNotifierPort`).
+    pub fn with_notifier(mut self, notifier: Arc<dyn NotifierPort>) -> Self {
+        self.notifier = notifier;
+        self
     }
 
     /// Adds the secret store.

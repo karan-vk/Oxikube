@@ -5831,6 +5831,7 @@ dependencies = [
  "oxikube_kube",
  "oxikube_logging",
  "oxikube_logs_ui",
+ "oxikube_notify_os",
  "oxikube_overview_ui",
  "oxikube_palette",
  "oxikube_ports",
@@ -6183,6 +6184,16 @@ version = "0.0.1"
 [[package]]
 name = "oxikube_notify_os"
 version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "futures",
+ "mac-notification-sys",
+ "notify-rust",
+ "oxikube_domain",
+ "oxikube_ports",
+ "parking_lot",
+ "tracing",
+]
 
 [[package]]
 name = "oxikube_overview_ui"

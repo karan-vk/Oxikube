@@ -69,6 +69,7 @@ pub mod metrics_provider;
 pub mod namespaces;
 pub mod network;
 pub mod nodes;
+pub mod os_notifications;
 pub mod overview;
 pub mod references;
 pub mod rollout;
@@ -147,6 +148,7 @@ pub use network::{
     OpenedServicePort, PodsPlan, ServiceBackends, ServicePortOpener, UrlSink, plan_show_pods,
     register_open_in_browser,
 };
+pub use os_notifications::{ClickAction, Delivery, OsNotificationService};
 pub use overview::{FixedWarnings, NoRecentWarnings, RecentWarnings, WarningRow};
 pub use references::{
     OwnerCache, PodKey, PodUse, ReferenceFeed, ReferenceHub, ReferenceIndex, Usage, UsageStatus,

@@ -46,6 +46,7 @@ pub mod metrics_provider;
 pub mod metrics_settings;
 pub mod mount;
 pub mod os_motion;
+pub mod os_notifications;
 pub mod perf_logs;
 pub mod perf_table;
 #[cfg(any(test, feature = "perf-window"))]
