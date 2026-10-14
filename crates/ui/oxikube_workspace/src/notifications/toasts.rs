@@ -79,13 +79,14 @@ fn row_toast(row: &NotificationRow, dispatcher: &Rc<dyn CommandDispatcher>) -> T
         NotificationLevel::Info => ToastLevel::Info,
         NotificationLevel::Success => ToastLevel::Success,
         NotificationLevel::Warning => ToastLevel::Warning,
-        // An error notification still goes away by itself: the centre keeps it.
         NotificationLevel::Error => ToastLevel::Error,
     };
+    // Every toast goes away by itself, an error too: the centre keeps the notification.
+    let timeout = level.default_timeout().unwrap_or(Duration::from_secs(10));
     let mut toast = Toast::new(level, shorten(&row.body))
         .title(format!("{} \u{b7} {}", row.title, row.cluster_label))
         .key(toast_key(row))
-        .timeout(level.default_timeout().unwrap_or(Duration::from_secs(10)));
+        .timeout(timeout);
     if row.target.is_some() {
         let dispatcher = dispatcher.clone();
         let commands = row.open_commands();

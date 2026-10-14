@@ -95,12 +95,8 @@ impl NotificationPanel {
         let unread = centre.unread();
         let mute = self.active.as_ref().map(|cluster| {
             let muted = centre.is_muted(cluster);
-            let label = if muted {
-                format!("Unmute {}", centre.cluster_label(cluster))
-            } else {
-                format!("Mute {}", centre.cluster_label(cluster))
-            };
-            (muted, label)
+            let verb = if muted { "Unmute" } else { "Mute" };
+            (muted, format!("{verb} {}", centre.cluster_label(cluster)))
         });
         let muted_count = centre.muted().len();
         h_flex()

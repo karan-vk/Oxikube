@@ -222,7 +222,12 @@ impl NotificationService {
 
     /// Marks every row read. Returns how many were unread.
     pub fn mark_all_read(&self) -> usize {
-        self.change(|state| state.centre.mark_all_read())
+        let mut marked = 0;
+        self.change(|state| {
+            marked = state.centre.mark_all_read();
+            marked > 0
+        });
+        marked
     }
 
     /// Whether `cluster` is muted.
@@ -318,42 +323,25 @@ impl NotificationService {
             .is_some_and(|watch| watch.pump.is_some())
     }
 
-    /// Runs `change` on the state and tells the subscribers when it returns something truthy.
-    fn change<R: Changed>(&self, change: impl FnOnce(&mut State) -> R) -> R {
-        let (result, wakers) = {
+    /// Runs `change` on the state and tells the subscribers when it returns true.
+    fn change(&self, change: impl FnOnce(&mut State) -> bool) -> bool {
+        let (changed, wakers) = {
             let mut state = self.inner.state.lock();
-            let result = change(&mut state);
-            let wakers = if result.changed() {
+            let changed = change(&mut state);
+            let wakers = if changed {
                 state.publish(None)
             } else {
                 Vec::new()
             };
-            (result, wakers)
+            (changed, wakers)
         };
         wake(wakers);
-        result
+        changed
     }
 
     async fn persist(&self) -> OxiResult<()> {
         let _in_order = self.inner.persist.lock().await;
         let muted = self.inner.state.lock().muted.clone();
         mute::save(&*self.inner.store, &muted).await
-    }
-}
-
-/// Whether a state change is worth telling the subscribers about.
-trait Changed {
-    fn changed(&self) -> bool;
-}
-
-impl Changed for bool {
-    fn changed(&self) -> bool {
-        *self
-    }
-}
-
-impl Changed for usize {
-    fn changed(&self) -> bool {
-        *self > 0
     }
 }

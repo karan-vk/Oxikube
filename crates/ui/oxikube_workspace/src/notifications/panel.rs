@@ -12,6 +12,7 @@ use gpui::{
     Action, App, Context, Entity, EventEmitter, FocusHandle, Focusable, Pixels, SharedString,
     Subscription, UniformListScrollHandle, Window, px,
 };
+use oxikube_app::notifications::NotificationId;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::ClusterId;
 use oxikube_ui::IconName;
@@ -20,7 +21,6 @@ use super::TogglePanel;
 use super::centre::{NotificationCentre, NotificationRow};
 use crate::cluster_tab::CommandDispatcher;
 use crate::panel::{DockPosition, Panel, PanelEvent};
-use oxikube_app::notifications::NotificationId;
 
 /// The panel's name in saved layouts.
 pub const PANEL_NAME: &str = "NotificationPanel";

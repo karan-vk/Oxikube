@@ -42,10 +42,6 @@ pub struct NotificationRow {
 
 impl NotificationRow {
     fn of(note: &Notification, sessions: &ClusterSessionManager, tz: &jiff::tz::TimeZone) -> Self {
-        let cluster_label = sessions
-            .get(&note.cluster)
-            .map(|session| session.title().to_owned())
-            .unwrap_or_else(|| note.cluster.to_string());
         let time = note
             .updated
             .to_zoned(tz.clone())
@@ -62,7 +58,7 @@ impl NotificationRow {
             title: note.title.clone().into(),
             body: note.body.clone().into(),
             cluster: note.cluster.clone(),
-            cluster_label: cluster_label.into(),
+            cluster_label: label_of(sessions, &note.cluster).into(),
             meta: meta.into(),
             read: note.read,
             target: note.target.clone(),
@@ -82,6 +78,14 @@ impl NotificationRow {
         );
         commands
     }
+}
+
+/// A cluster's display name while its session is open, else its id.
+fn label_of(sessions: &ClusterSessionManager, cluster: &ClusterId) -> String {
+    sessions
+        .get(cluster)
+        .map(|session| session.title().to_owned())
+        .unwrap_or_else(|| cluster.to_string())
 }
 
 /// What the centre tells the window besides redrawing.
@@ -200,11 +204,7 @@ impl NotificationCentre {
 
     /// What `cluster` is called.
     pub fn cluster_label(&self, cluster: &ClusterId) -> SharedString {
-        self.sessions
-            .get(cluster)
-            .map(|session| session.title().to_owned())
-            .unwrap_or_else(|| cluster.to_string())
-            .into()
+        label_of(&self.sessions, cluster).into()
     }
 
     /// The service behind it.
