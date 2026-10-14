@@ -783,14 +783,6 @@ pub static COMMANDS: &[CommandMeta] = &[
         NONE,
     )
     .in_views(EDITOR_VIEW),
-    // Queues local context for the agent panel (E14-S08); the events are read from the
-    // `EventService`'s buffer (its feed is started on demand). Changes nothing in the cluster.
-    CommandMeta::read(
-        CommandId::EVENTS_SEND_TO_AGENT,
-        "Events: Send to Agent",
-        CommandScope::Cluster,
-        NONE,
-    ),
     // The events view (E14-S03): it reads the app's `EventService` (one events feed per
     // cluster), never the cluster itself, and changes nothing in it. Copying and exporting
     // write the clipboard or a file the user picks; the messages are redacted on the way out.
@@ -818,6 +810,14 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::EVENTS_OPEN,
         "Show Events",
+        CommandScope::Cluster,
+        NONE,
+    ),
+    // Queues local context for the agent panel (E14-S08); the events are read from the
+    // `EventService`'s buffer (its feed is started on demand). Changes nothing in the cluster.
+    CommandMeta::read(
+        CommandId::EVENTS_SEND_TO_AGENT,
+        "Events: Send to Agent",
         CommandScope::Cluster,
         NONE,
     ),
