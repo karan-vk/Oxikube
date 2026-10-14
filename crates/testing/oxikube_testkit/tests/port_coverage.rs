@@ -10,10 +10,10 @@ use oxikube_ports::{
     AccessReviewPort, AgentClient, AgentPort, ClockPort, CloudDiscoveryPort, ClusterConnectorPort,
     ClusterSourcePort, ContextProviderPort, CrashReporterPort, DescribePort, DiscoveryPort,
     DrainPort, EventsMonitor, EventsPort, ExecPort, ExecStreamPort, FsPort, HelmPort,
-    IntegrationPort, LogPort, MetricsPort, NotifierPort, PortForwardPort, PromqlEndpointPort,
-    PromqlPort, ProviderDetectorPort, QueryCataloguePort, ResourcePort, ResourceReader,
-    ResourceWriter, SchemaPort, SecretStorePort, ServiceProxyPort, StatePort, TableFeedPort,
-    TerminalBackend, ToolDef, ToolName, ToolPort, UpdaterPort, WarningPort,
+    IntegrationPort, LogPort, MetricsPort, NotificationSourcePort, NotifierPort, PortForwardPort,
+    PromqlEndpointPort, PromqlPort, ProviderDetectorPort, QueryCataloguePort, ResourcePort,
+    ResourceReader, ResourceWriter, SchemaPort, SecretStorePort, ServiceProxyPort, StatePort,
+    TableFeedPort, TerminalBackend, ToolDef, ToolName, ToolPort, UpdaterPort, WarningPort,
 };
 use oxikube_testkit::*;
 
@@ -41,6 +41,7 @@ const FAKES: &[(&str, &str)] = &[
     ("StatePort", "FakeStatePort"),
     ("SecretStorePort", "FakeSecretStorePort"),
     ("NotifierPort", "FakeNotifierPort"),
+    ("NotificationSourcePort", "FakeNotificationSourcePort"),
     ("UpdaterPort", "FakeUpdaterPort"),
     ("CrashReporterPort", "FakeCrashReporterPort"),
     ("FsPort", "FakeFsPort"),
@@ -99,6 +100,7 @@ fn fakes_are_port_trait_objects() {
     let _: Arc<dyn StatePort> = Arc::new(FakeStatePort::new());
     let _: Arc<dyn SecretStorePort> = Arc::new(FakeSecretStorePort::new());
     let _: Arc<dyn NotifierPort> = Arc::new(FakeNotifierPort::new());
+    let _: Arc<dyn NotificationSourcePort> = Arc::new(FakeNotificationSourcePort::new());
     let _: Arc<dyn UpdaterPort> = Arc::new(FakeUpdaterPort::new());
     let _: Arc<dyn CrashReporterPort> = Arc::new(FakeCrashReporterPort::new());
     let _: Arc<dyn FsPort> = Arc::new(FakeFsPort::new());

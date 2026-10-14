@@ -40,6 +40,7 @@
 //! | `StatePort` | [`FakeStatePort`] |
 //! | `SecretStorePort` | [`FakeSecretStorePort`] |
 //! | `NotifierPort` | [`FakeNotifierPort`] |
+//! | `NotificationSourcePort` | [`FakeNotificationSourcePort`] and the `emit_*` hook helpers |
 //! | `UpdaterPort` | [`FakeUpdaterPort`] |
 //! | `CrashReporterPort` | [`FakeCrashReporterPort`] |
 //! | `FsPort` | [`FakeFsPort`] |
@@ -88,6 +89,7 @@ mod events;
 mod infra;
 mod integration;
 mod merge;
+mod notification_source;
 mod notifier;
 mod promql_endpoint;
 mod provider;
@@ -126,6 +128,11 @@ pub use infra::{
 pub use integration::{
     ContextProviderCall, ContextProviderScripts, FakeContextProviderPort, FakeIntegrationPort,
     FakeToolPort, IntegrationCall, IntegrationScripts, ToolCall, ToolScripts,
+};
+pub use notification_source::{
+    FakeNotificationSourcePort, SourceCall, agent_permission, emit_agent_permission,
+    emit_portforward_drop, emit_portforward_recovery, emit_update_available, hook_cluster,
+    portforward_change,
 };
 pub use notifier::{FakeNotifierPort, NotifierCall, NotifierScripts};
 pub use promql_endpoint::{FakePromqlEndpointPort, PromqlEndpointCall, PromqlEndpointScripts};

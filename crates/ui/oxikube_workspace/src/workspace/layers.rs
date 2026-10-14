@@ -74,4 +74,10 @@ impl Workspace {
         self.toast_layer
             .update(cx, |layer, cx| layer.show(toast, cx))
     }
+
+    /// Takes the toast with `key` away, wherever it is queued. Returns whether there was one.
+    pub fn dismiss_toast_key(&mut self, key: &str, cx: &mut Context<Self>) -> bool {
+        self.toast_layer
+            .update(cx, |layer, cx| layer.dismiss_key(key, cx))
+    }
 }

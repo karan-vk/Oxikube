@@ -73,7 +73,7 @@ fn an_event_becomes_an_input_keyed_by_cluster_object_and_reason() {
     let rules = NotificationRules::default();
     let e = warning("e1", "web-0", "BackOff", 4, 0);
     let input = rules.input_for(&cluster(), &e, 3);
-    assert_eq!(input.cluster, cluster());
+    assert_eq!(input.cluster, Some(cluster()));
     assert_eq!(input.level, NotificationLevel::Warning);
     assert_eq!(input.title, "Pod default/web-0: BackOff");
     assert_eq!(input.body, "BackOff on web-0");

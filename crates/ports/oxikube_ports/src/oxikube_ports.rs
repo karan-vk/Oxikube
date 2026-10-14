@@ -17,6 +17,7 @@
 //! | [`StatePort`] | [`state`] | `oxikube_state_sqlite` (ADR 0010) |
 //! | [`SecretStorePort`] | [`secrets`] | `oxikube_keychain` |
 //! | [`NotifierPort`] | [`notifier`] | `oxikube_notify_os` |
+//! | [`NotificationSourcePort`] (inbound hooks: port-forward drops, updates, agent permission, E14-S07) | [`notification_source`] | implemented by `oxikube_app::NotificationService` |
 //! | [`UpdaterPort`] | [`updater`] | `oxikube_updater` |
 //! | [`CrashReporterPort`] | [`crash`] | `oxikube_crash` |
 //! | [`FsPort`] | [`fs`] | `oxikube_runtime` (std fs) or the testkit fake |
@@ -110,6 +111,7 @@ pub mod helm;
 pub mod integration;
 pub mod log;
 pub mod metrics;
+pub mod notification_source;
 pub mod notifier;
 pub mod portforward;
 pub mod promql;
@@ -176,6 +178,7 @@ pub use integration::{
 };
 pub use log::{LogOptions, LogPort, LogSince, LogStream};
 pub use metrics::{MetricsOutcome, MetricsPort};
+pub use notification_source::NotificationSourcePort;
 pub use notifier::{
     ActivationHandler, MAX_BODY_CHARS, MAX_TITLE_CHARS, Notification, NotificationActivation,
     NotificationLevel, NotifierPort, NotifierStatus, is_unavailable, unavailable,
@@ -234,6 +237,7 @@ mod tests {
         state: Arc<dyn StatePort>,
         secrets: Arc<dyn SecretStorePort>,
         notifier: Arc<dyn NotifierPort>,
+        notification_source: Arc<dyn NotificationSourcePort>,
         updater: Arc<dyn UpdaterPort>,
         crash: Arc<dyn CrashReporterPort>,
         fs: Arc<dyn FsPort>,
@@ -263,6 +267,7 @@ mod tests {
         assert_send_sync::<dyn StatePort>();
         assert_send_sync::<dyn SecretStorePort>();
         assert_send_sync::<dyn NotifierPort>();
+        assert_send_sync::<dyn NotificationSourcePort>();
         assert_send_sync::<dyn UpdaterPort>();
         assert_send_sync::<dyn CrashReporterPort>();
         assert_send_sync::<dyn FsPort>();

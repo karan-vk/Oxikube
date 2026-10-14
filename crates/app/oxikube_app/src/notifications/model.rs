@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use jiff::Timestamp;
 use oxikube_domain::ids::{ClusterId, ResourceRef};
+use oxikube_domain::notification::NotificationKind;
 use oxikube_ports::NotificationLevel;
 use serde::{Deserialize, Serialize};
 
@@ -39,8 +40,10 @@ pub struct GroupKey {
 /// (E14-S07: port-forward drops, updates, agent permission) build their own.
 #[derive(Debug, Clone, PartialEq)]
 pub struct NotificationInput {
-    /// The cluster it concerns: muting the cluster drops it.
-    pub cluster: ClusterId,
+    /// Where it comes from: switching the kind off drops it.
+    pub kind: NotificationKind,
+    /// The cluster it concerns, if any: muting the cluster drops it. An update has none.
+    pub cluster: Option<ClusterId>,
     /// How urgent it is.
     pub level: NotificationLevel,
     /// The headline. Redacted by the centre.
@@ -49,6 +52,8 @@ pub struct NotificationInput {
     pub body: String,
     /// The object a click opens, if any.
     pub target: Option<ResourceRef>,
+    /// An `https` link a click opens in the browser, if any (an update's release page).
+    pub link: Option<Arc<str>>,
     /// Inputs with the same key within the dedupe window update one row (its count goes up)
     /// instead of adding rows. Sources choose it: an event's is its cluster, object and reason.
     pub dedupe_key: Arc<str>,
@@ -64,8 +69,10 @@ pub struct NotificationInput {
 pub struct Notification {
     /// The row's id.
     pub id: NotificationId,
-    /// The cluster it concerns.
-    pub cluster: ClusterId,
+    /// Where it comes from.
+    pub kind: NotificationKind,
+    /// The cluster it concerns, if any.
+    pub cluster: Option<ClusterId>,
     /// How urgent it is.
     pub level: NotificationLevel,
     /// The headline (redacted).
@@ -74,6 +81,8 @@ pub struct Notification {
     pub body: String,
     /// The object a click opens: the latest one, for a group.
     pub target: Option<ResourceRef>,
+    /// The link a click opens in the browser, if any.
+    pub link: Option<Arc<str>>,
     /// The key later occurrences are merged by.
     pub dedupe_key: Arc<str>,
     /// How many occurrences the row stands for.
@@ -92,13 +101,20 @@ pub struct Notification {
 }
 
 impl Notification {
+    /// Whether its toast stays until the row is read ([`NotificationKind::sticky`]).
+    pub fn sticky(&self) -> bool {
+        self.kind.sticky()
+    }
+
     /// The same notification for the OS notifier (`NotifierPort`): its text, level, cluster, the
     /// object a click opens, and the dedupe key as the replacement tag, so a later occurrence
     /// replaces the one on the desktop. The port redacts and caps it again.
     pub fn to_os(&self) -> oxikube_ports::Notification {
         let mut os = oxikube_ports::Notification::new(&self.title, &self.body, self.level)
-            .with_cluster(self.cluster.clone())
             .with_tag(self.dedupe_key.to_string());
+        if let Some(cluster) = &self.cluster {
+            os = os.with_cluster(cluster.clone());
+        }
         if let Some(target) = &self.target {
             os = os.with_action_target(target.clone());
         }

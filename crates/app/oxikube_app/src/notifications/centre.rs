@@ -68,13 +68,14 @@ impl Centre {
         now: Timestamp,
     ) -> Applied {
         let route = match (&input.group, self.live(&input.dedupe_key, rules, now)) {
-            (Some(group), None) => limiter.route(rules, &input.cluster, &group.reason, now),
+            (Some(group), None) => limiter.route(rules, input.cluster.as_ref(), &group.reason, now),
             _ => Route::Own,
         };
         let key: Arc<str> = match (route, &input.group) {
-            (Route::Group, Some(group)) => {
-                Arc::from(format!("group/{}/{}", input.cluster, group.reason))
-            }
+            (Route::Group, Some(group)) => Arc::from(match &input.cluster {
+                Some(cluster) => format!("group/{cluster}/{}", group.reason),
+                None => format!("group/{}", group.reason),
+            }),
             _ => input.dedupe_key.clone(),
         };
         let id = match self.live(&key, rules, now) {
@@ -88,7 +89,7 @@ impl Centre {
             self.fold(id, &input);
         }
         let row = self.rows.get_mut(&id).expect("the row was just written");
-        let raised = limiter.may_raise(rules, row.last_raised, now);
+        let raised = limiter.may_raise(rules, row.last_raised, row.note.sticky(), now);
         if raised {
             row.last_raised = Some(now);
         }
@@ -134,6 +135,15 @@ impl Centre {
         true
     }
 
+    /// Marks the row with `key` read, if it is listed and unread (a request was answered).
+    /// Returns whether it was unread.
+    pub(crate) fn mark_read_by_key(&mut self, key: &str) -> bool {
+        match self.by_key.get(key).copied() {
+            Some(id) => self.mark_read(id),
+            None => false,
+        }
+    }
+
     /// Marks every row read. Returns how many were unread.
     pub(crate) fn mark_all_read(&mut self) -> usize {
         let marked = self.unread;
@@ -172,11 +182,13 @@ impl Centre {
         };
         let note = Notification {
             id,
+            kind: input.kind,
             cluster: input.cluster.clone(),
             level: input.level,
             title: clean(&input.title, MAX_TITLE_CHARS),
             body: clean(&input.body, MAX_BODY_CHARS),
             target: input.target.clone(),
+            link: input.link.clone(),
             dedupe_key: key.clone(),
             count: input.occurrences.max(1),
             objects: 1,
@@ -216,6 +228,7 @@ impl Centre {
         note.updated = now;
         note.level = note.level.max_with(input.level);
         note.target = input.target.clone().or(note.target.take());
+        note.link = input.link.clone().or(note.link.take());
         if row.group.is_none() {
             note.title = clean(&input.title, MAX_TITLE_CHARS);
             note.body = clean(&input.body, MAX_BODY_CHARS);

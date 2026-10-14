@@ -22,7 +22,7 @@ use futures::channel::mpsc;
 use gpui::{App, Entity, Task, Window};
 use oxikube_app::{ClickAction, ClusterSessionManager, NotificationService, OsNotificationService};
 use oxikube_domain::ids::ClusterId;
-use oxikube_workspace::notifications::{NotificationDeps, NotificationWiring};
+use oxikube_workspace::notifications::{NotificationDeps, NotificationWiring, PanelRequest};
 use oxikube_workspace::{CommandDispatcher, Workspace};
 
 /// The notification centre of one window; keep it as long as the window lives.
@@ -47,7 +47,7 @@ pub fn mount_centre(
     service: NotificationService,
     sessions: ClusterSessionManager,
     dispatcher: Rc<dyn CommandDispatcher>,
-    requests: mpsc::UnboundedReceiver<()>,
+    requests: mpsc::UnboundedReceiver<PanelRequest>,
     window: &mut Window,
     cx: &mut App,
 ) -> CentreMount {

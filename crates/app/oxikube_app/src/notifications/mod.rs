@@ -8,7 +8,7 @@
 //! OS notifier receives when the user opted in ([`forward_to_os`]).
 //!
 //! ```text
-//!  EventService (per cluster)            other sources (E14-S07): submit()
+//!  EventService (per cluster)            other sources (E14-S07): NotificationSourcePort
 //!        │ EventsChanged (warnings, watched kinds)        │
 //!        ▼                                                 │
 //!  Tracker: only news (new events, higher counts)          │
@@ -36,6 +36,7 @@
 //! | what subscribers are told, coalesced per poll | [`NotificationsSubscription`], [`NotificationsChanged`] (`subscription`) |
 //! | the four bus commands and their tool stubs | [`register_commands`] (`commands`) |
 //! | the OS output | [`forward_to_os`] (`os`) |
+//! | the other sources: port-forward drops, updates, agent permission (E14-S07) | `sources`: [`NotificationService`] implements `oxikube_ports::NotificationSourcePort` ([`NotificationService::sources`]) |
 //!
 //! # Spam
 //!
@@ -60,7 +61,9 @@ mod mute;
 mod os;
 mod rules;
 mod service;
+mod sources;
 mod subscription;
+mod switches;
 mod tracker;
 
 #[cfg(test)]
@@ -70,6 +73,7 @@ pub use commands::{COMMANDS, register_commands};
 pub use model::{GroupKey, MAX_BODY_CHARS, Notification, NotificationId, NotificationInput};
 pub use mute::MUTED_KEY;
 pub use os::forward_to_os;
+pub use oxikube_domain::notification::NotificationKind;
 pub use rules::{ClusterRules, DEFAULT_WATCHED_KINDS, NotificationRules};
 pub use service::NotificationService;
 pub use subscription::{MAX_RAISED_PER_ITEM, NotificationsChanged, NotificationsSubscription};

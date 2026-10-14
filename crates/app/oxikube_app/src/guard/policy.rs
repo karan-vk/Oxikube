@@ -213,6 +213,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::NotificationsTogglePanel
         | Command::NotificationsMarkRead { .. }
         | Command::NotificationsMarkAllRead
+        | Command::NotificationsOpenLink { .. }
         | Command::JumpBack
         | Command::JumpForward
         | Command::JumpLast

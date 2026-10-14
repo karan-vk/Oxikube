@@ -28,6 +28,7 @@
 //! | [`metric_query`] | [`MetricRequest`] / [`MetricQuery`]: what a history graph asks for, and the step policy of a range (E13-S06) |
 //! | [`metrics_provider`] | [`MetricsProviderKind`]: the Prometheus-compatible stack behind a cluster's history graphs (E13-S05) |
 //! | [`schema`] | [`JsonSchema`]: the flattened per-GVK OpenAPI v3 view the manifest editor validates against |
+//! | [`notification`] | [`NotificationKind`](notification::NotificationKind) and the typed inputs of the non-event notification sources with their dedupe keys (E14-S07) |
 //! | [`portforward`] | [`ForwardSpec`], [`ForwardStatus`]: what a port-forward targets and how it is doing |
 //! | [`agent`] | [`ContextBlock`](agent::ContextBlock), the bounded context handed to agents |
 //! | [`error`], [`error_details`] | [`OxiError`], [`ErrorKind`], [`OxiResult`]; [`ConflictDetails`] and [`ValidationDetails`] (field managers and field paths of a rejected write) |
@@ -66,6 +67,7 @@ pub mod log;
 pub mod metric_query;
 pub mod metrics;
 pub mod metrics_provider;
+pub mod notification;
 pub mod portforward;
 pub mod preset;
 pub mod quantity;

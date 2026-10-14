@@ -232,6 +232,8 @@ impl CommandId {
     pub const NOTIFICATIONS_MARK_READ: CommandId = CommandId::new("notifications::MarkRead");
     /// `notifications::MuteCluster`: stop notifying about a cluster's events (remembered).
     pub const NOTIFICATIONS_MUTE_CLUSTER: CommandId = CommandId::new("notifications::MuteCluster");
+    /// `notifications::OpenLink`: open a notification's `https` link in the browser.
+    pub const NOTIFICATIONS_OPEN_LINK: CommandId = CommandId::new("notifications::OpenLink");
     /// `notifications::TogglePanel`: show and focus the notification centre, or hide it.
     pub const NOTIFICATIONS_TOGGLE_PANEL: CommandId = CommandId::new("notifications::TogglePanel");
     /// `notifications::UnmuteCluster`: notify about a muted cluster's events again.
@@ -1232,6 +1234,12 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandId::NOTIFICATIONS_MUTE_CLUSTER,
         "Mute Cluster Notifications",
         CommandScope::Cluster,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::NOTIFICATIONS_OPEN_LINK,
+        "Open Notification Link",
+        CommandScope::Global,
         NONE,
     ),
     CommandMeta::read(

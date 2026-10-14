@@ -398,6 +398,13 @@ pub enum Command {
     /// Mark every notification of the notification centre read (E14-S05).
     #[serde(rename = "notifications::MarkAllRead")]
     NotificationsMarkAllRead,
+    /// Open the `https` link of a notification (a release page) in the browser (E14-S07).
+    /// Anything but an `https` URL is refused.
+    #[serde(rename = "notifications::OpenLink")]
+    NotificationsOpenLink {
+        /// The link, as the notification carries it.
+        url: String,
+    },
     /// Stop notifying about a cluster's events until it is unmuted; remembered across restarts
     /// (E14-S05). A local preference, not a cluster mutation.
     #[serde(rename = "notifications::MuteCluster")]
@@ -1483,6 +1490,7 @@ impl Command {
             Command::NotificationsTogglePanel => CommandId::NOTIFICATIONS_TOGGLE_PANEL,
             Command::NotificationsMarkRead { .. } => CommandId::NOTIFICATIONS_MARK_READ,
             Command::NotificationsMarkAllRead => CommandId::NOTIFICATIONS_MARK_ALL_READ,
+            Command::NotificationsOpenLink { .. } => CommandId::NOTIFICATIONS_OPEN_LINK,
             Command::NotificationsMuteCluster { .. } => CommandId::NOTIFICATIONS_MUTE_CLUSTER,
             Command::NotificationsUnmuteCluster { .. } => CommandId::NOTIFICATIONS_UNMUTE_CLUSTER,
             Command::JumpBack => CommandId::JUMP_BACK,
@@ -1957,6 +1965,9 @@ mod tests {
             Command::NotificationsTogglePanel,
             Command::NotificationsMarkRead { id: 7 },
             Command::NotificationsMarkAllRead,
+            Command::NotificationsOpenLink {
+                url: "https://example.com/release".to_owned(),
+            },
             Command::NotificationsMuteCluster { cluster: cluster() },
             Command::NotificationsUnmuteCluster { cluster: cluster() },
             Command::JumpBack,
@@ -2444,6 +2455,7 @@ mod tests {
                     | Command::NotificationsTogglePanel
                     | Command::NotificationsMarkRead { .. }
                     | Command::NotificationsMarkAllRead
+                    | Command::NotificationsOpenLink { .. }
                     | Command::NotificationsMuteCluster { .. }
                     | Command::NotificationsUnmuteCluster { .. }
                     | Command::JumpBack

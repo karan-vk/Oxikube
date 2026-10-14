@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use oxikube_domain::event::{Event, EventType};
 use oxikube_domain::ids::ClusterId;
+use oxikube_domain::notification::NotificationKind;
 use oxikube_ports::NotificationLevel;
 
 use super::model::{GroupKey, NotificationInput};
@@ -157,11 +158,13 @@ impl NotificationRules {
             None => format!("{}/{name}", object.gvk.kind),
         };
         NotificationInput {
-            cluster: cluster.clone(),
+            kind: NotificationKind::ClusterEvent,
+            cluster: Some(cluster.clone()),
             level: NotificationLevel::Warning,
             title: format!("{} {name}: {}", object.gvk.kind, event.reason),
             body: event.message.clone(),
             target: Some(object.clone()),
+            link: None,
             dedupe_key: Arc::from(format!("event/{cluster}/{identity}/{}", event.reason)),
             group: Some(GroupKey {
                 reason: event.reason.clone(),

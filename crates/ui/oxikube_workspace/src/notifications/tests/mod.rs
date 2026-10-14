@@ -4,6 +4,7 @@
 //! unread badge, click-to-navigate, the keys of the panel, the mute toggle and the toast cap.
 
 mod panel;
+mod sources;
 mod toasts;
 
 use std::cell::RefCell;
@@ -17,6 +18,7 @@ use oxikube_app::notifications::{NotificationInput, NotificationService};
 use oxikube_app::{ClusterSessionManager, session::SessionOptions};
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
+use oxikube_domain::notification::NotificationKind;
 use oxikube_keymap::KeymapOptions;
 use oxikube_ports::{ClusterContext, NotificationLevel, SourceId};
 use oxikube_testkit::{
@@ -46,11 +48,13 @@ pub(super) fn pod(name: &str) -> ResourceRef {
 /// A warning about pod `name` with `reason`.
 pub(super) fn warning(name: &str, reason: &str) -> NotificationInput {
     NotificationInput {
-        cluster: prod(),
+        kind: NotificationKind::ClusterEvent,
+        cluster: Some(prod()),
         level: NotificationLevel::Warning,
         title: format!("Pod default/{name}: {reason}"),
         body: format!("{reason} on {name}"),
         target: Some(pod(name)),
+        link: None,
         dedupe_key: format!("event/{name}/{reason}").into(),
         group: None,
         occurrences: 1,
