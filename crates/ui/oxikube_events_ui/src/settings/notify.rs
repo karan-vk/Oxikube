@@ -33,6 +33,8 @@ pub const MAX_WATCHED_KINDS: usize = 64;
 /// Reasons an `ignore_reasons` list keeps; the rest are dropped.
 pub const MAX_IGNORED_REASONS: usize = 256;
 
+const SECS_PER_DAY: u64 = 86_400;
+
 /// The `events.rate_limit` object: what keeps a burst of Warning events from becoming spam.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct RateLimitContent {
@@ -87,13 +89,12 @@ impl Default for RateLimit {
 
 impl RateLimit {
     pub(super) fn from_content(content: &RateLimitContent) -> Self {
-        let day = 86_400;
         Self {
             per_object: duration(
                 "events.rate_limit.per_object",
                 content.per_object.as_deref(),
                 300,
-                (1, day),
+                (1, SECS_PER_DAY),
             ),
             per_reason: number("events.rate_limit.per_reason", content.per_reason, 3, 100),
             group_window: duration(
@@ -145,7 +146,7 @@ fn duration(key: &'static str, text: Option<&str>, default: u64, bounds: (u64, u
                 "s" => 1,
                 "m" => 60,
                 "h" => 3_600,
-                "d" => 86_400,
+                "d" => SECS_PER_DAY,
                 _ => return None,
             };
             number.checked_mul(unit)
