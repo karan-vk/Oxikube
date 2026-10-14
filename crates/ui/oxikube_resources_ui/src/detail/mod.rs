@@ -12,7 +12,7 @@
 //! | `find` | find in the YAML and Describe text (E11-S06): `/`, the strip, `n` / `N` through the shared `oxikube_app::search::find` |
 //! | `yaml` | the YAML tab (E07-S06): [`yaml_text`] (managedFields, Secret masking) as a pure function run off the UI thread, the read-only code view, the toolbar |
 //! | `describe` | the Describe tab (E07-S06): `DescribePort` read on the Tokio bridge, spinner, error with Retry, refresh |
-//! | `events` | [`EventRow`], [`events_about`]: the events of the object from the namespace's `Event` feed |
+//! | `events` | [`EventRow`], [`rows_of`]: the events of the object, as the app's events index lists them |
 //! | `tabs` | [`DetailTab`]: Overview, YAML, Describe, Events, a CRD's Schema, the Used by tab of a ServiceAccount, ConfigMap, Secret, claim or PriorityClass, and the Metrics tab of kinds with history graphs |
 //! | `used_by` | the Used by tab (E12-S18): the workloads whose Pods name the object, from the shared reference index; a lease on the Pods feed held while the tab is up |
 //! | `state` | [`DetailDeps`], [`Mount`], [`DetailState`]: what the view is built over and how the object stands |
@@ -26,7 +26,7 @@
 //! | `rollout` | "Restart" and "Set image" in the header of a Deployment, StatefulSet or DaemonSet (E12-S05): `rollout_state`, the buttons, `workload::Restart` through the bus and the set-image flow's dialog, also for the palette |
 //! | `rollback` | `rollback_state` and `open_rollback` (E12-S06): whether the view offers Rollback and the flow that opens its dialog, for the workload panel's button and the palette |
 //! | `editor_buttons` | "Edit" and "View YAML in Editor" in the header (E10-S06): `resource::Edit` / `resource::ViewYamlInEditor`, which open a `kind/name` manifest editor tab |
-//! | `events_feed` | the Events tab's subscription, started on first show |
+//! | `events_feed` | the Events tab's feed over the app's `EventService` index (E14-S04: no watch of its own), started on first show |
 //! | `render`, `overview`, `parts`, `events_tab` | drawing: header, tab strip, the virtualised Overview (its stateless rows in `parts`) and Events lists |
 //! | `schema_tab`, `schema_view` | the Schema tab of a CRD's detail (E07-S07): its `openAPIV3Schema` as a collapsible tree, the version chips and the way to the custom resources (state and commands, then drawing) |
 //! | `reveal` | revealing a Secret's values in memory (E12-S11): the summary a Secret's full read keeps, `secret::Reveal` (`x`), the hide-again timer, the decoded values the YAML tab shows |
@@ -88,7 +88,7 @@ pub(crate) mod tests;
 
 pub use describe::DescribeState;
 pub use drawer::{DEFAULT_WIDTH, DetailDrawer, ToggleDrawer};
-pub use events::{EventRow, MAX_EVENTS, events_about};
+pub use events::{EventRow, MAX_EVENTS, rows_of};
 pub use keys::{
     Close, CloseFind, EditSecretDecoded, Find, NextMatch, PreviousMatch, RevealSecret, SelectNext,
     SelectPrevious, ShowTab,

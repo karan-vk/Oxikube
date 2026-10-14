@@ -133,6 +133,10 @@
   //            ones are dropped. 10,000 events hold about 17 MB. One events watch per cluster
   //            feeds the events view, a resource's Events tab, the warning badges and the
   //            overview's warnings. Applies at once (a smaller value drops the oldest events).
+  //   warning_window  how long a Warning event keeps its object's warning icon in the tables
+  //            and stays in the overviews' recent warnings: a number and m, h or d (30m, 1h, 2d;
+  //            1 minute to 7 days). Applies at once, to every cluster (a per-cluster value is not
+  //            read).
   //   os_notifications  also show Warning notifications on the desktop (macOS notification
   //                 centre, Linux D-Bus notifications). Off by default; turning it on asks the OS for
   //                 permission where it has such a thing, and is the only time Oxikube contacts the
@@ -142,7 +146,8 @@
   //                 run outside an .app bundle may not be allowed to notify by the OS.
   "events": {
     "buffer": 10000,
-    "os_notifications": false
+    "os_notifications": false,
+    "warning_window": "1h"
   },
   // The Describe tab of a resource's detail (`kubectl describe`-style text). `backend`:
   //   "auto"     render in process (deskribe: 36 specialised kinds, a generic layout for custom

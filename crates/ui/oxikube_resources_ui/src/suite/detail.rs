@@ -1,7 +1,6 @@
 //! The detail drawer end to end: a row opened from the table, its four tabs (Overview, YAML,
 //! Describe, Events) and a live feed changing the object under them.
 
-use oxikube_domain::Resource;
 use oxikube_ports::{DescribeOutput, DescribeSource};
 use oxikube_testkit::{ScriptedFeed, TICK};
 use serde_json::json;
@@ -9,23 +8,16 @@ use serde_json::json;
 use crate::detail::tests::fixture::{Detail, edited, kind, pod_ref, web_pod, web_replicaset};
 use crate::detail::{DetailState, DetailTab, Mount};
 
-fn event(name: &str, pod: &str, reason: &str, at: &str) -> Resource {
-    edited(
-        oxikube_testkit::resource("v1", "Event")
-            .namespace("shop")
-            .name(name)
-            .field("type", json!("Warning"))
-            .field("reason", json!(reason))
-            .field("message", json!(format!("{reason} {pod}")))
-            .field("lastTimestamp", json!(at))
-            .field(
-                "involvedObject",
-                json!({"apiVersion": "v1", "kind": "Pod", "name": pod,
-                       "namespace": "shop", "uid": format!("u-{pod}")}),
-            )
-            .build(),
-        |_| {},
-    )
+fn event(name: &str, pod: &str, reason: &str, at: &str) -> oxikube_domain::event::Event {
+    let mut e = oxikube_testkit::event()
+        .uid(name)
+        .warning()
+        .reason(reason)
+        .message(&format!("{reason} {pod}"))
+        .regarding("Pod", Some("shop"), pod, &format!("u-{pod}"))
+        .build();
+    e.last_seen = Some(at.parse().expect("a timestamp"));
+    e
 }
 
 fn pods() -> oxikube_domain::kinds::ResourceKind {
@@ -59,18 +51,19 @@ fn enter_on_a_row_opens_its_detail_in_the_drawer(cx: &mut gpui::TestAppContext) 
 
 #[gpui::test]
 fn every_tab_shows_its_content_and_follows_the_live_object(cx: &mut gpui::TestAppContext) {
-    let pod = web_pod();
+    let pod = edited(web_pod(), |json| json["metadata"]["uid"] = json!("u-web-0"));
     let renamed = edited(pod.clone(), |json| {
         json["metadata"]["resourceVersion"] = json!("8");
         json["metadata"]["labels"]["app"] = json!("web-v2");
     });
     let feed = ScriptedFeed::new().initial([pod]).modify(1, renamed);
-    let mut d = Detail::new(
+    let (mut d, _rig) = Detail::with_events(
         cx,
-        [
+        [],
+        oxikube_testkit::FakeEventFeed::new().initial([
             event("web-0.backoff", "web-0", "BackOff", "2026-01-01T00:30:00Z"),
             event("web-1.started", "web-1", "Started", "2026-01-01T00:31:00Z"),
-        ],
+        ]),
     );
     feed.install(&d.f.ports().resources);
     d.f.ports()

@@ -128,6 +128,8 @@ pub struct ResourceTable {
     pub(super) filter_task: Option<Task<()>>,
     _session_task: Task<()>,
     pub(super) prefs_task: Option<Task<()>>,
+    /// Redraws the table when the warning badges change (E14-S04); `None` without the column.
+    _badge_task: Option<Task<()>>,
     _tick: Task<()>,
     _subscriptions: Vec<Subscription>,
     /// The feed's redraw: skipped while the table has not rendered the last one (a table in a
@@ -157,7 +159,8 @@ impl ResourceTable {
         let title: SharedString = plural_title(&kind).into();
         let own_columns = own_provider(cx, &cluster, &kind, &deps, None);
         let provider = initial_provider(&cluster, &kind, &deps, own_columns.as_ref());
-        let scope = ColumnScope::of(&deps, &cluster, &kind);
+        let warnings = crate::warnings::RowWarnings::for_table(cx, &cluster, &kind);
+        let scope = ColumnScope::of(&deps, &cluster, &kind, warnings.is_some());
         let layout = ColumnLayout::new(
             scope.columns(&*provider, &kind.gvk),
             &ColumnPrefs::default(),
@@ -184,6 +187,7 @@ impl ResourceTable {
                 cluster: cluster.clone(),
                 kind: kind.clone(),
             }),
+            warnings: warnings.clone(),
             #[cfg(test)]
             rendered_cells: 0,
         };
@@ -220,7 +224,10 @@ impl ResourceTable {
                         view.follow_rank(cx);
                         // A poll's new usage reads as a moved cell, a new metrics state as a
                         // moved badge: one redraw a second at most, never one per sample.
-                        if view.ages_moved(cx) || view.metrics.moved(&view.cluster, cx) {
+                        if view.ages_moved(cx)
+                            || view.metrics.moved(&view.cluster, cx)
+                            || view.badges_expired(cx)
+                        {
                             cx.notify();
                         }
                     }
@@ -232,6 +239,9 @@ impl ResourceTable {
         });
 
         let metrics = crate::metrics::TableMetrics::for_kind(&kind.gvk);
+        let badge_task = warnings
+            .as_ref()
+            .map(|source| crate::warnings::follow_badges(source.handle().changes(), cx));
         let mut this = Self {
             cluster,
             kind,
@@ -262,6 +272,7 @@ impl ResourceTable {
             filter_task: None,
             _session_task: session_task,
             prefs_task: None,
+            _badge_task: badge_task,
             _tick: tick,
             _subscriptions: vec![events, refocus, filter_events, session_echo],
             redraw: RenderGate::default(),

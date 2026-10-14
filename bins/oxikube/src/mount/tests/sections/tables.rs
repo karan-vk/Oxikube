@@ -65,11 +65,15 @@ fn every_kind_opens_from_its_entry_with_its_columns_and_its_detail(cx: &mut Test
         let (rows, columns) = app.vcx.update(|_, cx| {
             table.read(cx).read_rows(cx, |d| {
                 let rows: Vec<String> = d.rows().iter().map(|o| o.name().to_owned()).collect();
-                let columns: Vec<String> = d
+                let mut columns: Vec<String> = d
                     .layout()
                     .columns()
                     .map(|(c, _)| column_label(&c.title, c.wide))
                     .collect();
+                // The warning badge column (E14-S04) is every table's, right after the name; the
+                // kind's own columns are what this case lists.
+                let badge = columns.remove(1);
+                assert_eq!(badge, "\u{26A0}", "{}'s second column", case.kind);
                 (rows, columns)
             })
         });

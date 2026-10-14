@@ -16,6 +16,12 @@
 //! coalesced notify lands (a test-mode context draws dirty windows as effects flush), so with
 //! churn it counts two draws per frame where the app draws once per vsync.
 //!
+//! `OXIKUBE_BENCH_BADGES=500` (E14-S04) installs the app's events index with the warning badge
+//! column and 500 pods that have a recent `Warning` event; the feed then delivers warnings about
+//! `OXIKUBE_BENCH_CHURN` pods per frame, so the model changes and the table redraws for it while
+//! it scrolls. Unset, the table has no badge column (the "without" half of the comparison); `0`
+//! has the column and no warnings.
+//!
 //! `OXIKUBE_BENCH_TYPE=pod-0123` (E07-S04) types that into the filter bar while the feed churns
 //! and the table scrolls: one more character every six frames (the first applies at once, the
 //! rest after the bar's debounce), then back out one character at a time.
@@ -28,15 +34,17 @@ use std::time::{Duration, Instant};
 
 use gpui::{App, AppContext as _, px, size};
 use oxikube_app::store::ResourceStores;
-use oxikube_app::{ClusterSessionManager, CoreColumns};
+use oxikube_app::{ClusterSessionManager, CoreColumns, EventService, EventsConfig, WarningBadges};
 use oxikube_domain::Resource;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk};
 use oxikube_domain::kinds::{ResourceKind, VerbSet};
 use oxikube_ports::{ClockPort, ClusterContext, Delta, DeltaBatch, SourceId};
 use oxikube_resources_ui::table::{ResourceTable, ResourceTableDeps, store_runtime};
+use oxikube_resources_ui::warnings::ObjectEvents;
 use oxikube_testkit::{
-    FakeClockPort, FakeClusterConnectorPort, FakeClusterSourcePort, FakeStatePort, Timeline, pod,
+    FakeClockPort, FakeClusterConnectorPort, FakeClusterSourcePort, FakeEventFeed, FakeStatePort,
+    TICK, Timeline, event, pod,
 };
 use oxikube_workspace::CommandDispatcher;
 
@@ -72,6 +80,31 @@ fn step() -> usize {
         .unwrap_or(3)
 }
 
+/// Pods with a warning (`OXIKUBE_BENCH_BADGES`); `None`: no events index, no badge column.
+fn badges() -> Option<usize> {
+    std::env::var("OXIKUBE_BENCH_BADGES")
+        .ok()
+        .and_then(|v| v.parse().ok())
+}
+
+/// A `Warning` event about `pod-{i}` seen just now.
+fn warning_about(i: usize, n: usize) -> oxikube_domain::event::Event {
+    let mut e = event()
+        .uid(&format!("event-{i}-{n}"))
+        .warning()
+        .reason("BackOff")
+        .message("Back-off restarting failed container")
+        .regarding(
+            "Pod",
+            Some(&format!("ns-{}", i % 20)),
+            &format!("pod-{i:05}"),
+            &format!("uid-{i:05}"),
+        )
+        .build();
+    e.last_seen = Some(jiff::Timestamp::now());
+    e
+}
+
 /// The text typed into the filter bar during the run, if any.
 fn typed() -> Option<String> {
     std::env::var("OXIKUBE_BENCH_TYPE")
@@ -87,6 +120,7 @@ fn pod_named(i: usize, version: usize) -> Resource {
         .namespace(format!("ns-{}", i % 20))
         .name(format!("pod-{i:05}"))
         .restarts(u32::try_from(version).unwrap_or(0))
+        .uid(format!("uid-{i:05}"))
         .build();
     r.meta.resource_version = Some(version.to_string().into());
     r
@@ -121,10 +155,34 @@ fn main() {
     let entry = ClusterContext::new(cluster.clone(), context, SourceId("kubeconfig".into()));
     let source = Arc::new(FakeClusterSourcePort::new().with_contexts([entry]));
     let sessions = ClusterSessionManager::new(connector, source, clock.clone());
-    futures::executor::block_on(sessions.connect(&cluster)).expect("connect");
-
     let mut cx =
         oxikube_testkit::headless::headless_context_with_assets(Arc::new(oxikube_ui::Assets));
+    // The events index (E14-S04), when asked for: the badge column reads it.
+    let _track = badges().map(|warned| {
+        let mut feed =
+            FakeEventFeed::new().initial((0..warned).map(|i| warning_about(i * 7 % PODS, 0)));
+        for frame in 1..=frames() {
+            for k in 0..churn_per_frame() {
+                feed = feed.add(
+                    u32::try_from(frame).unwrap_or(u32::MAX),
+                    warning_about((frame * 131 + k * 1013) % PODS, frame),
+                );
+            }
+        }
+        ports.events.install(feed);
+        let clock: Arc<dyn ClockPort> = clock.clone();
+        let service = EventService::new(sessions.clone(), clock.clone(), EventsConfig::default());
+        let executor = cx.background_executor().clone();
+        let spawner: Arc<dyn oxikube_app::store::Spawner> =
+            Arc::new(move |task| executor.spawn(task).detach());
+        service.start(spawner.clone());
+        let badges = WarningBadges::new(service, clock, spawner, Duration::from_secs(3_600));
+        let track = badges.track(&cluster);
+        cx.update(|cx| ObjectEvents::install(badges, cx));
+        track
+    });
+    // The feed starts when the cluster is connected.
+    futures::executor::block_on(sessions.connect(&cluster)).ok();
     let kind = ResourceKind {
         gvk: Gvk::new("", "v1", "Pod"),
         preferred: true,
@@ -188,6 +246,9 @@ fn main() {
         }
         let started = Instant::now();
         ports.resources.clock().advance(FRAME);
+        if _track.is_some() {
+            ports.events.clock().advance(TICK);
+        }
         cx.run_until_parked();
         cx.advance_clock(FRAME);
         cx.run_until_parked();
@@ -220,6 +281,13 @@ fn main() {
             (ids.len(), visible.len(), per_cell)
         })
     });
+    println!(
+        "badge column: {}",
+        match badges() {
+            Some(n) => format!("on, {n} warned pods"),
+            None => "off".to_owned(),
+        }
+    );
     println!("{columns} columns x {visible} visible rows; one cell read costs {cell_us:.2} us");
     frame_ms.sort_by(f64::total_cmp);
     draw_ms.sort_by(f64::total_cmp);

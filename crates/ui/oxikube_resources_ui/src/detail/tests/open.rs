@@ -10,7 +10,7 @@ use oxikube_domain::command::Command;
 use oxikube_domain::ids::{Gvk, ResourceRef};
 use oxikube_ports::{Delta, DeltaBatch, TableBatch, TableColumn, TableRow, TableSource};
 use oxikube_ports::{DescribeOutput, DescribeSource};
-use oxikube_testkit::Timeline;
+use oxikube_testkit::{FakeEventFeed, Timeline, event};
 use serde_json::json;
 
 use super::fixture::{Detail, edited, pod_ref, web_pod, web_replicaset};
@@ -309,39 +309,27 @@ fn opening_a_detail_does_not_block_and_shows_a_skeleton_first(cx: &mut TestAppCo
 
 #[gpui::test]
 fn the_yaml_and_describe_tabs_show_the_object_and_events_follow_it(cx: &mut TestAppContext) {
-    let warning = edited(
-        oxikube_testkit::resource("v1", "Event")
-            .namespace("shop")
-            .name("web-0.backoff")
-            .field("type", json!("Warning"))
-            .field("reason", json!("BackOff"))
-            .field("message", json!("Back-off restarting failed container"))
-            .field("count", json!(3))
-            .field("lastTimestamp", json!("2026-01-01T00:30:00Z"))
-            .field(
-                "involvedObject",
-                json!({"apiVersion": "v1", "kind": "Pod", "name": "web-0",
-                       "namespace": "shop", "uid": "u-web-0"}),
-            )
-            .build(),
-        |_| {},
+    let mut warning = event()
+        .uid("web-0.backoff")
+        .warning()
+        .reason("BackOff")
+        .message("Back-off restarting failed container")
+        .regarding("Pod", Some("shop"), "web-0", "u-web-0")
+        .count(3)
+        .build();
+    warning.last_seen = Some("2026-01-01T00:30:00Z".parse().unwrap());
+    let elsewhere = event()
+        .uid("web-1.started")
+        .reason("Started")
+        .message("started web-1")
+        .regarding("Pod", Some("shop"), "web-1", "u-web-1")
+        .build();
+    let pod = edited(web_pod(), |json| json["metadata"]["uid"] = json!("u-web-0"));
+    let (mut d, rig) = Detail::with_events(
+        cx,
+        [pod, web_replicaset()],
+        FakeEventFeed::new().initial([warning, elsewhere]),
     );
-    let elsewhere = edited(
-        oxikube_testkit::resource("v1", "Event")
-            .namespace("shop")
-            .name("web-1.started")
-            .field("type", json!("Normal"))
-            .field("reason", json!("Started"))
-            .field("message", json!("started web-1"))
-            .field("lastTimestamp", json!("2026-01-01T00:31:00Z"))
-            .field(
-                "involvedObject",
-                json!({"apiVersion": "v1", "kind": "Pod", "name": "web-1", "namespace": "shop"}),
-            )
-            .build(),
-        |_| {},
-    );
-    let mut d = Detail::new(cx, [web_pod(), warning, elsewhere]);
     let view = d.open(&pod_ref("web-0"));
     let event_watches = |d: &mut Detail| {
         d.f.ports()
@@ -356,7 +344,7 @@ fn the_yaml_and_describe_tabs_show_the_object_and_events_follow_it(cx: &mut Test
     assert_eq!(
         event_watches(&mut d),
         0,
-        "the Overview alone starts no events watch"
+        "the drawer starts no events watch"
     );
 
     d.click("detail-tab-yaml");
@@ -378,9 +366,10 @@ fn the_yaml_and_describe_tabs_show_the_object_and_events_follow_it(cx: &mut Test
     assert_eq!(d.read(&view, |v| v.tab()), DetailTab::Events);
     assert_eq!(
         event_watches(&mut d),
-        1,
-        "the feed starts when the tab is first shown"
+        0,
+        "the tab reads the events index, not a watch of the store"
     );
+    assert_eq!(rig.port.recorded_calls().len(), 1, "the one events feed");
     let rows = d.read(&view, |v| v.event_rows().to_vec());
     assert_eq!(rows.len(), 1, "only the events about this pod");
     assert_eq!(&*rows[0].reason, "BackOff");
@@ -392,19 +381,28 @@ fn the_yaml_and_describe_tabs_show_the_object_and_events_follow_it(cx: &mut Test
         "the Overview is not drawn behind it"
     );
 
-    // Back and forth does not start a second watch.
+    // Back and forth does not start a second feed.
     d.click("detail-tab-overview");
     d.click("detail-tab-events");
-    assert_eq!(event_watches(&mut d), 1);
+    assert_eq!(rig.port.recorded_calls().len(), 1);
 }
 
 #[gpui::test]
 fn the_events_tab_says_when_there_are_none(cx: &mut TestAppContext) {
-    let mut d = Detail::new(cx, [web_pod()]);
+    let (mut d, _rig) = Detail::with_events(cx, [web_pod()], FakeEventFeed::new());
     d.open(&pod_ref("web-0"));
     d.click("detail-tab-events");
     d.settle();
     assert!(d.shown("detail-events-empty"));
+}
+
+#[gpui::test]
+fn without_an_events_service_the_tab_says_so(cx: &mut TestAppContext) {
+    let mut d = Detail::new(cx, [web_pod()]);
+    d.open(&pod_ref("web-0"));
+    d.click("detail-tab-events");
+    d.settle();
+    assert!(d.shown("detail-events-error"));
 }
 
 #[gpui::test]

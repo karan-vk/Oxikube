@@ -14,6 +14,7 @@ use oxikube_testkit::TestPorts;
 
 use super::start_on;
 use crate::app_state::AppState;
+use oxikube_testkit::FakeClockPort;
 
 fn cluster() -> ClusterId {
     TestPorts::cluster_id()
@@ -37,9 +38,10 @@ fn start_puts_nothing_on_the_bridge_until_a_cluster_feed_runs(cx: &mut TestAppCo
     let (spawner, spawned) = counting(cx);
     let state = cx.update(|cx| {
         let state = AppState::test_with(cx, &ports);
-        start_on(&state.services().events, spawner.clone(), cx);
+        let clock = Arc::new(FakeClockPort::default());
+        start_on(&state.services().events, clock.clone(), spawner.clone(), cx);
         // A second window's mount reuses what the first started.
-        start_on(&state.services().events, spawner, cx);
+        start_on(&state.services().events, clock, spawner, cx);
         state
     });
     cx.run_until_parked();

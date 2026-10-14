@@ -136,6 +136,9 @@ fn the_nodes_entry_opens_the_story_s_columns(cx: &mut TestAppContext) {
                 .collect::<Vec<_>>()
         })
     });
+    // The warning badge column (E14-S04) comes right after the name.
+    assert_eq!(columns[1], "warnings");
+    let columns: Vec<_> = columns.into_iter().filter(|id| id != "warnings").collect();
     assert_eq!(
         columns,
         [

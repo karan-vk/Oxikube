@@ -3,6 +3,10 @@
 //! scheduled (`FailedScheduling`, a `Warning`), indexed by the pod's uid and by namespace; the
 //! overview's warnings read them; the feed stops when the last subscriber leaves.
 //!
+//! E14-S04 adds the warning badges and the per-object feed over the same service: the stuck pod
+//! has a badge with the `FailedScheduling` reason, the running pod has none, and the stuck pod's
+//! feed lists its events newest first, from the one cluster-wide watch.
+//!
 //! The pods live in the test's own `oxi-test-<rand>` namespace and every query is limited to it
 //! (the feed itself is cluster-wide, as in the app, so other suites' events pass through the
 //! buffer and are filtered out). The unschedulable pod asks for more CPU than any node has; it
@@ -15,10 +19,11 @@ use futures::future::BoxFuture;
 use k8s_openapi::api::core::v1::Pod;
 use kube::Api;
 use kube::api::PostParams;
+use oxikube_app::events::DEFAULT_EVENTS_BUFFER;
 use oxikube_app::events::{EventFilter, EventService, EventsConfig, EventsState};
 use oxikube_app::session::{ClusterSessionManager, SessionManagerConfig, SessionOptions};
 use oxikube_app::store::Spawner;
-use oxikube_app::{RecentWarnings, events::DEFAULT_EVENTS_BUFFER};
+use oxikube_app::{DEFAULT_WARNING_WINDOW, RecentWarnings, WarningBadges};
 use oxikube_kube::{ConnectorConfig, KubeConnector, PoolConfig};
 use oxikube_ports::EventApi;
 use oxikube_testkit::FakeClusterSourcePort;
@@ -172,4 +177,107 @@ async fn one_feed_fills_the_buffer_and_its_indexes_from_the_cluster() {
     })
     .await;
     assert!(service.query(&cluster, &in_ns).is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_stuck_pod_has_a_warning_badge_and_its_events_from_the_index() {
+    let Some(kind) = Kind::from_env().await else {
+        return;
+    };
+    let client = kind.admin_client().await;
+    let ns = TestNamespace::create(kind.context.as_str()).expect("namespace");
+    let pods = Api::<Pod>::namespaced(client.clone(), ns.name());
+    let running: Pod =
+        serde_json::from_value(oxikube_testkit::integration::pods::sleeper("bd-run"))
+            .expect("pod json");
+    let running = pods
+        .create(&PostParams::default(), &running)
+        .await
+        .expect("create the sleeper");
+    let stuck = pods
+        .create(&PostParams::default(), &unschedulable("bd-stuck"))
+        .await
+        .expect("create the unschedulable pod");
+    let (running_uid, stuck_uid) = (
+        running.metadata.uid.expect("a uid"),
+        stuck.metadata.uid.expect("a uid"),
+    );
+
+    let entry = catalog_entry(&kind.context);
+    let cluster = entry.cluster.clone();
+    let sessions = ClusterSessionManager::with_config(
+        Arc::new(KubeConnector::new(
+            kind.kubeconfig.clone(),
+            PoolConfig::default(),
+            ConnectorConfig::default(),
+        )),
+        Arc::new(FakeClusterSourcePort::new()),
+        Arc::new(TokioClock),
+        SessionManagerConfig::default(),
+    );
+    sessions.open(&entry, SessionOptions::default());
+    sessions.connect(&cluster).await.expect("connect");
+    let service = EventService::new(
+        sessions.clone(),
+        Arc::new(TokioClock),
+        EventsConfig {
+            idle_grace: Duration::ZERO,
+            ..EventsConfig::default()
+        },
+    );
+    service.start(tokio_spawner());
+    let badges = WarningBadges::new(
+        service.clone(),
+        Arc::new(TokioClock),
+        tokio_spawner(),
+        DEFAULT_WARNING_WINDOW,
+    );
+    let track = badges.track(&cluster);
+    let for_cluster = badges.for_cluster(&cluster);
+    let feed = badges.object_feed(&cluster, Some(stuck_uid.as_str()), None);
+    let diagnostics = || {
+        format!(
+            "state {:?}, status {:?}, badged objects {}",
+            service.state(&cluster),
+            service.status(&cluster),
+            for_cluster.len()
+        )
+    };
+
+    eventually("the stuck pod's badge", diagnostics, || async {
+        for_cluster
+            .get(&stuck_uid, jiff::Timestamp::now())
+            .is_some_and(|badge| badge.reason() == "FailedScheduling")
+    })
+    .await;
+    assert!(
+        for_cluster
+            .get(&running_uid, jiff::Timestamp::now())
+            .is_none(),
+        "the running pod has no warning"
+    );
+    // The same warning past the window is no badge.
+    let later = jiff::Timestamp::now() + jiff::SignedDuration::from_hours(2);
+    assert!(for_cluster.get(&stuck_uid, later).is_none());
+
+    // The stuck pod's tab: its events from the index, newest first.
+    eventually("the stuck pod's events", diagnostics, || async {
+        feed.events()
+            .iter()
+            .any(|e| &*e.reason == "FailedScheduling")
+    })
+    .await;
+    let events = feed.events();
+    assert!(
+        events
+            .iter()
+            .all(|e| e.regarding_uid.as_deref() == Some(stuck_uid.as_str()))
+    );
+    assert!(events.windows(2).all(|w| w[0].last_seen >= w[1].last_seen));
+
+    drop((track, feed));
+    eventually("the feed stops", diagnostics, || async {
+        service.state(&cluster) == EventsState::Idle
+    })
+    .await;
 }

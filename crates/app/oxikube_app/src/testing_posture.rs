@@ -402,6 +402,7 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         },
         "resource::ViewYaml" => Command::ResourceViewYaml { target: target() },
         "resource::ViewDescribe" => Command::ResourceViewDescribe { target: target() },
+        "resource::ViewEvents" => Command::ResourceViewEvents { target: target() },
         "resource::ViewMetrics" => Command::ResourceViewMetrics { target: target() },
         "resource::Edit" => Command::ResourceEdit { target: target() },
         "secret::Reveal" => Command::SecretReveal {

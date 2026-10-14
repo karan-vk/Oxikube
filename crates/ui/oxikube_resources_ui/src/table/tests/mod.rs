@@ -27,6 +27,7 @@ mod view_used_by;
 mod view_user_keymap;
 mod view_verbs;
 mod view_vim;
+mod view_warnings;
 mod views;
 
 use std::sync::Arc;

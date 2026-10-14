@@ -54,10 +54,7 @@ impl DetailView {
                 if update.as_ref().is_ok_and(|u| u.cluster != cluster) {
                     continue;
                 }
-                let followed = this.update(cx, |view, cx| {
-                    view.resubscribe(cx);
-                    view.restart_events(cx);
-                });
+                let followed = this.update(cx, |view, cx| view.resubscribe(cx));
                 if followed.is_err() {
                     break;
                 }
@@ -151,11 +148,10 @@ impl DetailView {
         task_cx: &mut std::task::Context<'_>,
         cx: &mut Context<Self>,
     ) -> bool {
-        let subscription = match feed {
-            Feed::Object => self.subscription.as_mut(),
-            Feed::Events => self.events.subscription.as_mut(),
-        };
-        let Some(subscription) = subscription else {
+        if matches!(feed, Feed::Events) {
+            return self.drain_events(task_cx, cx);
+        }
+        let Some(subscription) = self.subscription.as_mut() else {
             return false;
         };
         let mut deltas = Vec::new();
@@ -168,10 +164,7 @@ impl DetailView {
         };
         if !deltas.is_empty() {
             for delta in deltas {
-                match feed {
-                    Feed::Object => self.apply(delta, cx),
-                    Feed::Events => self.apply_events(delta, cx),
-                }
+                self.apply(delta, cx);
             }
             notify_coalesced(cx);
         }
@@ -226,6 +219,7 @@ impl DetailView {
             if first {
                 cx.emit(ItemEvent::UpdateTab);
             }
+            self.object_known_for_events(cx);
         } else {
             // The version is the same but the feed may have recomputed cells (a Table row's
             // age): the chip follows them.

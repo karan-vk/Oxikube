@@ -127,6 +127,19 @@ impl Detail {
         Self::over(Fixture::new(cx), objects)
     }
 
+    /// [`Self::new`] with the app's events index over fakes (E14-S04): `feed` is what the
+    /// cluster's events watch lists and then delivers. The rig holds the index.
+    pub(crate) fn with_events(
+        cx: &mut TestAppContext,
+        objects: impl IntoIterator<Item = Resource>,
+        feed: oxikube_testkit::FakeEventFeed,
+    ) -> (Self, crate::warnings::tests::EventsRig) {
+        let mut f = Fixture::new(cx);
+        let rig = f.install_events(feed);
+        f.ports().discovery.set_kinds(kinds());
+        (Self::connected(f, objects), rig)
+    }
+
     /// [`Self::new`] over the fixture with the exec row actions (E09-S08).
     pub(crate) fn with_exec(
         cx: &mut TestAppContext,

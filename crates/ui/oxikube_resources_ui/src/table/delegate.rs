@@ -10,13 +10,13 @@
 use std::sync::Arc;
 
 use gpui::{
-    App, InteractiveElement as _, IntoElement, ParentElement as _, SharedString, WeakEntity,
-    Window, div, px,
+    AnyElement, App, InteractiveElement as _, IntoElement, ParentElement as _, SharedString,
+    WeakEntity, Window, div, px,
 };
 use jiff::Timestamp;
-use oxikube_app::ColumnProvider;
 use oxikube_app::columns::Align;
 use oxikube_app::store::{FeedState, ObjectKey, StoreObject};
+use oxikube_app::{Column, ColumnProvider};
 use oxikube_ui::menu::{PopupMenu, PopupMenuItem};
 use oxikube_ui::table::SortDirection;
 use oxikube_ui::table::TextCell;
@@ -29,6 +29,7 @@ use super::selection::Selection;
 use super::states::{StateLabels, TableState, state_view};
 use super::view::ResourceTable;
 use crate::actions::ActionSource;
+use crate::warnings::{BADGE_COLUMN, RowWarnings, badge_cell};
 
 /// The data behind a [`ResourceTable`]'s rows. See the [`table`](crate::table) module docs.
 pub struct RowsDelegate {
@@ -58,6 +59,8 @@ pub struct RowsDelegate {
     pub(super) view: WeakEntity<ResourceTable>,
     /// The row actions of the context menu (none for a table without them).
     pub(super) actions: Option<ActionSource>,
+    /// Where the warning badge column reads its badges (none for a table without the column).
+    pub(super) warnings: Option<RowWarnings>,
     /// How many cells were drawn (virtualisation tests).
     #[cfg(test)]
     pub(super) rendered_cells: usize,
@@ -108,6 +111,32 @@ impl RowsDelegate {
     fn colors(&self, cx: &App) -> ToneColors {
         self.colors.unwrap_or_else(|| ToneColors::current(cx))
     }
+
+    /// The warning that badges `row` now, when the table has the badge column.
+    fn badge_of(&self, row: &StoreObject) -> Option<oxikube_app::WarningBadge> {
+        self.warnings.as_ref()?.badge(row, self.now)
+    }
+
+    /// Whether `column` is the warning badge column this table offers.
+    fn is_badge_column(&self, column: &Column) -> bool {
+        column.id == BADGE_COLUMN && self.warnings.is_some()
+    }
+
+    /// The cell of the badge column, when that is the column at `col_ix`.
+    fn badge_td(&self, row_ix: usize, col_ix: usize, colors: &ToneColors) -> Option<AnyElement> {
+        if !self.is_badge_column(self.layout.visible(col_ix)?) {
+            return None;
+        }
+        let row = self.rows.get(row_ix)?;
+        Some(badge_cell(
+            self.badge_of(row),
+            self.now,
+            colors.warn,
+            row_ix,
+            row.key(),
+            self.view.clone(),
+        ))
+    }
 }
 
 impl TableDelegate for RowsDelegate {
@@ -152,6 +181,9 @@ impl TableDelegate for RowsDelegate {
         cx: &mut App,
     ) -> impl IntoElement {
         let colors = self.colors(cx);
+        if let Some(element) = self.badge_td(row_ix, col_ix, &colors) {
+            return element;
+        }
         let cell = match (self.rows.get(row_ix), self.layout.visible(col_ix)) {
             (Some(row), Some(column)) => self.provider.cell(row, &column.id, self.now),
             _ => oxikube_app::Cell::empty(),
@@ -160,7 +192,7 @@ impl TableDelegate for RowsDelegate {
         {
             self.rendered_cells += 1;
         }
-        cell_element(&cell, &colors, row_ix, col_ix)
+        cell_element(&cell, &colors, row_ix, col_ix).into_any_element()
     }
 
     fn text_cell(
@@ -172,6 +204,10 @@ impl TableDelegate for RowsDelegate {
     ) -> Option<TextCell> {
         let colors = self.colors(cx);
         let (row, column) = (self.rows.get(row_ix)?, self.layout.visible(col_ix)?);
+        if self.is_badge_column(column) {
+            // Drawn by `render_td`: an icon with a tooltip, not text.
+            return None;
+        }
         let (text, tone) = self.cells.get(row, &column.id, &*self.provider, self.now);
         #[cfg(test)]
         {
@@ -272,6 +308,9 @@ impl TableDelegate for RowsDelegate {
 
     fn cell_text(&self, row_ix: usize, col_ix: usize, _: &App) -> String {
         match (self.rows.get(row_ix), self.layout.visible(col_ix)) {
+            (Some(row), Some(column)) if self.is_badge_column(column) => {
+                crate::warnings::cell_text(self.badge_of(row).as_ref())
+            }
             (Some(row), Some(column)) => self
                 .provider
                 .cell(row, &column.id, self.now)

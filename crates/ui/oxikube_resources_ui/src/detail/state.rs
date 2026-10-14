@@ -5,8 +5,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::Task;
-use oxikube_app::store::{StoreObject, Subscription};
-use oxikube_app::{ClusterSessionManager, CoreColumns, ResourceStores};
+use oxikube_app::{ClusterSessionManager, CoreColumns, ObjectEventsFeed, ResourceStores};
 use oxikube_domain::Resource;
 use oxikube_workspace::CommandDispatcher;
 
@@ -121,11 +120,13 @@ impl FullState {
 #[derive(Default)]
 pub(super) struct EventsTab {
     pub(super) started: bool,
-    /// Every event of the namespace as the store has them (the filter reads these).
-    pub(super) feed: Vec<Arc<StoreObject>>,
+    /// The object's events in the app's index; `None` until the tab was shown and the object
+    /// is known.
+    pub(super) feed: Option<ObjectEventsFeed>,
+    /// The uid `feed` follows: an object recreated under the same name has a new one.
+    pub(super) uid: Option<std::sync::Arc<str>>,
     pub(super) rows: Vec<EventRow>,
     pub(super) ready: bool,
     pub(super) error: Option<String>,
-    pub(super) subscription: Option<Subscription>,
     pub(super) task: Option<Task<()>>,
 }

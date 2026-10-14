@@ -45,6 +45,7 @@ mod storage;
 mod tail;
 mod terminal;
 mod used_by;
+mod warning_badges;
 mod workloads;
 
 use gpui::{Entity, TestAppContext, VisualTestContext};
