@@ -15,9 +15,10 @@ OXIKUBE_TEST_CONTEXT=kind-oxikube cargo test -p oxikube_kube --features integrat
 Without `OXIKUBE_TEST_CONTEXT` every test returns early, so `cargo test --workspace` stays green
 without a cluster. CI runs the suite in `.github/workflows/integration.yml` on PRs that touch
 adapters, ports, app, testing or xtask, and nightly twice in a row as a flake check; on failure it
-uploads each failed test's namespace events (saved by `TestNamespace` before it deletes the
-namespace, into `OXIKUBE_TEST_DIAGNOSTICS_DIR`), the cluster-wide events, pods, nodes and the kind
-logs. Locally, without that variable, a failed test prints its namespace's events to stderr.
+uploads each failed test's namespace events and pod descriptions (saved by `TestNamespace`
+before it deletes the namespace, into `OXIKUBE_TEST_DIAGNOSTICS_DIR`), the cluster-wide events,
+pods, nodes and the kind logs. Locally, without that variable, a failed test prints its
+namespace's events and pod descriptions to stderr.
 
 ## Rules every test follows
 
@@ -118,3 +119,19 @@ Run it all: `cargo xtask kind-up`, then `cargo it` (this crate, the app's kind s
 | an account that may not list Services: detection ends in `Failed(Forbidden)` with the way out, every probe `Skipped` | `service_proxy_kind::detection_as_an_account_that_may_not_list_services_fails_as_forbidden_not_as_absent` |
 | a path that could change the route never reaches the cluster | `service_proxy_kind::a_path_that_could_change_the_route_never_reaches_the_cluster` |
 | detection of a real Prometheus Service through the proxy; the app checks a configured Service, queries it and shows it; automatic detection ends in a visible verdict | `bins/oxikube/tests/kind_metrics` |
+
+## Epic E14 acceptance items (events and notifications, E14-S10)
+
+The chain from the kubelet to the user: a pod whose image cannot be pulled
+(`oxikube_testkit::integration::events::unpullable_pod`, image under `.invalid`) makes `Failed`
+Warnings; `EventArrivals` (a `kubectl get events --watch` on the test's namespace) timestamps
+them, so a latency is the app's own and not the kubelet's.
+
+| Item | Test |
+|---|---|
+| the adapter: one API by default, forced `core/v1`, both merged, per-object feeds, RBAC fallback | `events_feed`, `events_rbac` (E14-S01) |
+| a Warning reaches the `EventService` within 1 s of the watch seeing it, on `events.k8s.io/v1` and on `core/v1` | `oxikube_app/tests/kind_smoke/events_chain/fallback.rs` |
+| `events.k8s.io` unavailable (the API server's own 404, discovery leaves the group out): the feed reads `core/v1` and the normalised events equal the `events.k8s.io/v1` ones | the same test |
+| a Deployment's burst: one row per pod up to the group threshold, one group row for the rest, each raised once; mute holds new warnings back and is saved; unmute resumes | `oxikube_app/tests/kind_smoke/events_chain/notify.rs` |
+| the running app: `:ev <ns>` and `ctrl-z` show the Warning within 1 s, the pods table's badge, the drawer's Events tab (`resource::ViewEvents`), the toast; muted, a new failing pod is in the view and not in the centre; unmuted, the next one notifies | `bins/oxikube/tests/kind_events.rs` |
+| the notification centre in the app: the toast, the bell, the panel key, mute saved in the state db | `bins/oxikube/tests/kind_notifications.rs` (E14-S05) |

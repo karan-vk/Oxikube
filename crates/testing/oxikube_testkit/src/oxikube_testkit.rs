@@ -21,6 +21,8 @@
 //! - [`discovery_sets`]: whole discovery answers for the kind registry and sidebar tests (E12-S01):
 //!   a stock cluster, with the Gateway API, with CRDs, CRDs only.
 //! - [`kinds`]: discovery fixtures, `ResourceKind`s as an API server reports them (`kind(..).short(..)`, `core_kinds()`, CRDs that collide).
+//! - [`events_scope`]: [`ScopedEvents`] / [`EventsConnector`], a real connection's events feeds
+//!   narrowed to a test's namespaces or forced onto `core/v1` (the E14 kind suites).
 //! - [`images`]: the container images the kind suites run (one list, pre-pulled by `kind-up`).
 //! - [`manifests`]: large generated YAML (`pod_list_yaml(5 MiB, ..)`, a `kubectl get -o yaml`
 //!   dump with planted schema errors) and the schema it is checked against, for the manifest
@@ -50,6 +52,7 @@
 pub mod builders;
 pub mod commands;
 pub mod discovery_sets;
+pub mod events_scope;
 pub mod fakes;
 pub mod fixtures;
 #[cfg(feature = "gpui-test")]
@@ -75,6 +78,7 @@ pub use builders::{
     NodeBuilder, PodBuilder, daemonset, deployment, job, node, pod, replicaset, resource,
     statefulset,
 };
+pub use events_scope::{EventsConnector, ScopedEvents};
 pub use fakes::*;
 pub use overlap::Overlap;
 pub use script::{CallLog, Script, StreamGauge, Timeline, unscripted};

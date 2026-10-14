@@ -23,7 +23,10 @@ name: integration
 # detail panel and guard checked in the app, a CRD's printer columns against `kubectl get`; one
 # test per sidebar section, about 10 s in all), and `kind_metrics_server` (E13-S13: the Pods and Nodes
 # tables, the live rings and the overview's tiles from metrics-server; the stacks are the
-# nightly's `metrics-stack` job). The per-port exec, attach, node shell and debug scenarios
+# nightly's `metrics-stack` job), and `kind_events` (E14-S10: a failing image pull's Warning in
+# the events view within a second, the pods table's badge, the drawer's Events tab, the toast,
+# mute and unmute; its service-level half, the burst counts and the `core/v1` fallback without
+# `events.k8s.io`, is `oxikube_app/tests/kind_smoke/events_chain` in the `kind` job). The per-port exec, attach, node shell and debug scenarios
 # (`oxikube_kube/tests/exec_*`, `oxikube_app/tests/kind_smoke/{exec,debug,node_shell}`) run in the
 # `kind` job with everything else. The macOS golden screenshots of the terminal
 # element are the nightly job's (`nightly.yml`).
@@ -54,8 +57,8 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   OXIKUBE_TEST_CONTEXT: kind-oxikube
-  # A failing test's `TestNamespace` writes its events here before deleting the namespace (which
-  # deletes the events); the diagnostics upload below carries them.
+  # A failing test's `TestNamespace` writes its events and its pods' descriptions here before
+  # deleting the namespace (which deletes both); the diagnostics uploads below carry them.
   OXIKUBE_TEST_DIAGNOSTICS_DIR: ${{ github.workspace }}/diagnostics/namespaces
   # kube, app and testkit integration tests; `--no-fail-fast` reports every failing file.
   SUITE: >-
@@ -129,7 +132,7 @@ jobs:
       TERMINAL_SUITE: >-
         cargo test -p oxikube --features integration --test kind_exec --test kind_terminal --test kind_terminal_data --test kind_assist
         --test kind_templates --test kind_editor --test kind_network --test kind_sections
-        --test kind_metrics_server --test kind_notifications
+        --test kind_metrics_server --test kind_notifications --test kind_events
         --no-fail-fast
     steps:
       - uses: actions/checkout@v7
@@ -177,8 +180,13 @@ jobs:
           kubectl --context kind-oxikube get pods -A -o wide > terminal-artifacts/pods.txt || true
           kubectl --context kind-oxikube get events -A -o wide \
             --sort-by=.metadata.creationTimestamp > terminal-artifacts/events.txt || true
+          # A failed test's namespace events and pod descriptions (`TestNamespace` saved them).
+          if [ -d diagnostics/namespaces ]; then
+            cp -R diagnostics/namespaces terminal-artifacts/namespaces || true
+          fi
       # Never terminal content: the suite prints perf numbers and test names, and the artifacts
-      # are those numbers plus cluster pods and events (no logs of the terminal, no scrollback).
+      # are those numbers plus cluster pods and events, and a failed test's namespace events and
+      # pod descriptions (no logs of the terminal, no scrollback).
       - name: Upload terminal artifacts
         if: ${{ always() }}
         uses: actions/upload-artifact@v7
