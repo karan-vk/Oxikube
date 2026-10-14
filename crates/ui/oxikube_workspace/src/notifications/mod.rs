@@ -32,8 +32,8 @@ use gpui::{AppContext as _, Entity, Subscription, Window, actions};
 use oxikube_app::ClusterSessionManager;
 use oxikube_app::notifications::NotificationService;
 
-pub use centre::{CentreEvent, NotificationCentre, NotificationRow};
-pub use commands::{NotificationPanelSink, register_commands, serve};
+pub use centre::{APP_LABEL, CentreEvent, NotificationCentre, NotificationRow};
+pub use commands::{NotificationPanelSink, PanelRequest, register_commands, serve};
 pub use panel::{NotificationPanel, PANEL_NAME};
 pub use render::ROW_HEIGHT;
 pub use status::NotificationStatusItem;

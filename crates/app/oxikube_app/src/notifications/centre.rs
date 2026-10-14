@@ -68,18 +68,20 @@ impl Centre {
         now: Timestamp,
     ) -> Applied {
         let route = match (&input.group, self.live(&input.dedupe_key, rules, now)) {
-            (Some(group), None) => limiter.route(rules, &input.cluster, &group.reason, now),
+            (Some(group), None) => limiter.route(rules, input.cluster.as_ref(), &group.reason, now),
             _ => Route::Own,
         };
         let key: Arc<str> = match (route, &input.group) {
-            (Route::Group, Some(group)) => {
-                Arc::from(format!("group/{}/{}", input.cluster, group.reason))
-            }
+            (Route::Group, Some(group)) => Arc::from(match &input.cluster {
+                Some(cluster) => format!("group/{cluster}/{}", group.reason),
+                None => format!("group/{}", group.reason),
+            }),
             _ => input.dedupe_key.clone(),
         };
+        let mut escalated = false;
         let id = match self.live(&key, rules, now) {
             Some(id) => {
-                self.update(id, &input, now);
+                escalated = self.update(id, &input, now);
                 id
             }
             None => self.insert(key, &input, route, now),
@@ -88,7 +90,7 @@ impl Centre {
             self.fold(id, &input);
         }
         let row = self.rows.get_mut(&id).expect("the row was just written");
-        let raised = limiter.may_raise(rules, row.last_raised, now);
+        let raised = limiter.may_raise(rules, row.last_raised, row.note.sticky(), escalated, now);
         if raised {
             row.last_raised = Some(now);
         }
@@ -134,6 +136,15 @@ impl Centre {
         true
     }
 
+    /// Marks the row with `key` read, if it is listed and unread (a request was answered).
+    /// Returns whether it was unread.
+    pub(crate) fn mark_read_by_key(&mut self, key: &str) -> bool {
+        match self.by_key.get(key).copied() {
+            Some(id) => self.mark_read(id),
+            None => false,
+        }
+    }
+
     /// Marks every row read. Returns how many were unread.
     pub(crate) fn mark_all_read(&mut self) -> usize {
         let marked = self.unread;
@@ -172,11 +183,13 @@ impl Centre {
         };
         let note = Notification {
             id,
+            kind: input.kind,
             cluster: input.cluster.clone(),
             level: input.level,
             title: clean(&input.title, MAX_TITLE_CHARS),
             body: clean(&input.body, MAX_BODY_CHARS),
             target: input.target.clone(),
+            link: input.link.clone(),
             dedupe_key: key.clone(),
             count: input.occurrences.max(1),
             objects: 1,
@@ -203,10 +216,11 @@ impl Centre {
         id
     }
 
-    fn update(&mut self, id: NotificationId, input: &NotificationInput, now: Timestamp) {
+    /// Folds `input` into row `id`; returns whether the row's level went up.
+    fn update(&mut self, id: NotificationId, input: &NotificationInput, now: Timestamp) -> bool {
         let seq = self.bump();
         let Some(row) = self.rows.get_mut(&id) else {
-            return;
+            return false;
         };
         self.order.remove(&row.seq);
         self.order.insert(seq, id);
@@ -214,8 +228,11 @@ impl Centre {
         let note = Arc::make_mut(&mut row.note);
         note.count = note.count.saturating_add(input.occurrences.max(1));
         note.updated = now;
-        note.level = note.level.max_with(input.level);
+        let before = note.level;
+        note.level = before.max_with(input.level);
+        let escalated = note.level != before;
         note.target = input.target.clone().or(note.target.take());
+        note.link = input.link.clone().or(note.link.take());
         if row.group.is_none() {
             note.title = clean(&input.title, MAX_TITLE_CHARS);
             note.body = clean(&input.body, MAX_BODY_CHARS);
@@ -224,6 +241,7 @@ impl Centre {
             note.read = false;
             self.unread += 1;
         }
+        escalated
     }
 
     /// Adds `input`'s object to the group row `id` and words the row for the burst.

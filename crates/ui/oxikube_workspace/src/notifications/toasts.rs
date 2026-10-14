@@ -1,15 +1,23 @@
 //! The centre's toasts: a raised notification becomes a warning toast with an "Open" button
 //! (the row's open commands), keyed by the row so a later occurrence replaces it in place.
 //!
+//! A sticky notification (an agent waiting for a permission answer) has a toast that does not time
+//! out; it goes away when the row is read, whether by its "Open" button, the panel or the answer
+//! ([`follow_toasts`] watches the centre for that).
+//!
 //! Capped on top of the service's own rate limit: at most [`MAX_TOASTS`] per [`TOAST_WINDOW`];
 //! past it one summary toast ("12 unread notifications", "Show all") stands for the rest, and
-//! the toast layer's auto-dismiss takes them all away. A burst never stacks toasts.
+//! the toast layer's auto-dismiss takes them all away. A burst never stacks toasts. A sticky
+//! toast is outside the cap, as it is outside the service's limit: it neither counts nor is
+//! turned into the summary, because the agent waits on it.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
+use std::collections::HashSet;
 use std::rc::Rc;
 use std::time::Duration;
 
 use gpui::{App, Entity, Subscription, WeakEntity};
+use oxikube_app::notifications::NotificationId;
 use oxikube_domain::command::Command;
 use oxikube_ports::NotificationLevel;
 
@@ -39,25 +47,31 @@ pub fn follow_toasts(
     cx: &mut App,
 ) -> Subscription {
     let shown = Rc::new(Cell::new(0_usize));
-    cx.subscribe(centre, move |centre, event: &CentreEvent, cx| {
+    let sticky = Rc::new(RefCell::new(HashSet::<NotificationId>::new()));
+    let dismiss = dismiss_when_read(centre, workspace.clone(), sticky.clone(), cx);
+    let raised = cx.subscribe(centre, move |centre, event: &CentreEvent, cx| {
         let CentreEvent::Raised { rows, more } = event;
         let Some(workspace) = workspace.upgrade() else {
             return;
         };
         let mut overflow = *more;
         for row in rows {
-            if shown.get() >= MAX_TOASTS {
+            if row.sticky() {
+                // Outside the budget: neither capped nor counted, the agent is waiting on it.
+                sticky.borrow_mut().insert(row.id);
+            } else if shown.get() >= MAX_TOASTS {
                 overflow += 1;
                 continue;
+            } else {
+                shown.set(shown.get() + 1);
+                let budget = shown.clone();
+                // Detached on purpose: it only gives the slot back; nothing stores or drops it.
+                cx.spawn(async move |cx| {
+                    cx.background_executor().timer(TOAST_WINDOW).await;
+                    budget.set(budget.get().saturating_sub(1));
+                })
+                .detach();
             }
-            shown.set(shown.get() + 1);
-            let budget = shown.clone();
-            // Detached on purpose: it only gives the slot back; nothing stores or drops it.
-            cx.spawn(async move |cx| {
-                cx.background_executor().timer(TOAST_WINDOW).await;
-                budget.set(budget.get().saturating_sub(1));
-            })
-            .detach();
             let toast = row_toast(row, &dispatcher);
             workspace.update(cx, |ws, cx| ws.show_toast(toast, cx));
         }
@@ -66,12 +80,48 @@ pub fn follow_toasts(
             let toast = summary_toast(unread, &dispatcher);
             workspace.update(cx, |ws, cx| ws.show_toast(toast, cx));
         }
+    });
+    Subscription::join(raised, dismiss)
+}
+
+/// Takes the toast of a sticky row away once the row is read (or gone).
+fn dismiss_when_read(
+    centre: &Entity<NotificationCentre>,
+    workspace: WeakEntity<Workspace>,
+    sticky: Rc<RefCell<HashSet<NotificationId>>>,
+    cx: &mut App,
+) -> Subscription {
+    cx.observe(centre, move |centre, cx| {
+        if sticky.borrow().is_empty() {
+            return;
+        }
+        let rows = centre.read(cx).rows();
+        let handled: Vec<NotificationId> = sticky
+            .borrow()
+            .iter()
+            .copied()
+            .filter(|id| {
+                rows.iter()
+                    .find(|row| row.id == *id)
+                    .is_none_or(|row| row.read)
+            })
+            .collect();
+        for id in handled {
+            sticky.borrow_mut().remove(&id);
+            if let Some(workspace) = workspace.upgrade() {
+                workspace.update(cx, |ws, cx| ws.dismiss_toast_key(&key_of(id), cx));
+            }
+        }
     })
 }
 
 /// The toast key of a row.
 pub fn toast_key(row: &NotificationRow) -> String {
-    format!("notification/{}", row.id)
+    key_of(row.id)
+}
+
+fn key_of(id: NotificationId) -> String {
+    format!("notification/{id}")
 }
 
 fn row_toast(row: &NotificationRow, dispatcher: &Rc<dyn CommandDispatcher>) -> Toast {
@@ -81,18 +131,26 @@ fn row_toast(row: &NotificationRow, dispatcher: &Rc<dyn CommandDispatcher>) -> T
         NotificationLevel::Warning => ToastLevel::Warning,
         NotificationLevel::Error => ToastLevel::Error,
     };
-    // Every toast goes away by itself, an error too: the centre keeps the notification.
-    let timeout = level.default_timeout().unwrap_or(Duration::from_secs(10));
+    let title = match row.cluster {
+        Some(_) => format!("{} \u{b7} {}", row.title, row.cluster_label),
+        None => row.title.to_string(),
+    };
     let mut toast = Toast::new(level, shorten(&row.body))
-        .title(format!("{} \u{b7} {}", row.title, row.cluster_label))
-        .key(toast_key(row))
-        .timeout(timeout);
-    if row.target.is_some() {
+        .title(title)
+        .key(toast_key(row));
+    toast = if row.sticky() {
+        // Stays until the row is read; see `dismiss_when_read`.
+        toast.persistent()
+    } else {
+        // Every other toast goes away by itself, an error too: the centre keeps the notification.
+        toast.timeout(level.default_timeout().unwrap_or(Duration::from_secs(10)))
+    };
+    if row.is_openable() {
         let dispatcher = dispatcher.clone();
-        let commands = row.open_commands();
+        let row = row.clone();
         toast = toast.action(ToastAction::new("Open", move |_, cx| {
-            for command in &commands {
-                dispatcher.dispatch(command.clone(), cx);
+            for command in row.open_commands() {
+                dispatcher.dispatch(command, cx);
             }
         }));
     }

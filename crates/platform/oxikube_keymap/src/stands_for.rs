@@ -173,6 +173,10 @@ pub const STANDS_FOR: &[(&str, CommandId)] = &[
     ),
     ("notification_panel::OpenSelected", CommandId::RESOURCE_OPEN),
     (
+        "notification_panel::OpenSelected",
+        CommandId::NOTIFICATIONS_OPEN_LINK,
+    ),
+    (
         "notification_panel::MarkSelectedRead",
         CommandId::NOTIFICATIONS_MARK_READ,
     ),

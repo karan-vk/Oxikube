@@ -1,5 +1,5 @@
-//! The notification centre in the running app (E14-S05), over `TestPorts`: a new Warning event of
-//! a connected cluster toasts and lights the status-bar bell (the backlog does not), the key opens
+//! The notification centre in the running app (E14-S05; the other sources, E14-S07), over
+//! `TestPorts`: a new Warning event of a connected cluster toasts and lights the status-bar bell (the backlog does not), the key opens
 //! the centre in the right dock with the row, the five commands are on the bus with their tool
 //! stubs, and a muted cluster is remembered in the state db.
 
@@ -8,7 +8,10 @@ use std::time::Duration;
 use gpui::{BorrowAppContext as _, TestAppContext};
 use oxikube_domain::command::{Command, CommandId};
 use oxikube_ports::{StateKey, StatePort as _};
-use oxikube_testkit::{FakeEventFeed, TICK, TestPorts, event};
+use oxikube_testkit::{
+    FakeEventFeed, TICK, TestPorts, emit_agent_permission, emit_portforward_drop,
+    emit_update_available, event,
+};
 use oxikube_workspace::DockPosition;
 use oxikube_workspace::notifications::NotificationPanel;
 
@@ -108,6 +111,10 @@ fn the_commands_are_on_the_bus_with_tool_stubs(cx: &mut TestAppContext) {
     for (id, owner) in [
         (
             CommandId::NOTIFICATIONS_TOGGLE_PANEL,
+            "oxikube_workspace::notifications",
+        ),
+        (
+            CommandId::NOTIFICATIONS_OPEN_LINK,
             "oxikube_workspace::notifications",
         ),
         (
@@ -231,4 +238,82 @@ fn the_events_settings_decide_what_notifies_and_a_hot_reload_applies_at_once(
         "Pods are no longer watched"
     );
     assert_eq!(events.live_feeds(), 1, "still the cluster's one feed");
+}
+
+#[gpui::test]
+fn the_other_sources_reach_the_running_app_through_the_services_hooks(cx: &mut TestAppContext) {
+    let mut app = App::start(cx, TestPorts::seeded());
+    let state = app.vcx.update(|_, cx| AppState::global(cx));
+    // What E15, E24 and E27 are handed: the app's one service as the hooks port.
+    let hooks = state.services().notifications.sources();
+    emit_update_available(&*hooks, "0.6.1");
+    emit_portforward_drop(&*hooks, "fwd-1");
+    emit_agent_permission(&*hooks, "s1", "r1");
+    settle(&mut app);
+
+    assert!(
+        app.drawn("status-notifications-count"),
+        "the bell counts them"
+    );
+    let messages: Vec<String> = app
+        .read(|ws, cx| ws.toast_layer().read(cx).visible())
+        .iter()
+        .map(|t| t.message.to_string())
+        .collect();
+    assert_eq!(messages.len(), 3, "{messages:?}");
+    assert_eq!(state.services().notifications.unread(), 3);
+
+    // The permission toast waits for the answer; the others go by themselves.
+    app.vcx.executor().advance_clock(Duration::from_secs(120));
+    app.vcx.run_until_parked();
+    assert_eq!(
+        app.read(|ws, cx| ws.toast_layer().read(cx).visible()).len(),
+        1
+    );
+    hooks.agent_permission_resolved("s1", "r1");
+    settle(&mut app);
+    assert!(
+        app.read(|ws, cx| ws.toast_layer().read(cx).visible())
+            .is_empty()
+    );
+    assert_eq!(state.services().notifications.unread(), 2);
+
+    // The panel lists all three, newest first.
+    super::notifications::dispatch(&mut app, Command::NotificationsTogglePanel);
+    settle(&mut app);
+    assert!(app.drawn("notification-row-2"));
+    assert!(!app.drawn("notification-row-3"));
+}
+
+#[gpui::test]
+fn only_https_links_open_from_a_notification(cx: &mut TestAppContext) {
+    let mut app = App::start(cx, TestPorts::seeded());
+    let ok = super::notifications::dispatch(
+        &mut app,
+        Command::NotificationsOpenLink {
+            url: "https://example.com/release".to_owned(),
+        },
+    );
+    assert!(ok.message.is_none());
+    assert_eq!(
+        app.vcx.opened_url().as_deref(),
+        Some("https://example.com/release"),
+        "the window's serve loop opened it"
+    );
+
+    let state = app.vcx.update(|_, cx| AppState::global(cx));
+    let bus = state.command_bus().expect("the bus").clone();
+    let refused = futures::executor::block_on(bus.dispatch(
+        Command::NotificationsOpenLink {
+            url: "file:///etc/passwd".to_owned(),
+        },
+        oxikube_app::command_bus::DispatchContext::new(oxikube_domain::Initiator::Ui, "me"),
+    ));
+    assert!(refused.is_err(), "{refused:?}");
+    app.vcx.run_until_parked();
+    assert_eq!(
+        app.vcx.opened_url().as_deref(),
+        Some("https://example.com/release"),
+        "the refused link reached nothing"
+    );
 }

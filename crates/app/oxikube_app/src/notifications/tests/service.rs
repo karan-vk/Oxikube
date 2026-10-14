@@ -422,3 +422,23 @@ async fn a_cluster_switched_off_the_desktop_still_notifies_in_the_app() {
     assert_eq!(notifier.shown()[0].title, "title loud");
     assert_eq!(h.centre.list().len(), 2, "both are listed in the app");
 }
+
+#[tokio::test]
+async fn cluster_events_stop_with_their_kind_switched_off() {
+    let h = Harness::new();
+    h.port().install(
+        FakeEventFeed::new()
+            .add(1, warning("e1", "web-0", "BackOff", 1, 1))
+            .add(2, warning("e2", "web-1", "Failed", 1, 2)),
+    );
+    h.centre.set_kind_enabled(
+        oxikube_domain::notification::NotificationKind::ClusterEvent,
+        false,
+    );
+    h.connect().await;
+    h.until("watched", |h| h.port().live_feeds() == 1).await;
+    h.tick().await;
+    h.tick().await;
+    tokio::time::sleep(Duration::from_millis(20)).await;
+    assert!(h.centre.list().is_empty(), "the kind is off");
+}

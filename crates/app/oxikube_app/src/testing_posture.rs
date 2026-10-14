@@ -111,6 +111,9 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "app::SendTestNotification" => Command::AppSendTestNotification,
         "app::ToggleOsNotifications" => Command::AppToggleOsNotifications { enabled: None },
         "notifications::MarkAllRead" => Command::NotificationsMarkAllRead,
+        "notifications::OpenLink" => Command::NotificationsOpenLink {
+            url: "https://example.com".to_owned(),
+        },
         "notifications::MarkRead" => Command::NotificationsMarkRead { id: 1 },
         "notifications::MuteCluster" => Command::NotificationsMuteCluster { cluster },
         "notifications::TogglePanel" => Command::NotificationsTogglePanel,

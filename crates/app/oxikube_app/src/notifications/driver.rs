@@ -8,6 +8,7 @@ use std::sync::{Arc, Weak};
 use futures::StreamExt as _;
 use oxikube_domain::event::Event;
 use oxikube_domain::ids::ClusterId;
+use oxikube_domain::notification::NotificationKind;
 
 use super::service::{Inner, wake};
 use super::tracker::Tracker;
@@ -132,6 +133,9 @@ fn on_events(inner: &Inner, cluster: &ClusterId, changes: EventsChanged, held: &
             if let Some(occurrences) = watch.tracker.observe(event) {
                 news.push((event.clone(), occurrences));
             }
+        }
+        if !state.accepts(NotificationKind::ClusterEvent, Some(cluster)) {
+            return;
         }
         for (event, occurrences) in news {
             if !state.rules.admits(cluster, &event) {

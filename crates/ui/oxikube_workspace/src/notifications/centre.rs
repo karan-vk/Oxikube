@@ -15,6 +15,7 @@ use oxikube_app::ClusterSessionManager;
 use oxikube_app::notifications::{Notification, NotificationId, NotificationService};
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{ClusterId, ResourceRef};
+use oxikube_domain::notification::NotificationKind;
 use oxikube_ports::NotificationLevel;
 use oxikube_runtime::NotifyCoalescedExt as _;
 
@@ -29,9 +30,12 @@ pub struct NotificationRow {
     pub title: SharedString,
     /// The latest detail.
     pub body: SharedString,
-    /// The cluster it concerns.
-    pub cluster: ClusterId,
-    /// What the cluster is called (its display name, else its context).
+    /// Where it comes from.
+    pub kind: NotificationKind,
+    /// The cluster it concerns, if any (an update concerns none).
+    pub cluster: Option<ClusterId>,
+    /// What the cluster is called (its display name, else its context); [`APP_LABEL`] when it
+    /// concerns none.
     pub cluster_label: SharedString,
     /// The count and time line: `×12 · 14:03:07`.
     pub meta: SharedString,
@@ -39,7 +43,12 @@ pub struct NotificationRow {
     pub read: bool,
     /// The object a click opens.
     pub target: Option<ResourceRef>,
+    /// The `https` link a click opens in the browser.
+    pub link: Option<SharedString>,
 }
+
+/// What a notification that concerns no cluster is labelled with.
+pub const APP_LABEL: &str = "Oxikube";
 
 impl NotificationRow {
     fn of(note: &Notification, sessions: &ClusterSessionManager, tz: &TimeZone) -> Self {
@@ -58,25 +67,47 @@ impl NotificationRow {
             level: note.level,
             title: note.title.clone().into(),
             body: note.body.clone().into(),
+            kind: note.kind,
             cluster: note.cluster.clone(),
-            cluster_label: label_of(sessions, &note.cluster).into(),
+            cluster_label: note
+                .cluster
+                .as_ref()
+                .map_or_else(|| APP_LABEL.to_owned(), |c| label_of(sessions, c))
+                .into(),
             meta: meta.into(),
             read: note.read,
             target: note.target.clone(),
+            link: note.link.as_deref().map(|link| link.to_owned().into()),
         }
     }
 
+    /// Whether its toast stays until the row is read.
+    pub fn sticky(&self) -> bool {
+        self.kind.sticky()
+    }
+
+    /// Whether opening the row does anything beyond marking it read: it names an object or a link.
+    pub fn is_openable(&self) -> bool {
+        self.target.is_some() || self.link.is_some()
+    }
+
     /// What opening the row dispatches, in order: mark it read, select its cluster, open its
-    /// object (the same commands a click on the OS notification runs).
+    /// object (the same commands a click on the OS notification runs); a link is opened
+    /// last (`notifications::OpenLink`).
     pub fn open_commands(&self) -> Vec<Command> {
         let mut commands = vec![Command::NotificationsMarkRead { id: self.id.0 }];
         commands.extend(
             oxikube_app::ClickAction {
-                cluster: Some(self.cluster.clone()),
+                cluster: self.cluster.clone(),
                 open: self.target.clone(),
             }
             .commands(),
         );
+        if let Some(url) = &self.link {
+            commands.push(Command::NotificationsOpenLink {
+                url: url.to_string(),
+            });
+        }
         commands
     }
 }

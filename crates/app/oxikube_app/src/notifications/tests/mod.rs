@@ -7,6 +7,7 @@ mod commands;
 mod limiter;
 mod rules;
 mod service;
+mod sources;
 mod tracker;
 
 use std::sync::Arc;
@@ -16,6 +17,8 @@ use jiff::{SignedDuration, Timestamp};
 use oxikube_domain::event::Event;
 use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_testkit::event;
+
+use oxikube_domain::notification::NotificationKind;
 
 use super::{GroupKey, NotificationInput};
 use oxikube_ports::NotificationLevel;
@@ -62,11 +65,13 @@ pub(super) fn warning(uid: &str, name: &str, reason: &str, count: u32, secs: i64
 /// A plain input (no group) with `key` in `cluster`.
 pub(super) fn input(cluster: &ClusterId, key: &str) -> NotificationInput {
     NotificationInput {
-        cluster: cluster.clone(),
+        kind: NotificationKind::ClusterEvent,
+        cluster: Some(cluster.clone()),
         level: NotificationLevel::Warning,
         title: format!("title {key}"),
         body: format!("body {key}"),
         target: None,
+        link: None,
         dedupe_key: Arc::from(key),
         group: None,
         occurrences: 1,

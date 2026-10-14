@@ -191,7 +191,13 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `notifications.muted`), burst grouping per cluster and reason ("12 pods: BackOff" after `group_threshold` objects in
   `group_window`), dedupe by an explicit key (count up within `dedupe_window`) and a raise limit (per row
   `object_interval`, overall `max_raised` per `raise_window`) into a bounded read / unread list (500 rows, in memory).
-  Other sources (E14-S07) hand in a `NotificationInput` through `submit`. Subscribers get `NotificationsChanged` coalesced
+  Other sources (E14-S07) reach the same path through `oxikube_ports::NotificationSourcePort`, which `NotificationService`
+  implements (`sources()` hands out `Arc<dyn NotificationSourcePort>`): `port_forward_changed` (one notification per drop,
+  `portforward:<cluster>:<forward-id>:dropped`; a recovery marks it read), `update_available` (once per version,
+  `update:<version>`, no cluster, `https` link only), `agent_permission_requested` / `agent_permission_resolved`
+  (`agent-permission:<session>:<request-id>`, sticky toast, none while the agent panel is focused). The input types and the
+  key formats live in `oxikube_domain::notification` (with `NotificationKind`), so E15/E24/E27 depend on ports, never on the
+  app; `set_kind_enabled` switches a kind off (settings wiring: E14-S09). `submit` stays for any other `NotificationInput`. Subscribers get `NotificationsChanged` coalesced
   per poll; `forward_to_os` hands the raised ones to `OsNotificationService` (shown only once opted in). Commands
   `notifications::MarkRead` / `MarkAllRead` / `MuteCluster` / `UnmuteCluster` (none touches a cluster).
   Module `columns` (E07-S02): `ColumnProvider`, the one question a table asks of a kind (`columns(kind,
@@ -1410,7 +1416,7 @@ crate's `README.md` for its allowed dependencies. Highlights:
   derived once per change, redraws coalesced), `NotificationPanel` in the right dock (virtualised list, unread marks,
   "Mark all read", the shown cluster's mute toggle; key context `NotificationPanel`), `NotificationStatusItem` (the
   bell and unread count on the right of the status bar), `follow_toasts` (at most `MAX_TOASTS` per `TOAST_WINDOW`
-  plus one summary) and `notifications::TogglePanel` (`cmd-shift-i` / `ctrl-shift-i`). Module `cluster_tab`
+  plus one summary) and `notifications::TogglePanel` (`cmd-shift-i` / `ctrl-shift-i`) and `notifications::OpenLink` (an `https` link of a notification; E14-S07, the toast of a sticky notification stays until it is read). Module `cluster_tab`
   (E06-S04): `ClusterTab` is an `Item` that hosts a `Workspace` of its own, embedded in the window's
   (own docks for the sidebar, own pane group, own layout saved under `cluster:<id>`; the status
   bar, modal and toast layers are the window's); `ClusterTabs` keeps one tab per session that is

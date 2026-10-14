@@ -6,8 +6,8 @@ use std::task::Waker;
 
 use futures::FutureExt as _;
 use futures::future::BoxFuture;
-use oxikube_domain::OxiResult;
 use oxikube_domain::ids::ClusterId;
+use oxikube_domain::notification::NotificationKind;
 use oxikube_ports::{ClockPort, StatePort};
 use parking_lot::Mutex;
 
@@ -47,11 +47,11 @@ impl std::fmt::Debug for NotificationService {
 pub(crate) struct Inner {
     pub(crate) events: EventService,
     pub(crate) sessions: ClusterSessionManager,
-    store: Arc<dyn StatePort>,
+    pub(super) store: Arc<dyn StatePort>,
     pub(crate) clock: Arc<dyn ClockPort>,
     pub(crate) state: Mutex<State>,
     /// Held while the muted clusters are written, so two quick toggles land in order.
-    persist: futures::lock::Mutex<()>,
+    pub(super) persist: futures::lock::Mutex<()>,
 }
 
 pub(crate) struct State {
@@ -59,6 +59,10 @@ pub(crate) struct State {
     pub(crate) centre: Centre,
     pub(crate) limiter: Limiter,
     pub(crate) muted: BTreeSet<ClusterId>,
+    /// The kinds switched off: nothing of them is added.
+    pub(crate) disabled_kinds: BTreeSet<NotificationKind>,
+    /// The versions an update notification was added for (one per version).
+    pub(crate) announced_versions: BTreeSet<String>,
     /// The muted clusters were read: until then no cluster is watched (a muted one must never
     /// toast at launch).
     pub(crate) loaded: bool,
@@ -70,6 +74,12 @@ pub(crate) struct State {
 }
 
 impl State {
+    /// Whether an input of `kind` about `cluster` may be added: the kind is on and the cluster,
+    /// if any, is not muted.
+    pub(crate) fn accepts(&self, kind: NotificationKind, cluster: Option<&ClusterId>) -> bool {
+        !self.disabled_kinds.contains(&kind) && !cluster.is_some_and(|c| self.muted.contains(c))
+    }
+
     /// Tells every subscriber the centre changed (and that `raised` should toast); returns the
     /// wakers to wake once the lock is released.
     pub(crate) fn publish(&self, raised: Option<&Arc<Notification>>) -> Vec<Waker> {
@@ -108,6 +118,8 @@ impl NotificationService {
                     centre: Centre::default(),
                     limiter: Limiter::default(),
                     muted: BTreeSet::new(),
+                    disabled_kinds: BTreeSet::new(),
+                    announced_versions: BTreeSet::new(),
                     loaded: false,
                     spawner: None,
                     follower: None,
@@ -178,12 +190,24 @@ impl NotificationService {
     }
 
     /// Hands the centre one occurrence from any source. Returns the row it landed in, or `None`
-    /// when its cluster is muted.
+    /// when its kind is switched off or its cluster is muted. The typed hooks of the other
+    /// sources ([`NotificationSourcePort`](oxikube_ports::NotificationSourcePort)) build their
+    /// inputs and come here.
     pub fn submit(&self, input: NotificationInput) -> Option<Arc<Notification>> {
+        self.submit_if(input, |_| true)
+    }
+
+    /// [`submit`](Self::submit) when `gate` agrees; `gate` runs under the state lock, after the
+    /// kind and the cluster were checked, so a source can make its own check-and-remember atomic.
+    pub(crate) fn submit_if(
+        &self,
+        input: NotificationInput,
+        gate: impl FnOnce(&mut State) -> bool,
+    ) -> Option<Arc<Notification>> {
         let now = self.inner.clock.now();
         let (row, wakers) = {
             let mut state = self.inner.state.lock();
-            if state.muted.contains(&input.cluster) {
+            if !state.accepts(input.kind, input.cluster.as_ref()) || !gate(&mut state) {
                 return None;
             }
             let State {
@@ -228,54 +252,6 @@ impl NotificationService {
             marked > 0
         });
         marked
-    }
-
-    /// Whether `cluster` is muted.
-    pub fn is_muted(&self, cluster: &ClusterId) -> bool {
-        self.inner.state.lock().muted.contains(cluster)
-    }
-
-    /// The muted clusters.
-    pub fn muted(&self) -> Vec<ClusterId> {
-        self.inner.state.lock().muted.iter().cloned().collect()
-    }
-
-    /// Mutes `cluster`: its events stop being watched for notifications (its feed may still run
-    /// for the views) and nothing about it is added; the rows already listed stay. Remembered
-    /// across restarts. Returns whether it was unmuted.
-    ///
-    /// # Errors
-    ///
-    /// The state store's error when the change could not be saved (it still applies until the
-    /// app quits).
-    pub async fn mute(&self, cluster: &ClusterId) -> OxiResult<bool> {
-        let changed = self.change(|state| {
-            let changed = state.muted.insert(cluster.clone());
-            if changed {
-                state.watches.remove(cluster);
-                state.limiter.forget(cluster);
-            }
-            changed
-        });
-        if changed {
-            self.persist().await?;
-        }
-        Ok(changed)
-    }
-
-    /// Unmutes `cluster`: notifying resumes with what happens from now on. Returns whether it
-    /// was muted.
-    ///
-    /// # Errors
-    ///
-    /// As for [`mute`](Self::mute).
-    pub async fn unmute(&self, cluster: &ClusterId) -> OxiResult<bool> {
-        let changed = self.change(|state| state.muted.remove(cluster));
-        if changed {
-            driver::reconcile(&self.inner, cluster);
-            self.persist().await?;
-        }
-        Ok(changed)
     }
 
     /// The rules in effect.
@@ -335,7 +311,7 @@ impl NotificationService {
     }
 
     /// Runs `change` on the state and tells the subscribers when it returns true.
-    fn change(&self, change: impl FnOnce(&mut State) -> bool) -> bool {
+    pub(crate) fn change(&self, change: impl FnOnce(&mut State) -> bool) -> bool {
         let (changed, wakers) = {
             let mut state = self.inner.state.lock();
             let changed = change(&mut state);
@@ -348,11 +324,5 @@ impl NotificationService {
         };
         wake(wakers);
         changed
-    }
-
-    async fn persist(&self) -> OxiResult<()> {
-        let _in_order = self.inner.persist.lock().await;
-        let muted = self.inner.state.lock().muted.clone();
-        mute::save(&*self.inner.store, &muted).await
     }
 }

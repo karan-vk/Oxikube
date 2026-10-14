@@ -10,12 +10,12 @@ fn at_most_max_raised_per_window_whatever_the_rows() {
     let rules = NotificationRules::default();
     let mut limiter = Limiter::default();
     let raised = (0..20)
-        .filter(|_| limiter.may_raise(&rules, None, at(0)))
+        .filter(|_| limiter.may_raise(&rules, None, false, false, at(0)))
         .count();
     assert_eq!(raised, rules.max_raised);
     let window = rules.raise_window.as_secs() as i64;
     assert!(
-        limiter.may_raise(&rules, None, at(window)),
+        limiter.may_raise(&rules, None, false, false, at(window)),
         "the window moved on"
     );
 }
@@ -26,7 +26,7 @@ fn routing_counts_distinct_objects_in_the_window() {
     let mut limiter = Limiter::default();
     let reason = "BackOff".into();
     let routes: Vec<Route> = (0..5)
-        .map(|i| limiter.route(&rules, &cluster(), &reason, at(i)))
+        .map(|i| limiter.route(&rules, Some(&cluster()), &reason, at(i)))
         .collect();
     assert_eq!(
         routes,
@@ -40,7 +40,7 @@ fn routing_counts_distinct_objects_in_the_window() {
     );
     limiter.forget(&cluster());
     assert_eq!(
-        limiter.route(&rules, &cluster(), &reason, at(6)),
+        limiter.route(&rules, Some(&cluster()), &reason, at(6)),
         Route::Own
     );
 }
@@ -84,4 +84,22 @@ fn a_burst_of_a_thousand_warnings_in_a_second_raises_a_handful() {
         })
         .count();
     assert_eq!(raised, rules.max_raised);
+}
+
+#[test]
+fn an_escalation_skips_the_row_interval_but_not_the_overall_limit() {
+    let rules = NotificationRules::default();
+    let mut limiter = Limiter::default();
+    assert!(limiter.may_raise(&rules, None, false, false, at(0)));
+    let recent = Some(at(1));
+    assert!(!limiter.may_raise(&rules, recent, false, false, at(2)));
+    assert!(limiter.may_raise(&rules, recent, false, true, at(2)));
+    let spent = (0..20)
+        .filter(|_| limiter.may_raise(&rules, recent, false, true, at(3)))
+        .count();
+    assert_eq!(
+        spent + 2,
+        rules.max_raised,
+        "escalations count towards the limit"
+    );
 }

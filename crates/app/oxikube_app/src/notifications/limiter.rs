@@ -5,7 +5,8 @@
 //!   within [`group_window`](super::NotificationRules::group_window) get rows of their own; the
 //!   next ones in that window fold into the reason's one group row.
 //! * **Raising** (per row and overall): a row toasts and reaches the OS at most once per
-//!   [`object_interval`](super::NotificationRules::object_interval), and at most
+//!   [`object_interval`](super::NotificationRules::object_interval) (unless it got more urgent
+//!   since), and at most
 //!   [`max_raised`](super::NotificationRules::max_raised) rows do per
 //!   [`raise_window`](super::NotificationRules::raise_window).
 //!
@@ -36,7 +37,7 @@ pub(crate) enum Route {
 #[derive(Debug, Default)]
 pub(crate) struct Limiter {
     /// Per cluster and reason: when each object with a row of its own got it, oldest first.
-    reasons: HashMap<(ClusterId, Arc<str>), VecDeque<Timestamp>>,
+    reasons: HashMap<(Option<ClusterId>, Arc<str>), VecDeque<Timestamp>>,
     /// When the recent raises happened, oldest first.
     raises: VecDeque<Timestamp>,
 }
@@ -46,7 +47,7 @@ impl Limiter {
     pub(crate) fn route(
         &mut self,
         rules: &NotificationRules,
-        cluster: &ClusterId,
+        cluster: Option<&ClusterId>,
         reason: &Arc<str>,
         now: Timestamp,
     ) -> Route {
@@ -59,7 +60,7 @@ impl Limiter {
         }
         let times = self
             .reasons
-            .entry((cluster.clone(), reason.clone()))
+            .entry((cluster.cloned(), reason.clone()))
             .or_default();
         trim(times, now, rules.group_window);
         if times.len() >= rules.group_threshold.max(1) {
@@ -70,15 +71,25 @@ impl Limiter {
     }
 
     /// Whether a row last raised at `last` may raise again at `now`; records the raise when it
-    /// may.
+    /// may. A `sticky` row (an agent waiting for an answer) is exempt from the overall limit,
+    /// which it does not count towards: it is rare, and a toast lost to a burst of warnings
+    /// would leave the agent waiting unseen. An `escalated` update (the row got more urgent, a
+    /// port-forward that dropped has now failed) skips the per-row interval, so the worse news is
+    /// told rather than hidden behind the first toast; it still counts towards the overall limit.
     pub(crate) fn may_raise(
         &mut self,
         rules: &NotificationRules,
         last: Option<Timestamp>,
+        sticky: bool,
+        escalated: bool,
         now: Timestamp,
     ) -> bool {
-        if last.is_some_and(|last| !elapsed(last, now, rules.object_interval)) {
+        let quiet = last.is_some_and(|last| !elapsed(last, now, rules.object_interval));
+        if quiet && !escalated {
             return false;
+        }
+        if sticky {
+            return true;
         }
         trim(&mut self.raises, now, rules.raise_window);
         if self.raises.len() >= rules.max_raised {
@@ -90,7 +101,7 @@ impl Limiter {
 
     /// Forgets `cluster`'s windows (it was closed or muted).
     pub(crate) fn forget(&mut self, cluster: &ClusterId) {
-        self.reasons.retain(|(c, _), _| c != cluster);
+        self.reasons.retain(|(c, _), _| c.as_ref() != Some(cluster));
     }
 }
 
