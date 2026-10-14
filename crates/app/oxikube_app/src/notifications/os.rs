@@ -17,7 +17,11 @@ pub async fn forward_to_os(centre: NotificationService, os: OsNotificationServic
     drop(centre);
     while let Some(change) = changes.next().await {
         for raised in &change.raised {
-            if !changes.os_allowed(&raised.cluster) {
+            if !raised
+                .cluster
+                .as_ref()
+                .is_none_or(|c| changes.os_allowed(c))
+            {
                 continue;
             }
             match os.notify(&raised.to_os()).await {
