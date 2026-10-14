@@ -16,9 +16,11 @@
 //!    thread, the stream going on.
 //! 5. **Faults** (`faults_*`): `ctrl-z`'s toggle every frame.
 //! 6. **Burst** (`burst_*`): [`BURST`] events in one frame, [`BURST_FRAMES`] frames in a row.
+//!    The feed's quiet ticks left before the bursts are delivered first, outside the measurement,
+//!    so the phase's frames are exactly the burst ticks.
 //!
-//! The sample fails unless every live frame's events reached the rows and no frame absorbed more
-//! than one coalesced notify.
+//! The sample fails unless every live frame's events reached the rows, the last burst's newest
+//! event is the top row, and no frame absorbed more than one coalesced notify.
 
 use std::rc::Rc;
 use std::sync::Arc;
@@ -89,6 +91,13 @@ fn nth(n: usize) -> Event {
     e
 }
 
+/// The uid of the newest event of [`feed`]`(ticks)` by `tick`.
+fn newest(ticks: usize, tick: usize) -> String {
+    let quiet = tick.min(ticks - BURST_FRAMES);
+    let bursts = tick - quiet;
+    format!("event-{}", HELD + quiet * PER_FRAME + bursts * BURST - 1)
+}
+
 /// The feed: [`HELD`] events, then `ticks` ticks of [`PER_FRAME`] and a burst at the end.
 fn feed(ticks: usize) -> FakeEventFeed {
     let mut feed = FakeEventFeed::new().initial((0..HELD).map(nth));
@@ -127,6 +136,23 @@ impl Stage {
         cx.run_until_parked();
         cx.advance_clock(FRAME);
         cx.run_until_parked();
+    }
+
+    /// Delivers the feed's quiet ticks until `newest` (the last event before the bursts) is the
+    /// top row, then draws them, outside any measurement: the next tick is the first burst. The
+    /// feed's ticks count from when the service opened it, so they are found by their events.
+    fn drain_until(&self, newest: &str, cx: &mut HeadlessAppContext) -> Result<()> {
+        let mut parks = 0;
+        while self.rows(cx).1.as_deref() != Some(newest) {
+            ensure!(
+                parks < MAX_TURNS * 4,
+                "gave up waiting for {newest}, the last event before the bursts"
+            );
+            self.park(cx);
+            parks += 1;
+        }
+        harness::draw_frame(cx, self.window, |_, _| {})?;
+        Ok(())
     }
 
     fn rows(&self, cx: &mut HeadlessAppContext) -> (usize, Option<String>) {
@@ -289,8 +315,17 @@ pub(super) fn run(probe: bool) -> Result<ScenarioSample> {
         view.update(cx, |v, cx| v.toggle_faults(cx));
     })?;
 
-    // 6. Bursts: the feed's last ticks.
+    // 6. Bursts: the feed's last ticks, every event shown (faults off) and the tail live.
+    if cx.update(|cx| view.read(cx).filters().faults_only) {
+        view.update(&mut cx, |v, cx| v.toggle_faults(cx));
+    }
+    stage.drain_until(&newest(ticks, ticks - BURST_FRAMES), &mut cx)?;
     let mut burst = stage.phase(&mut cx, &recorder, BURST_FRAMES, |_, _, _| {})?;
+    let (rows, top) = stage.rows(&mut cx);
+    ensure!(
+        rows == HELD && top.as_deref() == Some(newest(ticks, ticks).as_str()),
+        "the bursts did not reach the rows: {rows} rows, {top:?} on top"
+    );
 
     let mut metrics = extra("scroll_", &mut scroll);
     metrics.extend(extra("filter_", &mut filter));

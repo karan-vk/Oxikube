@@ -95,6 +95,28 @@ fn another_order_places_new_rows_in_it() {
 }
 
 #[test]
+fn a_list_built_in_the_old_order_is_installed_in_the_new_one() {
+    // A read starts in the default order; a header click lands before the read does.
+    let events = [ev("a", 1, 7), ev("b", 2, 1), ev("c", 3, 4)];
+    let set = RowSet::build(listed(&events), EventSort::default(), 0);
+    let mut m = model(&events);
+    m.set_sort(EventSort {
+        column: EventColumn::Count,
+        descending: true,
+    });
+    m.install(set);
+    assert_eq!(uids(&m), ["a", "c", "b"], "the rows follow the header");
+    // The binary searches find the rows: an update moves its row, it does not duplicate it.
+    let again = EventsChanged {
+        updated: vec![ev("b", 4, 9)],
+        removed: vec![EventKey::of(&ev("c", 0, 0))],
+        ..EventsChanged::default()
+    };
+    assert!(m.apply(&again));
+    assert_eq!(uids(&m), ["b", "a"]);
+}
+
+#[test]
 fn the_selection_follows_its_event_when_rows_arrive_above_it() {
     let mut m = model(&[ev("a", 1, 1), ev("b", 2, 1)]);
     assert!(m.select(1));

@@ -44,6 +44,8 @@ pub struct RowSet {
     rows: Vec<Box<EventRow>>,
     by_key: HashMap<EventKey, (u64, Arc<Event>)>,
     next_id: u64,
+    /// The order the rows were built in (a header click may change the model's meanwhile).
+    sort: EventSort,
 }
 
 impl RowSet {
@@ -70,6 +72,7 @@ impl RowSet {
             rows,
             by_key,
             next_id: first_id + count,
+            sort,
         }
     }
 
@@ -152,9 +155,16 @@ impl EventsModel {
         self.set.next_id
     }
 
-    /// Replaces the rows with a list built by [`RowSet::build`] (in this model's order). The
-    /// selection stays on its event when the list still has it. Counts nothing as unseen.
-    pub fn install(&mut self, set: RowSet) {
+    /// Replaces the rows with a list built by [`RowSet::build`]. A list built in another order
+    /// (a header was clicked while it was read) is sorted into this model's first, so the
+    /// binary searches of [`apply`](Self::apply) stay right. The selection stays on its event
+    /// when the list still has it. Counts nothing as unseen.
+    pub fn install(&mut self, mut set: RowSet) {
+        if set.sort != self.sort {
+            let sort = self.sort;
+            set.rows.sort_by(|a, b| sort.compare(a, b));
+            set.sort = sort;
+        }
         self.set = set;
         self.drop_selection_if_gone();
         self.unseen.clear();
@@ -167,6 +177,7 @@ impl EventsModel {
             return;
         }
         self.sort = sort;
+        self.set.sort = sort;
         self.set.rows.sort_by(|a, b| sort.compare(a, b));
     }
 

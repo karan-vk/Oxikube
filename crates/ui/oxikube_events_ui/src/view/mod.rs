@@ -103,6 +103,9 @@ pub struct EventsView {
     pub(crate) filters: EventsFilters,
     /// The filter the rows are for: the last good compile of `filters`.
     pub(crate) applied: EventFilter,
+    /// The text of the last good compile: while the typed text is a bad regex, the other fields
+    /// still apply with this text.
+    pub(crate) good_text: String,
     /// Why the text is not a filter, while it is not.
     pub(crate) filter_error: Option<SharedString>,
     /// Whether a filter field has the focus (bare keys are text then).
@@ -172,6 +175,8 @@ impl EventsView {
             fields,
             filters: EventsFilters::default(),
             applied: EventFilter::new(),
+            good_text: String::new(),
+
             filter_error: None,
             editing: false,
             loaded: false,

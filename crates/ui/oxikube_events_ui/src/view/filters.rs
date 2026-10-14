@@ -5,8 +5,9 @@
 //! A field updates on the keystroke (the input owns its text); the compile is a few comparisons
 //! and, for a regex, one compile per edit. A good filter goes to the subscription at once, whose
 //! next item is a reset: the matching rows are read off the UI thread, so typing never waits for
-//! 10 000 events to be filtered. A bad regex is shown under the toolbar and the rows of the last
-//! good filter stay.
+//! 10 000 events to be filtered. A bad regex is shown under the toolbar and the last good text
+//! stays in force; the toggles and the other fields still apply on top of it, so the rows always
+//! say what the toolbar shows.
 
 use gpui::{AppContext as _, Context, Entity, Window};
 use oxikube_ui::input::{InputEvent, InputState};
@@ -127,19 +128,31 @@ impl EventsView {
         self.filters_changed(cx);
     }
 
-    /// Compiles the filters: a good filter goes to the subscription (its rows are read again)
-    /// and is saved; a bad one is only shown.
+    /// Compiles the filters and sends a new filter to the subscription (its rows are read
+    /// again); the filters are saved. A bad regex is shown, and the rest of the filters apply
+    /// with the last good text.
     fn filters_changed(&mut self, cx: &mut Context<Self>) {
-        match self.filters.compile() {
+        let filter = match self.filters.compile() {
             Ok(filter) => {
                 self.filter_error = None;
-                if filter != self.applied {
-                    self.applied = filter.clone();
-                    self.refiltered = true;
-                    self.subscription.borrow().set_filter(filter);
-                }
+                self.good_text.clone_from(&self.filters.text);
+                Some(filter)
             }
-            Err(error) => self.filter_error = Some(error.message.into()),
+            Err(error) => {
+                self.filter_error = Some(error.message.into());
+                let good = EventsFilters {
+                    text: self.good_text.clone(),
+                    ..self.filters.clone()
+                };
+                good.compile().ok()
+            }
+        };
+        if let Some(filter) = filter
+            && filter != self.applied
+        {
+            self.applied = filter.clone();
+            self.refiltered = true;
+            self.subscription.borrow().set_filter(filter);
         }
         if self.loaded
             && let Some(writer) = &self.writer

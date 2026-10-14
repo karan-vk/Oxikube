@@ -84,6 +84,36 @@ fn an_invalid_regex_is_shown_and_the_rows_stay(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn the_toggles_still_apply_while_the_text_is_a_bad_regex(cx: &mut TestAppContext) {
+    let mut fx = Fx::new(cx);
+    let view = fx.open();
+    let apply =
+        |fx: &mut Fx, f: &dyn Fn(&mut crate::EventsView, &mut gpui::Context<crate::EventsView>)| {
+            fx.vcx.update(|_, cx| view.update(cx, |v, cx| f(v, cx)));
+            fx.settle();
+        };
+    apply(&mut fx, &|v, cx| v.set_field(Field::Text, "web".into(), cx));
+    assert_eq!(fx.uids(), ["w1", "n1"]);
+    apply(&mut fx, &|v, cx| {
+        v.set_field(Field::Text, "back(".into(), cx)
+    });
+    assert!(fx.drawn("events-filter-error"));
+    assert_eq!(fx.uids(), ["w1", "n1"], "the last good text stays in force");
+    // The faults toggle the toolbar shows is the one the rows follow.
+    fx.keys("ctrl-z");
+    assert!(fx.vcx.update(|_, cx| view.read(cx).filters().faults_only));
+    assert_eq!(fx.uids(), ["w1"]);
+    fx.keys("ctrl-z");
+    apply(&mut fx, &|v, cx| v.set_types(TypeChoice::Normal, cx));
+    assert_eq!(fx.uids(), ["n1"]);
+    assert!(fx.drawn("events-filter-error"), "the text is still bad");
+    // Fixing the text applies it with the toggles.
+    apply(&mut fx, &|v, cx| v.set_field(Field::Text, "dns".into(), cx));
+    assert!(!fx.drawn("events-filter-error"));
+    assert_eq!(fx.uids(), ["n2"]);
+}
+
+#[gpui::test]
 fn type_reason_kind_and_namespace_narrow_together(cx: &mut TestAppContext) {
     let mut fx = Fx::new(cx);
     let view = fx.open();
