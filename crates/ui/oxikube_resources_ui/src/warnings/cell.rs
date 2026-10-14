@@ -1,5 +1,7 @@
 //! The badge cell: a warning icon with a tooltip, and a click that shows the object's events.
 
+use std::fmt::Write as _;
+
 use gpui::{
     AnyElement, InteractiveElement as _, IntoElement as _, ParentElement as _, SharedString,
     StatefulInteractiveElement as _, Styled as _, WeakEntity, div, px,
@@ -15,12 +17,12 @@ use crate::table::ResourceTable;
 
 /// The tooltip of a badge: `Warning: BackOff x3, 2m ago` and the event's message.
 pub(crate) fn tooltip_text(badge: &WarningBadge, now: Timestamp) -> String {
-    let mut line = format!("Warning: {}", badge.reason());
+    let mut line = cell_text(Some(badge));
     if badge.count() > 1 {
-        line.push_str(&format!(" x{}", badge.count()));
+        let _ = write!(line, " x{}", badge.count());
     }
     let age = Age::between(badge.last_seen(), now).to_kubectl_string();
-    line.push_str(&format!(", {age} ago"));
+    let _ = write!(line, ", {age} ago");
     if !badge.message().is_empty() {
         line.push('\n');
         line.push_str(badge.message());

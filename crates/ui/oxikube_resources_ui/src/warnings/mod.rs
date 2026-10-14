@@ -8,7 +8,7 @@
 //! | `handle` | [`ObjectEvents`]: the app's [`WarningBadges`] as a GPUI global, installed by the binary |
 //! | `column` | [`badge_column`], the column's id and its position; [`RowWarnings`], a table's source of badges |
 //! | `cell` | the icon cell, its tooltip text and the click |
-//! | `follow` | what keeps a table current: redraw when badges change, and when one expires |
+//! | `follow` | what keeps a table current: redraw when the badges change |
 //!
 //! # Performance
 //!
@@ -17,7 +17,7 @@
 //! without a badge. The badge column is not sortable and its cell is never cached, so it adds no
 //! work to the store's ranking or the cell cache. The model changes off the UI thread (the
 //! tracker task of [`oxikube_app::BadgeTrack`]); a table is told by a coalesced stream and
-//! redraws through its render gate, and a once-a-second tick notices an expired badge.
+//! redraws through its render gate, and the table's once-a-second tick notices an expired badge.
 //!
 //! Without the global (a window with no events service) the column is not offered.
 

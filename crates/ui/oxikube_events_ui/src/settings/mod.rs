@@ -22,9 +22,9 @@ mod os;
 #[cfg(test)]
 mod tests;
 
-use gpui::App;
 use std::time::Duration;
 
+use gpui::App;
 use oxikube_app::events::{
     DEFAULT_EVENTS_BUFFER, EventsConfig, MAX_EVENTS_BUFFER, MIN_EVENTS_BUFFER,
 };
@@ -118,9 +118,9 @@ fn parse_window(text: Option<&str>) -> Duration {
     let Some(text) = text else {
         return DEFAULT_WARNING_WINDOW;
     };
-    let parsed = text
-        .trim()
-        .split_at_checked(text.trim().len().saturating_sub(1))
+    let trimmed = text.trim();
+    let parsed = trimmed
+        .split_at_checked(trimmed.len().saturating_sub(1))
         .and_then(|(number, unit)| {
             let number: u64 = number.trim().parse().ok()?;
             let unit = match unit {
