@@ -1,5 +1,5 @@
 //! Warning badges and the per-object event feed (E14-S04): what a table row's warning icon and a
-//! resource's Events tab read, both from the [`EventService`](crate::events::EventService) index
+//! resource's Events tab read, both from the [`EventService`] index
 //! and never from a watch of their own.
 //!
 //! | Piece | Where |

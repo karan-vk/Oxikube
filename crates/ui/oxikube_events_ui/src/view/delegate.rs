@@ -16,7 +16,7 @@ use oxikube_ui::table::{SortDirection, TableColumn, TableDelegate, TextCell};
 use super::EventsView;
 use crate::model::{EventColumn, EventSort, EventsModel};
 
-/// The table's delegate. See the [module docs](self).
+/// The table's delegate. See the `delegate` module docs.
 pub struct EventsDelegate {
     /// The rows.
     pub(crate) model: EventsModel,

@@ -27,8 +27,8 @@
 //! - `events-stream` ([`events_stream`]): the events view over a full 10 000-event buffer while
 //!   events stream in: live tail, scrolling, typing a filter, the faults toggle, bursts (E14-S03).
 //! - `notifications-burst` ([`notifications`]): 1 000 Warning events in one second reaching the
-//!   notification centre with its panel open: grouping, the rate limit, the coalesced redraw, the
-//!   toast cap (E14-S05).
+//!   notification centre with its panel open, through the cluster's `EventService` feed: news
+//!   detection, grouping, the rate limit, the coalesced redraw, the toast cap (E14-S05).
 //!
 //! The view-driving scenarios mount their view as the app's window does ([`window_root`]), so it
 //! is drawn with the app's text style; a sample fails if its text falls back to another family

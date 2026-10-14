@@ -216,7 +216,10 @@ impl Centre {
         id
     }
 
-    /// Folds `input` into row `id`; returns whether the row's level went up.
+    /// Folds `input` into row `id`; returns whether the row's level went up. An unread row keeps
+    /// the more urgent of its level and the input's; a read row (seen, or resolved by its source:
+    /// a forward that recovered) starts over at the input's level, so an earlier, handled failure
+    /// does not colour a later plain drop.
     fn update(&mut self, id: NotificationId, input: &NotificationInput, now: Timestamp) -> bool {
         let seq = self.bump();
         let Some(row) = self.rows.get_mut(&id) else {
@@ -229,8 +232,12 @@ impl Centre {
         note.count = note.count.saturating_add(input.occurrences.max(1));
         note.updated = now;
         let before = note.level;
-        note.level = before.max_with(input.level);
-        let escalated = note.level != before;
+        note.level = if note.read {
+            input.level
+        } else {
+            before.max_with(input.level)
+        };
+        let escalated = before.max_with(note.level) != before;
         note.target = input.target.clone().or(note.target.take());
         note.link = input.link.clone().or(note.link.take());
         if row.group.is_none() {

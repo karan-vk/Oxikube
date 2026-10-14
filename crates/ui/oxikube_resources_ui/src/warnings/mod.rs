@@ -5,8 +5,8 @@
 //!
 //! | File | Holds |
 //! |---|---|
-//! | `handle` | [`ObjectEvents`]: the app's [`WarningBadges`] as a GPUI global, installed by the binary |
-//! | `column` | [`badge_column`], the column's id and its position; [`RowWarnings`], a table's source of badges |
+//! | `handle` | [`ObjectEvents`]: the app's [`oxikube_app::WarningBadges`] as a GPUI global, installed by the binary |
+//! | `column` | [`badge_column`], the column's id and its position; `RowWarnings`, a table's source of badges |
 //! | `cell` | the icon cell, its tooltip text and the click |
 //! | `follow` | what keeps a table current: redraw when the badges change |
 //!
