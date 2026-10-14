@@ -247,6 +247,9 @@ fn a_notification_burst_reaches_the_centre_without_stacking_toasts() {
         "{stderr}"
     );
     assert!(stderr.contains(", 200 rows listed,"), "{stderr}");
+    // The centre's coalesced redraw reached the window, once a frame at most.
+    assert!(stderr.contains("(at most 1 per frame)"), "{stderr}");
+    assert!(s["counters"]["notifies"].as_u64() > Some(0), "{s}");
 }
 
 #[test]

@@ -7,6 +7,7 @@ use oxikube_domain::audit::Initiator;
 use oxikube_domain::command::CommandId;
 use oxikube_domain::ids::{Gvk, ResourceRef};
 use oxikube_domain::safety::ConfirmTier;
+use oxikube_resources_ui::warnings::BADGE_COLUMN;
 use oxikube_testkit::sections::{KindCase, column_label};
 use oxikube_workspace::sidebar::DEFINITIONS_ENTRY;
 
@@ -18,23 +19,42 @@ const GENERIC: &[CommandId] = &[
     CommandId::RESOURCE_VIEW_YAML,
     CommandId::RESOURCE_VIEW_YAML_IN_EDITOR,
     CommandId::RESOURCE_VIEW_DESCRIBE,
+    // "View Events" (E14-S04) opens the object's Events tab on every kind.
+    CommandId::RESOURCE_VIEW_EVENTS,
     CommandId::RESOURCE_EDIT,
     CommandId::RESOURCE_DELETE,
 ];
 
-/// The table columns' titles (a wide one suffixed `*`).
+/// The table columns' ids and titles (a wide one suffixed `*`).
 fn columns(
     app: &mut Launched,
     table: &gpui::Entity<oxikube_resources_ui::table::ResourceTable>,
-) -> Vec<String> {
+) -> Vec<(String, String)> {
     app.vcx.update(|_, cx| {
         table.read(cx).read_rows(cx, |d| {
             d.layout()
                 .columns()
-                .map(|(c, _)| column_label(&c.title, c.wide))
+                .map(|(c, _)| (c.id.to_string(), column_label(&c.title, c.wide)))
                 .collect()
         })
     })
+}
+
+/// The documented columns of a table, with the warning-badge column (E14-S04) checked and left
+/// out: every table of a connected cluster has the EventService, so the badge sits right after
+/// Name; the documented lists are the kind's own columns.
+fn documented_columns(kind: &str, columns: Vec<(String, String)>) -> Vec<String> {
+    let badge = columns.iter().position(|(id, _)| id == BADGE_COLUMN);
+    assert_eq!(
+        badge,
+        Some(1),
+        "{kind}'s warning badge column right after Name"
+    );
+    columns
+        .into_iter()
+        .filter(|(id, _)| id != BADGE_COLUMN)
+        .map(|(_, label)| label)
+        .collect()
 }
 
 /// `case`'s object `name`: listed with the documented columns, its own actions on its row, its
@@ -55,7 +75,8 @@ pub fn kind(app: &mut Launched, context: &str, namespace: &str, case: &KindCase,
         .copied()
         .filter(|c| !(case.namespaced() && *c == "Namespace"))
         .collect();
-    assert_eq!(columns(app, &table), expected, "{}'s columns", case.kind);
+    let shown = documented_columns(case.kind, columns(app, &table));
+    assert_eq!(shown, expected, "{}'s columns", case.kind);
     app.vcx.update(|window, cx| window.draw(cx).clear(cx));
 
     // The row's menu: the object under the cursor, the kind's own actions.
@@ -179,7 +200,7 @@ pub fn printer_columns(app: &mut Launched, context: &str, namespace: &str) {
     );
     assert_eq!(server.first().map(String::as_str), Some("Name"));
     assert_eq!(
-        columns(app, &table),
+        documented_columns("Widget", columns(app, &table)),
         server,
         "the Widget table is `kubectl get`'s"
     );

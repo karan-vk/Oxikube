@@ -25,7 +25,7 @@ use crate::panel::{DockPosition, Panel, PanelEvent};
 /// The panel's name in saved layouts.
 pub const PANEL_NAME: &str = "NotificationPanel";
 
-/// The notification centre panel. See the [module docs](self).
+/// The notification centre panel. See the `panel` module docs.
 pub struct NotificationPanel {
     pub(super) centre: Entity<NotificationCentre>,
     pub(super) dispatcher: Rc<dyn CommandDispatcher>,

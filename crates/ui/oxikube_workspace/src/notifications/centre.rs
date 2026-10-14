@@ -132,7 +132,8 @@ pub enum CentreEvent {
     },
 }
 
-/// The window's model of the notification centre. See the [module docs](self).
+/// The window's model of the notification centre: its rows, derived once per change, and a
+/// redraw coalesced to the frame. See the `centre` module docs.
 pub struct NotificationCentre {
     service: NotificationService,
     sessions: ClusterSessionManager,

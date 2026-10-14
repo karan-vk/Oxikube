@@ -108,6 +108,49 @@ fn giving_up_escalates_the_same_row_and_a_recovery_marks_it_read() {
     assert_eq!(service.unread(), 0);
 }
 
+#[test]
+fn a_drop_after_a_recovered_failure_is_a_warning_again() {
+    let (service, clock) = service();
+    let hooks = service.sources();
+    hooks.port_forward_changed(portforward_change(
+        "fwd-1",
+        ForwardPhase::Active,
+        ForwardPhase::Failed,
+    ));
+    assert_eq!(service.list()[0].level, NotificationLevel::Error);
+    hooks.port_forward_changed(portforward_change(
+        "fwd-1",
+        ForwardPhase::Failed,
+        ForwardPhase::Active,
+    ));
+    assert!(service.list()[0].read, "the forward is back");
+
+    // Within the dedupe window, the next plain drop reopens the same row at its own level.
+    clock.advance(secs(7 * 60));
+    emit_portforward_drop(&*hooks, "fwd-1");
+    let rows = service.list();
+    assert_eq!(rows.len(), 1, "one row per forward");
+    assert!(!rows[0].read);
+    assert!(
+        rows[0].title.starts_with("Port-forward dropped"),
+        "{}",
+        rows[0].title
+    );
+    assert_eq!(
+        rows[0].level,
+        NotificationLevel::Warning,
+        "the handled failure does not colour the new drop"
+    );
+
+    // While it stays unread, giving up still escalates it.
+    hooks.port_forward_changed(portforward_change(
+        "fwd-1",
+        ForwardPhase::Reconnecting,
+        ForwardPhase::Failed,
+    ));
+    assert_eq!(service.list()[0].level, NotificationLevel::Error);
+}
+
 #[tokio::test]
 async fn giving_up_is_raised_again_although_the_drop_just_was() {
     let (service, clock) = service();

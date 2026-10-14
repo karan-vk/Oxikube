@@ -267,9 +267,11 @@ impl NotificationService {
 
     /// Replaces the rules (the settings changed), atomically: a notification is judged by the old
     /// rules or the new, never a mix. A cluster whose watched kinds changed is subscribed again
-    /// with the new kinds (an edit of a window or an ignored reason touches no subscription);
-    /// nothing already listed changes.
+    /// with the new kinds (an edit of a window or an ignored reason touches no subscription), and
+    /// what that subscription's first list holds is the backlog: a newly watched kind's warnings
+    /// already in the buffer are not told. Nothing already listed changes.
     pub fn set_rules(&self, rules: NotificationRules) {
+        let now = self.inner.clock.now();
         {
             let mut state = self.inner.state.lock();
             if state.rules == rules {
@@ -278,7 +280,7 @@ impl NotificationService {
             let state = &mut *state;
             for (cluster, watch) in &mut state.watches {
                 if state.rules.event_filter(cluster) != rules.event_filter(cluster) {
-                    watch.pump = None;
+                    watch.resubscribe(now);
                 }
             }
             state.rules = rules;

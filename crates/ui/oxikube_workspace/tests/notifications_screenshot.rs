@@ -13,7 +13,9 @@ use std::{path::Path, process::ExitCode, rc::Rc, sync::Arc};
 
 use gpui::{AppContext as _, HeadlessAppContext, px, size};
 use oxikube_app::events::{EventService, EventsConfig};
-use oxikube_app::notifications::{GroupKey, NotificationInput, NotificationService};
+use oxikube_app::notifications::{
+    GroupKey, NotificationInput, NotificationKind, NotificationService,
+};
 use oxikube_app::{ClusterSessionManager, session::SessionOptions};
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
@@ -51,7 +53,8 @@ fn input(
     body: &str,
 ) -> NotificationInput {
     NotificationInput {
-        cluster: cluster.clone(),
+        kind: NotificationKind::ClusterEvent,
+        cluster: Some(cluster.clone()),
         level,
         title: format!("Pod default/{name}: {reason}"),
         body: body.to_owned(),
@@ -66,6 +69,7 @@ fn input(
             reason: reason.into(),
             noun: "pod".into(),
         }),
+        link: None,
         occurrences: 1,
     }
 }

@@ -356,6 +356,98 @@ async fn new_rules_apply_at_once_and_resubscribe_only_when_the_kinds_change() {
     assert_eq!(h.titles(), ["Job default/batch: DeadlineExceeded"]);
 }
 
+/// A `Warning` event `uid` about Service `name` in `default` (`Service` is not watched by
+/// default), last seen `secs` after `t0`.
+fn service_warning(uid: &str, name: &str, secs: i64) -> oxikube_domain::event::Event {
+    let mut e = event()
+        .uid(uid)
+        .warning()
+        .reason("SyncLoadBalancerFailed")
+        .message("no load balancer")
+        .regarding("Service", Some("default"), name, name)
+        .build();
+    e.last_seen = Some(super::at(secs));
+    e
+}
+
+#[tokio::test]
+async fn widening_the_kinds_does_not_replay_the_newly_watched_kinds_backlog() {
+    let h = Harness::new();
+    h.port().install(
+        FakeEventFeed::new()
+            .add(1, warning("pod", "web-0", "BackOff", 1, 1))
+            // Not watched yet: it waits in the cluster's buffer, newer than every told event.
+            .add(2, service_warning("old-lb", "lb-0", 2))
+            // After the kinds change: news.
+            .add(4, service_warning("new-lb", "lb-1", 4)),
+    );
+    h.connect().await;
+    h.until("watched", |h| h.port().live_feeds() == 1).await;
+    h.tick().await;
+    h.until("the Pod is listed", |h| !h.centre.list().is_empty())
+        .await;
+    h.tick().await;
+    h.until("the Service warning is buffered", |h| {
+        h.events
+            .query(&cluster(), &crate::events::EventFilter::warnings())
+            .len()
+            == 2
+    })
+    .await;
+
+    let mut rules = h.centre.rules();
+    rules.watched_kinds.push(Arc::from("Service"));
+    h.centre.set_rules(rules);
+    h.until("watched again", |h| {
+        h.centre.is_watching(&cluster()) && h.port().live_feeds() == 1
+    })
+    .await;
+    for _ in 0..2 {
+        h.tick().await;
+    }
+    h.until("the new Service warning is listed", |h| {
+        h.centre.list().len() > 1
+    })
+    .await;
+    assert_eq!(
+        h.titles(),
+        [
+            "Service default/lb-1: SyncLoadBalancerFailed",
+            "Pod default/web-0: BackOff"
+        ],
+        "the Service warning held before the change is backlog, not news"
+    );
+}
+
+#[tokio::test]
+async fn what_a_replaced_pump_still_hands_over_is_dropped() {
+    let h = Harness::new();
+    h.connect().await;
+    h.until("watched", |h| {
+        h.centre.is_watching(&cluster()) && h.port().live_feeds() == 1
+    })
+    .await;
+    let pump_id = |h: &Harness| h.centre.inner.state.lock().watches[&cluster()].pump_id;
+    let old = pump_id(&h);
+    let mut rules = h.centre.rules();
+    rules.watched_kinds.push(Arc::from("Service"));
+    h.centre.set_rules(rules);
+    h.until("watched again", |h| h.centre.is_watching(&cluster()))
+        .await;
+    assert_ne!(pump_id(&h), old, "a new pump");
+
+    // The old pump was between its subscription and the lock when it was replaced.
+    let late = crate::events::EventsChanged {
+        added: vec![Arc::new(warning("late", "web-0", "BackOff", 1, 1))],
+        ..Default::default()
+    };
+    crate::notifications::driver::on_events(&h.centre.inner, &cluster(), old, late, &[]);
+    assert!(
+        h.centre.list().is_empty(),
+        "the old pump's change is dropped"
+    );
+}
+
 #[tokio::test]
 async fn a_cluster_override_of_the_kinds_applies_to_that_cluster_alone() {
     let h = Harness::new();

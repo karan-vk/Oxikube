@@ -3,6 +3,7 @@
 //! through the rules into the centre; and the follower that keeps the watches in step with the
 //! sessions.
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
 
 use futures::StreamExt as _;
@@ -21,6 +22,23 @@ use crate::store::{TaskGuard, spawn_guarded};
 pub(crate) struct Watch {
     pub(crate) tracker: Tracker,
     pub(crate) pump: Option<TaskGuard>,
+    /// The pump the tracker belongs to: what an older pump still delivers is dropped.
+    pub(crate) pump_id: u64,
+}
+
+/// Numbers the pumps, so a pump replaced while it was handing over a change is told apart.
+static NEXT_PUMP: AtomicU64 = AtomicU64::new(1);
+
+impl Watch {
+    /// Drops the pump so [`reconcile`] subscribes again (the event filter changed), with a
+    /// tracker started at `now`: the new subscription's first reset holds events the old filter
+    /// never showed (a newly watched kind's warnings already in the buffer), which are backlog,
+    /// not news; a kept tracker would judge them as a relist and tell them all.
+    pub(crate) fn resubscribe(&mut self, now: jiff::Timestamp) {
+        self.pump = None;
+        self.pump_id = 0;
+        self.tracker = Tracker::new(now);
+    }
 }
 
 /// Follows the session updates until the service is dropped.
@@ -88,17 +106,30 @@ pub(crate) fn reconcile(inner: &Arc<Inner>, cluster: &ClusterId) {
         .or_insert_with(|| Watch {
             tracker: Tracker::new(now),
             pump: None,
+            pump_id: 0,
         });
     if watch.pump.is_some() {
         return;
     }
+    let pump_id = NEXT_PUMP.fetch_add(1, Ordering::Relaxed);
+    watch.pump_id = pump_id;
     let subscription = inner.events.subscribe(cluster, filter);
-    let task = pump(Arc::downgrade(inner), cluster.clone(), subscription);
+    let task = pump(
+        Arc::downgrade(inner),
+        cluster.clone(),
+        pump_id,
+        subscription,
+    );
     watch.pump = Some(spawn_guarded(&spawner, task));
 }
 
 /// Reads one cluster's events into the centre until aborted or the service is dropped.
-async fn pump(inner: Weak<Inner>, cluster: ClusterId, mut subscription: EventsSubscription) {
+async fn pump(
+    inner: Weak<Inner>,
+    cluster: ClusterId,
+    pump_id: u64,
+    mut subscription: EventsSubscription,
+) {
     while let Some(changes) = subscription.next().await {
         let Some(inner) = inner.upgrade() else {
             return;
@@ -108,12 +139,19 @@ async fn pump(inner: Weak<Inner>, cluster: ClusterId, mut subscription: EventsSu
         } else {
             Vec::new()
         };
-        on_events(&inner, &cluster, changes, &held);
+        on_events(&inner, &cluster, pump_id, changes, &held);
     }
 }
 
-/// Hands the news among `changes` (and the `held` events of a reset) to the centre.
-fn on_events(inner: &Inner, cluster: &ClusterId, changes: EventsChanged, held: &[Arc<Event>]) {
+/// Hands the news among `changes` (and the `held` events of a reset) to the centre, unless pump
+/// `pump_id` was replaced meanwhile (its changes would count against the new tracker).
+pub(crate) fn on_events(
+    inner: &Inner,
+    cluster: &ClusterId,
+    pump_id: u64,
+    changes: EventsChanged,
+    held: &[Arc<Event>],
+) {
     let now = inner.clock.now();
     let mut wakers = Vec::new();
     {
@@ -122,7 +160,11 @@ fn on_events(inner: &Inner, cluster: &ClusterId, changes: EventsChanged, held: &
         if state.muted.contains(cluster) {
             return;
         }
-        let Some(watch) = state.watches.get_mut(cluster) else {
+        let Some(watch) = state
+            .watches
+            .get_mut(cluster)
+            .filter(|watch| watch.pump_id == pump_id)
+        else {
             return;
         };
         let mut news = watch.tracker.reset(held);
