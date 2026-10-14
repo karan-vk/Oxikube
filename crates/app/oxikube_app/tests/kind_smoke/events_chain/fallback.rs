@@ -26,12 +26,10 @@ use oxikube_kube::{DiscoveryConfig, KubeDiscovery, KubeEvents, KubeResources};
 use oxikube_ports::EventApi;
 use oxikube_testkit::EventsConnector;
 use oxikube_testkit::integration::TestNamespace;
-use oxikube_testkit::integration::events::{
-    EventArrivals, PULL_FAILED_REASON, create, unpullable_pod,
-};
+use oxikube_testkit::integration::events::{EventArrivals, PULL_FAILED_REASON, unpullable_pod};
 use tower::{Layer, Service};
 
-use super::{Chain, DEADLINE, LIVE_WITHIN, kube_connector, until};
+use super::{Chain, DEADLINE, LIVE_WITHIN, create_in, kube_connector, until};
 use crate::cluster::Kind;
 
 /// Sends `events.k8s.io` requests to a group no API server serves; everything else unchanged.
@@ -177,9 +175,7 @@ async fn without_events_k8s_io_the_service_reads_core_v1_and_normalises_the_same
         EventArrivals::start(kind.context.as_str(), ns.name(), DEADLINE).expect("the watch")
     });
     let created = Instant::now();
-    tokio::task::block_in_place(|| {
-        create(kind.context.as_str(), ns.name(), &unpullable_pod("ev-pull")).expect("the pod");
-    });
+    create_in(&kind, &ns, &unpullable_pod("ev-pull"));
 
     // Scenario 1: live within a second of the event existing, on both APIs.
     for (api, chain) in [("events.k8s.io/v1", &reference), ("core/v1", &disabled)] {

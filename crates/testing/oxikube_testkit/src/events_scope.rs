@@ -59,7 +59,7 @@ impl ScopedEvents {
     }
 
     /// The scope and options a feed asked with `scope` and `options` is opened with.
-    pub fn rewrite(
+    fn rewrite(
         &self,
         scope: &WatchScope,
         options: &EventsWatchOptions,

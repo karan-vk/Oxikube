@@ -15,17 +15,19 @@ use std::time::{Duration, Instant};
 
 use futures::StreamExt as _;
 use oxikube_app::events::EventFilter;
-use oxikube_app::notifications::{MUTED_KEY, Notification, NotificationId, NotificationService};
+use oxikube_app::notifications::{
+    MUTED_KEY, Notification, NotificationId, NotificationRules, NotificationService,
+};
 use oxikube_domain::event::Event;
 use oxikube_ports::{StateKey, StatePort as _};
 use oxikube_testkit::integration::TestNamespace;
 use oxikube_testkit::integration::events::{
-    PULL_FAILED_REASON, create, unpullable_deployment, unpullable_pod,
+    PULL_FAILED_REASON, unpullable_deployment, unpullable_pod,
 };
 use oxikube_testkit::{EventsConnector, FakeStatePort, ScopedEvents};
 use parking_lot::Mutex;
 
-use super::{Chain, kube_connector, tokio_spawner, until};
+use super::{Chain, create_in, kube_connector, tokio_spawner, until};
 use crate::clock::TokioClock;
 use crate::cluster::Kind;
 
@@ -120,10 +122,8 @@ async fn a_burst_notifies_once_per_pod_and_once_for_the_rest_and_mute_holds_it_b
 
     let rules = centre.rules();
     let replicas = rules.group_threshold + EXTRA;
-    tokio::task::block_in_place(|| {
-        let deployment = unpullable_deployment("burst", u32::try_from(replicas).expect("small"));
-        create(kind.context.as_str(), ns.name(), &deployment).expect("the deployment");
-    });
+    let deployment = unpullable_deployment("burst", u32::try_from(replicas).expect("small"));
+    create_in(&kind, &ns, &deployment);
     let diagnostics = || {
         format!(
             "{}\ncentre:\n{}",
@@ -201,9 +201,7 @@ async fn a_burst_notifies_once_per_pod_and_once_for_the_rest_and_mute_holds_it_b
         "{saved}"
     );
     let before = (centre.list(), raised.lock().values().sum::<usize>());
-    tokio::task::block_in_place(|| {
-        create(kind.context.as_str(), ns.name(), &unpullable_pod("muted")).expect("the pod");
-    });
+    create_in(&kind, &ns, &unpullable_pod("muted"));
     until(
         "the muted pod's warning in the service",
         diagnostics,
@@ -227,7 +225,7 @@ async fn a_burst_notifies_once_per_pod_and_once_for_the_rest_and_mute_holds_it_b
 
     // Unmuted: what happens next notifies again (the raise limit is not this step's subject, so
     // the burst's own raises do not count against the new pod).
-    centre.set_rules(oxikube_app::notifications::NotificationRules {
+    centre.set_rules(NotificationRules {
         max_raised: 100,
         ..rules
     });
@@ -236,9 +234,7 @@ async fn a_burst_notifies_once_per_pod_and_once_for_the_rest_and_mute_holds_it_b
         centre.is_watching(&cluster)
     })
     .await;
-    tokio::task::block_in_place(|| {
-        create(kind.context.as_str(), ns.name(), &unpullable_pod("after")).expect("the pod");
-    });
+    create_in(&kind, &ns, &unpullable_pod("after"));
     until(
         "a row about the pod created after unmuting",
         diagnostics,

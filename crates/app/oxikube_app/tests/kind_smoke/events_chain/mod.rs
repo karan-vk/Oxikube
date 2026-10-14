@@ -32,6 +32,7 @@ use oxikube_kube::{ConnectorConfig, KubeConnector, PoolConfig};
 use oxikube_ports::ClusterConnectorPort;
 use oxikube_testkit::FakeClusterSourcePort;
 use oxikube_testkit::integration::TestNamespace;
+use oxikube_testkit::integration::events::create;
 
 use crate::clock::TokioClock;
 use crate::cluster::{Kind, catalog_entry};
@@ -55,6 +56,13 @@ fn kube_connector(kind: &Kind) -> KubeConnector {
         PoolConfig::default(),
         ConnectorConfig::default(),
     )
+}
+
+/// Creates `manifest` in `ns` with kubectl, which blocks, so off the async worker.
+fn create_in(kind: &Kind, ns: &TestNamespace, manifest: &serde_json::Value) {
+    tokio::task::block_in_place(|| {
+        create(kind.context.as_str(), ns.name(), manifest).expect("the object");
+    });
 }
 
 /// One connected cluster and its `EventService`, as the app builds them, with the subscriber a

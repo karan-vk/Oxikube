@@ -206,11 +206,6 @@ impl EventArrivals {
         Ok(arrivals)
     }
 
-    /// Every event seen so far (its first arrival), oldest first. The marker is not listed.
-    pub fn arrivals(&self) -> Vec<Arrival> {
-        self.seen.lock().clone()
-    }
-
     /// The first arrival that matches `pred`, if any yet.
     pub fn first(&self, pred: impl Fn(&Arrival) -> bool) -> Option<Arrival> {
         self.seen.lock().iter().find(|a| pred(a)).cloned()
@@ -298,11 +293,8 @@ mod tests {
         let deployment = unpullable_deployment("d", 4);
         assert_eq!(deployment["spec"]["replicas"], 4);
         assert_eq!(
-            deployment["spec"]["selector"]["matchLabels"],
+            deployment["spec"]["selector"]["matchLabels"]["oxikube.test/deployment"],
             deployment["spec"]["template"]["metadata"]["labels"]["oxikube.test/deployment"]
-                .as_str()
-                .map(|v| json!({ "oxikube.test/deployment": v }))
-                .expect("a label")
         );
     }
 

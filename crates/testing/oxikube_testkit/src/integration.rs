@@ -218,8 +218,8 @@ impl TestNamespace {
 
 impl Drop for TestNamespace {
     fn drop(&mut self) {
-        // Deleting the namespace deletes its events and pods, so a failed test's evidence is saved now;
-        // a diagnostics step after the run would find nothing.
+        // Deleting the namespace deletes its events and pods, so a failed test's evidence is
+        // saved now; a diagnostics step after the run would find nothing.
         if std::thread::panicking() {
             self.save_failure_diagnostics();
         }
