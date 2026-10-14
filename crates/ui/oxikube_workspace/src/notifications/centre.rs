@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use futures::StreamExt as _;
 use gpui::{Context, EventEmitter, SharedString, Task};
+use jiff::tz::TimeZone;
 use oxikube_app::ClusterSessionManager;
 use oxikube_app::notifications::{Notification, NotificationId, NotificationService};
 use oxikube_domain::command::Command;
@@ -41,7 +42,7 @@ pub struct NotificationRow {
 }
 
 impl NotificationRow {
-    fn of(note: &Notification, sessions: &ClusterSessionManager, tz: &jiff::tz::TimeZone) -> Self {
+    fn of(note: &Notification, sessions: &ClusterSessionManager, tz: &TimeZone) -> Self {
         let time = note
             .updated
             .to_zoned(tz.clone())
@@ -109,6 +110,8 @@ pub struct NotificationCentre {
     cache: HashMap<NotificationId, (Arc<Notification>, NotificationRow)>,
     unread: usize,
     muted: Vec<ClusterId>,
+    /// The zone the rows' times are shown in (the system's unless told otherwise).
+    tz: TimeZone,
     _pump: Task<()>,
 }
 
@@ -131,11 +134,10 @@ impl NotificationCentre {
                         cx.notify_coalesced();
                     }
                     if !change.raised.is_empty() {
-                        let tz = jiff::tz::TimeZone::system();
                         let rows = change
                             .raised
                             .iter()
-                            .map(|note| NotificationRow::of(note, &this.sessions, &tz))
+                            .map(|note| NotificationRow::of(note, &this.sessions, &this.tz))
                             .collect();
                         cx.emit(CentreEvent::Raised {
                             rows,
@@ -155,6 +157,7 @@ impl NotificationCentre {
             cache: HashMap::new(),
             unread: 0,
             muted: Vec::new(),
+            tz: TimeZone::system(),
             _pump: pump,
         };
         centre.refresh();
@@ -163,14 +166,13 @@ impl NotificationCentre {
 
     fn refresh(&mut self) {
         let notes = self.service.list();
-        let tz = jiff::tz::TimeZone::system();
         let mut cache = HashMap::with_capacity(notes.len());
         let rows: Vec<NotificationRow> = notes
             .into_iter()
             .map(|note| {
                 let row = match self.cache.remove(&note.id) {
                     Some((made_from, row)) if Arc::ptr_eq(&made_from, &note) => row,
-                    _ => NotificationRow::of(&note, &self.sessions, &tz),
+                    _ => NotificationRow::of(&note, &self.sessions, &self.tz),
                 };
                 cache.insert(note.id, (note, row.clone()));
                 row
@@ -180,6 +182,15 @@ impl NotificationCentre {
         self.rows = rows.into();
         self.unread = self.service.unread();
         self.muted = self.service.muted();
+    }
+
+    /// Shows the rows' times in `tz` from now on (the default is the system's zone), re-deriving
+    /// every row. Tests and screenshots pin a zone so their output does not depend on the machine.
+    pub fn set_time_zone(&mut self, tz: TimeZone, cx: &mut Context<Self>) {
+        self.tz = tz;
+        self.cache.clear();
+        self.refresh();
+        cx.notify();
     }
 
     /// The rows, newest first.

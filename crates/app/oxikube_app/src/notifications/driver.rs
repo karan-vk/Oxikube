@@ -129,7 +129,7 @@ fn on_events(inner: &Inner, cluster: &ClusterId, changes: EventsChanged, held: &
             watch.tracker.forget(key);
         }
         for event in changes.added.iter().chain(&changes.updated) {
-            if let Some(occurrences) = watch.tracker.observe(event, false) {
+            if let Some(occurrences) = watch.tracker.observe(event) {
                 news.push((event.clone(), occurrences));
             }
         }

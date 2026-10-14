@@ -5,8 +5,8 @@
 //! * The first list is the backlog: none of it is news.
 //! * An event it has not seen is news when it was last seen after the tracker started (less a
 //!   small allowance for the cluster's clock) when it arrives as an addition, and after the latest
-//!   event seen so far when it arrives in a later reset (a relist after a reconnect replays what
-//!   was already told, and adds only what happened during the gap).
+//!   event seen *before* that reset when it arrives in a later one (a relist after a reconnect
+//!   replays what was already told, and adds only what happened during the gap).
 //! * An empty reset (the feed stopped: a disconnect) changes nothing, so the reconnect's relist
 //!   is recognised.
 //!
@@ -47,15 +47,22 @@ impl Tracker {
         }
     }
 
-    /// Counts `event`; returns how many of its occurrences are news (`None`: none).
-    pub(crate) fn observe(&mut self, event: &Event, in_reset: bool) -> Option<u32> {
+    /// Counts `event`, an addition or a change; returns how many of its occurrences are news
+    /// (`None`: none).
+    pub(crate) fn observe(&mut self, event: &Event) -> Option<u32> {
+        self.count(event, None)
+    }
+
+    /// Counts `event`. An event not seen before is judged against `relist_floor` when it comes
+    /// from a reset (the latest time told before that reset), else against the start.
+    fn count(&mut self, event: &Event, relist_floor: Option<Timestamp>) -> Option<u32> {
         let key = EventKey::of(event);
         let at = seen_at(event);
         let count = event.count.max(1);
-        let news = match self.counts.get(&key) {
-            Some(&before) => count.checked_sub(before).filter(|more| *more > 0),
-            None if in_reset => (at > self.latest).then_some(1),
-            None => {
+        let news = match (self.counts.get(&key), relist_floor) {
+            (Some(&before), _) => count.checked_sub(before).filter(|more| *more > 0),
+            (None, Some(floor)) => (at > floor).then_some(1),
+            (None, None) => {
                 let timeless = event.last_seen.is_none() && event.first_seen.is_none();
                 (timeless || at > self.since).then_some(1)
             }
@@ -68,16 +75,19 @@ impl Tracker {
         news
     }
 
-    /// Reads a reset: the events the cluster's buffer now holds. Returns the news among them, in
-    /// the order given. An empty reset is ignored (see the [module docs](self)).
+    /// Reads a reset: the events the cluster's buffer now holds, in any order (the feed gives
+    /// them newest first). Returns the news among them, in the order given. Every unseen event
+    /// is judged against the latest time told *before* the reset, so a gap holding several new
+    /// events tells them all. An empty reset is ignored (see the [module docs](self)).
     pub(crate) fn reset(&mut self, events: &[Arc<Event>]) -> Vec<(Arc<Event>, u32)> {
         if events.is_empty() {
             return Vec::new();
         }
         let backlog = !self.seen;
+        let floor = self.latest;
         let news = events
             .iter()
-            .filter_map(|event| self.observe(event, true).map(|n| (event.clone(), n)))
+            .filter_map(|event| self.count(event, Some(floor)).map(|n| (event.clone(), n)))
             .filter(|_| !backlog)
             .collect();
         let held: HashSet<EventKey> = events.iter().map(|e| EventKey::of(e)).collect();

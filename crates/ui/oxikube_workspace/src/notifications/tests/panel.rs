@@ -195,3 +195,27 @@ fn the_selection_follows_its_row_when_a_newer_one_arrives(cx: &mut TestAppContex
         Some(&Command::ResourceOpen { target: pod("a") })
     );
 }
+
+#[gpui::test]
+fn row_times_are_shown_in_the_centres_zone_not_the_machines(cx: &mut TestAppContext) {
+    use jiff::tz::{Offset, TimeZone};
+
+    let mut fx = Fixture::open(cx);
+    let centre = fx.wiring.centre.clone();
+    let meta = |fx: &mut Fixture| {
+        fx.vcx
+            .update(|_, cx| centre.read(cx).rows()[0].meta.to_string())
+    };
+    let zone = |fx: &mut Fixture, tz: TimeZone| {
+        fx.vcx
+            .update(|_, cx| centre.update(cx, |centre, cx| centre.set_time_zone(tz, cx)));
+        fx.settle();
+    };
+    // The fake clock starts at 2026-01-01T00:00:00Z.
+    zone(&mut fx, TimeZone::UTC);
+    fx.submit(warning("web-0", "BackOff"));
+    assert_eq!(meta(&mut fx), "00:00:00");
+    // A new zone re-derives the rows already made.
+    zone(&mut fx, TimeZone::fixed(Offset::constant(9)));
+    assert_eq!(meta(&mut fx), "09:00:00");
+}

@@ -24,7 +24,7 @@ fn the_first_list_is_backlog_even_when_recent() {
     assert!(tracker.reset(&recent).is_empty());
     // Then its count rises: that is news.
     assert_eq!(
-        tracker.observe(&warning("now", "web-0", "BackOff", 2, 3), false),
+        tracker.observe(&warning("now", "web-0", "BackOff", 2, 3)),
         Some(1)
     );
 }
@@ -33,15 +33,15 @@ fn the_first_list_is_backlog_even_when_recent() {
 fn an_addition_after_the_start_is_news_and_a_count_rise_is_news_by_the_difference() {
     let mut tracker = Tracker::new(t0());
     assert_eq!(
-        tracker.observe(&warning("e", "web-0", "BackOff", 1, 5), false),
+        tracker.observe(&warning("e", "web-0", "BackOff", 1, 5)),
         Some(1)
     );
     assert_eq!(
-        tracker.observe(&warning("e", "web-0", "BackOff", 4, 9), false),
+        tracker.observe(&warning("e", "web-0", "BackOff", 4, 9)),
         Some(3)
     );
     assert_eq!(
-        tracker.observe(&warning("e", "web-0", "BackOff", 4, 9), false),
+        tracker.observe(&warning("e", "web-0", "BackOff", 4, 9)),
         None,
         "no rise"
     );
@@ -52,7 +52,7 @@ fn an_old_count_rising_is_news_even_from_the_backlog() {
     let mut tracker = Tracker::new(t0());
     tracker.reset(&[Arc::new(warning("e", "web-0", "BackOff", 9, -60))]);
     assert_eq!(
-        tracker.observe(&warning("e", "web-0", "BackOff", 10, 1), false),
+        tracker.observe(&warning("e", "web-0", "BackOff", 10, 1)),
         Some(1)
     );
 }
@@ -62,11 +62,11 @@ fn an_addition_within_the_clock_allowance_counts_and_an_older_one_does_not() {
     let mut tracker = Tracker::new(t0());
     let allowance = CLOCK_ALLOWANCE.as_secs();
     assert_eq!(
-        tracker.observe(&warning("a", "web-0", "BackOff", 1, 1 - allowance), false),
+        tracker.observe(&warning("a", "web-0", "BackOff", 1, 1 - allowance)),
         Some(1)
     );
     assert_eq!(
-        tracker.observe(&warning("b", "web-1", "BackOff", 1, -allowance - 1), false),
+        tracker.observe(&warning("b", "web-1", "BackOff", 1, -allowance - 1)),
         None
     );
 }
@@ -75,7 +75,7 @@ fn an_addition_within_the_clock_allowance_counts_and_an_older_one_does_not() {
 fn a_relist_after_a_reconnect_tells_only_the_gap() {
     let mut tracker = Tracker::new(t0());
     let before = Arc::new(warning("a", "web-0", "BackOff", 2, 10));
-    assert_eq!(tracker.observe(&before, false), Some(1));
+    assert_eq!(tracker.observe(&before), Some(1));
     // The disconnect: the feed stops and the buffer empties. Nothing changes.
     assert!(tracker.reset(&[]).is_empty());
     // The relist: the old event as it was, one that rose, and one that happened in the gap.
@@ -97,10 +97,34 @@ fn a_relist_after_a_reconnect_tells_only_the_gap() {
 }
 
 #[test]
+fn a_relist_in_feed_order_tells_every_event_of_the_gap() {
+    // The feed hands a reset newest first: each unseen event is judged against what was told
+    // before the reset, not against a newer event of the same relist.
+    let mut tracker = Tracker::new(t0());
+    let before = Arc::new(warning("old", "web-0", "BackOff", 1, 10));
+    assert_eq!(tracker.observe(&before), Some(1));
+    assert!(tracker.reset(&[]).is_empty());
+    let relist = [
+        Arc::new(warning("web-2", "web-2", "BackOff", 1, 40)),
+        Arc::new(warning("web-1", "web-1", "Failed", 1, 30)),
+        before.clone(),
+    ];
+    let mut news: Vec<_> = tracker
+        .reset(&relist)
+        .into_iter()
+        .map(|(e, n)| (e.uid.as_deref().unwrap().to_owned(), n))
+        .collect();
+    news.sort();
+    assert_eq!(news, [("web-1".to_owned(), 1), ("web-2".to_owned(), 1)]);
+    // And the next relist, with nothing new, tells nothing.
+    assert!(tracker.reset(&relist).is_empty());
+}
+
+#[test]
 fn a_reset_trims_the_counts_to_what_the_buffer_holds() {
     let mut tracker = Tracker::new(t0());
-    tracker.observe(&warning("a", "web-0", "BackOff", 1, 1), false);
-    tracker.observe(&warning("b", "web-1", "BackOff", 1, 2), false);
+    tracker.observe(&warning("a", "web-0", "BackOff", 1, 1));
+    tracker.observe(&warning("b", "web-1", "BackOff", 1, 2));
     tracker.reset(&[Arc::new(warning("b", "web-1", "BackOff", 1, 2))]);
     assert_eq!(tracker.len(), 1);
     tracker.forget(&EventKey::of(&warning("b", "web-1", "BackOff", 1, 2)));

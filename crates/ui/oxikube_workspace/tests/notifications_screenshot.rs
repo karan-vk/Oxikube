@@ -165,6 +165,10 @@ fn render(tokens: Tokens) -> anyhow::Result<RgbaImage> {
         let tab = cx.new(|cx| TestItem::new("prod-eu", cx));
         workspace.update(cx, |ws, cx| ws.open_item(tab, window, cx));
         let wiring = install(&workspace, deps, window, cx);
+        // Times in UTC, so the golden does not depend on the machine's zone.
+        wiring.centre.update(cx, |centre, cx| {
+            centre.set_time_zone(jiff::tz::TimeZone::UTC, cx);
+        });
         // The shown cluster tab: the header offers to mute it.
         let active = cluster.clone();
         wiring
