@@ -78,9 +78,10 @@ impl Centre {
             }),
             _ => input.dedupe_key.clone(),
         };
+        let mut escalated = false;
         let id = match self.live(&key, rules, now) {
             Some(id) => {
-                self.update(id, &input, now);
+                escalated = self.update(id, &input, now);
                 id
             }
             None => self.insert(key, &input, route, now),
@@ -89,7 +90,7 @@ impl Centre {
             self.fold(id, &input);
         }
         let row = self.rows.get_mut(&id).expect("the row was just written");
-        let raised = limiter.may_raise(rules, row.last_raised, row.note.sticky(), now);
+        let raised = limiter.may_raise(rules, row.last_raised, row.note.sticky(), escalated, now);
         if raised {
             row.last_raised = Some(now);
         }
@@ -215,10 +216,11 @@ impl Centre {
         id
     }
 
-    fn update(&mut self, id: NotificationId, input: &NotificationInput, now: Timestamp) {
+    /// Folds `input` into row `id`; returns whether the row's level went up.
+    fn update(&mut self, id: NotificationId, input: &NotificationInput, now: Timestamp) -> bool {
         let seq = self.bump();
         let Some(row) = self.rows.get_mut(&id) else {
-            return;
+            return false;
         };
         self.order.remove(&row.seq);
         self.order.insert(seq, id);
@@ -226,7 +228,9 @@ impl Centre {
         let note = Arc::make_mut(&mut row.note);
         note.count = note.count.saturating_add(input.occurrences.max(1));
         note.updated = now;
-        note.level = note.level.max_with(input.level);
+        let before = note.level;
+        note.level = before.max_with(input.level);
+        let escalated = note.level != before;
         note.target = input.target.clone().or(note.target.take());
         note.link = input.link.clone().or(note.link.take());
         if row.group.is_none() {
@@ -237,6 +241,7 @@ impl Centre {
             note.read = false;
             self.unread += 1;
         }
+        escalated
     }
 
     /// Adds `input`'s object to the group row `id` and words the row for the burst.

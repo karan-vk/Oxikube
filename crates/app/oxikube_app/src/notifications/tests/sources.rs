@@ -108,6 +108,40 @@ fn giving_up_escalates_the_same_row_and_a_recovery_marks_it_read() {
     assert_eq!(service.unread(), 0);
 }
 
+#[tokio::test]
+async fn giving_up_is_raised_again_although_the_drop_just_was() {
+    let (service, clock) = service();
+    let hooks = service.sources();
+    let mut sub = service.subscribe();
+    sub.next().await.expect("first item");
+
+    emit_portforward_drop(&*hooks, "fwd-1");
+    let drop = sub.next().await.expect("the drop");
+    assert_eq!(drop.raised.len(), 1);
+    assert_eq!(drop.raised[0].level, NotificationLevel::Warning);
+
+    // Seconds later, far inside the per-row interval: it failed for good.
+    clock.advance(secs(20));
+    hooks.port_forward_changed(portforward_change(
+        "fwd-1",
+        ForwardPhase::Reconnecting,
+        ForwardPhase::Failed,
+    ));
+    let failed = sub.next().await.expect("the failure");
+    assert_eq!(failed.raised.len(), 1, "the worse news is told");
+    assert_eq!(failed.raised[0].level, NotificationLevel::Error);
+    assert!(failed.raised[0].title.starts_with("Port-forward failed"));
+
+    // The same level again is still quiet.
+    hooks.port_forward_changed(portforward_change(
+        "fwd-1",
+        ForwardPhase::Reconnecting,
+        ForwardPhase::Failed,
+    ));
+    let again = sub.next().await.expect("the repeat");
+    assert!(again.raised.is_empty(), "{:?}", again.raised);
+}
+
 #[test]
 fn changes_that_are_not_drops_say_nothing() {
     let (service, _) = service();

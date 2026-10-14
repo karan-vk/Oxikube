@@ -7,7 +7,9 @@
 //!
 //! Capped on top of the service's own rate limit: at most [`MAX_TOASTS`] per [`TOAST_WINDOW`];
 //! past it one summary toast ("12 unread notifications", "Show all") stands for the rest, and
-//! the toast layer's auto-dismiss takes them all away. A burst never stacks toasts.
+//! the toast layer's auto-dismiss takes them all away. A burst never stacks toasts. A sticky
+//! toast is outside the cap, as it is outside the service's limit: it neither counts nor is
+//! turned into the summary, because the agent waits on it.
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
@@ -54,20 +56,21 @@ pub fn follow_toasts(
         };
         let mut overflow = *more;
         for row in rows {
-            if shown.get() >= MAX_TOASTS {
+            if row.sticky() {
+                // Outside the budget: neither capped nor counted, the agent is waiting on it.
+                sticky.borrow_mut().insert(row.id);
+            } else if shown.get() >= MAX_TOASTS {
                 overflow += 1;
                 continue;
-            }
-            shown.set(shown.get() + 1);
-            let budget = shown.clone();
-            // Detached on purpose: it only gives the slot back; nothing stores or drops it.
-            cx.spawn(async move |cx| {
-                cx.background_executor().timer(TOAST_WINDOW).await;
-                budget.set(budget.get().saturating_sub(1));
-            })
-            .detach();
-            if row.sticky() {
-                sticky.borrow_mut().insert(row.id);
+            } else {
+                shown.set(shown.get() + 1);
+                let budget = shown.clone();
+                // Detached on purpose: it only gives the slot back; nothing stores or drops it.
+                cx.spawn(async move |cx| {
+                    cx.background_executor().timer(TOAST_WINDOW).await;
+                    budget.set(budget.get().saturating_sub(1));
+                })
+                .detach();
             }
             let toast = row_toast(row, &dispatcher);
             workspace.update(cx, |ws, cx| ws.show_toast(toast, cx));

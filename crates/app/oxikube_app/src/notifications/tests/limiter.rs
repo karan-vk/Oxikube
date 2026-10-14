@@ -10,12 +10,12 @@ fn at_most_max_raised_per_window_whatever_the_rows() {
     let rules = NotificationRules::default();
     let mut limiter = Limiter::default();
     let raised = (0..20)
-        .filter(|_| limiter.may_raise(&rules, None, false, at(0)))
+        .filter(|_| limiter.may_raise(&rules, None, false, false, at(0)))
         .count();
     assert_eq!(raised, rules.max_raised);
     let window = rules.raise_window.as_secs() as i64;
     assert!(
-        limiter.may_raise(&rules, None, false, at(window)),
+        limiter.may_raise(&rules, None, false, false, at(window)),
         "the window moved on"
     );
 }
@@ -84,4 +84,22 @@ fn a_burst_of_a_thousand_warnings_in_a_second_raises_a_handful() {
         })
         .count();
     assert_eq!(raised, rules.max_raised);
+}
+
+#[test]
+fn an_escalation_skips_the_row_interval_but_not_the_overall_limit() {
+    let rules = NotificationRules::default();
+    let mut limiter = Limiter::default();
+    assert!(limiter.may_raise(&rules, None, false, false, at(0)));
+    let recent = Some(at(1));
+    assert!(!limiter.may_raise(&rules, recent, false, false, at(2)));
+    assert!(limiter.may_raise(&rules, recent, false, true, at(2)));
+    let spent = (0..20)
+        .filter(|_| limiter.may_raise(&rules, recent, false, true, at(3)))
+        .count();
+    assert_eq!(
+        spent + 2,
+        rules.max_raised,
+        "escalations count towards the limit"
+    );
 }

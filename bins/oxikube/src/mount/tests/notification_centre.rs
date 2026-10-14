@@ -295,6 +295,11 @@ fn only_https_links_open_from_a_notification(cx: &mut TestAppContext) {
         },
     );
     assert!(ok.message.is_none());
+    assert_eq!(
+        app.vcx.opened_url().as_deref(),
+        Some("https://example.com/release"),
+        "the window's serve loop opened it"
+    );
 
     let state = app.vcx.update(|_, cx| AppState::global(cx));
     let bus = state.command_bus().expect("the bus").clone();
@@ -305,4 +310,10 @@ fn only_https_links_open_from_a_notification(cx: &mut TestAppContext) {
         oxikube_app::command_bus::DispatchContext::new(oxikube_domain::Initiator::Ui, "me"),
     ));
     assert!(refused.is_err(), "{refused:?}");
+    app.vcx.run_until_parked();
+    assert_eq!(
+        app.vcx.opened_url().as_deref(),
+        Some("https://example.com/release"),
+        "the refused link reached nothing"
+    );
 }

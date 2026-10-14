@@ -10,7 +10,7 @@ use oxikube_testkit::{
 };
 
 use super::Fixture;
-use crate::notifications::{APP_LABEL, TOAST_WINDOW};
+use crate::notifications::{APP_LABEL, MAX_TOASTS, SUMMARY_KEY, TOAST_WINDOW};
 use crate::toast::{ToastLayer, ToastLevel};
 
 fn layer(fx: &mut Fixture) -> Entity<ToastLayer> {
@@ -100,6 +100,32 @@ fn a_permission_toast_stays_until_the_request_is_answered(cx: &mut TestAppContex
     assert!(visible(&mut fx).is_empty(), "answered: the toast goes");
     assert_eq!(fx.badge(), 0, "and the row is read");
     assert!(fx.service.list()[0].read);
+}
+
+#[gpui::test]
+fn a_permission_toast_is_outside_the_toast_cap(cx: &mut TestAppContext) {
+    let mut fx = Fixture::open(cx);
+    for i in 0..MAX_TOASTS {
+        fx.submit(super::warning(&format!("web-{i}"), "BackOff"));
+    }
+    emit_agent_permission(&*fx.service.sources(), "s1", "r1");
+    fx.settle();
+
+    // The budget is spent, yet the request is not folded into the "N unread" summary: its own
+    // toast is queued behind the timed ones and stays once they are gone.
+    fx.vcx.executor().advance_clock(TOAST_WINDOW * 10);
+    fx.vcx.run_until_parked();
+    let left = visible(&mut fx);
+    assert_eq!(left.len(), 1, "{left:?}");
+    assert_eq!(
+        left[0].message.as_ref(),
+        "Scale deployment web to 0 replicas"
+    );
+    assert_ne!(left[0].key.as_deref(), Some(SUMMARY_KEY));
+
+    fx.service.sources().agent_permission_resolved("s1", "r1");
+    fx.settle();
+    assert!(visible(&mut fx).is_empty());
 }
 
 #[gpui::test]
