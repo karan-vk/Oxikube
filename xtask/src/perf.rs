@@ -54,7 +54,7 @@ use std::process::{Command, Stdio};
 use std::time::Instant;
 
 /// Every scenario `oxikube --perf-scenario` knows, in report order.
-pub const SCENARIOS: [&str; 8] = [
+pub const SCENARIOS: [&str; 9] = [
     "startup",
     "scroll-10k",
     "palette",
