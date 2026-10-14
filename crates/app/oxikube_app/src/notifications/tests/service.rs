@@ -327,6 +327,9 @@ async fn new_rules_apply_at_once_and_resubscribe_only_when_the_kinds_change() {
     install_mixed_feed(&h);
     h.connect().await;
     h.until("watched", |h| h.port().live_feeds() == 1).await;
+    // Every subscription the events service ever handed out takes the next id.
+    let opened = |h: &Harness| h.events.inner.state.lock().next_id;
+    let before = opened(&h);
 
     // A window or an ignored reason is no new subscription: the cluster keeps its pump (and so
     // its tracker: nothing already seen is told again).
@@ -336,10 +339,12 @@ async fn new_rules_apply_at_once_and_resubscribe_only_when_the_kinds_change() {
     h.centre.set_rules(rules.clone());
     assert!(h.centre.is_watching(&cluster()));
     assert_eq!(h.centre.rules().max_raised, 9);
+    assert_eq!(opened(&h), before, "no new subscription for a window edit");
 
     // Narrowing the kinds subscribes again with the new filter; only Jobs notify now.
     rules.watched_kinds = vec![Arc::from("Job")];
     h.centre.set_rules(rules);
+    assert_eq!(opened(&h), before + 1, "one new subscription for the kinds");
     h.until("watched again", |h| {
         h.centre.is_watching(&cluster()) && h.port().live_feeds() == 1
     })
