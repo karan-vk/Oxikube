@@ -15,12 +15,12 @@ use std::sync::Arc;
 
 use oxikube_domain::notification::{
     AgentPermissionRequest, ForwardPhase, NotificationKind, PortForwardChange, UpdateAvailable,
-    agent_permission_key,
+    agent_permission_key, is_https_link,
 };
 use oxikube_ports::{NotificationLevel, NotificationSourcePort};
 
 use super::model::NotificationInput;
-use super::service::{NotificationService, State};
+use super::service::NotificationService;
 
 impl NotificationService {
     /// The hooks of the other sources as the port the emitting epics hold (E15, E24, E27).
@@ -30,7 +30,7 @@ impl NotificationService {
 
     /// Marks the row with `key` read; returns whether it was unread.
     fn resolve(&self, key: &str) -> bool {
-        self.change(|state: &mut State| state.centre.mark_read_by_key(key))
+        self.change(|state| state.centre.mark_read_by_key(key))
     }
 }
 
@@ -57,21 +57,18 @@ impl NotificationSourcePort for NotificationService {
                 "Connection lost; reconnecting.",
             )
         };
-        self.submit_if(
-            NotificationInput {
-                kind: NotificationKind::PortForward,
-                cluster: Some(change.cluster.clone()),
-                level,
-                title,
-                body: change.reason.clone().unwrap_or_else(|| fallback.to_owned()),
-                target: change.target.clone(),
-                link: None,
-                dedupe_key: Arc::from(change.dedupe_key()),
-                group: None,
-                occurrences: 1,
-            },
-            |_| true,
-        );
+        self.submit(NotificationInput {
+            kind: NotificationKind::PortForward,
+            cluster: Some(change.cluster.clone()),
+            level,
+            title,
+            body: change.reason.clone().unwrap_or_else(|| fallback.to_owned()),
+            target: change.target.clone(),
+            link: None,
+            dedupe_key: Arc::from(change.dedupe_key()),
+            group: None,
+            occurrences: 1,
+        });
     }
 
     fn update_available(&self, update: UpdateAvailable) {
@@ -104,21 +101,18 @@ impl NotificationSourcePort for NotificationService {
         if request.panel_focused {
             return;
         }
-        self.submit_if(
-            NotificationInput {
-                kind: NotificationKind::AgentPermission,
-                cluster: request.cluster.clone(),
-                level: NotificationLevel::Warning,
-                title: format!("{} needs permission", request.agent),
-                body: request.summary.clone(),
-                target: None,
-                link: None,
-                dedupe_key: Arc::from(request.dedupe_key()),
-                group: None,
-                occurrences: 1,
-            },
-            |_| true,
-        );
+        self.submit(NotificationInput {
+            kind: NotificationKind::AgentPermission,
+            cluster: request.cluster.clone(),
+            level: NotificationLevel::Warning,
+            title: format!("{} needs permission", request.agent),
+            body: request.summary.clone(),
+            target: None,
+            link: None,
+            dedupe_key: Arc::from(request.dedupe_key()),
+            group: None,
+            occurrences: 1,
+        });
     }
 
     fn agent_permission_resolved(&self, session: &str, request_id: &str) {
@@ -126,12 +120,8 @@ impl NotificationSourcePort for NotificationService {
     }
 }
 
-/// `link` when it is an `https` URL without whitespace or control characters; a notification
-/// never carries a `file:` or `javascript:` link into the browser.
+/// `link` when it is an `https` link ([`is_https_link`]).
 fn safe_link(link: &str) -> Option<Arc<str>> {
     let link = link.trim();
-    (link.starts_with("https://")
-        && link.len() > "https://".len()
-        && !link.chars().any(|c| c.is_whitespace() || c.is_control()))
-    .then(|| Arc::from(link))
+    is_https_link(link).then(|| Arc::from(link))
 }

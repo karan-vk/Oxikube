@@ -47,11 +47,11 @@ impl std::fmt::Debug for NotificationService {
 pub(crate) struct Inner {
     pub(crate) events: EventService,
     pub(crate) sessions: ClusterSessionManager,
-    pub(crate) store: Arc<dyn StatePort>,
+    pub(super) store: Arc<dyn StatePort>,
     pub(crate) clock: Arc<dyn ClockPort>,
     pub(crate) state: Mutex<State>,
     /// Held while the muted clusters are written, so two quick toggles land in order.
-    pub(crate) persist: futures::lock::Mutex<()>,
+    pub(super) persist: futures::lock::Mutex<()>,
 }
 
 pub(crate) struct State {

@@ -9,6 +9,7 @@ use gpui::{App, Task, WeakEntity, Window};
 use oxikube_app::command_bus::{CommandOutput, CommandRegistry, HandlerContext, RegisterError};
 use oxikube_domain::OxiError;
 use oxikube_domain::command::{self, Command, CommandId};
+use oxikube_domain::notification::is_https_link;
 
 use super::panel::NotificationPanel;
 use crate::workspace::Workspace;
@@ -84,13 +85,6 @@ pub fn register_commands(
     Ok(())
 }
 
-/// Whether `url` is an `https` link without whitespace or control characters.
-fn is_https_link(url: &str) -> bool {
-    url.strip_prefix("https://").is_some_and(|rest| {
-        !rest.is_empty() && !url.chars().any(|c| c.is_whitespace() || c.is_control())
-    })
-}
-
 /// Serves each request on the UI thread: toggles `workspace`'s notification panel, or opens a
 /// link. Keep the task as long as the window lives.
 pub fn serve(
@@ -101,13 +95,11 @@ pub fn serve(
 ) -> Task<()> {
     window.spawn(cx, async move |cx| {
         while let Some(request) = requests.next().await {
-            let PanelRequest::Toggle = request else {
-                if let PanelRequest::OpenLink(url) = request {
-                    // The window may be gone; then there is nobody to open it for.
-                    let _ = cx.update(|_, cx| cx.open_url(&url));
-                }
+            if let PanelRequest::OpenLink(url) = request {
+                // The window may be gone; then there is nobody to open it for.
+                let _ = cx.update(|_, cx| cx.open_url(&url));
                 continue;
-            };
+            }
             let toggled = cx.update(|window, cx| {
                 workspace.update(cx, |ws, cx| {
                     ws.toggle_panel::<NotificationPanel>(window, cx)

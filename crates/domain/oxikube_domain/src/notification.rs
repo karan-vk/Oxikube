@@ -58,16 +58,6 @@ impl NotificationKind {
         }
     }
 
-    /// What the kind is called in a sentence.
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::ClusterEvent => "Cluster events",
-            Self::PortForward => "Port-forward drops",
-            Self::UpdateAvailable => "Updates",
-            Self::AgentPermission => "Agent permission requests",
-        }
-    }
-
     /// Whether its toast stays until the notification is handled (read). Only an agent waiting
     /// for a permission answer does; the others go away with the normal toast timeout.
     pub fn sticky(self) -> bool {
@@ -184,6 +174,14 @@ impl AgentPermissionRequest {
     }
 }
 
+/// Whether `link` is an `https` URL without whitespace or control characters: the only kind of
+/// link a notification carries or the browser is asked to open (never `file:` or `javascript:`).
+pub fn is_https_link(link: &str) -> bool {
+    link.strip_prefix("https://").is_some_and(|rest| {
+        !rest.is_empty() && !link.chars().any(|c| c.is_whitespace() || c.is_control())
+    })
+}
+
 /// `agent-permission:<session>:<request-id>`: the key of a permission request, for the answer
 /// to find the notification it resolves.
 pub fn agent_permission_key(session: &str, request_id: &str) -> String {
@@ -245,6 +243,22 @@ mod tests {
         };
         assert_eq!(update.dedupe_key(), "update:0.6.1");
         assert_eq!(agent_permission_key("s1", "r9"), "agent-permission:s1:r9");
+    }
+
+    #[test]
+    fn only_plain_https_links_pass() {
+        assert!(is_https_link("https://example.com/r/1"));
+        for bad in [
+            "",
+            "https://",
+            "http://example.com",
+            "file:///etc/passwd",
+            "javascript:1",
+            "https://a b",
+            "https://a\nb",
+        ] {
+            assert!(!is_https_link(bad), "{bad:?}");
+        }
     }
 
     #[test]

@@ -1,5 +1,5 @@
-//! The notification centre in the running app (E14-S05; the other sources, E14-S07), over `TestPorts`: a new Warning event of
-//! a connected cluster toasts and lights the status-bar bell (the backlog does not), the key opens
+//! The notification centre in the running app (E14-S05; the other sources, E14-S07), over
+//! `TestPorts`: a new Warning event of a connected cluster toasts and lights the status-bar bell (the backlog does not), the key opens
 //! the centre in the right dock with the row, the five commands are on the bus with their tool
 //! stubs, and a muted cluster is remembered in the state db.
 
