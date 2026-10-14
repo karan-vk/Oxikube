@@ -22,7 +22,7 @@ pub struct EventFilterError {
     pub message: String,
 }
 
-/// Which events to return, see the [module docs](self). The default matches every event.
+/// Which events to return, see the module docs. The default matches every event.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct EventFilter {
     types: Vec<EventType>,

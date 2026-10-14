@@ -37,7 +37,7 @@ struct Slot {
     event: Arc<Event>,
 }
 
-/// One cluster's events, see the [module docs](self).
+/// One cluster's events, see the module docs.
 #[derive(Debug)]
 pub struct EventBuffer {
     capacity: usize,

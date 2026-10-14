@@ -1,5 +1,5 @@
 //! The `events` settings: how many events each cluster keeps (E14-S02) and the opt-in for
-//! desktop notifications (`os_notifications`, E14-S06; see [`os`]).
+//! desktop notifications (`os_notifications`, E14-S06; see the private `os` module).
 //!
 //! ```json
 //! "events": {
