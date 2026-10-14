@@ -4,8 +4,8 @@
 use futures::StreamExt as _;
 use futures::channel::mpsc::{UnboundedSender, unbounded};
 use gpui::{App, AppContext as _, Subscription};
-use oxikube_app::WarningBadges;
 use oxikube_app::NotificationService;
+use oxikube_app::WarningBadges;
 use oxikube_app::events::{EventService, EventsConfig};
 use oxikube_settings::Settings as _;
 
