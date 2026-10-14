@@ -143,16 +143,18 @@ impl ClusterBadges {
             .or_else(|| cluster_scoped_name.and_then(|name| self.get(name, now)))
     }
 
-    /// How many held warnings are past the window at `now`. A view that last drew at `now0`
-    /// redraws when this differs from what it drew with: a badge expired. Reads every entry
-    /// (the warned objects), so ask about once a second, not per row.
-    pub fn expired(&self, now: Timestamp) -> usize {
-        let cutoff = self.cutoff(now);
+    /// How many held warnings aged past the window between `from` and `to`: badged at `from`,
+    /// not at `to`. A view that checked at `from` redraws when this is not zero. Counting the
+    /// crossing itself (not how many entries are past the window) cannot miss an expiry that
+    /// coincides with a replacement or an eviction. Reads every entry (the warned objects), so
+    /// ask about once a second, not per row.
+    pub fn expired_between(&self, from: Timestamp, to: Timestamp) -> usize {
+        let (from, to) = (self.cutoff(from), self.cutoff(to));
         self.entries
             .read()
             .by_uid
             .values()
-            .filter(|held| held.seen < cutoff)
+            .filter(|held| held.seen >= from && held.seen < to)
             .count()
     }
 

@@ -62,3 +62,35 @@ impl Stream for BadgeChanges {
         Poll::Ready(Some(()))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use futures::{FutureExt as _, StreamExt as _};
+
+    use super::*;
+
+    #[test]
+    fn a_burst_of_bumps_is_one_item() {
+        let epoch = Epoch::default();
+        let mut changes = epoch.changes();
+        assert!(changes.next().now_or_never().is_none(), "nothing yet");
+        for _ in 0..1_000 {
+            epoch.bump();
+        }
+        assert_eq!(changes.next().now_or_never(), Some(Some(())));
+        assert!(
+            changes.next().now_or_never().is_none(),
+            "one item, not 1000"
+        );
+        epoch.bump();
+        assert_eq!(changes.next().now_or_never(), Some(Some(())));
+    }
+
+    #[test]
+    fn a_stream_starts_at_the_current_version() {
+        let epoch = Epoch::default();
+        epoch.bump();
+        let mut changes = epoch.changes();
+        assert!(changes.next().now_or_never().is_none());
+    }
+}

@@ -6,7 +6,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures::StreamExt as _;
+use futures::{FutureExt as _, StreamExt as _};
 use jiff::{SignedDuration, Timestamp};
 use oxikube_domain::event::Event;
 use oxikube_domain::ids::{ClusterId, ContextName};
@@ -177,6 +177,14 @@ async fn a_new_warning_badges_the_object_and_wakes_the_views_once() {
         .await
         .expect("woken")
         .expect("a change");
+    // The burst was one wake: nothing more is queued behind it.
+    for _ in 0..20 {
+        tokio::task::yield_now().await;
+    }
+    assert!(
+        changes.next().now_or_never().is_none(),
+        "two warnings in one tick woke the views once, not once per event"
+    );
 }
 
 #[tokio::test]
@@ -221,19 +229,56 @@ async fn a_badge_expires_past_the_window_without_any_event() {
     let badges = h.badges.for_cluster(&cluster());
     let hour = DEFAULT_WARNING_WINDOW.as_secs() as i64;
     assert!(badges.get("web", at(100 + hour)).is_some(), "still within");
-    assert_eq!(badges.expired(at(100 + hour)), 0);
+    assert_eq!(badges.expired_between(at(0), at(100 + hour)), 0);
     assert!(badges.get("web", at(101 + hour)).is_none(), "an hour on");
-    assert_eq!(badges.expired(at(101 + hour)), 1);
+    assert_eq!(badges.expired_between(at(0), at(101 + hour)), 1);
+    assert_eq!(
+        badges.expired_between(at(101 + hour), at(200 + hour)),
+        0,
+        "already expired at the first look: not a crossing"
+    );
 
     // A longer window brings it back at once, and wakes the views.
     let mut changes = h.badges.changes();
     h.badges.set_window(Duration::from_secs(2 * 3_600));
     assert!(badges.get("web", at(101 + hour)).is_some());
-    assert_eq!(badges.expired(at(101 + hour)), 0);
+    assert_eq!(badges.expired_between(at(0), at(101 + hour)), 0);
     tokio::time::timeout(Duration::from_secs(5), changes.next())
         .await
         .expect("woken by the window")
         .expect("a change");
+}
+
+#[tokio::test]
+async fn an_expiry_is_seen_even_when_a_replacement_cancels_it_out_in_a_count() {
+    let h = Harness::new();
+    h.connect().await;
+    let hour = DEFAULT_WARNING_WINDOW.as_secs() as i64;
+    let port = h.port();
+    port.install(
+        FakeEventFeed::new()
+            .initial([
+                warning("a1", "a", 10, "BackOff"),
+                warning("b1", "b", 100, "BackOff"),
+            ])
+            // `a` was already stale at the first look; a fresh warning replaces it.
+            .add(1, warning("a2", "a", 3 * hour, "Failed")),
+    );
+    let _track = h.badges.track(&cluster());
+    h.until("both badged", |h| h.reason_of("b", at(101)).is_some())
+        .await;
+    let badges = h.badges.for_cluster(&cluster());
+    let first = at(11 + hour);
+    let second = at(101 + hour);
+    port.clock().advance(TICK);
+    h.until("a is replaced", |h| {
+        h.reason_of("a", at(3 * hour)).as_deref() == Some("Failed")
+    })
+    .await;
+    // A count of stale entries is one at `first` (a's old warning) and one at `second` (b's),
+    // so it would not move; the crossing does.
+    assert_eq!(badges.expired_between(first, second), 1);
+    assert_eq!(badges.expired_between(second, at(200 + hour)), 0);
 }
 
 #[tokio::test]

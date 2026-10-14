@@ -42,8 +42,8 @@ pub(crate) struct RowWarnings {
     /// with the node's name as the uid.
     cluster_scoped: bool,
     handle: WarningBadges,
-    /// How many badges were past the window when the table last checked (the tick).
-    expired_seen: usize,
+    /// When the table last checked for expired badges (the tick).
+    checked: Timestamp,
 }
 
 impl RowWarnings {
@@ -58,7 +58,7 @@ impl RowWarnings {
             badges: handle.for_cluster(cluster),
             cluster_scoped: !kind.namespaced,
             handle,
-            expired_seen: 0,
+            checked: Timestamp::now(),
         })
     }
 
@@ -77,9 +77,14 @@ impl RowWarnings {
         )
     }
 
-    /// Whether a badge expired since the last call (the tick redraws then).
+    /// Whether a badge expired since the last call (the tick redraws then): some warning was
+    /// badged at the last check and is not at `now`. Looks at the crossing, not at a count of
+    /// stale entries, so an expiry cannot hide behind a replacement or an eviction.
     pub(crate) fn expired_moved(&mut self, now: Timestamp) -> bool {
-        let expired = self.badges.expired(now);
-        std::mem::replace(&mut self.expired_seen, expired) != expired
+        if now <= self.checked {
+            return false;
+        }
+        let from = std::mem::replace(&mut self.checked, now);
+        self.badges.expired_between(from, now) > 0
     }
 }

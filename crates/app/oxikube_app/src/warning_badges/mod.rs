@@ -17,8 +17,8 @@
 //! involved object's uid to the newest `Warning` about it, kept up to date from a warnings-only
 //! subscription: a table reads one entry per visible row (a hash lookup under a read lock, no
 //! scan of events). The window is compared at read time, so a badge expires without any event
-//! arriving; [`ClusterBadges::expired`] counts the entries past the window so a view can redraw
-//! once when some did. Events the writer gave no involved-object uid are not badged (they stay
+//! arriving; [`ClusterBadges::expired_between`] counts the entries that crossed the window between two
+//! looks so a view can redraw once when some did. Events the writer gave no involved-object uid are not badged (they stay
 //! in the events view).
 //!
 //! The cluster-wide feed is the service's one: tracking a cluster is a subscription like any
