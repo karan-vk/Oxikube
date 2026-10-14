@@ -46,7 +46,9 @@
 //! buffer outside the lock and swapped in, so a query on the UI thread never waits for it.
 //! Subscribers get one [`EventsChanged`] per poll whatever arrived (rule 2). `cargo bench -p
 //! oxikube_app --bench event_buffer` times 10 000 inserts (budget 50 ms) and measures the memory
-//! of a full 10k buffer (budget 50 MB).
+//! of a full 10k buffer (budget 50 MB). The feed's events arrive as `Arc<Event>` and the buffer
+//! keeps that allocation, so the adapter's de-duplicating ring and the buffer hold one copy of
+//! each event between them.
 //!
 //! # Content is data
 //!

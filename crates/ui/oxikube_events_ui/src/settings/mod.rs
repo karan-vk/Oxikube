@@ -34,8 +34,9 @@ pub use follow::follow_settings;
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct EventsContent {
     /// Events each cluster keeps in memory (100 to 50,000; out of range is clamped), newest by
-    /// last seen; older ones are dropped. A full buffer of 10,000 holds about 11 MB. A change
-    /// applies at once; set it under `clusters.<id>.events` to give one cluster its own bound.
+    /// last seen; older ones are dropped. A full buffer of 10,000 holds about 17 MB per cluster
+    /// (the events and the watch's index of them). A change applies at once; set it under
+    /// `clusters.<id>.events` to give one cluster its own bound.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(range(min = 100, max = 50_000))]
     pub buffer: Option<i64>,

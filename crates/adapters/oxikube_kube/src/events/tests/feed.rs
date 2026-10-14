@@ -2,6 +2,7 @@
 //! fallbacks, the ring through the stream, failures and drop.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use futures::StreamExt;
@@ -131,21 +132,21 @@ pub(super) async fn open_with(
         .expect("the feed opens")
 }
 
-pub(super) async fn next(feed: &mut EventFeed) -> OxiResult<DeltaBatch<Event>> {
+pub(super) async fn next(feed: &mut EventFeed) -> OxiResult<DeltaBatch<Arc<Event>>> {
     tokio::time::timeout(Duration::from_secs(600), feed.next())
         .await
         .expect("a feed item in time")
         .expect("the feed is still open")
 }
 
-pub(super) async fn next_batch(feed: &mut EventFeed) -> DeltaBatch<Event> {
+pub(super) async fn next_batch(feed: &mut EventFeed) -> DeltaBatch<Arc<Event>> {
     next(feed)
         .await
         .unwrap_or_else(|e| panic!("expected a batch, got {e}"))
 }
 
 /// The events of the opening `Restarted`, by uid.
-pub(super) fn restart_uids(batch: &DeltaBatch<Event>) -> Vec<String> {
+pub(super) fn restart_uids(batch: &DeltaBatch<Arc<Event>>) -> Vec<String> {
     let [Delta::Restarted(all)] = batch.deltas.as_slice() else {
         panic!("expected one Restarted, got {:?}", batch.deltas);
     };
@@ -159,7 +160,7 @@ pub(super) fn restart_uids(batch: &DeltaBatch<Event>) -> Vec<String> {
 pub(super) struct Folded(BTreeMap<String, u32>);
 
 impl Folded {
-    pub(super) fn apply(&mut self, batch: DeltaBatch<Event>) {
+    pub(super) fn apply(&mut self, batch: DeltaBatch<Arc<Event>>) {
         for delta in batch {
             match delta {
                 Delta::Restarted(all) => {
@@ -595,6 +596,45 @@ async fn a_relist_after_410_retires_what_vanished_and_keeps_the_rest() {
         }
     }
     assert_eq!(folded.0.keys().collect::<Vec<_>>(), ["fresh", "keep"]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_quiet_recovery_after_a_reported_error_sends_an_empty_batch() {
+    // A 410 Gone on a cluster with no event churn: the relist changes nothing, so without the
+    // empty batch the consumer would keep showing "retrying" for a live feed (E14 audit).
+    let api = server(false);
+    api.reply(CORE, 200, list(vec![core_event("keep", "web-0", T1, 1)]));
+    api.reply_watch(
+        CORE,
+        200,
+        &[json!({"type": "ERROR", "object": status_body(410, "Expired", "too old")})],
+    );
+    let mut feed = events(
+        &api,
+        EventsConfig {
+            apis: EventApis::CoreOnly,
+            ..EventsConfig::default()
+        },
+    )
+    .watch(&cluster_scope(), &EventsOptions::default())
+    .await
+    .unwrap();
+    assert_eq!(restart_uids(&next_batch(&mut feed).await), ["keep"]);
+    let error = next(&mut feed).await.expect_err("the 410 is reported");
+    assert!(error.is_retryable(), "{error}");
+    let recovered = next_batch(&mut feed).await;
+    assert!(
+        recovered.deltas.is_empty(),
+        "nothing changed: {recovered:?}"
+    );
+    assert_eq!(*feed.state().borrow(), FeedState::Live);
+    settle().await;
+    assert!(
+        tokio::time::timeout(Duration::from_secs(60), feed.next())
+            .await
+            .is_err(),
+        "one recovery batch, not one per quiet second"
+    );
 }
 
 #[tokio::test(start_paused = true)]

@@ -1,6 +1,7 @@
 //! [`ShedSet`]: a bounded memory of the events a ring dropped, behind its evicted count.
 
 use std::collections::{BTreeMap, HashMap};
+use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher};
 
 use super::ring::Key;
 
@@ -10,16 +11,21 @@ const KEYS_PER_SLOT: usize = 4;
 /// Remembers the keys of the most recently shed events, at most `limit` of them, so the same
 /// event arriving again is recognised and not counted twice.
 ///
+/// A key is remembered as a 64-bit hash, not as its strings (no uid or message is kept alive
+/// for it), so the set stays small next to the ring. A lookup against a full set of 40 000
+/// hashes collides with odds below one in 10^14; a collision at worst miscounts one event or
+/// keeps one late event out.
+///
 /// The memory is bounded: once full, the key shed longest ago is forgotten. The count is not
 /// reduced by forgetting, so it never goes down on its own; an event forgotten and then seen
 /// again counts a second time. That only happens when more than `limit` other events were shed
 /// in between, far beyond what a relist or the second API's view of an event brings back.
 pub(super) struct ShedSet {
     limit: usize,
-    /// Shed key -> its position in `order`.
-    index: HashMap<Key, u64>,
-    /// Oldest shed first.
-    order: BTreeMap<u64, Key>,
+    /// Hash of a shed key -> its position in `order`.
+    index: HashMap<u64, u64>,
+    /// Oldest shed first: position -> hash of the key.
+    order: BTreeMap<u64, u64>,
     next: u64,
     count: u64,
 }
@@ -54,11 +60,12 @@ impl ShedSet {
     }
 
     pub(super) fn contains(&self, key: &Key) -> bool {
-        self.index.contains_key(key)
+        self.index.contains_key(&hash(key))
     }
 
     /// Records `key` as shed; counts it unless it is already remembered.
-    pub(super) fn insert(&mut self, key: Key) {
+    pub(super) fn insert(&mut self, key: &Key) {
+        let key = hash(key);
         if self.index.contains_key(&key) {
             return;
         }
@@ -68,16 +75,21 @@ impl ShedSet {
             }
         }
         self.next += 1;
-        self.order.insert(self.next, key.clone());
+        self.order.insert(self.next, key);
         self.index.insert(key, self.next);
         self.count += 1;
     }
 
     /// Forgets `key` and stops counting it, if it is remembered.
     pub(super) fn remove(&mut self, key: &Key) {
-        if let Some(position) = self.index.remove(key) {
+        if let Some(position) = self.index.remove(&hash(key)) {
             self.order.remove(&position);
             self.count -= 1;
         }
     }
+}
+
+/// A stable 64-bit hash of `key` (SipHash with fixed keys, the same in every run).
+fn hash(key: &Key) -> u64 {
+    BuildHasherDefault::<DefaultHasher>::default().hash_one(key)
 }

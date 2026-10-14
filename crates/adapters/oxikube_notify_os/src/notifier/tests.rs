@@ -19,6 +19,9 @@ struct Scripted {
     detached: AtomicUsize,
     /// One sender per notification that waits for the user, in show order.
     users: Mutex<Vec<mpsc::Sender<Response>>>,
+    /// Makes every `Shown::id` call slow, widening any window in which the notify thread is
+    /// still deciding about its waiter after `notify` returned.
+    slow_ids: std::sync::atomic::AtomicBool,
 }
 
 impl Scripted {
@@ -29,12 +32,16 @@ impl Scripted {
 
 struct ScriptedShown {
     id: u32,
+    slow: bool,
     user: Option<mpsc::Receiver<Response>>,
     backend: Arc<Scripted>,
 }
 
 impl Shown for ScriptedShown {
     fn id(&self) -> Option<u32> {
+        if self.slow {
+            std::thread::sleep(Duration::from_millis(50));
+        }
         Some(self.id)
     }
 
@@ -70,6 +77,7 @@ impl Backend for Arc<Scripted> {
         Ok(Box::new(ScriptedShown {
             // Like a freedesktop server: a replacement keeps the id it replaces.
             id: payload.replaces.unwrap_or(100 + shows.len() as u32),
+            slow: self.slow_ids.load(Ordering::SeqCst),
             user,
             backend: self.clone(),
         }))
@@ -226,6 +234,8 @@ fn a_replacement_shares_the_waiter_so_one_click_activates_once() {
         clicks.send(activation).unwrap();
     }));
     block_on(notifier.set_enabled(true)).unwrap();
+    // A slow platform: `notify` must still return only once the waiter is settled.
+    backend.slow_ids.store(true, Ordering::SeqCst);
 
     let first = warning("x").with_action_target(target());
     let newer = warning("x").with_action_target(

@@ -13,7 +13,7 @@ fn changes_of(
 ) -> Vec<crate::events::changes::Change> {
     let mut out = Vec::new();
     for e in events {
-        buffer.upsert_into(e, &mut out);
+        buffer.upsert_into(e.into(), &mut out);
     }
     out
 }

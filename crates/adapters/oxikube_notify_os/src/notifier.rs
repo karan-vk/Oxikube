@@ -251,11 +251,15 @@ impl NotifierPort for OsNotifier {
                         return;
                     }
                 };
-                if let (Some(tag), Some(id)) = (&activation.tag, shown.id()) {
+                let id = shown.id();
+                if let (Some(tag), Some(id)) = (&activation.tag, id) {
                     inner.remember(tag, id);
                 }
+                // Settle who waits (and free an unneeded slot) before `notify` returns, so the
+                // next call sees this notification's waiter and the slot count is exact.
+                let waiter = inner.waiter(id, activation, slot);
                 let _ = shown_tx.send(Ok(()));
-                match inner.waiter(shown.id(), activation, slot) {
+                match waiter {
                     Some(waiter) => {
                         let response = shown.wait();
                         inner.answered(waiter, response);

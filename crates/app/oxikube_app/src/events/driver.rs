@@ -83,7 +83,9 @@ async fn read_once(task: &FeedTask, delay: &mut Duration) -> Ended {
                 *delay = task.retry.0;
             }
             Err(error) if error.is_retryable() => {
-                // The adapter backs off and relists on its own; the events held stay.
+                // The adapter backs off and relists on its own; the events held stay. Its next
+                // batch (an empty one when the recovery changed nothing) says it reads again,
+                // and `apply_batch` moves the state back to `Ready`.
                 inner.set_state(
                     &task.cluster,
                     task.generation,

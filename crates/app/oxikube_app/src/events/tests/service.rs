@@ -319,6 +319,36 @@ async fn a_retryable_open_failure_is_retried_after_a_pause() {
 }
 
 #[tokio::test]
+async fn an_in_feed_error_on_a_quiet_cluster_clears_when_the_feed_reads_again() {
+    // A 410 Gone (or sleep/wake) on a cluster with no event churn: the watch relists, nothing
+    // changed, and the adapter's empty batch is the only sign it is live again.
+    let h = Harness::new();
+    h.connect().await;
+    h.port().install(
+        FakeEventFeed::new()
+            .initial([ev("a", "ns", "p", 1)])
+            .retrying(1, "the watch's resource version expired (HTTP 410 Gone)")
+            .recovered(2),
+    );
+    let _sub = h.service.subscribe(&cluster(), EventFilter::new());
+    h.ready().await;
+    h.port().clock().advance(TICK);
+    h.until("retrying", |h| {
+        matches!(h.service.state(&cluster()), EventsState::Retrying { .. })
+    })
+    .await;
+    assert_eq!(h.all(), ["a"], "the events held stay while it retries");
+    h.port().clock().advance(TICK);
+    h.ready().await;
+    assert_eq!(h.all(), ["a"]);
+    assert_eq!(
+        h.port().recorded_calls().len(),
+        1,
+        "the same feed recovered"
+    );
+}
+
+#[tokio::test]
 async fn the_overview_reads_the_newest_warnings() {
     let h = Harness::new();
     h.connect().await;

@@ -16,7 +16,10 @@
 //!
 //! # Failures
 //!
-//! A retryable failure is passed on as an `Err` item. A non-retryable one stops only its
+//! A retryable failure is passed on as an `Err` item. Once every watch is live again the
+//! consumer is told so with a batch, an empty one when the recovery changed nothing (a relist
+//! of a quiet cluster, a watch that reconnected without losing its place), so it never keeps
+//! showing "reconnecting" for a feed that is reading. A non-retryable one stops only its
 //! watch, which is how an API that is forbidden or missing drops out while the other
 //! carries on; it is passed on, as the last item, only when no watch is left.
 
@@ -26,8 +29,8 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
+use oxikube_domain::ErrorKind;
 use oxikube_domain::event::Event;
-use oxikube_domain::{ErrorKind, OxiError};
 use oxikube_ports::{Delta, DeltaBatch, EventApi, ForbiddenScope};
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinSet;
@@ -36,11 +39,12 @@ use tokio::time::{Instant, sleep_until};
 use super::handle::Counters;
 use super::plan::{Alternative, Spawner, Stage};
 use super::ring::{EventRing, Key};
+use super::run::Run;
 use super::source::{Msg, Tagged};
 use crate::feed::FeedState;
 
 /// What the consumer receives.
-pub(super) type Output = oxikube_domain::OxiResult<DeltaBatch<Event>>;
+pub(super) type Output = oxikube_domain::OxiResult<DeltaBatch<Arc<Event>>>;
 
 /// Per-watch bookkeeping.
 pub(super) struct Watch {
@@ -95,41 +99,6 @@ pub(super) struct Merge {
     pub(super) spawner: Spawner,
     /// The watch tasks; dropping the pump aborts them.
     pub(super) tasks: JoinSet<()>,
-}
-
-/// Mutable bookkeeping of a running pump.
-#[derive(Default)]
-struct Run {
-    batch: Vec<Delta<Event>>,
-    warm: bool,
-    deadline: Option<Instant>,
-    flush_due: bool,
-    error: Option<OxiError>,
-    /// The failure that stopped the last watch to stop, held in case no watch is left.
-    last_fatal: Option<OxiError>,
-    done: bool,
-}
-
-impl Run {
-    fn batch_ready(&self) -> bool {
-        self.warm && self.flush_due && !self.batch.is_empty()
-    }
-
-    fn has_output(&self) -> bool {
-        self.batch_ready() || self.error.is_some()
-    }
-
-    fn next_output(&mut self) -> Option<Output> {
-        if self.batch_ready() {
-            self.flush_due = false;
-            self.deadline = None;
-            return Some(Ok(DeltaBatch::from_deltas(mem::take(&mut self.batch))));
-        }
-        if self.batch.is_empty() {
-            self.flush_due = false;
-        }
-        self.error.take().map(Err)
-    }
 }
 
 impl Pump {
@@ -197,7 +166,9 @@ impl Merge {
             Msg::Delete(event) => self.ring.remove(&Key::of(&event), &mut deltas),
             Msg::State(state) => {
                 self.watches[index].state = state;
-                self.publish_state();
+                if self.publish_state() == FeedState::Live {
+                    run.on_live();
+                }
             }
             Msg::Error(error) => {
                 run.error = Some(error);
@@ -217,14 +188,16 @@ impl Merge {
                     }
                 }
                 self.publish_status();
-                self.publish_state();
+                if self.publish_state() == FeedState::Live {
+                    run.on_live();
+                }
             }
         }
         self.after(run, deltas);
     }
 
     /// Queues `deltas` and moves the run along: opening, a final failure, counters.
-    fn after(&self, run: &mut Run, deltas: Vec<Delta<Event>>) {
+    fn after(&self, run: &mut Run, deltas: Vec<Delta<Arc<Event>>>) {
         self.counters.len.store(self.ring.len(), Ordering::Relaxed);
         self.counters
             .evicted
@@ -324,8 +297,8 @@ impl Merge {
         report.forbidden = forbidden;
     }
 
-    /// The worst state of the watches still running.
-    fn publish_state(&self) {
+    /// Publishes the worst state of the watches still running, and returns it.
+    fn publish_state(&self) -> FeedState {
         let worst = self
             .watches
             .iter()
@@ -335,6 +308,7 @@ impl Merge {
             .unwrap_or(FeedState::Stopped);
         self.state
             .send_if_modified(|current| mem::replace(current, worst) != worst);
+        worst
     }
 }
 

@@ -11,6 +11,7 @@
 mod common;
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 use std::time::Duration;
 
 use futures::StreamExt;
@@ -56,10 +57,10 @@ fn kube_events(client: &Client, kind: &Kind, config: EventsConfig) -> KubeEvents
 
 /// What a consumer folding the feed's deltas holds, by event uid.
 #[derive(Default)]
-struct Folded(BTreeMap<String, Event>);
+struct Folded(BTreeMap<String, Arc<Event>>);
 
 impl Folded {
-    fn apply(&mut self, delta: Delta<Event>) {
+    fn apply(&mut self, delta: Delta<Arc<Event>>) {
         let uid = |e: &Event| {
             e.uid
                 .as_deref()
@@ -197,7 +198,7 @@ async fn a_failing_pod_has_a_warning_and_the_object_feed_isolates_it() {
         .expect("open the object feed");
     let mut mine = Folded::default();
     mine.until(&mut object_feed, "the broken pod's Warning", |f| {
-        f.0.values().any(Event::is_warning)
+        f.0.values().any(|e| e.is_warning())
     })
     .await;
     assert!(
@@ -235,7 +236,7 @@ async fn each_api_alone_agrees_with_the_merged_feed() {
         .await
         .expect("create the unschedulable pod");
 
-    let ready = |f: &Folded| f.0.values().any(Event::is_warning);
+    let ready = |f: &Folded| f.0.values().any(|e| e.is_warning());
     let mut sets = Vec::new();
     for apis in [
         EventApis::Both,
@@ -293,7 +294,7 @@ async fn the_default_feed_watches_one_api_and_sees_the_same_events() {
     );
     let mut auto = Folded::default();
     auto.until(&mut feed, "a Warning", |f| {
-        f.0.values().any(Event::is_warning)
+        f.0.values().any(|e| e.is_warning())
     })
     .await;
 
@@ -307,7 +308,7 @@ async fn the_default_feed_watches_one_api_and_sees_the_same_events() {
     assert_eq!(forced.apis(), [EventApi::Core]);
     let mut core = Folded::default();
     core.until(&mut forced, "a Warning", |f| {
-        f.0.values().any(Event::is_warning)
+        f.0.values().any(|e| e.is_warning())
     })
     .await;
     let who = |f: &Folded| {
@@ -370,7 +371,7 @@ async fn the_connections_events_port_serves_a_warning() {
         .expect("open the events feed through the port");
     let deadline = tokio::time::Instant::now() + DEADLINE * 2;
     let mut seen = Folded::default();
-    while !seen.0.values().any(Event::is_warning) {
+    while !seen.0.values().any(|e| e.is_warning()) {
         let batch = tokio::time::timeout_at(deadline, served.feed.next())
             .await
             .expect("a Warning in time")

@@ -17,7 +17,7 @@ fn event(uid: &str, last: &str, count: u32) -> Event {
 }
 
 /// `+uid@count` / `-uid@count` per delta.
-fn labels(deltas: &[Delta<Event>]) -> Vec<String> {
+fn labels(deltas: &[Delta<Arc<Event>>]) -> Vec<String> {
     deltas
         .iter()
         .map(|d| match d {
@@ -233,7 +233,7 @@ fn both_views_of_one_event_make_one_entry_and_one_delta() {
     // The other API's view of the same stored object: same uid, same time and count.
     assert!(put(&mut ring, EventsV1, v1).is_empty());
     assert_eq!(ring.len(), 1);
-    assert_eq!(ring.snapshot(), std::slice::from_ref(&core));
+    assert_eq!(ring.snapshot(), [Arc::new(core.clone())]);
     // And again, the same view twice (a resync): nothing.
     assert!(put(&mut ring, Core, core).is_empty());
 }
@@ -344,4 +344,35 @@ fn a_relist_of_one_api_does_not_retire_what_the_other_delivered() {
     ring.retire_unseen(Core, &NONE, &seen, &mut out);
     assert_eq!(labels(&out), ["-only-core@1"]);
     assert_eq!(ring.len(), 1);
+}
+
+#[test]
+fn deltas_and_the_snapshot_share_the_rings_allocation() {
+    // One copy of each event between the ring and its consumer: the delta, the snapshot and the
+    // eviction hand out the ring's own `Arc`, never a clone of the event (E14 audit: a second
+    // copy per cluster doubled the memory of a 10k buffer).
+    let mut ring = EventRing::new(1);
+    let mut out = Vec::new();
+    let first = event("a", "2026-10-03T11:01:00Z", 1);
+    ring.upsert(Key::of(&first), Core, &NONE, first, &mut out);
+    assert_eq!(out.len(), 1);
+    let Some(Delta::Applied(applied)) = out.pop() else {
+        panic!("one Applied");
+    };
+    assert!(
+        Arc::ptr_eq(&ring.snapshot()[0], &applied),
+        "snapshot shares"
+    );
+    assert_eq!(
+        Arc::strong_count(&applied),
+        2,
+        "the ring and this test, nothing else"
+    );
+    out.clear();
+    let newer = event("b", "2026-10-03T11:02:00Z", 1);
+    ring.upsert(Key::of(&newer), Core, &NONE, newer, &mut out);
+    let Delta::Deleted(evicted) = &out[0] else {
+        panic!("the eviction first, got {out:?}");
+    };
+    assert!(Arc::ptr_eq(evicted, &applied), "eviction shares");
 }

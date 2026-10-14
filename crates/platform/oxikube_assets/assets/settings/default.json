@@ -130,7 +130,7 @@
   // Kubernetes events (E14). Can also be set under "clusters.<id>.events". A number out of
   // range is clamped (a warning goes to the log), never refused.
   //   buffer   events each cluster keeps in memory, newest by last seen (100 to 50,000); older
-  //            ones are dropped. 10,000 events hold about 11 MB. One events watch per cluster
+  //            ones are dropped. 10,000 events hold about 17 MB. One events watch per cluster
   //            feeds the events view, a resource's Events tab, the warning badges and the
   //            overview's warnings. Applies at once (a smaller value drops the oldest events).
   //   os_notifications  also show Warning notifications on the desktop (macOS notification

@@ -21,11 +21,9 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use jiff::Timestamp;
-use oxikube_domain::OxiResult;
-use oxikube_domain::event::{Event, EventType};
-use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
+use oxikube_domain::event::Event;
 use oxikube_domain::session::WatchScope;
+use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::{
     ClockPort, Delta, DeltaBatch, EventApi, EventsFeed, EventsMonitor, EventsPort, EventsStatus,
     EventsWatchOptions,
@@ -36,107 +34,9 @@ use crate::FakeClockPort;
 use crate::script::{CallLog, Script, StreamGauge, Timeline};
 use crate::scripted_feed::TICK;
 
-/// Builds a domain [`Event`]; start with [`event`].
-#[derive(Debug, Clone)]
-pub struct EventBuilder(Event);
+mod builder;
 
-/// A `Normal` event `Scheduled` about pod `default/web-0` of cluster `kubeconfig:kind-oxikube`,
-/// seen once at `2026-01-01T00:00:00Z`. Change what a test cares about.
-pub fn event() -> EventBuilder {
-    let cluster = ClusterId::new("kubeconfig", &ContextName::new("kind-oxikube"));
-    let at: Timestamp = "2026-01-01T00:00:00Z"
-        .parse()
-        .unwrap_or(Timestamp::UNIX_EPOCH);
-    EventBuilder(Event {
-        uid: Some(Arc::from("event-uid")),
-        namespace: Some(Arc::from("default")),
-        event_type: EventType::Normal,
-        reason: Arc::from("Scheduled"),
-        message: "Successfully assigned default/web-0 to node-1".into(),
-        truncated: false,
-        regarding: ResourceRef::new(
-            cluster,
-            Gvk::new("", "v1", "Pod"),
-            Some("default".into()),
-            "web-0",
-        ),
-        regarding_uid: Some(Arc::from("pod-uid")),
-        related: None,
-        count: 1,
-        first_seen: Some(at),
-        last_seen: Some(at),
-        reporting_component: Some(Arc::from("default-scheduler")),
-        reporting_instance: None,
-        action: None,
-    })
-}
-
-impl EventBuilder {
-    /// The event's own uid.
-    #[must_use]
-    pub fn uid(mut self, uid: &str) -> Self {
-        self.0.uid = Some(Arc::from(uid));
-        self
-    }
-
-    /// Type `Warning`.
-    #[must_use]
-    pub fn warning(mut self) -> Self {
-        self.0.event_type = EventType::Warning;
-        self
-    }
-
-    /// The reason.
-    #[must_use]
-    pub fn reason(mut self, reason: &str) -> Self {
-        self.0.reason = Arc::from(reason);
-        self
-    }
-
-    /// The message.
-    #[must_use]
-    pub fn message(mut self, message: &str) -> Self {
-        self.0.message = message.to_owned();
-        self
-    }
-
-    /// The object the event is about (`kind` in the core group) and its uid.
-    #[must_use]
-    pub fn regarding(mut self, kind: &str, namespace: Option<&str>, name: &str, uid: &str) -> Self {
-        let cluster = self.0.regarding.cluster.clone();
-        self.0.regarding = ResourceRef::new(
-            cluster,
-            Gvk::new("", "v1", kind),
-            namespace.map(Arc::from),
-            name,
-        );
-        self.0.regarding_uid = Some(Arc::from(uid));
-        self
-    }
-
-    /// How many times it happened.
-    #[must_use]
-    pub fn count(mut self, count: u32) -> Self {
-        self.0.count = count;
-        self
-    }
-
-    /// When it was last seen (RFC 3339).
-    ///
-    /// # Panics
-    ///
-    /// When `at` is not an RFC 3339 timestamp.
-    #[must_use]
-    pub fn last_seen(mut self, at: &str) -> Self {
-        self.0.last_seen = Some(at.parse().expect("an RFC 3339 timestamp"));
-        self
-    }
-
-    /// The event.
-    pub fn build(self) -> Event {
-        self.0
-    }
-}
+pub use builder::{EventBuilder, event};
 
 /// A scripted events feed: the initial list at tick 0 and the changes of each later tick.
 /// See the module docs of `fakes::events`.
@@ -144,6 +44,8 @@ impl EventBuilder {
 pub struct FakeEventFeed {
     initial: Vec<Event>,
     steps: BTreeMap<u32, Vec<Delta<Event>>>,
+    /// Retryable failures reported while the feed stays open, by tick.
+    retrying: BTreeMap<u32, String>,
 }
 
 impl FakeEventFeed {
@@ -183,31 +85,68 @@ impl FakeEventFeed {
         self
     }
 
-    /// The last tick that delivers something (0 when only the initial list is scripted).
-    pub fn last_tick(&self) -> u32 {
-        self.steps.keys().next_back().copied().unwrap_or(0)
+    /// The watch fails at `tick` with a retryable (network) error and keeps going, as the
+    /// production feed does while it backs off and relists. Comes after that tick's batch.
+    ///
+    /// # Panics
+    ///
+    /// When `tick` is 0: a feed that cannot open is a scripted `watch_events` error instead.
+    #[must_use]
+    pub fn retrying(mut self, tick: u32, message: &str) -> Self {
+        assert!(tick >= 1, "tick 0 is the initial list");
+        self.retrying.insert(tick, message.to_owned());
+        self
     }
 
-    /// Every batch with its tick, oldest first.
-    pub fn batches(&self) -> Vec<(u32, DeltaBatch<Event>)> {
-        let first = DeltaBatch::from_deltas(vec![Delta::Restarted(self.initial.clone())]);
+    /// The watch is reading again at `tick` with nothing changed: an empty batch, as the
+    /// production feed sends after a quiet recovery.
+    #[must_use]
+    pub fn recovered(self, tick: u32) -> Self {
+        self.at(tick, [])
+    }
+
+    /// The last tick that delivers something (0 when only the initial list is scripted).
+    pub fn last_tick(&self) -> u32 {
+        let steps = self.steps.keys().next_back().copied().unwrap_or(0);
+        let errors = self.retrying.keys().next_back().copied().unwrap_or(0);
+        steps.max(errors)
+    }
+
+    /// Every batch with its tick, oldest first. The events are shared (`Arc`), as the port
+    /// delivers them.
+    pub fn batches(&self) -> Vec<(u32, DeltaBatch<Arc<Event>>)> {
+        let initial = self.initial.iter().cloned().map(Arc::new).collect();
+        let first = DeltaBatch::from_deltas(vec![Delta::Restarted(initial)]);
         std::iter::once((0, first))
-            .chain(
-                self.steps
-                    .iter()
-                    .map(|(t, d)| (*t, DeltaBatch::from_deltas(d.clone()))),
-            )
+            .chain(self.steps.iter().map(|(t, d)| {
+                let deltas = d.iter().cloned().map(shared).collect();
+                (*t, DeltaBatch::from_deltas(deltas))
+            }))
             .collect()
     }
 
     /// The feed as a timeline: tick `n` at offset `n * TICK`, kept open like a live watch.
-    pub fn timeline(&self) -> Timeline<DeltaBatch<Event>> {
-        self.batches()
+    pub fn timeline(&self) -> Timeline<DeltaBatch<Arc<Event>>> {
+        let timeline = self
+            .batches()
             .into_iter()
             .fold(Timeline::new(), |timeline, (tick, batch)| {
                 timeline.ok_at(TICK * tick, batch)
+            });
+        self.retrying
+            .iter()
+            .fold(timeline, |timeline, (tick, message)| {
+                timeline.err_at(TICK * *tick, OxiError::network(message.clone()))
             })
             .keep_open()
+    }
+}
+
+fn shared(delta: Delta<Event>) -> Delta<Arc<Event>> {
+    match delta {
+        Delta::Applied(event) => Delta::Applied(Arc::new(event)),
+        Delta::Deleted(event) => Delta::Deleted(Arc::new(event)),
+        Delta::Restarted(events) => Delta::Restarted(events.into_iter().map(Arc::new).collect()),
     }
 }
 
