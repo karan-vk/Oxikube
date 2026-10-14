@@ -28,6 +28,7 @@ mod delete;
 mod drain;
 mod events;
 mod events_agent;
+mod events_chain;
 mod exec;
 mod filter_selector;
 mod live_metrics;

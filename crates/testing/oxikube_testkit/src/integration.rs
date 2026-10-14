@@ -3,8 +3,8 @@
 //! The cluster comes from `cargo xtask kind-up`; tests learn its kubectl context from
 //! [`CONTEXT_ENV`] and skip cleanly when it is unset. Each test creates its own
 //! `oxi-test-<rand>` namespace via [`TestNamespace`], which is deleted on drop. When a test
-//! panics, the namespace's events are saved first (see [`DIAGNOSTICS_DIR_ENV`]), because
-//! deleting the namespace deletes its events.
+//! panics, the namespace's events and its pods' descriptions are saved first (see
+//! [`DIAGNOSTICS_DIR_ENV`]), because deleting the namespace deletes them.
 //!
 //! This shells out to `kubectl --context <ctx>` on purpose: the testkit stays free of
 //! `kube`, and every call is pinned to the named context.
@@ -13,14 +13,16 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+pub mod events;
 pub mod metrics;
 pub mod pods;
 
 /// Environment variable naming the kubectl context of the kind cluster under test.
 pub const CONTEXT_ENV: &str = "OXIKUBE_TEST_CONTEXT";
 
-/// Environment variable naming a directory where a failed test's namespace events are written
-/// (`<dir>/<namespace>.events.txt`) before the namespace is deleted. Unset, they go to stderr,
+/// Environment variable naming a directory where a failed test's namespace events and pod
+/// descriptions are written (`<dir>/<namespace>.events.txt`, `<dir>/<namespace>.pods.txt`)
+/// before the namespace is deleted. Unset, they go to stderr,
 /// which the test harness prints with the failure. CI points it into the uploaded diagnostics.
 pub const DIAGNOSTICS_DIR_ENV: &str = "OXIKUBE_TEST_DIAGNOSTICS_DIR";
 
@@ -135,60 +137,91 @@ impl TestNamespace {
     /// or exits non-zero, the text says so instead. Events carry reasons and messages written by
     /// controllers, not object payloads.
     pub fn events(&self) -> String {
+        self.kubectl_text(
+            "events",
+            &[
+                "get",
+                "events",
+                "-o",
+                "wide",
+                "--sort-by=.metadata.creationTimestamp",
+            ],
+        )
+    }
+
+    /// `kubectl describe pods` in the namespace (states, conditions, the pods' own events), for
+    /// a failed test. Never fails, like [`Self::events`]. The test pods carry no secrets: a
+    /// description names a Secret an env var or volume refers to, never its data.
+    pub fn pods(&self) -> String {
+        self.kubectl_text("pods", &["describe", "pods"])
+    }
+
+    fn kubectl_text(&self, what: &str, args: &[&str]) -> String {
         let out = Command::new("kubectl")
             .args(["--context", &self.context, "-n", &self.name])
-            .args(["get", "events", "-o", "wide"])
-            .arg("--sort-by=.metadata.creationTimestamp")
+            .args(args)
             .output();
         match out {
             Ok(out) if out.status.success() => {
                 let text = String::from_utf8_lossy(&out.stdout).trim().to_owned();
                 if text.is_empty() {
-                    format!("(no events in {})", self.name)
+                    format!("(no {what} in {})", self.name)
                 } else {
                     text
                 }
             }
             Ok(out) => format!(
-                "(kubectl get events failed: {})",
+                "(kubectl {} failed: {})",
+                args.join(" "),
                 String::from_utf8_lossy(&out.stderr).trim()
             ),
             Err(e) => format!("(kubectl could not be run: {e})"),
         }
     }
 
-    /// Writes [`Self::events`] to `<dir>/<namespace>.events.txt`, creating `dir`, and returns
-    /// the file's path.
-    fn write_events(&self, dir: &Path) -> std::io::Result<PathBuf> {
+    /// Writes [`Self::events`] to `<dir>/<namespace>.events.txt` and [`Self::pods`] to
+    /// `<dir>/<namespace>.pods.txt`, creating `dir`.
+    fn write_diagnostics(&self, dir: &Path) -> std::io::Result<()> {
         std::fs::create_dir_all(dir)?;
-        let path = dir.join(format!("{}.events.txt", self.name));
-        std::fs::write(&path, self.events() + "\n")?;
-        Ok(path)
+        std::fs::write(
+            dir.join(format!("{}.events.txt", self.name)),
+            self.events() + "\n",
+        )?;
+        std::fs::write(
+            dir.join(format!("{}.pods.txt", self.name)),
+            self.pods() + "\n",
+        )
     }
 
-    /// Saves the events of a failed test's namespace before it is deleted: to the diagnostics
-    /// directory when one is configured, else to stderr (best effort).
-    fn save_failure_events(&self) {
+    /// Saves the events and pod descriptions of a failed test's namespace before it is deleted:
+    /// to the diagnostics directory when one is configured, else to stderr (best effort).
+    fn save_failure_diagnostics(&self) {
         if let Some(dir) = &self.diagnostics_dir {
-            match self.write_events(dir) {
-                Ok(_) => return,
+            match self.write_diagnostics(dir) {
+                Ok(()) => return,
                 Err(e) => eprintln!(
-                    "could not write events of {} to {}: {e}",
+                    "could not write the diagnostics of {} to {}: {e}",
                     self.name,
                     dir.display()
                 ),
             }
         }
-        eprintln!("events in {} (test failed):\n{}", self.name, self.events());
+        eprintln!(
+            "events in {} (test failed):\n{}\npods in {}:\n{}",
+            self.name,
+            self.events(),
+            self.name,
+            self.pods()
+        );
     }
 }
 
 impl Drop for TestNamespace {
     fn drop(&mut self) {
-        // Deleting the namespace deletes its events, so a failed test's evidence is saved now;
+        // Deleting the namespace deletes its events and pods, so a failed test's evidence is saved now;
         // a diagnostics step after the run would find nothing.
         if std::thread::panicking() {
-            self.save_failure_events();
+            self.save_failure_diagnostics();
         }
         // Best effort: never panic in drop. `--wait=false` keeps test teardown fast; the
         // namespace controller finishes the job.
@@ -285,6 +318,13 @@ mod tests {
         )
         .expect("events saved before the namespace was deleted");
         assert!(saved.contains("OxiEvidence"), "{saved}");
+        let pods = std::fs::read_to_string(
+            dir.path()
+                .join("namespaces")
+                .join(format!("{name}.pods.txt")),
+        )
+        .expect("pod descriptions saved too");
+        assert!(!pods.starts_with("(kubectl"), "{pods}");
     }
 
     /// Creates a Warning event with reason `OxiEvidence` in `ns` (kubectl has no `create event`).
