@@ -17,7 +17,10 @@ use oxikube_testkit::{
 
 use super::{cluster, input, t0, warning};
 use crate::events::{EventService, EventsConfig};
-use crate::notifications::{MUTED_KEY, NotificationService, NotificationsChanged, forward_to_os};
+use crate::notifications::{
+    ClusterRules, MUTED_KEY, NotificationRules, NotificationService, NotificationsChanged,
+    forward_to_os,
+};
 use crate::os_notifications::OsNotificationService;
 use crate::session::ClusterSessionManager;
 use crate::store::Spawner;
@@ -297,4 +300,125 @@ async fn raised_notifications_reach_the_os_only_once_opted_in() {
     assert_eq!(shown.title, "title after");
     assert_eq!(shown.tag.as_deref(), Some("after"));
     assert!(shown.action_target.is_some(), "a click opens the object");
+}
+
+/// A feed with one Pod warning and one Job warning (`Job` is watched by default; `Service` is not).
+fn install_mixed_feed(h: &Harness) {
+    h.port().install(
+        FakeEventFeed::new()
+            .add(1, warning("pod", "web-0", "BackOff", 1, 1))
+            .add(2, {
+                let mut job = event()
+                    .uid("job")
+                    .warning()
+                    .reason("DeadlineExceeded")
+                    .message("too slow")
+                    .regarding("Job", Some("default"), "batch", "batch")
+                    .build();
+                job.last_seen = Some(super::at(2));
+                job
+            }),
+    );
+}
+
+#[tokio::test]
+async fn new_rules_apply_at_once_and_resubscribe_only_when_the_kinds_change() {
+    let h = Harness::new();
+    install_mixed_feed(&h);
+    h.connect().await;
+    h.until("watched", |h| h.port().live_feeds() == 1).await;
+    // Every subscription the events service ever handed out takes the next id.
+    let opened = |h: &Harness| h.events.inner.state.lock().next_id;
+    let before = opened(&h);
+
+    // A window or an ignored reason is no new subscription: the cluster keeps its pump (and so
+    // its tracker: nothing already seen is told again).
+    let mut rules = h.centre.rules();
+    rules.ignored_reasons = vec![Arc::from("Pulled")];
+    rules.max_raised = 9;
+    h.centre.set_rules(rules.clone());
+    assert!(h.centre.is_watching(&cluster()));
+    assert_eq!(h.centre.rules().max_raised, 9);
+    assert_eq!(opened(&h), before, "no new subscription for a window edit");
+
+    // Narrowing the kinds subscribes again with the new filter; only Jobs notify now.
+    rules.watched_kinds = vec![Arc::from("Job")];
+    h.centre.set_rules(rules);
+    assert_eq!(opened(&h), before + 1, "one new subscription for the kinds");
+    h.until("watched again", |h| {
+        h.centre.is_watching(&cluster()) && h.port().live_feeds() == 1
+    })
+    .await;
+    h.tick().await;
+    h.tick().await;
+    h.until("the Job is listed", |h| !h.centre.list().is_empty())
+        .await;
+    assert_eq!(h.titles(), ["Job default/batch: DeadlineExceeded"]);
+}
+
+#[tokio::test]
+async fn a_cluster_override_of_the_kinds_applies_to_that_cluster_alone() {
+    let h = Harness::new();
+    install_mixed_feed(&h);
+    h.centre.set_rules(NotificationRules {
+        clusters: [(
+            cluster(),
+            ClusterRules {
+                watched_kinds: Some(vec![Arc::from("Pod")]),
+                ..ClusterRules::default()
+            },
+        )]
+        .into(),
+        ..NotificationRules::default()
+    });
+    h.connect().await;
+    h.until("watched", |h| h.port().live_feeds() == 1).await;
+    h.tick().await;
+    h.tick().await;
+    h.until("the Pod is listed", |h| !h.centre.list().is_empty())
+        .await;
+    assert_eq!(
+        h.titles(),
+        ["Pod default/web-0: BackOff"],
+        "the Job is not watched here"
+    );
+}
+
+#[tokio::test]
+async fn a_cluster_switched_off_the_desktop_still_notifies_in_the_app() {
+    let h = Harness::new();
+    let notifier = Arc::new(FakeNotifierPort::new());
+    let os = OsNotificationService::new(notifier.clone());
+    os.apply(true).await;
+    tokio::spawn(forward_to_os(h.centre.clone(), os.clone()));
+    tokio::task::yield_now().await;
+    h.centre.set_rules(NotificationRules {
+        clusters: [(
+            cluster(),
+            ClusterRules {
+                os_notifications: Some(false),
+                ..ClusterRules::default()
+            },
+        )]
+        .into(),
+        ..NotificationRules::default()
+    });
+    assert!(!h.centre.os_allowed(&cluster()));
+
+    let quiet = h.centre.submit(input(&cluster(), "quiet")).expect("listed");
+    assert!(!quiet.read);
+    let loud = h.centre.submit(input(&super::other(), "loud"));
+    assert!(loud.is_some());
+    h.until("the other cluster reaches the desktop", |_| {
+        notifier.shown().len() == 1
+    })
+    .await;
+    tokio::time::sleep(Duration::from_millis(20)).await;
+    assert_eq!(
+        notifier.shown().len(),
+        1,
+        "the switched-off cluster did not"
+    );
+    assert_eq!(notifier.shown()[0].title, "title loud");
+    assert_eq!(h.centre.list().len(), 2, "both are listed in the app");
 }

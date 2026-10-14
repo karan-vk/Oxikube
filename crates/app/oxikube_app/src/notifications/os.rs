@@ -7,15 +7,19 @@ use futures::StreamExt as _;
 use super::service::NotificationService;
 use crate::os_notifications::{Delivery, OsNotificationService};
 
-/// Hands every raised notification of `centre` to `os` until the centre is dropped. Each
-/// notification goes out redacted, capped and tagged with its dedupe key (a later occurrence
-/// replaces it on the desktop); the "no notification service" hint goes to the log once.
+/// Hands every raised notification of `centre` to `os` until the centre is dropped, except those
+/// of a cluster whose `os_notifications` setting is off. Each notification goes out redacted,
+/// capped and tagged with its dedupe key (a later occurrence replaces it on the desktop); the "no
+/// notification service" hint goes to the log once.
 /// It only waits between notifications, so a host runs it on its foreground executor.
 pub async fn forward_to_os(centre: NotificationService, os: OsNotificationService) {
     let mut changes = centre.subscribe();
     drop(centre);
     while let Some(change) = changes.next().await {
         for raised in &change.raised {
+            if !changes.os_allowed(&raised.cluster) {
+                continue;
+            }
             match os.notify(&raised.to_os()).await {
                 Delivery::Unavailable { hint: Some(hint) } => tracing::warn!("{hint}"),
                 Delivery::Failed(why) => tracing::debug!(%why, "an OS notification failed"),

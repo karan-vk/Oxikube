@@ -5,6 +5,11 @@
 //! "events": {
 //!   "buffer": 10000,
 //!   "os_notifications": false,
+//!   "watched_kinds": ["Pod", "Deployment", "StatefulSet", "DaemonSet", "ReplicaSet", "Job",
+//!                     "CronJob", "Node", "PersistentVolumeClaim"],
+//!   "ignore_reasons": [],
+//!   "rate_limit": { "per_object": "5m", "per_reason": 3, "group_window": "1m",
+//!                   "max_raised": 5, "raise_window": "30s" },
 //!   "warning_window": "1h"
 //! }
 //! ```
@@ -16,25 +21,35 @@
 //! events, and the cluster's feed is opened again with the new bound. `warning_window` is how
 //! long a `Warning` event keeps its object's badge in the tables (`30m`, `1h`, `2d`; between one
 //! minute and seven days); a value that does not parse falls back to the default with a warning.
+//! The notification keys
+//! (`watched_kinds`, `ignore_reasons`, `rate_limit`, `os_notifications`; see the private `notify`
+//! module) become the notification centre's rules ([`follow_notification_rules`]), the first
+//! three of them also per cluster.
 
 mod follow;
+mod notify;
+#[cfg(test)]
+mod notify_tests;
 mod os;
 #[cfg(test)]
 mod tests;
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::App;
 use oxikube_app::events::{
     DEFAULT_EVENTS_BUFFER, EventsConfig, MAX_EVENTS_BUFFER, MIN_EVENTS_BUFFER,
 };
+use oxikube_app::notifications::DEFAULT_WATCHED_KINDS;
 use oxikube_app::warning_badges::{DEFAULT_WARNING_WINDOW, clamp_warning_window};
 use oxikube_domain::ids::ClusterId;
 use oxikube_settings::{Settings, SettingsStore};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-pub use follow::{follow_settings, follow_warning_window};
+pub use follow::{follow_notification_rules, follow_settings, follow_warning_window};
+pub use notify::{MAX_IGNORED_REASONS, MAX_WATCHED_KINDS, RateLimit, RateLimitContent};
 
 /// What one settings layer says about events: the `events` object of `settings.json`.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -49,7 +64,8 @@ pub struct EventsContent {
     /// Show Warning notifications on the desktop as well as in Oxikube (opt-in; default off).
     /// Turning this on asks the OS for permission where it has such a thing. Notifications
     /// carry the same redacted text as the in-app ones and never a secret. It is a per-user
-    /// choice about the desktop: a `clusters.<id>.events` block does not change it.
+    /// choice about the desktop: `false` under `clusters.<id>.events` keeps that cluster off the
+    /// desktop (it still notifies in the app), `true` there cannot turn the desktop on.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub os_notifications: Option<bool>,
     /// How long a `Warning` event keeps its object's badge in the tables, and the age of the
@@ -59,10 +75,30 @@ pub struct EventsContent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(regex(pattern = r"^\s*\d+\s*[mhd]\s*$"))]
     pub warning_window: Option<String>,
+    /// The kinds whose `Warning` events notify (`Pod`, `Deployment`; case does not matter):
+    /// a toast, an entry in the notification centre and, when `os_notifications` is on, a
+    /// desktop notification. Defaults to the workload kinds, their pods, nodes and volume claims;
+    /// `[]` notifies about nothing. At most 64 kinds. A change applies at once; set it under
+    /// `clusters.<id>.events` to watch other kinds in one cluster.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(length(max = 64), inner(length(min = 1)))]
+    pub watched_kinds: Option<Vec<String>>,
+    /// Reasons that never notify (`BackOff`, `Unhealthy`; matched exactly, case counts), whatever
+    /// the kind. At most 256. A change applies at once; set it under `clusters.<id>.events` to
+    /// ignore other reasons in one cluster.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(length(max = 256), inner(length(min = 1)))]
+    pub ignore_reasons: Option<Vec<String>>,
+    /// How a burst of Warning events is kept from becoming spam: a notification per object at
+    /// most every `per_object`, the objects of a reason folding into one group after
+    /// `per_reason`, and a cap on toasts per `raise_window`. One per app; a change applies at
+    /// once. See the keys of the object.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rate_limit: Option<RateLimitContent>,
 }
 
 /// The resolved `events` settings.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EventsSettings {
     /// Events each cluster keeps, already clamped.
     pub buffer: usize,
@@ -70,6 +106,12 @@ pub struct EventsSettings {
     pub os_notifications: bool,
     /// How long a warning keeps its badge, already parsed and clamped.
     pub warning_window: Duration,
+    /// The kinds whose `Warning` events notify, trimmed and de-duplicated (E14-S05).
+    pub watched_kinds: Vec<Arc<str>>,
+    /// The reasons that never notify.
+    pub ignore_reasons: Vec<Arc<str>>,
+    /// The notification rate limit, already parsed and clamped.
+    pub rate_limit: RateLimit,
 }
 
 impl Settings for EventsSettings {
@@ -81,6 +123,21 @@ impl Settings for EventsSettings {
             buffer: clamp(content.buffer),
             os_notifications: content.os_notifications.unwrap_or(false),
             warning_window: parse_window(content.warning_window.as_deref()),
+            watched_kinds: notify::names(
+                "events.watched_kinds",
+                content.watched_kinds.as_deref(),
+                &DEFAULT_WATCHED_KINDS,
+                true,
+                MAX_WATCHED_KINDS,
+            ),
+            ignore_reasons: notify::names(
+                "events.ignore_reasons",
+                content.ignore_reasons.as_deref(),
+                &[],
+                false,
+                MAX_IGNORED_REASONS,
+            ),
+            rate_limit: RateLimit::from_content(&content.rate_limit.unwrap_or_default()),
         }
     }
 }

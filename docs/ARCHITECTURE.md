@@ -184,7 +184,10 @@ crate's `README.md` for its allowed dependencies. Highlights:
   Module `notifications` (E14-S05): `NotificationService`, the in-app notification centre. One `EventsSubscription`
   per open, unmuted cluster (the cluster's one feed, never a watch of its own) through a `Tracker` (only news: new events
   and count rises, never the backlog of a list or a relist), `NotificationRules` (Warning events of the watched kinds,
-  reasons ignored; in-code defaults until E14-S09's settings), the per-cluster mute (ids only, `StatePort` key
+  reasons ignored, per cluster where a `ClusterRules` override says so; the `events` settings (E14-S09:
+  `watched_kinds`, `ignore_reasons`, `rate_limit`, `clusters.<id>.events`) replace the rules atomically through
+  `set_rules`, which subscribes again only the clusters whose kinds changed, and `os_notifications: false` of a cluster
+  keeps it off the desktop in `forward_to_os`), the per-cluster mute (ids only, `StatePort` key
   `notifications.muted`), burst grouping per cluster and reason ("12 pods: BackOff" after `group_threshold` objects in
   `group_window`), dedupe by an explicit key (count up within `dedupe_window`) and a raise limit (per row
   `object_interval`, overall `max_raised` per `raise_window`) into a bounded read / unread list (500 rows, in memory).

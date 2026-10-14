@@ -17,7 +17,7 @@ impl EventsSettings {
     pub fn current(cx: &App) -> Self {
         cx.try_global::<SettingsStore>()
             .and_then(|store| store.try_get::<Self>(None))
-            .copied()
+            .cloned()
             .unwrap_or_default()
     }
 
