@@ -92,6 +92,13 @@
 //!     app's `EventService`; its `events::*` commands (faults only, pause, copy, export) are on the
 //!     bus with their tool stubs.
 //!
+//! 18. the notification centre (E14-S05, `mount::notifications`, `crate::notification_centre`):
+//!     each open cluster's Warning events of the watched kinds become notifications (grouped,
+//!     rate limited, muted per cluster); the window shows them as capped toasts, a bell with the
+//!     unread count on the right of the status bar and the right-dock panel
+//!     (`notifications::TogglePanel`, `cmd-shift-i` / `ctrl-shift-i`, the palette, the bell);
+//!     raised ones reach the OS notifier once the user opted in.
+//!
 //! Nothing here reads a file or touches the network: the catalog's first read of the kubeconfig
 //! files runs on the Tokio bridge once this update has ended, which is after the first frame
 //! (ADR 0013, `startup::deferred`). What must live as long as the window is held by a
@@ -211,6 +218,8 @@ pub struct Wiring {
     _notification_clicks: Task<()>,
     /// Opens the events views and applies the `events::*` requests (E14-S03).
     _events_views: Entity<oxikube_events_ui::EventsViews>,
+    /// The notification centre: panel, status-bar bell and toasts (E14-S05).
+    _notification_centre: Rc<notifications::CentreMount>,
 }
 
 /// Mounts the cluster UI in the main window. See the [module docs](self).
@@ -349,6 +358,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (pulses_sink, pulses_rx) = oxikube_overview_ui::pulses::PulsesRequestSink::channel();
     let (overview_sink, overview_rx) = oxikube_overview_ui::OverviewRequestSink::channel();
     let (events_sink, events_rx) = oxikube_events_ui::EventsCommandSink::channel();
+    let (panel_sink, panel_rx) = oxikube_workspace::notifications::NotificationPanelSink::channel();
     let registry = bus::build_registry(bus::BusParts {
         events_agent,
         agent_pending: agent.pending.clone(),
@@ -384,6 +394,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
             crate::os_notifications::SettingsOsNotificationWriter::new(cx),
         ),
         events_views: events_sink,
+        notifications: services.notifications.clone(),
+        notification_panel: panel_sink,
     });
     let registry = match registry {
         Ok(registry) => registry,
@@ -479,6 +491,19 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         cx,
     );
 
+    // The notification centre (E14-S05): the app's service follows the sessions (once per app),
+    // and this window gets the panel, the status-bar bell and the toasts.
+    crate::notification_centre::start(&services.notifications, &services.os_notifications, cx);
+    let centre = Rc::new(notifications::mount_centre(
+        &workspace,
+        services.notifications.clone(),
+        services.sessions.clone(),
+        dispatcher_for_notifications.clone(),
+        panel_rx,
+        window,
+        cx,
+    ));
+    let centre_for_tabs = centre.clone();
     let status = cx.new(|cx| ClusterStatusItem::new(services.sessions.clone(), cx));
     workspace.update(cx, |ws, cx| {
         ws.register_status_item(StatusSide::Left, STATUS_PRIORITY, status.clone(), cx);
@@ -495,6 +520,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let follow_active = cx.subscribe(&tabs, move |_, event: &ClusterTabsEvent, cx| {
         if let ClusterTabsEvent::ActiveChanged(active) = event {
             let active = active.clone();
+            centre_for_tabs.set_active_cluster(active.clone(), cx);
             status.update(cx, |item, cx| item.set_cluster(active, cx));
         }
     });
@@ -657,6 +683,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _follow_overviews: follow_overviews,
         _notification_clicks: notification_clicks,
         _events_views: events_views,
+        _notification_centre: centre,
     });
     workspace.update(cx, |ws, _| ws.attach(wiring));
 }

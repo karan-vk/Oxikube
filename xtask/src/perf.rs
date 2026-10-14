@@ -63,6 +63,7 @@ pub const SCENARIOS: [&str; 8] = [
     "charts",
     "pulses",
     "events-stream",
+    "notifications-burst",
 ];
 
 /// The name `oxikube --perf-scenario` reports for `name`: `table-scroll-10k` (the story's name
@@ -82,7 +83,7 @@ const LAUNCH_METRIC: &str = "launch_to_first_frame_ms";
 #[derive(clap::Args, Debug, Clone)]
 pub struct Args {
     /// Scenario to run: startup, scroll-10k (alias table-scroll-10k), palette, logs-stream,
-    /// editor-5mb, charts, pulses, events-stream.
+    /// editor-5mb, charts, pulses, events-stream, notifications-burst.
     #[arg(required_unless_present_any = ["all", "from_report"], conflicts_with_all = ["all", "from_report"])]
     pub scenario: Option<String>,
     /// Run every scenario.

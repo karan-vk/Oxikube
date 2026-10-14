@@ -522,6 +522,28 @@
     }
   },
   {
+    // The notification centre (E14-S05): cmd-shift-i shows (and focuses) it in the right dock or
+    // hides it, from anywhere. In it: up and down select a notification, enter opens it (marks
+    // it read, selects its cluster, opens its object), r marks it read, shift-r marks all read,
+    // escape closes the panel.
+    "bindings": {
+      "cmd-shift-i": "notifications::TogglePanel"
+    }
+  },
+  {
+    "context": "NotificationPanel",
+    "bindings": {
+      "up": "notification_panel::SelectPrevious",
+      "k": "notification_panel::SelectPrevious",
+      "down": "notification_panel::SelectNext",
+      "j": "notification_panel::SelectNext",
+      "enter": "notification_panel::OpenSelected",
+      "r": "notification_panel::MarkSelectedRead",
+      "shift-r": "notifications::MarkAllRead",
+      "escape": "notification_panel::Close"
+    }
+  },
+  {
     // Terminals (E09-S07): ctrl-` shows (and focuses) the shown cluster's terminal panel in the
     // bottom dock or hides it; ctrl-~ opens a new shell there (a plain shell tab when no cluster
     // tab is shown).

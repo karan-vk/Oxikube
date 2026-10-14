@@ -93,6 +93,8 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::EventsCopyRow { cluster }
         | Command::EventsCopyRowJson { cluster }
         | Command::EventsExportJson { cluster }
+        | Command::NotificationsMuteCluster { cluster }
+        | Command::NotificationsUnmuteCluster { cluster }
         | Command::ClusterShowOverview { cluster }
         | Command::EventsSendToAgent { cluster, .. }
         | Command::ClusterRedetectMetrics { cluster }
@@ -208,6 +210,9 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::AppQuit
         | Command::AppSendTestNotification
         | Command::AppToggleOsNotifications { .. }
+        | Command::NotificationsTogglePanel
+        | Command::NotificationsMarkRead { .. }
+        | Command::NotificationsMarkAllRead
         | Command::JumpBack
         | Command::JumpForward
         | Command::JumpLast

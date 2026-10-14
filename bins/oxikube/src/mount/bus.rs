@@ -31,6 +31,8 @@
 //! | `oxikube_palette` | `help::Show` (the `?` overlay of the keys that apply where the focus is; read-only, E11-S10) |
 //! | `oxikube_app::metrics_provider` | `cluster::RedetectMetrics` (run provider detection again, or re-check the configured endpoint), `cluster::ToggleMetrics` (`prometheus.enabled` in `settings.json`); neither changes a cluster (E13-S05) |
 //! | `oxikube_app::os_notifications` | `app::ToggleOsNotifications` (the `events.os_notifications` opt-in in `settings.json`), `app::SendTestNotification` (one desktop notification, only once opted in); neither changes a cluster (E14-S06) |
+//! | `oxikube_app::notifications` | `notifications::MarkRead`, `notifications::MarkAllRead`, `notifications::MuteCluster`, `notifications::UnmuteCluster` (the notification centre's read state and the per-cluster mute, kept in the state db; no cluster is changed; E14-S05) |
+//! | `oxikube_workspace::notifications` | `notifications::TogglePanel` (the notification centre panel in the right dock; E14-S05) |
 //! | `oxikube_settings_ui` | `cluster::ShowMetricsSettings` (the cluster's metrics page, a tab of its tab; E13-S05) |
 //! | `oxikube_overview_ui` | `cluster::ShowPulses` (the cluster's pulses page, `:pulses`; E13-S10) |
 //! | `oxikube_overview_ui` | `cluster::ShowOverview` (the cluster's overview, a tab of its tab; reads only; E13-S09) |
@@ -159,6 +161,11 @@ pub struct BusParts {
     pub os_notification_settings: Arc<dyn oxikube_app::os_notifications::OsNotificationSettings>,
     /// Where the `events::*` commands send their requests (applied on the UI thread; E14-S03).
     pub events_views: oxikube_events_ui::EventsCommandSink,
+    /// The notification centre (`notifications::MarkRead`, `MarkAllRead`, `MuteCluster`,
+    /// `UnmuteCluster`; E14-S05).
+    pub notifications: oxikube_app::NotificationService,
+    /// Where `notifications::TogglePanel` sends its requests (applied on the UI thread; E14-S05).
+    pub notification_panel: oxikube_workspace::notifications::NotificationPanelSink,
 }
 
 /// Every handler of the app, each installed under its owner (see the [module docs](self)).
@@ -251,6 +258,12 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
             parts.os_notifications,
             parts.os_notification_settings,
         )
+    })?;
+    registry.install("oxikube_app::notifications", |r| {
+        oxikube_app::notifications::register_commands(r, parts.notifications)
+    })?;
+    registry.install("oxikube_workspace::notifications", |r| {
+        oxikube_workspace::notifications::register_commands(r, parts.notification_panel)
     })?;
     registry.install("oxikube_settings_ui", |r| {
         oxikube_settings_ui::metrics::register_commands(r, parts.metrics_pages)

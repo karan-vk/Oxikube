@@ -165,6 +165,17 @@ pub const STANDS_FOR: &[(&str, CommandId)] = &[
     ("events_view::ExportJson", CommandId::EVENTS_EXPORT_JSON),
     // The pulses page (E13-S10): `enter` opens the selected tile's table.
     ("pulses::Open", CommandId::RESOURCE_OPEN_LIST),
+    // The notification centre (E14-S05): `enter` marks the selected notification read and opens
+    // its object, `r` marks it read.
+    (
+        "notification_panel::OpenSelected",
+        CommandId::NOTIFICATIONS_MARK_READ,
+    ),
+    ("notification_panel::OpenSelected", CommandId::RESOURCE_OPEN),
+    (
+        "notification_panel::MarkSelectedRead",
+        CommandId::NOTIFICATIONS_MARK_READ,
+    ),
     // The catalog home (E06-S03).
     ("catalog::ConnectSelected", CommandId::CLUSTER_CONNECT),
     ("catalog::DisconnectSelected", CommandId::CLUSTER_DISCONNECT),

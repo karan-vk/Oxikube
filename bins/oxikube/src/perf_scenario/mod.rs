@@ -26,6 +26,9 @@
 //!   taking a new sample on every frame (E13-S10).
 //! - `events-stream` ([`events_stream`]): the events view over a full 10 000-event buffer while
 //!   events stream in: live tail, scrolling, typing a filter, the faults toggle, bursts (E14-S03).
+//! - `notifications-burst` ([`notifications`]): 1 000 Warning events in one second reaching the
+//!   notification centre with its panel open: grouping, the rate limit, the coalesced redraw, the
+//!   toast cap (E14-S05).
 //!
 //! The view-driving scenarios mount their view as the app's window does ([`window_root`]), so it
 //! is drawn with the app's text style; a sample fails if its text falls back to another family
@@ -37,6 +40,7 @@ mod charts;
 mod editor_5mb;
 mod events_stream;
 mod logs_stream;
+mod notifications;
 mod palette;
 mod pulses;
 mod scroll_10k;
@@ -73,10 +77,12 @@ pub fn run(name: &str, report: Option<&Path>, probe: bool, launched: Instant) ->
         charts::NAME => charts::run(probe),
         pulses::NAME => pulses::run(probe),
         events_stream::NAME => events_stream::run(probe),
+        notifications::NAME => notifications::run(probe),
         other => {
             eprintln!(
                 "oxikube: unknown perf scenario `{other}` (startup, scroll-10k or \
-                 table-scroll-10k, palette, logs-stream, editor-5mb, charts, pulses, events-stream)"
+                 table-scroll-10k, palette, logs-stream, editor-5mb, charts, pulses, \
+                 events-stream, notifications-burst)"
             );
             return ExitCode::from(2);
         }

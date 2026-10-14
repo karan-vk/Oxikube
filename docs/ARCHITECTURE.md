@@ -181,6 +181,16 @@ crate's `README.md` for its allowed dependencies. Highlights:
   it for a view's tick), `BadgeChanges` is the coalesced "something changed" stream a table redraws on, and
   `ObjectEventsFeed` is one object's events newest first (a Node is also followed under its name, the kubelet's uid).
   `WarningBadges` implements `RecentWarnings` over the window for the overviews.
+  Module `notifications` (E14-S05): `NotificationService`, the in-app notification centre. One `EventsSubscription`
+  per open, unmuted cluster (the cluster's one feed, never a watch of its own) through a `Tracker` (only news: new events
+  and count rises, never the backlog of a list or a relist), `NotificationRules` (Warning events of the watched kinds,
+  reasons ignored; in-code defaults until E14-S09's settings), the per-cluster mute (ids only, `StatePort` key
+  `notifications.muted`), burst grouping per cluster and reason ("12 pods: BackOff" after `group_threshold` objects in
+  `group_window`), dedupe by an explicit key (count up within `dedupe_window`) and a raise limit (per row
+  `object_interval`, overall `max_raised` per `raise_window`) into a bounded read / unread list (500 rows, in memory).
+  Other sources (E14-S07) hand in a `NotificationInput` through `submit`. Subscribers get `NotificationsChanged` coalesced
+  per poll; `forward_to_os` hands the raised ones to `OsNotificationService` (shown only once opted in). Commands
+  `notifications::MarkRead` / `MarkAllRead` / `MuteCluster` / `UnmuteCluster` (none touches a cluster).
   Module `columns` (E07-S02): `ColumnProvider`, the one question a table asks of a kind (`columns(kind,
   caps)` and `cell(object, column, now)`), with two implementations (ADR 0006). `CoreColumns` is a
   table-driven catalogue of ~40 core kinds (computed `Ready` / `Status` / `Restarts` from the domain
@@ -1392,7 +1402,12 @@ crate's `README.md` for its allowed dependencies. Highlights:
   the dock's layout and rebuilt into it on restore; any other item tab dropped on a dock goes back
   to its pane; `item`, `panel`, `pane` (`PaneGroup`/`Pane` snapshots), `dock`,
   `closed`, `actions` (`workspace::*` actions and bindings), `test_support` (feature
-  `test-support`: `TestItem`, `TestPanel`, `TestStatusItem`, `TestModal`). Module `cluster_tab`
+  `test-support`: `TestItem`, `TestPanel`, `TestStatusItem`, `TestModal`). Module `notifications`
+  (E14-S05): the notification centre of a window over the app's `NotificationService`: `NotificationCentre` (rows
+  derived once per change, redraws coalesced), `NotificationPanel` in the right dock (virtualised list, unread marks,
+  "Mark all read", the shown cluster's mute toggle; key context `NotificationPanel`), `NotificationStatusItem` (the
+  bell and unread count on the right of the status bar), `follow_toasts` (at most `MAX_TOASTS` per `TOAST_WINDOW`
+  plus one summary) and `notifications::TogglePanel` (`cmd-shift-i` / `ctrl-shift-i`). Module `cluster_tab`
   (E06-S04): `ClusterTab` is an `Item` that hosts a `Workspace` of its own, embedded in the window's
   (own docks for the sidebar, own pane group, own layout saved under `cluster:<id>`; the status
   bar, modal and toast layers are the window's); `ClusterTabs` keeps one tab per session that is

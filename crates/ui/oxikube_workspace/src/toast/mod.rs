@@ -17,7 +17,8 @@
 //! - **Layout**: the layer is absolutely positioned over the workspace, so a toast appearing or
 //!   disappearing never lays out the rest of the window.
 //!
-//! Persisting notifications into a panel is later work (the notifications panel).
+//! Stored notifications live in the notification centre (`crate::notifications`, E14-S05), which
+//! shows its raised ones here.
 
 mod model;
 mod view;

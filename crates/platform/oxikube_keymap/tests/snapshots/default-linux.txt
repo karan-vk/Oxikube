@@ -247,6 +247,17 @@
 [EventsView && Editing]
   escape           events_view::FocusTable
 [(everywhere)]
+  ctrl-shift-i     notifications::TogglePanel
+[NotificationPanel]
+  down             notification_panel::SelectNext
+  enter            notification_panel::OpenSelected
+  escape           notification_panel::Close
+  j                notification_panel::SelectNext
+  k                notification_panel::SelectPrevious
+  r                notification_panel::MarkSelectedRead
+  shift-r          notifications::MarkAllRead
+  up               notification_panel::SelectPrevious
+[(everywhere)]
   ctrl-`           terminal_panel::TogglePanel
   ctrl-~           terminal::New
 [Terminal]

@@ -110,6 +110,11 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "app::Quit" => Command::AppQuit,
         "app::SendTestNotification" => Command::AppSendTestNotification,
         "app::ToggleOsNotifications" => Command::AppToggleOsNotifications { enabled: None },
+        "notifications::MarkAllRead" => Command::NotificationsMarkAllRead,
+        "notifications::MarkRead" => Command::NotificationsMarkRead { id: 1 },
+        "notifications::MuteCluster" => Command::NotificationsMuteCluster { cluster },
+        "notifications::TogglePanel" => Command::NotificationsTogglePanel,
+        "notifications::UnmuteCluster" => Command::NotificationsUnmuteCluster { cluster },
         "cluster::ApplyPreset" => Command::ClusterApplyPreset {
             cluster,
             preset: ClusterPreset::Staging,
