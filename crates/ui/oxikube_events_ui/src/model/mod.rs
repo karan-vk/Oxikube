@@ -8,7 +8,7 @@
 //! `EventsChanged` (one per frame at most): each added, updated or removed event finds its place
 //! with a binary search, so a delta costs `O(log n)` comparisons plus a move of the row vector's
 //! tail (pointers: rows are boxed), never a re-sort (docs/PERFORMANCE.md rule 4). A burst of more
-//! than [`REBUILD_MIN`] changes is applied in one pass instead: the changed rows are dropped, the
+//! than `REBUILD_MIN` changes is applied in one pass instead: the changed rows are dropped, the
 //! new ones appended and the vector sorted once, which the sort does in linear time (two sorted
 //! runs to merge).
 //!
@@ -25,12 +25,12 @@ use std::sync::Arc;
 use oxikube_app::events::{EventKey, EventsChanged};
 use oxikube_domain::event::Event;
 
-pub use row::{EventColumn, EventRow, MESSAGE_CHARS, object_label, one_line, type_label};
+pub use row::{EventColumn, EventRow, object_label, one_line, type_label};
 pub use sort::EventSort;
 
 /// A burst of more changes than this is applied in one pass (drop, append, one sort of two
 /// sorted runs), which is cheaper than that many binary-searched inserts.
-pub const REBUILD_MIN: usize = 64;
+const REBUILD_MIN: usize = 64;
 
 /// Rows in order with their index by key, built off the UI thread.
 #[derive(Debug, Default)]

@@ -11,7 +11,7 @@ use oxikube_domain::event::{Event, EventType};
 
 /// Longest message a row shows, in chars: rows are one line (the table is a `uniform_list`), and
 /// the whole message is in the copy and the export.
-pub const MESSAGE_CHARS: usize = 300;
+const MESSAGE_CHARS: usize = 300;
 
 /// The columns of the events view, in order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

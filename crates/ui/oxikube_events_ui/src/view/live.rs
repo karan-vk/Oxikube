@@ -13,7 +13,7 @@ use super::EventsView;
 use crate::model::{RowSet, Tail};
 
 /// How often the Age and Last seen cells move on.
-pub const CLOCK_TICK: Duration = Duration::from_secs(1);
+const CLOCK_TICK: Duration = Duration::from_secs(1);
 
 impl EventsView {
     /// Polls the subscription for as long as the view lives. The service coalesces everything
