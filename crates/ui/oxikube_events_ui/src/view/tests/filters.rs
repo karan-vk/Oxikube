@@ -193,3 +193,36 @@ fn open_with_a_namespace_and_text_applies_them(cx: &mut TestAppContext) {
     });
     assert_eq!(open, 1);
 }
+
+#[gpui::test]
+fn open_all_clears_the_namespace_a_bare_open_keeps(cx: &mut TestAppContext) {
+    let mut fx = Fx::new(cx);
+    fx.run(Command::EventsOpen {
+        cluster: cluster(),
+        namespace: Some("default".into()),
+        filter: None,
+    });
+    assert_eq!(fx.uids(), ["w1", "n1"]);
+    // A bare `:ev` (or the sidebar) keeps the view's filters.
+    fx.open();
+    assert_eq!(fx.uids(), ["w1", "n1"]);
+    // `:ev all` plans an empty namespace: every namespace again.
+    fx.run(Command::EventsOpen {
+        cluster: cluster(),
+        namespace: Some(String::new()),
+        filter: None,
+    });
+    assert_eq!(fx.uids(), ["w2", "n2", "w1", "n1"]);
+    let view = fx.view().unwrap();
+    let filters = fx.vcx.update(|_, cx| view.read(cx).filters().clone());
+    assert_eq!(filters.namespace, "");
+    let field = fx.vcx.update(|_, cx| {
+        view.read(cx)
+            .fields
+            .get(Field::Namespace)
+            .read(cx)
+            .value()
+            .to_string()
+    });
+    assert_eq!(field, "");
+}

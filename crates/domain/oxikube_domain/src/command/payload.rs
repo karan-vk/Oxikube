@@ -175,7 +175,8 @@ pub enum Command {
     EventsOpen {
         /// The cluster whose events open.
         cluster: ClusterId,
-        /// Show only the events stored in this namespace (`:ev kube-system`).
+        /// Show only the events stored in this namespace (`:ev kube-system`); an empty name shows
+        /// every namespace (`:ev all`). `None` (with no `filter`) keeps the view's filters.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         namespace: Option<String>,
         /// The text filter to apply: a case-insensitive substring, or a regular expression when it

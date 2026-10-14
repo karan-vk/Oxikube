@@ -189,8 +189,9 @@ fn is_event_kind(gvk: &Gvk) -> bool {
 }
 
 /// `:ev [ns] [/text] [@ctx]`: `events::Open` with the namespace and the text as the view's
-/// filters. The namespace is the view's own filter, not the cluster's selection; `all` (or no
-/// namespace) is every namespace. A label selector means nothing for events and is refused.
+/// filters. The namespace is the view's own filter, not the cluster's selection. `all` is every
+/// namespace and plans an empty namespace, so it clears the one the view had; with no namespace
+/// the view keeps its filters. A label selector means nothing for events and is refused.
 fn events_plan(
     jump: &ResourceJump,
     target: Option<&JumpContext>,
@@ -204,8 +205,14 @@ fn events_plan(
             "Events have no labels to select by: filter them with `/text`",
         ));
     }
+    // `all` resolves to no names: an empty namespace, which the view reads as every namespace.
     let namespace = match &jump.namespace {
-        Some(ns) => namespace_names(ns, &cluster, env)?.into_iter().next(),
+        Some(ns) => Some(
+            namespace_names(ns, &cluster, env)?
+                .into_iter()
+                .next()
+                .unwrap_or_default(),
+        ),
         None => None,
     };
     let open = Command::EventsOpen {

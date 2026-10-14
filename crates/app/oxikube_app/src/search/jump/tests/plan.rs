@@ -351,7 +351,12 @@ fn ev_takes_its_namespace_and_text_as_the_views_filters() {
         planned("ev kube-system /BackOff").commands,
         [events(Some("kube-system"), Some("BackOff"))]
     );
-    assert_eq!(planned("ev all").commands, [events(None, None)]);
+    // `all` is every namespace: an empty one, which clears the view's namespace filter.
+    assert_eq!(planned("ev all").commands, [events(Some(""), None)]);
+    assert_eq!(
+        planned("ev all /BackOff").commands,
+        [events(Some(""), Some("BackOff"))]
+    );
     assert_eq!(failed("ev nowhere").kind, ParseErrorKind::UnknownNamespace);
     assert_eq!(failed("ev app=web").kind, ParseErrorKind::Unexpected);
 }

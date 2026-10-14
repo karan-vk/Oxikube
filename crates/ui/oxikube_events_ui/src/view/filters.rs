@@ -180,7 +180,8 @@ impl EventsView {
     }
 
     /// `events::Open` with filters (`:ev kube-system /BackOff`): the namespace and the text
-    /// replace what the toolbar had; the rest stays.
+    /// replace what the toolbar had; the rest stays. An empty namespace (`:ev all`) clears the
+    /// namespace filter; with neither given (a bare `:ev`, the sidebar) the filters stay.
     pub fn apply_open(
         &mut self,
         namespace: Option<String>,
