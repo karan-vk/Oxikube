@@ -1689,8 +1689,8 @@ keystroke or the faults toggle within a frame.
   swapped in, so the input updates in the frame it is typed. Rows are one line (`uniform_list`); the Age and Last seen cells
   are formatted once per second per visible row; the redraw is `notify_coalesced`. While the tail is paused (by the user, or by
   scrolling away from the top) nothing moves: arrivals are only counted.
-- **Headless** (`oxikube --perf-scenario events-stream`, release, Apple silicon, 1 run): live `frame_ms` p50 2.2, p95 2.5;
-  scroll p95 3.8; typing a filter p95 3.5; faults toggle p95 3.8; bursts of 500 events p95 2.3; at most 1 notify per frame;
-  rss 93 MiB.
+- **Headless** (`cargo xtask perf events-stream`, release-fast, Apple silicon, median of 5 runs): live `frame_ms` p50 2.2,
+  p95 2.5; scroll p95 4.1; typing a filter p95 3.8; faults toggle p95 4.3; bursts of 500 events p95 2.3; 240 frames, 0
+  dropped, 120 notifies (at most 1 per frame); rss 91 MiB.
 - Not measured here: the kind cluster at 200 events/s (the scenario streams 240/s through the service's real buffer, dedupe
   and coalescing, on fakes).
