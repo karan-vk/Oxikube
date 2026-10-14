@@ -6,6 +6,7 @@ use std::sync::{Arc, Weak};
 use std::task::{Context, Poll, Waker};
 
 use futures::Stream;
+use oxikube_domain::ids::ClusterId;
 use parking_lot::Mutex;
 
 use super::model::Notification;
@@ -95,6 +96,16 @@ impl std::fmt::Debug for NotificationsSubscription {
         f.debug_struct("NotificationsSubscription")
             .field("id", &self.id)
             .finish_non_exhaustive()
+    }
+}
+
+impl NotificationsSubscription {
+    /// Whether `cluster`'s notifications may reach the desktop under the rules in effect now
+    /// (`events.os_notifications` of the cluster; `true` once the service is gone).
+    pub fn os_allowed(&self, cluster: &ClusterId) -> bool {
+        self.inner
+            .upgrade()
+            .is_none_or(|inner| inner.state.lock().rules.os_allowed(cluster))
     }
 }
 

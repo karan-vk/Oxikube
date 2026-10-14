@@ -5,6 +5,7 @@ use futures::StreamExt as _;
 use futures::channel::mpsc::{UnboundedSender, unbounded};
 use gpui::{App, AppContext as _, Subscription};
 use oxikube_app::WarningBadges;
+use oxikube_app::NotificationService;
 use oxikube_app::events::{EventService, EventsConfig};
 use oxikube_settings::Settings as _;
 
@@ -48,4 +49,19 @@ pub fn follow_warning_window(badges: &WarningBadges, cx: &mut App) -> Subscripti
 fn send(tx: &UnboundedSender<EventsConfig>, base: &EventsConfig, cx: &App) {
     // The task is gone only when the app is shutting down.
     let _ = tx.unbounded_send(EventsSettings::config_in(cx, base.clone()));
+}
+
+/// Sets the notification centre's rules from the settings now and again on every change of them:
+/// the kinds and reasons (global and per cluster), the rate limit and which clusters may reach
+/// the desktop. Keep the returned subscription for as long as the service should follow.
+///
+/// The rules are a few short lists and numbers, so the swap happens in the settings observer; the
+/// service replaces them atomically and subscribes again only the clusters whose kinds changed.
+pub fn follow_notification_rules(service: &NotificationService, cx: &mut App) -> Subscription {
+    let base = service.rules();
+    service.set_rules(EventsSettings::rules_in(cx, base.clone()));
+    let service = service.clone();
+    EventsSettings::observe(cx, move |cx| {
+        service.set_rules(EventsSettings::rules_in(cx, base.clone()));
+    })
 }

@@ -5,7 +5,7 @@
 
 use std::time::Duration;
 
-use gpui::TestAppContext;
+use gpui::{BorrowAppContext as _, TestAppContext};
 use oxikube_domain::command::{Command, CommandId};
 use oxikube_ports::{StateKey, StatePort as _};
 use oxikube_testkit::{FakeEventFeed, TICK, TestPorts, event};
@@ -158,4 +158,77 @@ fn the_toggle_command_opens_the_centre_and_a_mute_is_saved(cx: &mut TestAppConte
     .unwrap()
     .expect("saved");
     assert_eq!(stored, serde_json::json!({ "clusters": [cluster] }));
+}
+
+fn warning(uid: &str, reason: &str, kind: &str, name: &str) -> oxikube_domain::event::Event {
+    event()
+        .uid(uid)
+        .warning()
+        .reason(reason)
+        .message(&format!("{reason} {name}"))
+        .regarding(kind, Some("default"), name, name)
+        .last_seen("2026-01-01T00:05:00Z")
+        .build()
+}
+
+#[gpui::test]
+fn the_events_settings_decide_what_notifies_and_a_hot_reload_applies_at_once(
+    cx: &mut TestAppContext,
+) {
+    let ports = TestPorts::seeded();
+    let cluster = TestPorts::cluster_id();
+    let events = ports.connector.ports_for(&cluster).events;
+    events.install(
+        FakeEventFeed::new()
+            .add(1, warning("a", "FailedScheduling", "Pod", "web-1"))
+            .add(2, warning("b", "BackOff", "Pod", "web-2"))
+            .add(3, warning("c", "DeadlineExceeded", "Job", "batch"))
+            .add(4, warning("d", "Unhealthy", "Pod", "web-3")),
+    );
+    let mut app = App::start_with(cx, ports, |cx| {
+        cx.update_global::<oxikube_settings::SettingsStore, _>(|store, _| {
+            store
+                .set_user_settings(r#"{ "events": { "ignore_reasons": ["FailedScheduling"] } }"#)
+                .unwrap()
+        });
+    });
+    let state = app.vcx.update(|_, cx| AppState::global(cx));
+    let centre = state.services().notifications.clone();
+    assert_eq!(
+        centre.rules().ignored_reasons.len(),
+        1,
+        "settings.json is read at start"
+    );
+
+    app.press("enter");
+    settle(&mut app);
+    assert!(centre.is_watching(&cluster));
+    events.clock().advance(TICK);
+    settle(&mut app);
+    assert!(centre.list().is_empty(), "an ignored reason never notifies");
+
+    // Edit settings.json: only Jobs now, and the old ignore-list is gone.
+    super::notifications::edit_settings(
+        &mut app,
+        r#"{ "events": { "watched_kinds": ["Job"], "rate_limit": { "max_raised": 7 } } }"#,
+    );
+    let rules = centre.rules();
+    assert_eq!(rules.watched_kinds.len(), 1);
+    assert!(rules.ignored_reasons.is_empty());
+    assert_eq!(rules.max_raised, 7);
+    assert!(
+        centre.is_watching(&cluster),
+        "still one watch after the new kinds"
+    );
+    for _ in 0..3 {
+        events.clock().advance(TICK);
+        settle(&mut app);
+    }
+    let titles: Vec<_> = centre.list().iter().map(|n| n.title.clone()).collect();
+    assert_eq!(
+        titles,
+        ["Job default/batch: DeadlineExceeded"],
+        "Pods are no longer watched"
+    );
+    assert_eq!(events.live_feeds(), 1, "still the cluster's one feed");
 }

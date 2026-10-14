@@ -10,6 +10,8 @@
 //!   one is forgotten;
 //! * each watched cluster's pump runs on the background executor, so an app with no open
 //!   cluster has no task on the Tokio runtime for notifications;
+//! * the rules (`events.watched_kinds`, `ignore_reasons`, `rate_limit`, global and per cluster)
+//!   follow the settings, hot reloaded ([`oxikube_events_ui::follow_notification_rules`]);
 //! * the raised notifications go to the [`OsNotificationService`], which shows them on the
 //!   desktop only once the user opted in (`events.os_notifications`).
 //!
@@ -17,7 +19,7 @@
 
 use std::sync::Arc;
 
-use gpui::{App, AppContext as _, Global, Task};
+use gpui::{App, AppContext as _, Global, Subscription, Task};
 use oxikube_app::store::Spawner;
 use oxikube_app::{NotificationService, OsNotificationService};
 
@@ -26,6 +28,9 @@ struct CentreFollow {
     _load: Task<()>,
     _sessions: Task<()>,
     _os: Task<()>,
+    /// `events.watched_kinds`, `ignore_reasons`, `rate_limit` and the per-cluster desktop switch
+    /// into the service's rules, hot reloaded.
+    _rules: Subscription,
 }
 
 impl Global for CentreFollow {}
@@ -43,9 +48,11 @@ pub fn start(service: &NotificationService, os: &OsNotificationService, cx: &mut
     let sessions = cx.spawn(async move |_| follow.await);
     let forward = oxikube_app::notifications::forward_to_os(service.clone(), os.clone());
     let os = cx.spawn(async move |_| forward.await);
+    let rules = oxikube_events_ui::follow_notification_rules(service, cx);
     cx.set_global(CentreFollow {
         _load: load,
         _sessions: sessions,
         _os: os,
+        _rules: rules,
     });
 }

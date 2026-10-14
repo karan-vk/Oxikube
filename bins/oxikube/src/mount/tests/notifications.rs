@@ -44,7 +44,7 @@ pub(super) fn dispatch(app: &mut App, command: Command) -> oxikube_app::command_
     }
 }
 
-fn edit_settings(app: &mut App, text: &str) {
+pub(super) fn edit_settings(app: &mut App, text: &str) {
     let text = text.to_owned();
     app.vcx.update(|_, cx| {
         cx.update_global::<SettingsStore, _>(|store, _| store.set_user_settings(&text).unwrap());

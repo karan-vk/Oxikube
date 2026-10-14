@@ -7,7 +7,7 @@
 //!
 //! | Module | Story | Holds |
 //! |---|---|---|
-//! | [`settings`] | E14-S02 | the `events` settings ([`EventsSettings`]: `events.buffer`, global and per cluster, and `events.warning_window`) and [`follow_settings`] and [`follow_warning_window`], which push them into the app's `EventService` and `WarningBadges` now and on every change |
+//! | [`settings`] | E14-S02, S04, S06, S09 | the `events` settings ([`EventsSettings`]: `buffer`, `os_notifications`, `warning_window`, `watched_kinds`, `ignore_reasons`, `rate_limit`; global and per cluster where it makes sense), [`follow_settings`] (the `EventService` bounds), [`follow_warning_window`] (the `WarningBadges` window) and [`follow_notification_rules`] (the `NotificationService` rules), now and on every change |
 //! | [`view`] | E14-S03 | [`EventsView`]: a cluster's events, live, filterable, in a virtualised table (`:ev`, the sidebar's Events heading, the palette's "Show Events") |
 //! | [`model`] | E14-S03 | [`EventsModel`]: the rows kept in order as the changes arrive, the selection, the paused tail |
 //! | [`filter`] | E14-S03 | [`EventsFilters`]: what the toolbar asks for, compiled into the service's `EventFilter` |
@@ -32,5 +32,8 @@ pub use commands::{
 };
 pub use filter::{EventsFilters, TypeChoice};
 pub use model::{EventColumn, EventSort, EventsModel, RowSet, Tail};
-pub use settings::{EventsContent, EventsSettings, follow_settings, follow_warning_window};
+pub use settings::{
+    EventsContent, EventsSettings, RateLimit, RateLimitContent, follow_notification_rules,
+    follow_settings, follow_warning_window,
+};
 pub use view::{EventsView, EventsViewDeps, Field, ITEM_KEY};

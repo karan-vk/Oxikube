@@ -283,18 +283,29 @@ impl NotificationService {
         self.inner.state.lock().rules.clone()
     }
 
-    /// Replaces the rules (the settings changed). The clusters' subscriptions are opened again
-    /// with the new kinds; nothing already listed changes.
+    /// Whether `cluster`'s raised notifications may reach the desktop (its `os_notifications`
+    /// override; the user's opt-in is the OS service's).
+    pub fn os_allowed(&self, cluster: &ClusterId) -> bool {
+        self.inner.state.lock().rules.os_allowed(cluster)
+    }
+
+    /// Replaces the rules (the settings changed), atomically: a notification is judged by the old
+    /// rules or the new, never a mix. A cluster whose watched kinds changed is subscribed again
+    /// with the new kinds (an edit of a window or an ignored reason touches no subscription);
+    /// nothing already listed changes.
     pub fn set_rules(&self, rules: NotificationRules) {
         {
             let mut state = self.inner.state.lock();
             if state.rules == rules {
                 return;
             }
-            state.rules = rules;
-            for watch in state.watches.values_mut() {
-                watch.pump = None;
+            let state = &mut *state;
+            for (cluster, watch) in &mut state.watches {
+                if state.rules.event_filter(cluster) != rules.event_filter(cluster) {
+                    watch.pump = None;
+                }
             }
+            state.rules = rules;
         }
         driver::reconcile_all(&self.inner);
     }

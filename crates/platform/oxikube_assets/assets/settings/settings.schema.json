@@ -522,18 +522,53 @@
             "null"
           ]
         },
+        "ignore_reasons": {
+          "description": "Reasons that never notify (`BackOff`, `Unhealthy`; matched exactly, case counts), whatever\nthe kind. At most 256. A change applies at once; set it under `clusters.<id>.events` to\nignore other reasons in one cluster.",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 256,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "os_notifications": {
-          "description": "Show Warning notifications on the desktop as well as in Oxikube (opt-in; default off).\nTurning this on asks the OS for permission where it has such a thing. Notifications\ncarry the same redacted text as the in-app ones and never a secret. It is a per-user\nchoice about the desktop: a `clusters.<id>.events` block does not change it.",
+          "description": "Show Warning notifications on the desktop as well as in Oxikube (opt-in; default off).\nTurning this on asks the OS for permission where it has such a thing. Notifications\ncarry the same redacted text as the in-app ones and never a secret. It is a per-user\nchoice about the desktop: `false` under `clusters.<id>.events` keeps that cluster off the\ndesktop (it still notifies in the app), `true` there cannot turn the desktop on.",
           "type": [
             "boolean",
             "null"
           ]
+        },
+        "rate_limit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RateLimitContent"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "How a burst of Warning events is kept from becoming spam: a notification per object at\nmost every `per_object`, the objects of a reason folding into one group after\n`per_reason`, and a cap on toasts per `raise_window`. One per app; a change applies at\nonce. See the keys of the object."
         },
         "warning_window": {
           "description": "How long a `Warning` event keeps its object's badge in the tables, and the age of the\nwarnings the overviews list: a number and a unit, `m`inutes, `h`ours or `d`ays (`30m`,\n`1h`, `2d`); between 1 minute and 7 days, else the nearest. A change applies at once, to\nevery cluster (a value under `clusters.<id>.events` is not read).",
           "pattern": "^\\s*\\d+\\s*[mhd]\\s*$",
           "type": [
             "string",
+            "null"
+          ]
+        },
+        "watched_kinds": {
+          "description": "The kinds whose `Warning` events notify (`Pod`, `Deployment`; case does not matter):\na toast, an entry in the notification centre and, when `os_notifications` is on, a\ndesktop notification. Defaults to the workload kinds, their pods, nodes and volume claims;\n`[]` notifies about nothing. At most 64 kinds. A change applies at once; set it under\n`clusters.<id>.events` to watch other kinds in one cluster.",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 64,
+          "type": [
+            "array",
             "null"
           ]
         }
@@ -977,6 +1012,57 @@
           "type": "string"
         }
       ]
+    },
+    "RateLimitContent": {
+      "additionalProperties": false,
+      "description": "The `events.rate_limit` object: what keeps a burst of Warning events from becoming spam.",
+      "properties": {
+        "group_window": {
+          "description": "The window `per_reason` counts in (`1m`; 1 second to 1 hour). Default `1m`.",
+          "pattern": "^\\s*\\d+\\s*[smhd]\\s*$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "max_raised": {
+          "description": "At most this many notifications toast (and reach the desktop) per `raise_window`, whatever\ntheir reasons; the others are only listed in the centre. 1 to 100. Default 5.",
+          "format": "int64",
+          "maximum": 100,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "per_object": {
+          "description": "A notification for the same object toasts (and reaches the desktop) at most once per this\nlong; occurrences in between only count up its row in the centre. A number and a unit:\n`s`econds, `m`inutes, `h`ours or `d`ays (`5m`); 1 second to 1 day. Default `5m`.",
+          "pattern": "^\\s*\\d+\\s*[smhd]\\s*$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "per_reason": {
+          "description": "Objects of one reason in one cluster that get a notification of their own within\n`group_window`; the next ones fold into one group row (\"12 pods: BackOff\"). 1 to 100.\nDefault 3.",
+          "format": "int64",
+          "maximum": 100,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "raise_window": {
+          "description": "The window `max_raised` counts in (`30s`; 1 second to 1 hour). Default `30s`.",
+          "pattern": "^\\s*\\d+\\s*[smhd]\\s*$",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
     },
     "ReduceMotionSetting": {
       "description": "How the `reduce_motion` setting is decided.",

@@ -70,6 +70,6 @@ pub use commands::{COMMANDS, register_commands};
 pub use model::{GroupKey, MAX_BODY_CHARS, Notification, NotificationId, NotificationInput};
 pub use mute::MUTED_KEY;
 pub use os::forward_to_os;
-pub use rules::{DEFAULT_WATCHED_KINDS, NotificationRules};
+pub use rules::{ClusterRules, DEFAULT_WATCHED_KINDS, NotificationRules};
 pub use service::NotificationService;
 pub use subscription::{MAX_RAISED_PER_ITEM, NotificationsChanged, NotificationsSubscription};

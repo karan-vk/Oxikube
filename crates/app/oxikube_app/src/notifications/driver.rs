@@ -80,7 +80,7 @@ pub(crate) fn reconcile(inner: &Arc<Inner>, cluster: &ClusterId) {
         return;
     };
     let now = inner.clock.now();
-    let filter = state.rules.event_filter();
+    let filter = state.rules.event_filter(cluster);
     let watch = state
         .watches
         .entry(cluster.clone())
@@ -134,7 +134,7 @@ fn on_events(inner: &Inner, cluster: &ClusterId, changes: EventsChanged, held: &
             }
         }
         for (event, occurrences) in news {
-            if !state.rules.admits(&event) {
+            if !state.rules.admits(cluster, &event) {
                 continue;
             }
             let input = state.rules.input_for(cluster, &event, occurrences);

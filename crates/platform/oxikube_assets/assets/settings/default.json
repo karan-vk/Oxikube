@@ -127,12 +127,16 @@
     "max_streams": 20,
     "reconnect_retries": 5
   },
-  // Kubernetes events (E14). Can also be set under "clusters.<id>.events". A number out of
-  // range is clamped (a warning goes to the log), never refused.
+  // Kubernetes events and the notifications raised from them (E14). Can also be set under
+  // "clusters.<id>.events" (buffer, watched_kinds, ignore_reasons, os_notifications). A number or
+  // duration out of range is clamped and a duration that does not parse falls back to its
+  // default (a warning goes to the log), never refused; a value of the wrong type is reported as
+  // a settings diagnostic and the block keeps its last good (or default) values.
   //   buffer   events each cluster keeps in memory, newest by last seen (100 to 50,000); older
   //            ones are dropped. 10,000 events hold about 17 MB. One events watch per cluster
-  //            feeds the events view, a resource's Events tab, the warning badges and the
-  //            overview's warnings. Applies at once (a smaller value drops the oldest events).
+  //            feeds the events view, a resource's Events tab, the warning badges, the
+  //            notifications and the overview's warnings. Applies at once (a smaller value drops
+  //            the oldest events).
   //   warning_window  how long a Warning event keeps its object's warning icon in the tables
   //            and stays in the overviews' recent warnings: a number and m, h or d (30m, 1h, 2d;
   //            1 minute to 7 days). Applies at once, to every cluster (a per-cluster value is not
@@ -143,10 +147,46 @@
   //                 notification service. Clicking a notification brings Oxikube to the front and
   //                 opens the object. Also available as the "Toggle OS Notifications" command;
   //                 "Send Test OS Notification" checks that they reach you. A development build
-  //                 run outside an .app bundle may not be allowed to notify by the OS.
+  //                 run outside an .app bundle may not be allowed to notify by the OS. Under
+  //                 "clusters.<id>.events", false keeps that cluster off the desktop (it still
+  //                 toasts in the app); true cannot switch the desktop on for one cluster.
+  //   watched_kinds  the kinds whose Warning events notify: a toast, a row in the notification
+  //            centre and, with os_notifications on, a desktop notification. Case does not
+  //            matter, at most 64; [] notifies about nothing. Applies at once.
+  //   ignore_reasons  reasons that never notify, whatever the kind (matched exactly: "BackOff",
+  //            "Unhealthy"). At most 256. Applies at once.
+  //   rate_limit  keeps a burst from becoming spam (one per app, applies at once):
+  //     per_object    one object's notification toasts at most this often; more occurrences
+  //                   only count up its row (s, m, h or d: 5m; 1 second to 1 day)
+  //     per_reason    objects of one reason in one cluster that get a notification of their own
+  //                   within group_window before the rest fold into one "12 pods: BackOff" row
+  //                   (1 to 100)
+  //     group_window  the window per_reason counts in (1 second to 1 hour)
+  //     max_raised    notifications that may toast per raise_window, whatever their reasons;
+  //                   the others are only listed in the centre (1 to 100)
+  //     raise_window  the window max_raised counts in (1 second to 1 hour)
   "events": {
     "buffer": 10000,
     "os_notifications": false,
+    "watched_kinds": [
+      "Pod",
+      "Deployment",
+      "StatefulSet",
+      "DaemonSet",
+      "ReplicaSet",
+      "Job",
+      "CronJob",
+      "Node",
+      "PersistentVolumeClaim"
+    ],
+    "ignore_reasons": [],
+    "rate_limit": {
+      "per_object": "5m",
+      "per_reason": 3,
+      "group_window": "1m",
+      "max_raised": 5,
+      "raise_window": "30s"
+    },
     "warning_window": "1h"
   },
   // The Describe tab of a resource's detail (`kubectl describe`-style text). `backend`:
