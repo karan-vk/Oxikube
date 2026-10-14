@@ -82,7 +82,8 @@ fn next_order(seq: &mut u64, event: &Event) -> Order {
 }
 
 struct Entry {
-    event: Event,
+    /// Shared with the deltas that delivered it: the consumer holds the same allocation.
+    event: Arc<Event>,
     /// The API whose view `event` is.
     origin: EventApi,
     /// The namespace watch that delivered it (`None` for a cluster-wide watch).
@@ -135,7 +136,7 @@ impl EventRing {
     }
 
     /// The held events, oldest last-seen first.
-    pub(super) fn snapshot(&self) -> Vec<Event> {
+    pub(super) fn snapshot(&self) -> Vec<Arc<Event>> {
         self.order
             .values()
             .filter_map(|key| self.entries.get(key))
@@ -151,19 +152,19 @@ impl EventRing {
         api: EventApi,
         namespace: &Option<Arc<str>>,
         event: Event,
-        out: &mut Vec<Delta<Event>>,
+        out: &mut Vec<Delta<Arc<Event>>>,
     ) {
         if let Some(entry) = self.entries.get_mut(&key) {
             entry.holders |= api.bit();
             let newer = (event.last_seen, event.count) > (entry.event.last_seen, entry.event.count);
-            if (entry.origin == api || newer) && event != entry.event {
+            if (entry.origin == api || newer) && event != *entry.event {
                 let order = next_order(&mut self.next_seq, &event);
                 self.order.remove(&entry.order);
                 self.order.insert(order, key);
                 entry.order = order;
                 entry.origin = api;
-                entry.event = event.clone();
-                out.push(Delta::Applied(event));
+                entry.event = Arc::new(event);
+                out.push(Delta::Applied(entry.event.clone()));
             }
             return;
         }
@@ -172,6 +173,7 @@ impl EventRing {
         }
         self.shed.remove(&key);
         let order = next_order(&mut self.next_seq, &event);
+        let event = Arc::new(event);
         self.order.insert(order, key.clone());
         self.entries.insert(
             key,
@@ -189,18 +191,18 @@ impl EventRing {
     /// Evicts the oldest entry for `incoming` (the event `key`). `false` when `incoming` is
     /// the one to drop: older than every entry, or, if it was shed before, not newer than the
     /// oldest (a late second view of it must not push out a live entry).
-    fn make_room(&mut self, key: &Key, incoming: &Event, out: &mut Vec<Delta<Event>>) -> bool {
+    fn make_room(&mut self, key: &Key, incoming: &Event, out: &mut Vec<Delta<Arc<Event>>>) -> bool {
         let Some((&(oldest, _), _)) = self.order.first_key_value() else {
             return true;
         };
         let seen = incoming.last_seen.unwrap_or(Timestamp::MIN);
         if seen < oldest || (seen == oldest && self.shed.contains(key)) {
-            self.shed.insert(key.clone());
+            self.shed.insert(key);
             return false;
         }
         if let Some((_, oldest_key)) = self.order.pop_first() {
             if let Some(entry) = self.entries.remove(&oldest_key) {
-                self.shed.insert(oldest_key);
+                self.shed.insert(&oldest_key);
                 out.push(Delta::Deleted(entry.event));
             }
         }
@@ -209,7 +211,7 @@ impl EventRing {
 
     /// Removes the event `key`, if held; a shed event is no longer hidden once the server
     /// deletes it.
-    pub(super) fn remove(&mut self, key: &Key, out: &mut Vec<Delta<Event>>) {
+    pub(super) fn remove(&mut self, key: &Key, out: &mut Vec<Delta<Arc<Event>>>) {
         self.shed.remove(key);
         if let Some(entry) = self.entries.remove(key) {
             self.order.remove(&entry.order);
@@ -224,7 +226,7 @@ impl EventRing {
         api: EventApi,
         namespace: &Option<Arc<str>>,
         seen: &HashSet<Key>,
-        out: &mut Vec<Delta<Event>>,
+        out: &mut Vec<Delta<Arc<Event>>>,
     ) {
         let mut gone = Vec::new();
         for (key, entry) in &mut self.entries {

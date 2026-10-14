@@ -75,11 +75,14 @@ impl EventBuffer {
     }
 
     /// A buffer of `capacity` holding the newest of `events` (a relist).
-    pub fn from_events(capacity: usize, events: impl IntoIterator<Item = Event>) -> Self {
+    pub fn from_events<E: Into<Arc<Event>>>(
+        capacity: usize,
+        events: impl IntoIterator<Item = E>,
+    ) -> Self {
         let mut buffer = Self::new(capacity);
         let mut sink = Vec::new();
         for event in events {
-            buffer.upsert_into(event, &mut sink);
+            buffer.upsert_into(event.into(), &mut sink);
             sink.clear();
         }
         buffer
@@ -105,9 +108,10 @@ impl EventBuffer {
         self.evicted
     }
 
-    /// Stores `event`, or moves the stored event with its key to this state.
-    pub fn upsert(&mut self, event: Event) -> Upserted {
-        self.upsert_into(event, &mut Vec::new())
+    /// Stores `event`, or moves the stored event with its key to this state. An `Arc` is
+    /// kept as it is, so the feed's copy and the buffer's are one allocation.
+    pub fn upsert(&mut self, event: impl Into<Arc<Event>>) -> Upserted {
+        self.upsert_into(event.into(), &mut Vec::new())
     }
 
     /// Removes the event with `key`.
@@ -119,7 +123,7 @@ impl EventBuffer {
     }
 
     /// Applies one feed delta. A `Restarted` replaces every event.
-    pub fn apply(&mut self, delta: Delta<Event>) {
+    pub fn apply(&mut self, delta: Delta<Arc<Event>>) {
         self.apply_into(delta, &mut Vec::new());
     }
 
@@ -145,7 +149,7 @@ impl EventBuffer {
 
     /// Applies `delta`, recording what changed in `out`. Returns `true` when it was a
     /// `Restarted` (the caller tells subscribers to read everything again).
-    pub(crate) fn apply_into(&mut self, delta: Delta<Event>, out: &mut Vec<Change>) -> bool {
+    pub(crate) fn apply_into(&mut self, delta: Delta<Arc<Event>>, out: &mut Vec<Change>) -> bool {
         match delta {
             Delta::Applied(event) => {
                 self.upsert_into(event, out);
@@ -169,12 +173,12 @@ impl EventBuffer {
         }
     }
 
-    pub(crate) fn upsert_into(&mut self, event: Event, out: &mut Vec<Change>) -> Upserted {
+    pub(crate) fn upsert_into(&mut self, event: Arc<Event>, out: &mut Vec<Change>) -> Upserted {
         let key = EventKey::of(&event);
         let previous = match self.by_key.get(&key) {
             Some(order) => {
                 let slot = &self.ring[order];
-                if *slot.event == event {
+                if Arc::ptr_eq(&slot.event, &event) || *slot.event == *event {
                     return Upserted::Unchanged;
                 }
                 let previous = slot.event.clone();
@@ -196,7 +200,6 @@ impl EventBuffer {
             }
             self.evict_oldest(out);
         }
-        let event = Arc::new(event);
         self.index.insert(order, &event);
         self.by_key.insert(key.clone(), order);
         self.ring.insert(

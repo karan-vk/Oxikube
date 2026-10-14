@@ -22,7 +22,7 @@ impl Inner {
         &self,
         cluster: &ClusterId,
         generation: u64,
-        batch: DeltaBatch<Event>,
+        batch: DeltaBatch<Arc<Event>>,
     ) {
         let mut deltas = batch.deltas;
         // Everything before the last relist is replaced by it.

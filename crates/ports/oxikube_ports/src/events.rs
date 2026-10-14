@@ -159,8 +159,9 @@ pub trait EventsMonitor: Send + Sync {
 
 /// A live events feed and its monitor. See the [module docs](self).
 pub struct EventsFeed {
-    /// Coalesced deltas of normalised events.
-    pub feed: WatchFeed<Event>,
+    /// Coalesced deltas of normalised events. Shared (`Arc`), so the adapter's de-duplicating
+    /// ring and the consumer's buffer hold one copy of each event between them.
+    pub feed: WatchFeed<Arc<Event>>,
     /// The feed's status, polled by the consumer.
     pub monitor: Arc<dyn EventsMonitor>,
 }
@@ -185,6 +186,8 @@ impl std::fmt::Debug for EventsFeed {
 /// [`Unsupported`](oxikube_domain::ErrorKind::Unsupported) when the cluster serves none of the
 /// requested APIs. Failures after the feed opened arrive on the feed: retryable ones as `Err`
 /// items while it backs off, a final one (for example every scope forbidden) as the last item.
+/// After a retryable `Err`, the next batch (an empty one when the recovery changed nothing)
+/// means the feed reads again, so a consumer can clear its "reconnecting" state on any batch.
 #[async_trait]
 pub trait EventsPort: Send + Sync {
     /// Opens a feed of the events in `scope`.

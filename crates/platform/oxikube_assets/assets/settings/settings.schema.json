@@ -513,7 +513,7 @@
       "description": "What one settings layer says about events: the `events` object of `settings.json`.",
       "properties": {
         "buffer": {
-          "description": "Events each cluster keeps in memory (100 to 50,000; out of range is clamped), newest by\nlast seen; older ones are dropped. A full buffer of 10,000 holds about 11 MB. A change\napplies at once; set it under `clusters.<id>.events` to give one cluster its own bound.",
+          "description": "Events each cluster keeps in memory (100 to 50,000; out of range is clamped), newest by\nlast seen; older ones are dropped. A full buffer of 10,000 holds about 17 MB per cluster\n(the events and the watch's index of them). A change applies at once; set it under\n`clusters.<id>.events` to give one cluster its own bound.",
           "format": "int64",
           "maximum": 50000,
           "minimum": 100,

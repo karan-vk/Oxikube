@@ -4,8 +4,8 @@
 //! [`KubeEvents::watch`] opens an [`EventFeed`] over a [`WatchScope`]. It watches **one** of
 //! the two event APIs by default ([`EventApiChoice::Auto`]), maps every object with the
 //! domain's JSON mapping, de-duplicates and keeps the newest [`EventsConfig::capacity`]
-//! events, reporting changes as `DeltaBatch<Event>`s like any other feed (the port layer's
-//! `WatchFeed<Event>`). [`KubeEvents`] is the adapter of
+//! events, reporting changes as `DeltaBatch<Arc<Event>>`s like any other feed (the port layer's
+//! `WatchFeed<Arc<Event>>`; the ring and the consumer share each event). [`KubeEvents`] is the adapter of
 //! [`EventsPort`], served to the app as `ClusterPorts::events`.
 //! kube types stay in this module.
 //!
@@ -20,7 +20,7 @@
 //! | capacity, which APIs, per-object option | [`EventsConfig`], [`EventApis`], [`EventsOptions`] (`config`) |
 //! | stages (API order, namespace fallbacks), starting a stage's watches | `plan` |
 //! | one watcher per API and namespace, no reflector store | `source` |
-//! | merge, window/size batching, backpressure, failures, moving to the next stage | `pump` |
+//! | merge, window/size batching, backpressure, failures, moving to the next stage | `pump` (`run`: one run's batch, window and reported failure) |
 //! | de-duplication, eviction, evicted count | `ring` |
 //! | bounded memory of shed keys | `shed` |
 //! | the handle: stream, state, counters, forbidden scopes, abort on drop | [`EventFeed`] (`handle`) |
@@ -84,8 +84,10 @@
 //! honest. The watches keep no reflector store, the initial list is read page by page (or as a
 //! stream), and a full output channel stops the pump reading: a cluster emitting thousands
 //! of events a minute holds the same memory as a quiet one (the evicted count's memory of shed
-//! events is bounded too, see `shed`). The consumer's copy is one `Event` per delta. Deltas
-//! reach the consumer in coalesced batches (`FeedConfig::window` / `max_batch`), never one
+//! events is bounded too, see `shed`: 64-bit hashes, not keys). Every delta and the opening
+//! snapshot carry the ring's own `Arc<Event>`, so a consumer that keeps them (the app's
+//! `EventService`) and the ring hold one copy of each event between them. Deltas reach the
+//! consumer in coalesced batches (`FeedConfig::window` / `max_batch`), never one
 //! message per event.
 //!
 //! # No subscriber, no feed
@@ -106,6 +108,7 @@ mod handle;
 mod plan;
 mod pump;
 mod ring;
+mod run;
 mod shed;
 mod source;
 #[cfg(test)]

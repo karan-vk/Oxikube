@@ -79,13 +79,14 @@ pub struct EventFeedStats {
 /// (oldest last-seen first); later batches carry `Applied` and `Deleted` deltas. A `Deleted`
 /// is the server deleting the event or the feed evicting its oldest to stay within
 /// capacity. Retryable failures arrive as `Err` items while the feed backs off and
-/// continues; a non-retryable one is the last item.
+/// continues, and a batch (empty when nothing changed) follows once every watch is live
+/// again; a non-retryable one is the last item.
 ///
 /// Dropping the handle aborts the feed task and every watch with it (abort-on-drop, as for
 /// `oxikube_runtime::spawn_kube`).
 pub struct EventFeed {
     pub(super) capacity: usize,
-    pub(super) batches: mpsc::Receiver<OxiResult<DeltaBatch<Event>>>,
+    pub(super) batches: mpsc::Receiver<OxiResult<DeltaBatch<Arc<Event>>>>,
     pub(super) state: watch::Receiver<FeedState>,
     pub(super) counters: Arc<Counters>,
     pub(super) task: JoinHandle<()>,
@@ -130,7 +131,7 @@ impl EventFeed {
     }
 
     /// The feed as the port layer's [`WatchFeed`].
-    pub fn into_watch_feed(self) -> WatchFeed<Event> {
+    pub fn into_watch_feed(self) -> WatchFeed<Arc<Event>> {
         Box::pin(self)
     }
 
@@ -148,7 +149,7 @@ impl EventFeed {
 }
 
 impl Stream for EventFeed {
-    type Item = OxiResult<DeltaBatch<Event>>;
+    type Item = OxiResult<DeltaBatch<Arc<Event>>>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         self.batches.poll_recv(cx)

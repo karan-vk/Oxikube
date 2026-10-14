@@ -9,8 +9,10 @@ use oxikube_domain::ids::ClusterId;
 pub const DEFAULT_EVENTS_BUFFER: usize = 10_000;
 /// The smallest `events.buffer`.
 pub const MIN_EVENTS_BUFFER: usize = 100;
-/// The largest `events.buffer`. An event costs about 1.1 KB held (its text, the ring and the
-/// indexes; `benches/event_buffer`), so this is about 55 MB.
+/// The largest `events.buffer`. An event costs about 1.1 KB in the buffer (its text, the ring
+/// and the indexes; `benches/event_buffer`) plus about 0.5 KB in the adapter's de-duplicating
+/// ring, which shares the event (`Arc`) and remembers shed events as hashes: about 80 MB per
+/// cluster at this bound, about 17 MB at the default.
 pub const MAX_EVENTS_BUFFER: usize = 50_000;
 
 /// `capacity` within [`MIN_EVENTS_BUFFER`]..=[`MAX_EVENTS_BUFFER`].

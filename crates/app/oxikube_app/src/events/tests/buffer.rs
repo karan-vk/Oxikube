@@ -88,16 +88,20 @@ fn shrinking_evicts_the_oldest_and_growing_keeps_everything() {
 #[test]
 fn deletes_and_relists_keep_the_indexes_clean() {
     let mut buffer = EventBuffer::new(10);
-    buffer.apply(Delta::Applied(warning("w", "ns", "pod", 1, "BackOff")));
-    buffer.apply(Delta::Applied(ev("n", "ns", "pod", 2)));
+    buffer.apply(Delta::Applied(
+        warning("w", "ns", "pod", 1, "BackOff").into(),
+    ));
+    buffer.apply(Delta::Applied(ev("n", "ns", "pod", 2).into()));
     assert_eq!(buffer.object_counts("pod"), (2, 1));
-    buffer.apply(Delta::Deleted(warning("w", "ns", "pod", 1, "BackOff")));
+    buffer.apply(Delta::Deleted(
+        warning("w", "ns", "pod", 1, "BackOff").into(),
+    ));
     assert_eq!(buffer.object_counts("pod"), (1, 0));
     buffer.assert_consistent();
 
     buffer.apply(Delta::Restarted(vec![
-        ev("x", "other", "pod-2", 5),
-        ev("x", "other", "pod-2", 6),
+        ev("x", "other", "pod-2", 5).into(),
+        ev("x", "other", "pod-2", 6).into(),
     ]));
     buffer.assert_consistent();
     assert_eq!(buffer.len(), 1, "a relist replaces everything and dedupes");
@@ -133,4 +137,20 @@ fn from_events_keeps_the_newest_capacity() {
     let held: Vec<Arc<_>> = buffer.ring_events();
     assert_eq!(held.len(), 3);
     buffer.assert_consistent();
+}
+
+#[test]
+fn the_buffer_keeps_the_feeds_allocation_instead_of_a_copy() {
+    // The adapter's ring holds the same `Arc` it put in the delta: storing a copy here would
+    // hold every event twice per cluster (the E14 audit's 35 MB for a 10k buffer).
+    let mut buffer = EventBuffer::new(10);
+    let applied = std::sync::Arc::new(ev("a", "ns", "pod", 1));
+    buffer.apply(Delta::Applied(applied.clone()));
+    let listed = std::sync::Arc::new(ev("b", "ns", "pod", 2));
+    let relisted = EventBuffer::from_events(10, [listed.clone()]);
+    let all = EventFilter::new();
+    let held = buffer.query(&all).next().unwrap();
+    assert!(std::sync::Arc::ptr_eq(held, &applied), "applied: shared");
+    let held = relisted.query(&all).next().unwrap();
+    assert!(std::sync::Arc::ptr_eq(held, &listed), "relisted: shared");
 }
