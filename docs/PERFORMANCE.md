@@ -210,6 +210,7 @@ Two rules keep a scenario measuring what the app does (E07-F509, see
 | `editor-5mb` | measured (E10-S11, see [Manifest editor](#manifest-editor-a-5-mb-dump-e10-s11)) | the manifest editor over a 5 MB `kubectl get -o yaml` dump (a `kind: List` of about 12 000 pods, an error planted in every 20th) checked against the Pod schema: `open_ms` (building the view with the text to the end of its first frame), `frame_ms` / `draw_ms` (120 frames typing one keystroke each into a visible line, the clock moving one 120 Hz frame between them so the 150 ms debounce keeps restarting), `validation_ms` (the whole pass the pause starts, run on the test scheduler: its CPU time), `scroll_frame_ms` / `scroll_draw_ms` (120 frames scrolling from the top to the end with the diagnostics drawn), `slow_frame_pct` (typing and scrolling frames over 16 ms), `rss_mib` / `peak_rss_mib`; fails unless every planted error is found and the gutter paints no more markers than lines on screen |
 | `charts` | measured (E13-S07, see [Charts](#charts-12-sparklines-and-3-area-charts-e13-s07)) | the overview's worst case, 12 sparklines and 3 area charts of 5 760 points (24 h at 15 s) in the app's window root: `frame_ms` / `draw_ms` (120 frames with nothing changed: the paint from cached geometry), `tick_frame_ms` / `tick_draw_ms` (120 frames each handing all 15 new data, so every piece re-decimates, re-projects and re-tessellates once per frame), `hover_frame_ms` / `hover_draw_ms` (a chart's tooltip following a sweeping cursor), `rss_mib` / `peak_rss_mib`; fails when a repaint rebuilt any geometry or a tick built more than once per piece |
 | `pulses` | measured (E13-S10, see [Pulses](#pulses-16-tiles-e13-s10)) | the pulses page, 16 tiles with 14 sparklines of 60 samples, in the app's window root: `frame_ms` / `draw_ms` (120 frames with nothing changed) and `tick_frame_ms` / `tick_draw_ms` (every tile takes a new sample on every frame: the worst case, the page samples every 5 s), `rss_mib` |
+| `events-stream` | measured (E14-S03, see [Events view](#events-view-10-000-events-streaming-e14-s03)) | the events view over a full 10 000-event buffer (the app's `EventService` on `FakeEventsPort`) in the app's window root: `frame_ms` / `draw_ms` (120 frames, 2 events arriving each, the live tail putting them on top), `scroll_*` (a page scrolled a frame while they arrive; the tail pauses itself), `filter_*` (a key typed into the text filter every frame: a new subscription filter whose rows are read off the UI thread), `faults_*` (the faults toggle every frame), `burst_*` (500 events in one frame, 20 frames), `rss_mib`; fails when a frame absorbed more than one coalesced notify, the tail put nothing on top, or the bursts did not reach the rows |
 
 A scenario whose view is not built yet writes `status: "unavailable"` and a specific `reason` into the JSON report, prints `UNAVAILABLE: <reason>` with the enabling stories, and exits 0; every scenario is scripted today (`editor-5mb` was the last, E10-S11). The scripted path and the sample schema are covered by a `#[gpui::test]` that drives a fake feed through the same driver (`oxikube_runtime::perf::harness`).
 
@@ -1673,3 +1674,24 @@ The pulses page stays open with live updates: p95 frame at most 8 ms, idle CPU u
   (all 16 tiles sampled on every frame) p50 1.1, p95 1.8; rss 49 MiB; 0 dropped frames.
 - Not measured here: the 10 000-pod churn fixture on a kind cluster (it needs the shared cluster's 10 000 pods; the page reads
   tallies, so churn costs it nothing beyond what the pods table's feed already costs).
+
+## Events view: 10 000 events streaming (E14-S03)
+
+The events view stays open on a busy cluster: p95 frame at most 8 ms while events stream into a full buffer, a filter
+keystroke or the faults toggle within a frame.
+
+- **Costs.** The view never watches the cluster: it subscribes to the app's `EventService`, whose one feed per cluster the
+  cluster tab keeps running. The service coalesces everything between two polls into one change (so at most one per frame);
+  each added, updated or removed event finds its row with a binary search over boxed rows (`O(log n)` comparisons and a move of
+  pointers), and a burst of more than 64 changes is applied in one pass (drop, append, one sort of two sorted runs, linear).
+  Nothing re-sorts per event. A new filter (a keystroke, `ctrl-z`) is compiled once (the regex too) and handed to the
+  subscription; the matching events are read and turned into rows (their cell text included) on the background executor and
+  swapped in, so the input updates in the frame it is typed. Rows are one line (`uniform_list`); the Age and Last seen cells
+  are formatted once per second per visible row; the redraw is `notify_coalesced`. While the tail is paused (by the user, or by
+  scrolling away from the top) nothing moves: arrivals are only counted.
+- **Headless** (`cargo xtask perf events-stream`, release-fast, Apple silicon, median of 5 runs): live `frame_ms` p50 2.1,
+  p95 2.4; scroll p95 3.6; typing a filter p95 3.5; faults toggle p95 3.7; bursts of 500 events (each frame one more than 64
+  changes, the one-pass path; the scenario fails unless the last burst's newest event is the top row) p95 3.5; 240 frames, 0
+  dropped, 120 notifies (at most 1 per frame); rss 91 MiB.
+- Not measured here: the kind cluster at 200 events/s (the scenario streams 240/s through the service's real buffer, dedupe
+  and coalescing, on fakes).

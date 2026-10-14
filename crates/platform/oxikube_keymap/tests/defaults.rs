@@ -203,6 +203,13 @@ const VIEW_LOCAL: &[&str] = &[
     "pulses::SelectLast",
     "pulses::Refresh",
     "pulses::Close",
+    // The events view (E14-S03): its cursor, and the focus between its filter and its rows.
+    "events_view::SelectNext",
+    "events_view::SelectPrevious",
+    "events_view::SelectFirst",
+    "events_view::SelectLast",
+    "events_view::FocusFilter",
+    "events_view::FocusTable",
     // The bottom dock's terminal panel and the OS application menu.
     "terminal_panel::TogglePanel",
     "oxikube::Hide",

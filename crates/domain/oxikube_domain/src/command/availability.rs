@@ -39,11 +39,13 @@ pub enum ViewContext {
     Editor,
     /// The command palette and its pickers.
     Palette,
+    /// The cluster's events view (E14-S03).
+    Events,
 }
 
 impl ViewContext {
     /// Every view context.
-    pub const ALL: [ViewContext; 8] = [
+    pub const ALL: [ViewContext; 9] = [
         ViewContext::Workspace,
         ViewContext::Catalog,
         ViewContext::Table,
@@ -52,6 +54,7 @@ impl ViewContext {
         ViewContext::Terminal,
         ViewContext::Editor,
         ViewContext::Palette,
+        ViewContext::Events,
     ];
 
     /// The keymap key context name of this view (`LogView`, `ResourceTable`, ...).
@@ -65,6 +68,7 @@ impl ViewContext {
             ViewContext::Terminal => "Terminal",
             ViewContext::Editor => "ManifestEditor",
             ViewContext::Palette => "Palette",
+            ViewContext::Events => "EventsView",
         }
     }
 }

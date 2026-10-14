@@ -167,6 +167,58 @@ pub enum Command {
         /// The cluster whose pulses open.
         cluster: ClusterId,
     },
+    /// Open the cluster's events view (E14-S03, `:ev`): every event the app's one events feed of
+    /// the cluster holds, live, filterable by type, reason, kind, namespace and text, newest
+    /// first. Reads only what the `EventService` holds; opening it again shows the open view
+    /// (with the given filters applied).
+    #[serde(rename = "events::Open")]
+    EventsOpen {
+        /// The cluster whose events open.
+        cluster: ClusterId,
+        /// Show only the events stored in this namespace (`:ev kube-system`); an empty name shows
+        /// every namespace (`:ev all`). `None` (with no `filter`) keeps the view's filters.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        namespace: Option<String>,
+        /// The text filter to apply: a case-insensitive substring, or a regular expression when it
+        /// has regex syntax (`:ev /BackOff`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        filter: Option<String>,
+    },
+    /// Show only the `Warning` events in the cluster's events view, or every event again (k9s'
+    /// `ctrl-z`). Changes what the view shows, nothing else.
+    #[serde(rename = "events::ToggleFaults")]
+    EventsToggleFaults {
+        /// The cluster whose events view to change.
+        cluster: ClusterId,
+    },
+    /// Pause the cluster's events view's live tail (new events are counted, not shown), or resume
+    /// it (they are shown, in order).
+    #[serde(rename = "events::TogglePause")]
+    EventsTogglePause {
+        /// The cluster whose events view to change.
+        cluster: ClusterId,
+    },
+    /// Copy the selected row of the cluster's events view to the clipboard as one line of text
+    /// (the message redacted).
+    #[serde(rename = "events::CopyRow")]
+    EventsCopyRow {
+        /// The cluster whose events view to copy from.
+        cluster: ClusterId,
+    },
+    /// Copy the selected event of the cluster's events view to the clipboard as JSON (the message
+    /// redacted).
+    #[serde(rename = "events::CopyRowJson")]
+    EventsCopyRowJson {
+        /// The cluster whose events view to copy from.
+        cluster: ClusterId,
+    },
+    /// Write the events the cluster's events view lists (its filters applied, in its order) to a
+    /// JSON file the user picks (the messages redacted). Changes nothing in the cluster.
+    #[serde(rename = "events::ExportJson")]
+    EventsExportJson {
+        /// The cluster whose events view to export.
+        cluster: ClusterId,
+    },
     /// Open the cluster's overview (E13-S09): health tiles (nodes ready, pods by phase), capacity
     /// and allocation bars, top CPU and memory consumers, recent warnings, cluster info, and
     /// history graphs when a Prometheus-compatible endpoint answers. Reads only what the session's
@@ -1372,6 +1424,12 @@ impl Command {
             Command::ClusterSetColour { .. } => CommandId::CLUSTER_SET_COLOUR,
             Command::ClusterShowMetricsSettings { .. } => CommandId::CLUSTER_SHOW_METRICS_SETTINGS,
             Command::ClusterShowPulses { .. } => CommandId::CLUSTER_SHOW_PULSES,
+            Command::EventsOpen { .. } => CommandId::EVENTS_OPEN,
+            Command::EventsToggleFaults { .. } => CommandId::EVENTS_TOGGLE_FAULTS,
+            Command::EventsTogglePause { .. } => CommandId::EVENTS_TOGGLE_PAUSE,
+            Command::EventsCopyRow { .. } => CommandId::EVENTS_COPY_ROW,
+            Command::EventsCopyRowJson { .. } => CommandId::EVENTS_COPY_ROW_JSON,
+            Command::EventsExportJson { .. } => CommandId::EVENTS_EXPORT_JSON,
             Command::ClusterShowOverview { .. } => CommandId::CLUSTER_SHOW_OVERVIEW,
             Command::ClusterRedetectMetrics { .. } => CommandId::CLUSTER_REDETECT_METRICS,
             Command::ClusterToggleMetrics { .. } => CommandId::CLUSTER_TOGGLE_METRICS,
@@ -1772,6 +1830,21 @@ mod tests {
             },
             Command::ClusterShowMetricsSettings { cluster: cluster() },
             Command::ClusterShowPulses { cluster: cluster() },
+            Command::EventsOpen {
+                cluster: cluster(),
+                namespace: None,
+                filter: None,
+            },
+            Command::EventsOpen {
+                cluster: cluster(),
+                namespace: Some("kube-system".into()),
+                filter: Some("BackOff".into()),
+            },
+            Command::EventsToggleFaults { cluster: cluster() },
+            Command::EventsTogglePause { cluster: cluster() },
+            Command::EventsCopyRow { cluster: cluster() },
+            Command::EventsCopyRowJson { cluster: cluster() },
+            Command::EventsExportJson { cluster: cluster() },
             Command::ClusterShowOverview { cluster: cluster() },
             Command::ClusterRedetectMetrics { cluster: cluster() },
             Command::ClusterToggleMetrics {
@@ -2441,6 +2514,12 @@ mod tests {
                     | Command::ClusterSetColour { .. }
                     | Command::ClusterShowMetricsSettings { .. }
                     | Command::ClusterShowPulses { .. }
+                    | Command::EventsOpen { .. }
+                    | Command::EventsToggleFaults { .. }
+                    | Command::EventsTogglePause { .. }
+                    | Command::EventsCopyRow { .. }
+                    | Command::EventsCopyRowJson { .. }
+                    | Command::EventsExportJson { .. }
                     | Command::ClusterShowOverview { .. }
                     | Command::ClusterRedetectMetrics { .. }
                     | Command::ClusterToggleMetrics { .. }

@@ -129,6 +129,16 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         },
         "cluster::ShowMetricsSettings" => Command::ClusterShowMetricsSettings { cluster },
         "cluster::ShowPulses" => Command::ClusterShowPulses { cluster },
+        "events::Open" => Command::EventsOpen {
+            cluster,
+            namespace: None,
+            filter: None,
+        },
+        "events::ToggleFaults" => Command::EventsToggleFaults { cluster },
+        "events::TogglePause" => Command::EventsTogglePause { cluster },
+        "events::CopyRow" => Command::EventsCopyRow { cluster },
+        "events::CopyRowJson" => Command::EventsCopyRowJson { cluster },
+        "events::ExportJson" => Command::EventsExportJson { cluster },
         "cluster::ShowOverview" => Command::ClusterShowOverview { cluster },
         "events::SendToAgent" => Command::EventsSendToAgent {
             cluster,

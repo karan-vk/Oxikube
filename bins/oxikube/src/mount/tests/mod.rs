@@ -15,6 +15,7 @@ mod create;
 mod editor;
 mod events;
 mod events_agent;
+mod events_view;
 mod exec;
 mod help;
 mod immediate;

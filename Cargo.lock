@@ -6029,13 +6029,22 @@ dependencies = [
 name = "oxikube_events_ui"
 version = "0.0.1"
 dependencies = [
+ "anyhow",
  "futures",
  "gpui-pre",
+ "gpui-pre-platform",
+ "jiff",
  "oxikube_app",
  "oxikube_assets",
  "oxikube_domain",
+ "oxikube_keymap",
+ "oxikube_ports",
+ "oxikube_runtime",
  "oxikube_settings",
  "oxikube_testkit",
+ "oxikube_ui",
+ "oxikube_workspace",
+ "proptest",
  "schemars",
  "serde",
  "serde_json",

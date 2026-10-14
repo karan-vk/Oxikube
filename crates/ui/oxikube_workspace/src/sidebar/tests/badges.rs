@@ -51,8 +51,9 @@ fn the_plan_names_every_builtin_kind_the_user_may_list_once() {
     assert!(kinds.contains(&&key("", "pods")));
     assert!(kinds.contains(&&key("apps", "deployments")));
     assert!(kinds.contains(&&key("", "nodes")));
-    // `events` is one section heading, not an entry, and still has a badge.
-    assert!(kinds.contains(&&key("", "events")));
+    // `events` is one section heading that opens the events view (E14-S03): no kind of its own
+    // to count, so no second watch of the cluster's events.
+    assert!(!kinds.contains(&&key("", "events")));
     let mut unique = kinds.clone();
     unique.dedup();
     assert_eq!(unique.len(), kinds.len(), "each kind once");
@@ -98,10 +99,14 @@ fn custom_resources_and_unknown_kinds_have_no_badge() {
 fn single_kind_sections_show_their_kind_total() {
     let plan = count_plan(&core_sections(), &all_access(), None);
     let sections: Vec<&str> = plan.sections.iter().map(|(id, _)| &**id).collect();
-    for id in ["nodes", "namespaces", "events"] {
+    for id in ["nodes", "namespaces"] {
         assert!(sections.contains(&id), "{id}");
     }
     assert!(!sections.contains(&"workloads"), "workloads has many kinds");
+    assert!(
+        !sections.contains(&"events"),
+        "events opens a view, not a kind"
+    );
 }
 
 #[test]

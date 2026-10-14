@@ -87,6 +87,10 @@
 //! 17. pulses (E13-S10, `mount::pulses`): `cluster::ShowPulses` (`:pulses`, the palette's "Show
 //!     Pulses", the sidebar's Pulses entry) opens the cluster's pulses page in its tab: a gauge and a
 //!     short history per core kind and the cluster's CPU and memory, drilling into the tables.
+//! 18. the events view (E14-S03, `mount::events`): `events::Open` (`:ev`, the sidebar's Events
+//!     heading, the palette's "Show Events") opens the cluster's events view in its tab, over the
+//!     app's `EventService`; its `events::*` commands (faults only, pause, copy, export) are on the
+//!     bus with their tool stubs.
 //!
 //! Nothing here reads a file or touches the network: the catalog's first read of the kubeconfig
 //! files runs on the Tokio bridge once this update has ended, which is after the first frame
@@ -96,6 +100,7 @@
 pub mod bus;
 mod describe;
 mod editor;
+mod events;
 mod gallery;
 mod help;
 mod jump;
@@ -204,6 +209,8 @@ pub struct Wiring {
     /// Brings the window to the front and opens the object when an OS notification is clicked
     /// (E14-S06).
     _notification_clicks: Task<()>,
+    /// Opens the events views and applies the `events::*` requests (E14-S03).
+    _events_views: Entity<oxikube_events_ui::EventsViews>,
 }
 
 /// Mounts the cluster UI in the main window. See the [module docs](self).
@@ -230,6 +237,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let dispatcher_for_metrics = dispatcher.clone();
     let dispatcher_for_pulses = dispatcher.clone();
     let dispatcher_for_notifications = dispatcher.clone();
+    let dispatcher_for_events = dispatcher.clone();
 
     // The log service every log viewer opens its sessions on (E08-S01); `logs.buffer_lines` follows
     // the settings.
@@ -340,6 +348,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     ));
     let (pulses_sink, pulses_rx) = oxikube_overview_ui::pulses::PulsesRequestSink::channel();
     let (overview_sink, overview_rx) = oxikube_overview_ui::OverviewRequestSink::channel();
+    let (events_sink, events_rx) = oxikube_events_ui::EventsCommandSink::channel();
     let registry = bus::build_registry(bus::BusParts {
         events_agent,
         agent_pending: agent.pending.clone(),
@@ -374,6 +383,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         os_notification_settings: Arc::new(
             crate::os_notifications::SettingsOsNotificationWriter::new(cx),
         ),
+        events_views: events_sink,
     });
     let registry = match registry {
         Ok(registry) => registry,
@@ -602,6 +612,22 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         window,
         cx,
     );
+    // The events view (E14-S03): `events::Open` (`:ev`, the sidebar, the palette) opens it in the
+    // cluster tab over the app's one events feed per cluster.
+    let events_views = events::start_views(
+        oxikube_events_ui::EventsViewDeps {
+            service: services.events.clone(),
+            sessions: services.sessions.clone(),
+            dispatcher: dispatcher_for_events,
+            state: ports.state.clone(),
+            fs: ports.clusters.fs.clone(),
+            clock: ports.clusters.clock.clone(),
+        },
+        tabs.downgrade(),
+        events_rx,
+        window,
+        cx,
+    );
     let wiring = cx.new(|_| Wiring {
         tabs,
         bus,
@@ -630,6 +656,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _overview_pages: overview_pages,
         _follow_overviews: follow_overviews,
         _notification_clicks: notification_clicks,
+        _events_views: events_views,
     });
     workspace.update(cx, |ws, _| ws.attach(wiring));
 }

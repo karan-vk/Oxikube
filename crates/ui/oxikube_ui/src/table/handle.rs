@@ -113,6 +113,12 @@ impl<D: TableDelegate> TableHandle<D> {
         f(&self.state.read(cx).delegate().delegate)
     }
 
+    /// The delegate, borrowed for as long as `cx` is: for an owner that hands out a reference
+    /// into its data (a model's rows) rather than a copy.
+    pub fn delegate<'a>(&self, cx: &'a App) -> &'a D {
+        &self.state.read(cx).delegate().delegate
+    }
+
     /// Mutates the delegate (new rows, new sort order) and re-renders the table. Keeps column
     /// widths and scroll position; call [`refresh`](Self::refresh) too if the columns changed.
     pub fn update<R>(&self, cx: &mut App, f: impl FnOnce(&mut D) -> R) -> R {

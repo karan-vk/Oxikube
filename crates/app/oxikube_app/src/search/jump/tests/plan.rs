@@ -328,6 +328,57 @@ fn pulses_opens_the_shown_clusters_pulses() {
     assert_eq!(planned("pu").record.as_deref(), Some("pulses"));
 }
 
+fn events(namespace: Option<&str>, filter: Option<&str>) -> Command {
+    Command::EventsOpen {
+        cluster: cluster("dev"),
+        namespace: namespace.map(str::to_owned),
+        filter: filter.map(str::to_owned),
+    }
+}
+
+#[test]
+fn ev_opens_the_events_view_not_the_generic_table() {
+    for line in ["ev", "event", "events", "Events"] {
+        assert_eq!(planned(line).commands, [events(None, None)], "{line}");
+    }
+    assert_eq!(planned("ev").record.as_deref(), Some("ev"));
+}
+
+#[test]
+fn ev_takes_its_namespace_and_text_as_the_views_filters() {
+    // The namespace is the view's own filter: the cluster's selection is not changed.
+    assert_eq!(
+        planned("ev kube-system /BackOff").commands,
+        [events(Some("kube-system"), Some("BackOff"))]
+    );
+    // `all` is every namespace: an empty one, which clears the view's namespace filter.
+    assert_eq!(planned("ev all").commands, [events(Some(""), None)]);
+    assert_eq!(
+        planned("ev all /BackOff").commands,
+        [events(Some(""), Some("BackOff"))]
+    );
+    assert_eq!(failed("ev nowhere").kind, ParseErrorKind::UnknownNamespace);
+    assert_eq!(failed("ev app=web").kind, ParseErrorKind::Unexpected);
+}
+
+#[test]
+fn ev_in_another_context_switches_to_it_first() {
+    let plan = planned("ev @prod-eu");
+    assert_eq!(
+        plan.commands,
+        [
+            Command::ClusterSelect {
+                cluster: cluster("prod-eu")
+            },
+            Command::EventsOpen {
+                cluster: cluster("prod-eu"),
+                namespace: None,
+                filter: None,
+            },
+        ]
+    );
+}
+
 #[test]
 fn history_words_are_history_commands() {
     assert_eq!(planned("-").commands, [Command::JumpLast]);
