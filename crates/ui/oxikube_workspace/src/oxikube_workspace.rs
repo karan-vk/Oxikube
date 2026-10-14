@@ -38,6 +38,9 @@
 //! - [`modal`]: the [`ModalLayer`]: one [`ModalView`] at a time, Escape and outside-click
 //!   dismissal, Tab trapped inside, focus restored on close; [`DialogModal`] for confirmations.
 //! - [`toast`]: the [`ToastLayer`]: queued, deduplicated, auto-dismissing [`Toast`]s with actions.
+//! - [`notifications`]: the notification centre (E14-S05): the right-dock
+//!   [`NotificationPanel`](notifications::NotificationPanel), the status-bar bell and the capped
+//!   toasts over the app's `NotificationService`.
 //! - [`motion`]: the 150 ms animation cap the layers follow (off under reduce-motion).
 //!
 //! Features use the layers through the [`Workspace`]: `register_status_item`, `toggle_modal`,
@@ -58,6 +61,7 @@ pub mod dock;
 pub mod item;
 pub mod modal;
 pub mod motion;
+pub mod notifications;
 pub mod pane;
 pub mod panel;
 pub mod persistence;

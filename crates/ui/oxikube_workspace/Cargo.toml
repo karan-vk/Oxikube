@@ -16,6 +16,7 @@ anyhow.workspace = true
 futures.workspace = true
 gpui.workspace = true
 indexmap.workspace = true
+jiff.workspace = true
 oxikube_app.workspace = true
 oxikube_domain.workspace = true
 oxikube_keymap.workspace = true
@@ -67,6 +68,13 @@ required-features = ["screenshot"]
 [[test]]
 name = "restore_screenshot"
 path = "tests/restore_screenshot.rs"
+harness = false
+required-features = ["screenshot"]
+
+# The notification centre with every severity, light and dark (E14-S05); same gate.
+[[test]]
+name = "notifications_screenshot"
+path = "tests/notifications_screenshot.rs"
 harness = false
 required-features = ["screenshot"]
 

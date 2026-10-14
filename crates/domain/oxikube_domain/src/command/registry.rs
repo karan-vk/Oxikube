@@ -226,6 +226,17 @@ impl CommandId {
     pub const NODE_SHELL: CommandId = CommandId::new("node::Shell");
     /// `node::Uncordon`: mark a node schedulable again.
     pub const NODE_UNCORDON: CommandId = CommandId::new("node::Uncordon");
+    /// `notifications::MarkAllRead`: mark every notification of the centre read.
+    pub const NOTIFICATIONS_MARK_ALL_READ: CommandId = CommandId::new("notifications::MarkAllRead");
+    /// `notifications::MarkRead`: mark one notification of the centre read.
+    pub const NOTIFICATIONS_MARK_READ: CommandId = CommandId::new("notifications::MarkRead");
+    /// `notifications::MuteCluster`: stop notifying about a cluster's events (remembered).
+    pub const NOTIFICATIONS_MUTE_CLUSTER: CommandId = CommandId::new("notifications::MuteCluster");
+    /// `notifications::TogglePanel`: show and focus the notification centre, or hide it.
+    pub const NOTIFICATIONS_TOGGLE_PANEL: CommandId = CommandId::new("notifications::TogglePanel");
+    /// `notifications::UnmuteCluster`: notify about a muted cluster's events again.
+    pub const NOTIFICATIONS_UNMUTE_CLUSTER: CommandId =
+        CommandId::new("notifications::UnmuteCluster");
     /// `palette::ClearRecents`: forget the commands the palette lists first because they ran
     /// lately.
     pub const PALETTE_CLEAR_RECENTS: CommandId = CommandId::new("palette::ClearRecents");
@@ -1202,6 +1213,39 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::core("Node")),
+    // The notification centre (E14-S05): reading it, marking it read and muting a cluster's
+    // notifications touch only this app's own list and its local state db, never a cluster, so
+    // none is a mutation and all run on a read-only cluster.
+    CommandMeta::read(
+        CommandId::NOTIFICATIONS_MARK_ALL_READ,
+        "Mark All Notifications Read",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::NOTIFICATIONS_MARK_READ,
+        "Mark Notification Read",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::NOTIFICATIONS_MUTE_CLUSTER,
+        "Mute Cluster Notifications",
+        CommandScope::Cluster,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::NOTIFICATIONS_TOGGLE_PANEL,
+        "Toggle Notification Centre",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::NOTIFICATIONS_UNMUTE_CLUSTER,
+        "Unmute Cluster Notifications",
+        CommandScope::Cluster,
+        NONE,
+    ),
     // Forgets the palette's recent commands (a list of ids on this machine); touches no cluster.
     CommandMeta::read(
         CommandId::PALETTE_CLEAR_RECENTS,

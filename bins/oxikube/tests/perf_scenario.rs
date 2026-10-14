@@ -25,6 +25,11 @@ fn run(scenario: &str) -> (std::process::Output, Option<Value>) {
         .env("OXIKUBE_PERF_EDITOR_BYTES", EDITOR_BYTES.to_string())
         // `charts` likewise.
         .env("OXIKUBE_PERF_CHARTS_FRAMES", CHARTS_FRAMES.to_string())
+        // `notifications-burst` likewise (the whole burst still arrives, in fewer frames).
+        .env(
+            "OXIKUBE_PERF_NOTIFICATIONS_FRAMES",
+            NOTIFICATIONS_FRAMES.to_string(),
+        )
         .args(["--perf-scenario", scenario, "--perf-report"])
         .arg(&report)
         .output()
@@ -216,6 +221,32 @@ fn charts_repaint_from_cache_rebuild_once_per_tick_and_follow_a_hover() {
         let p50 = s["metrics"][format!("{prefix}frame_ms")]["p50"].as_f64();
         assert!(p50.is_some_and(|v| v > 0.0), "{prefix}frame_ms: {p50:?}");
     }
+}
+
+/// Scripted frames per phase of the `notifications-burst` smoke run.
+const NOTIFICATIONS_FRAMES: u64 = 8;
+
+#[test]
+fn a_notification_burst_reaches_the_centre_without_stacking_toasts() {
+    let (out, sample) = run("notifications-burst");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    // The scenario fails its sample when more than the toast cap plus a summary ever show.
+    assert!(out.status.success(), "{stderr}");
+    let s = sample.expect("sample written");
+    assert_eq!(s["status"], "ok");
+    assert_eq!(s["scenario"], "notifications-burst");
+    for prefix in ["", "idle_"] {
+        let frames = s["metrics"][format!("{prefix}draw_ms")]["count"].as_u64();
+        assert_eq!(frames, Some(NOTIFICATIONS_FRAMES), "{prefix}draw_ms");
+        let p50 = s["metrics"][format!("{prefix}frame_ms")]["p50"].as_f64();
+        assert!(p50.is_some_and(|v| v > 0.0), "{prefix}frame_ms: {p50:?}");
+    }
+    // The whole burst is listed, grouped: 50 reasons, three rows of their own and a group each.
+    assert!(
+        stderr.contains("oxikube notifications-burst: 1000 warnings over"),
+        "{stderr}"
+    );
+    assert!(stderr.contains(", 200 rows listed,"), "{stderr}");
 }
 
 #[test]

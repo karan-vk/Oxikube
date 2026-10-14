@@ -386,6 +386,31 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         enabled: Option<bool>,
     },
+    /// Show and focus the notification centre, or hide it (E14-S05).
+    #[serde(rename = "notifications::TogglePanel")]
+    NotificationsTogglePanel,
+    /// Mark one notification of the notification centre read (E14-S05).
+    #[serde(rename = "notifications::MarkRead")]
+    NotificationsMarkRead {
+        /// The notification's id, as the centre lists it.
+        id: u64,
+    },
+    /// Mark every notification of the notification centre read (E14-S05).
+    #[serde(rename = "notifications::MarkAllRead")]
+    NotificationsMarkAllRead,
+    /// Stop notifying about a cluster's events until it is unmuted; remembered across restarts
+    /// (E14-S05). A local preference, not a cluster mutation.
+    #[serde(rename = "notifications::MuteCluster")]
+    NotificationsMuteCluster {
+        /// The cluster to mute.
+        cluster: ClusterId,
+    },
+    /// Notify about a muted cluster's events again (E14-S05).
+    #[serde(rename = "notifications::UnmuteCluster")]
+    NotificationsUnmuteCluster {
+        /// The cluster to unmute.
+        cluster: ClusterId,
+    },
     /// Run the previous command of the jump bar's history again (`[`).
     #[serde(rename = "jump::Back")]
     JumpBack,
@@ -1455,6 +1480,11 @@ impl Command {
             Command::AppSendTestNotification => CommandId::APP_SEND_TEST_NOTIFICATION,
             Command::AppToggleOsNotifications { .. } => CommandId::APP_TOGGLE_OS_NOTIFICATIONS,
             Command::IngressClassSetDefault { .. } => CommandId::INGRESS_CLASS_SET_DEFAULT,
+            Command::NotificationsTogglePanel => CommandId::NOTIFICATIONS_TOGGLE_PANEL,
+            Command::NotificationsMarkRead { .. } => CommandId::NOTIFICATIONS_MARK_READ,
+            Command::NotificationsMarkAllRead => CommandId::NOTIFICATIONS_MARK_ALL_READ,
+            Command::NotificationsMuteCluster { .. } => CommandId::NOTIFICATIONS_MUTE_CLUSTER,
+            Command::NotificationsUnmuteCluster { .. } => CommandId::NOTIFICATIONS_UNMUTE_CLUSTER,
             Command::JumpBack => CommandId::JUMP_BACK,
             Command::JumpForward => CommandId::JUMP_FORWARD,
             Command::JumpLast => CommandId::JUMP_LAST,
@@ -1924,6 +1954,11 @@ mod tests {
             Command::AppQuit,
             Command::AppSendTestNotification,
             Command::AppToggleOsNotifications { enabled: None },
+            Command::NotificationsTogglePanel,
+            Command::NotificationsMarkRead { id: 7 },
+            Command::NotificationsMarkAllRead,
+            Command::NotificationsMuteCluster { cluster: cluster() },
+            Command::NotificationsUnmuteCluster { cluster: cluster() },
             Command::JumpBack,
             Command::JumpForward,
             Command::JumpLast,
@@ -2406,6 +2441,11 @@ mod tests {
                     | Command::AppQuit
                     | Command::AppSendTestNotification
                     | Command::AppToggleOsNotifications { .. }
+                    | Command::NotificationsTogglePanel
+                    | Command::NotificationsMarkRead { .. }
+                    | Command::NotificationsMarkAllRead
+                    | Command::NotificationsMuteCluster { .. }
+                    | Command::NotificationsUnmuteCluster { .. }
                     | Command::JumpBack
                     | Command::JumpForward
                     | Command::JumpLast

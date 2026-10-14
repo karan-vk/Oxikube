@@ -3,8 +3,8 @@
 use oxikube_app::session::namespaces::NamespaceService;
 use oxikube_app::{
     AliasRegistry, ClusterCatalog, ClusterCommands, ClusterSessionManager, EventService,
-    EventsConfig, IntegrationRegistry, MetricsService, MutationGuard, OsNotificationService,
-    UtilisationAggregator,
+    EventsConfig, IntegrationRegistry, MetricsService, MutationGuard, NotificationService,
+    OsNotificationService, UtilisationAggregator,
 };
 
 use super::AppPorts;
@@ -50,6 +50,11 @@ pub struct ClusterServices {
     /// `app::SendTestNotification` commands run on it, and the notification centre hands it the
     /// Warning events (E14-S05). Idle, and the OS untouched, until `events.os_notifications`.
     pub os_notifications: OsNotificationService,
+    /// The in-app notification centre (E14-S05): each open cluster's Warning events through the
+    /// rules, the per-cluster mute (in the state db), grouping and the rate limit, into the
+    /// list the window's panel, badge and toasts show; the raised ones go to `os_notifications`.
+    /// Idle until `notification_centre::start`.
+    pub notifications: NotificationService,
 }
 
 impl ClusterServices {
@@ -78,6 +83,12 @@ impl ClusterServices {
             clusters.clock.clone(),
             EventsConfig::default(),
         );
+        let notifications = NotificationService::new(
+            events.clone(),
+            sessions.clone(),
+            ports.state.clone(),
+            clusters.clock.clone(),
+        );
         Self {
             cluster_commands: ClusterCommands::new(sessions.clone(), catalog.clone()),
             sessions,
@@ -88,6 +99,7 @@ impl ClusterServices {
             utilisation: UtilisationAggregator::default(),
             metrics,
             live_metrics,
+            notifications,
             events,
             os_notifications: OsNotificationService::new(ports.notifier.clone()),
         }

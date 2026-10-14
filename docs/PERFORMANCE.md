@@ -211,6 +211,7 @@ Two rules keep a scenario measuring what the app does (E07-F509, see
 | `charts` | measured (E13-S07, see [Charts](#charts-12-sparklines-and-3-area-charts-e13-s07)) | the overview's worst case, 12 sparklines and 3 area charts of 5 760 points (24 h at 15 s) in the app's window root: `frame_ms` / `draw_ms` (120 frames with nothing changed: the paint from cached geometry), `tick_frame_ms` / `tick_draw_ms` (120 frames each handing all 15 new data, so every piece re-decimates, re-projects and re-tessellates once per frame), `hover_frame_ms` / `hover_draw_ms` (a chart's tooltip following a sweeping cursor), `rss_mib` / `peak_rss_mib`; fails when a repaint rebuilt any geometry or a tick built more than once per piece |
 | `pulses` | measured (E13-S10, see [Pulses](#pulses-16-tiles-e13-s10)) | the pulses page, 16 tiles with 14 sparklines of 60 samples, in the app's window root: `frame_ms` / `draw_ms` (120 frames with nothing changed) and `tick_frame_ms` / `tick_draw_ms` (every tile takes a new sample on every frame: the worst case, the page samples every 5 s), `rss_mib` |
 | `events-stream` | measured (E14-S03, see [Events view](#events-view-10-000-events-streaming-e14-s03)) | the events view over a full 10 000-event buffer (the app's `EventService` on `FakeEventsPort`) in the app's window root: `frame_ms` / `draw_ms` (120 frames, 2 events arriving each, the live tail putting them on top), `scroll_*` (a page scrolled a frame while they arrive; the tail pauses itself), `filter_*` (a key typed into the text filter every frame: a new subscription filter whose rows are read off the UI thread), `faults_*` (the faults toggle every frame), `burst_*` (500 events in one frame, 20 frames), `rss_mib`; fails when a frame absorbed more than one coalesced notify, the tail put nothing on top, or the bursts did not reach the rows |
+| `notifications-burst` | measured (E14-S05, see [Notification centre](#notification-centre-a-burst-of-1-000-warnings-e14-s05)) | 1 000 Warning events about distinct pods (50 reasons) reaching the notification centre over 120 frames, the panel open, in the app's window root: `frame_ms` / `draw_ms` (the burst: rules, grouping, dedupe, rate limit, the coalesced redraw of the panel and badge, the toasts) and `idle_frame_ms` / `idle_draw_ms` (the full panel with nothing new), `rss_mib`; fails when more than `MAX_TOASTS` toasts plus the summary are ever shown or waiting |
 
 A scenario whose view is not built yet writes `status: "unavailable"` and a specific `reason` into the JSON report, prints `UNAVAILABLE: <reason>` with the enabling stories, and exits 0; every scenario is scripted today (`editor-5mb` was the last, E10-S11). The scripted path and the sample schema are covered by a `#[gpui::test]` that drives a fake feed through the same driver (`oxikube_runtime::perf::harness`).
 
@@ -1660,6 +1661,20 @@ no such number has been verified here. Do not put "10 k Running" in a report wit
 8. Animations are short (≤ 150 ms), GPU-cheap, and off under reduce-motion.
 9. Every PR touching a hot path reports before/after numbers from `--perf` in the
    "Performance" section of the PR template.
+
+## Notification centre: a burst of 1 000 warnings (E14-S05)
+
+A burst of Warning events must not flood the UI: p95 frame at most 8 ms and at most a handful of toasts.
+
+- **Costs.** Each event is matched in `O(kinds + ignored reasons)`, routed in amortised `O(1)` (sliding windows per cluster and
+  reason) and added or merged in `O(log n)` (rows by id, an order index and a key index); the list is bounded (500 rows).
+  Subscribers get one `NotificationsChanged` per poll; the window derives its rows once per change, off the render path, and
+  redraws through `notify_coalesced`; the panel's list is a `uniform_list`. A burst groups after three objects per reason and
+  raises at most five notifications per 30 s; the window shows at most three toasts per 10 s plus one summary.
+- **Headless** (`oxikube --perf-scenario notifications-burst`, a **debug** build, Apple silicon, 1 run): burst `frame_ms` p50 7.1,
+  p95 7.7; `draw_ms` p95 8.1; idle (the panel holding 200 rows) `frame_ms` p50 5.9, p95 6.3; at most 4 toasts (3 + the
+  summary); 1 000 warnings became 200 rows (50 reasons × 3 rows of their own + 1 group). A release-fast build is several times
+  faster; the nightly seeds the baseline.
 
 ## Pulses: 16 tiles (E13-S10)
 

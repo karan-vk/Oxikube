@@ -16,7 +16,7 @@ use super::id::CommandId;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CommandCategory {
-    /// Application-level actions (`app::*`).
+    /// Application-level actions (`app::*`) and the notification centre (`notifications::*`).
     App,
     /// Windows (`window::*`).
     Window,
@@ -75,8 +75,9 @@ impl CommandCategory {
 
     /// The category of the command `id`, from its namespace.
     pub const fn of(id: CommandId) -> Self {
-        const NAMESPACES: [(&str, CommandCategory); 29] = [
+        const NAMESPACES: [(&str, CommandCategory); 30] = [
             ("app", CommandCategory::App),
+            ("notifications", CommandCategory::App),
             ("window", CommandCategory::Window),
             ("view", CommandCategory::View),
             ("palette", CommandCategory::View),

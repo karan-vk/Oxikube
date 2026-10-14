@@ -210,6 +210,10 @@ const VIEW_LOCAL: &[&str] = &[
     "events_view::SelectLast",
     "events_view::FocusFilter",
     "events_view::FocusTable",
+    // The notification centre's list (E14-S05).
+    "notification_panel::SelectNext",
+    "notification_panel::SelectPrevious",
+    "notification_panel::Close",
     // The bottom dock's terminal panel and the OS application menu.
     "terminal_panel::TogglePanel",
     "oxikube::Hide",

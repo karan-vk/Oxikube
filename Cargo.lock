@@ -6526,6 +6526,7 @@ dependencies = [
  "gpui-pre",
  "gpui-pre-platform",
  "indexmap",
+ "jiff",
  "oxikube_app",
  "oxikube_domain",
  "oxikube_keymap",

@@ -31,6 +31,7 @@ mod network;
 mod node_actions;
 mod node_drain;
 mod node_shell;
+mod notification_centre;
 mod notifications;
 mod overview;
 mod palette;

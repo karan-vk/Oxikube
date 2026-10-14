@@ -22,7 +22,7 @@ use crate::app_state::AppState;
 /// Runs `command` on the app's bus and settles the app. The handler may wait for the foreground
 /// (the settings writer applies its edit there), so it runs as a foreground task, never under a
 /// blocking `block_on`.
-fn dispatch(app: &mut App, command: Command) -> oxikube_app::command_bus::CommandOutput {
+pub(super) fn dispatch(app: &mut App, command: Command) -> oxikube_app::command_bus::CommandOutput {
     let state = app.vcx.update(|_, cx| AppState::global(cx));
     let bus = state.command_bus().expect("the bus").clone();
     let slot = Rc::new(RefCell::new(None));

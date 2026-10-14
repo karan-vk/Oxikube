@@ -45,6 +45,7 @@ pub mod live_metrics;
 pub mod metrics_provider;
 pub mod metrics_settings;
 pub mod mount;
+pub mod notification_centre;
 pub mod os_motion;
 pub mod os_notifications;
 pub mod perf_logs;

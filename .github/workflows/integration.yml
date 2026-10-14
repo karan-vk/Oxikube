@@ -129,7 +129,7 @@ jobs:
       TERMINAL_SUITE: >-
         cargo test -p oxikube --features integration --test kind_exec --test kind_terminal --test kind_terminal_data --test kind_assist
         --test kind_templates --test kind_editor --test kind_network --test kind_sections
-        --test kind_metrics_server
+        --test kind_metrics_server --test kind_notifications
         --no-fail-fast
     steps:
       - uses: actions/checkout@v7
