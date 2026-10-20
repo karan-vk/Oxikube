@@ -1064,6 +1064,40 @@ pub enum Command {
         /// The forward's id, as the manager lists it.
         id: u64,
     },
+    /// Save a port-forward as a favourite (E15-S06): restored when the cluster connects unless
+    /// `auto_start` is off. Saving the same forward again updates its name and switch. Holds no
+    /// secret: a cluster id, a resource reference, ports, a bind address and a display name.
+    #[serde(rename = "portforward::FavouriteAdd")]
+    PortForwardFavouriteAdd {
+        /// The core `v1` `Pod` or `Service` the favourite forwards to.
+        target: ResourceRef,
+        /// The port on the target (for a Service, the Service port).
+        remote_port: ForwardPort,
+        /// Local port; `None` is "Auto" (a free port each time).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        local_port: Option<u16>,
+        /// Local address to listen on; `None` is loopback.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        bind: Option<IpAddr>,
+        /// A display name; `None` names it after the target and port.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        name: Option<String>,
+        /// Whether to start it when the cluster connects; `None` is on.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        auto_start: Option<bool>,
+    },
+    /// Remove a favourite; a forward running from it keeps running (E15-S06).
+    #[serde(rename = "portforward::FavouriteRemove")]
+    PortForwardFavouriteRemove {
+        /// The favourite's id, as the favourites list it.
+        id: String,
+    },
+    /// Switch a favourite's start-on-connect on or off (E15-S06).
+    #[serde(rename = "portforward::FavouriteToggleAutoStart")]
+    PortForwardFavouriteToggleAutoStart {
+        /// The favourite's id, as the favourites list it.
+        id: String,
+    },
     /// Open a pod's logs.
     #[serde(rename = "pod::ViewLogs")]
     PodViewLogs {
@@ -1624,6 +1658,11 @@ impl Command {
             Command::PortForwardStop { .. } => CommandId::PORTFORWARD_STOP,
             Command::PortForwardRestart { .. } => CommandId::PORTFORWARD_RESTART,
             Command::PortForwardRemove { .. } => CommandId::PORTFORWARD_REMOVE,
+            Command::PortForwardFavouriteAdd { .. } => CommandId::PORTFORWARD_FAVOURITE_ADD,
+            Command::PortForwardFavouriteRemove { .. } => CommandId::PORTFORWARD_FAVOURITE_REMOVE,
+            Command::PortForwardFavouriteToggleAutoStart { .. } => {
+                CommandId::PORTFORWARD_FAVOURITE_TOGGLE_AUTO_START
+            }
             Command::PodViewLogs { .. } => CommandId::POD_VIEW_LOGS,
             Command::LogsClear { .. } => CommandId::LOGS_CLEAR,
             Command::LogsCopy { .. } => CommandId::LOGS_COPY,
@@ -1739,6 +1778,7 @@ impl Command {
             | Command::PodDebug { target, .. }
             | Command::PodPortForward { target, .. }
             | Command::PortForwardStart { target, .. }
+            | Command::PortForwardFavouriteAdd { target, .. }
             | Command::ServiceOpenInBrowser { target, .. }
             | Command::ServiceShowPods { target }
             | Command::ResourceShowUsedBy { target }
@@ -2199,6 +2239,16 @@ mod tests {
             Command::PortForwardStop { id: 1 },
             Command::PortForwardRestart { id: 1 },
             Command::PortForwardRemove { id: 1 },
+            Command::PortForwardFavouriteAdd {
+                target: pod(),
+                remote_port: ForwardPort::Named("http".into()),
+                local_port: None,
+                bind: None,
+                name: Some("db".into()),
+                auto_start: Some(false),
+            },
+            Command::PortForwardFavouriteRemove { id: "fav-1".into() },
+            Command::PortForwardFavouriteToggleAutoStart { id: "fav-1".into() },
             Command::PodViewLogs {
                 target: pod(),
                 container: None,
@@ -2574,6 +2624,7 @@ mod tests {
                     | Command::PortForwardStop { .. }
                     | Command::PortForwardRestart { .. }
                     | Command::PortForwardRemove { .. }
+                    | Command::PortForwardFavouriteAdd { .. }
                     | Command::ServiceShowPods { .. }
                     | Command::ResourceShowUsedBy { .. }
                     | Command::TableFocusFilter { .. }

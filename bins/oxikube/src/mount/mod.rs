@@ -360,6 +360,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (overview_sink, overview_rx) = oxikube_overview_ui::OverviewRequestSink::channel();
     let (events_sink, events_rx) = oxikube_events_ui::EventsCommandSink::channel();
     let (panel_sink, panel_rx) = oxikube_workspace::notifications::NotificationPanelSink::channel();
+    let (port_forwards, port_forward_favourites) =
+        port_forwards::manager(&state, &services, stores.clone(), cx);
     let registry = bus::build_registry(bus::BusParts {
         events_agent,
         agent_pending: agent.pending.clone(),
@@ -397,7 +399,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         events_views: events_sink,
         notifications: services.notifications.clone(),
         notification_panel: panel_sink,
-        port_forwards: port_forwards::manager(&state, &services, stores.clone(), cx),
+        port_forwards,
+        port_forward_favourites,
     });
     let registry = match registry {
         Ok(registry) => registry,

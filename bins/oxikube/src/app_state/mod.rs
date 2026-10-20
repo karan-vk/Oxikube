@@ -87,6 +87,7 @@ pub struct AppState {
     bus: OnceLock<CommandBus>,
     stores: OnceLock<Arc<ResourceStores>>,
     port_forwards: OnceLock<oxikube_app::PortForwardManager>,
+    port_forward_favourites: OnceLock<oxikube_app::portforward::PortForwardFavourites>,
     logs: OnceLock<Arc<LogService>>,
     exec: OnceLock<Arc<ExecService>>,
     agent: OnceLock<AgentHooks>,
@@ -114,6 +115,7 @@ impl AppState {
             bus: OnceLock::new(),
             stores: OnceLock::new(),
             port_forwards: OnceLock::new(),
+            port_forward_favourites: OnceLock::new(),
             logs: OnceLock::new(),
             exec: OnceLock::new(),
             agent: OnceLock::new(),
@@ -203,6 +205,21 @@ impl AppState {
     /// Stores the port-forward manager. The first one stays: `false` when one was set already.
     pub fn set_port_forwards(&self, manager: oxikube_app::PortForwardManager) -> bool {
         self.port_forwards.set(manager).is_ok()
+    }
+
+    /// The saved port-forwards (E15-S06), once the main window has been mounted (`None` before).
+    pub fn port_forward_favourites(
+        &self,
+    ) -> Option<&oxikube_app::portforward::PortForwardFavourites> {
+        self.port_forward_favourites.get()
+    }
+
+    /// Stores the favourites. The first ones stay: `false` when some were set already.
+    pub fn set_port_forward_favourites(
+        &self,
+        favourites: oxikube_app::portforward::PortForwardFavourites,
+    ) -> bool {
+        self.port_forward_favourites.set(favourites).is_ok()
     }
 
     /// The log service behind every log viewer, once the main window has been mounted (`None`
