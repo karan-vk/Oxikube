@@ -15,6 +15,8 @@
 //!   one row per forward;
 //! * a start is refused on a read-only cluster unless [`ForwardConfig::allowed_in_readonly`];
 //! * [`ForwardStarter`]: the start dialog's way through the bus (`portforward::Start` as the user);
+//! * [`annotations`]: k9s `port-forwards` / `auto-port-forwards` pod annotations as start-dialog
+//!   suggestions (opt-in, E15-S07);
 //! * `portforward::Start` / `Stop` / `Restart` / `Remove` ([`register_commands`]) and
 //!   `service::OpenInBrowser` (the manager is the [`ServicePortOpener`](crate::ServicePortOpener)).
 //!
@@ -26,6 +28,7 @@
 //! [`NotificationSourcePort`]: oxikube_ports::NotificationSourcePort
 
 mod alloc;
+pub mod annotations;
 mod backend;
 mod commands;
 pub mod favourites;

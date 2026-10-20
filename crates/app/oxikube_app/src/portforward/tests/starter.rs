@@ -115,3 +115,40 @@ async fn a_forward_still_waiting_for_a_pod_is_a_pending_start_not_a_failure() {
         "it stays listed and keeps trying"
     );
 }
+
+#[tokio::test]
+async fn annotation_suggestions_follow_the_setting_and_see_the_listed_forwards() {
+    let rig = Rig::new();
+    rig.backend.push("Pod", vec![pod("api-0", "Running")]);
+    let starter = starter(&rig);
+    let annotated = oxikube_testkit::resource("v1", "Pod")
+        .name("api-0")
+        .namespace(super::NS)
+        .annotation("k9scli.io/auto-port-forwards", "app::18080:8080")
+        .build();
+
+    assert!(!starter.annotations(), "off by default");
+    assert!(starter.annotation_suggestions(&annotated).is_empty());
+
+    rig.manager.set_config(crate::portforward::ForwardConfig {
+        annotations: true,
+        ..Default::default()
+    });
+    let found = starter.annotation_suggestions(&annotated);
+    assert_eq!(found.len(), 1);
+    assert!(found[0].forward.auto && found[0].conflict.is_none());
+
+    let live = starter
+        .start(pod_spec("api-0", 8080).with_local_port(18080))
+        .await
+        .expect("started");
+    assert!(live.local_addr.is_some());
+    let found = starter.annotation_suggestions(&annotated);
+    assert!(
+        found[0]
+            .conflict
+            .as_deref()
+            .is_some_and(|c| c.contains("18080")),
+        "{found:?}"
+    );
+}

@@ -157,6 +157,9 @@ pub use network::{
 pub use notifications::{NotificationRules, NotificationService};
 pub use os_notifications::{ClickAction, Delivery, OsNotificationService};
 pub use overview::{FixedWarnings, NoRecentWarnings, RecentWarnings, WarningRow};
+pub use portforward::annotations::{
+    AnnotationSuggestion, SuggestedForward, annotation_suggestions, parse_k9s_forwards,
+};
 pub use portforward::{
     ForwardBackend, ForwardChanges, ForwardConfig, ForwardId, ForwardInfo, ForwardStarter,
     ForwardState, PortForwardManager, SessionBackend, StartError, StartedForward,

@@ -17,6 +17,7 @@ mod view_filter;
 mod view_filter_keys;
 mod view_filter_saved;
 mod view_forward;
+mod view_forward_annotations;
 mod view_pod_keys;
 mod view_rows;
 mod view_scope;

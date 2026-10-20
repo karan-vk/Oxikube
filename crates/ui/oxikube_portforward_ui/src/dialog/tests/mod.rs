@@ -5,6 +5,7 @@
 mod form;
 mod ports;
 mod problem;
+mod view;
 
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
 
