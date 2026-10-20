@@ -283,6 +283,7 @@ fn render_detail(light: bool) -> anyhow::Result<RgbaImage> {
             set_image: None,
             rollback: None,
             drain: None,
+            forward: None,
         };
         cx.new(|cx| DetailView::new(target, deps, Mount::Drawer, cx))
     })?;
@@ -382,6 +383,7 @@ fn render_panel(light: bool) -> anyhow::Result<RgbaImage> {
             set_image: None,
             rollback: None,
             drain: None,
+            forward: None,
         };
         cx.new(|cx| DetailView::new(target, deps, Mount::Drawer, cx))
     })?;

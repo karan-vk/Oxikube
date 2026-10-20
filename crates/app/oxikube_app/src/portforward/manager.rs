@@ -221,8 +221,8 @@ impl PortForwardManager {
     ///
     /// The stop is graceful: the listener stops accepting at once, connections in flight get the
     /// adapter's grace period to finish (a download or a transaction ends cleanly instead of
-    /// being reset), and whatever is left after [`STOP_GRACE`](super::supervisor::STOP_GRACE)
-    /// is aborted.
+    /// being reset), and whatever is left after a 3 s grace is
+    /// aborted.
     pub fn stop(&self, id: ForwardId) -> bool {
         self.halt(id, true)
     }

@@ -112,7 +112,7 @@ impl ForwardStarter {
     ///
     /// # Errors
     ///
-    /// The handler's error, whose source is the [`StartError`] ([`StartError::of`]) so a view can
+    /// The handler's error, whose source is the [`StartError`](super::StartError) ([`StartError::of`](super::StartError::of)) so a view can
     /// offer the fix; a [`DispatchError`] mapped to the shared kinds otherwise.
     pub async fn start(&self, spec: ForwardSpec) -> Result<StartedForward, OxiError> {
         let cluster = spec.target.cluster.clone();
