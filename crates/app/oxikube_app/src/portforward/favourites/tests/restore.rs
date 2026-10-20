@@ -300,3 +300,25 @@ fn the_missing_wording_is_the_resolvers() {
     assert!(reason_is_missing(&reason), "{reason}");
     assert!(!reason_is_missing("pod db-0 is not running"));
 }
+
+#[tokio::test]
+async fn a_favourite_that_failed_to_start_is_retried_on_the_next_restore() {
+    let favs = Favs::new();
+    favs.rig.backend.push("Pod", vec![pod("db-0", "Running")]);
+    let busy = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = busy.local_addr().unwrap().port();
+    favs.favourites
+        .add(spec("db-0", 5432).with_local_port(port), None, true)
+        .await
+        .unwrap();
+    let first = favs.favourites.restore(&cluster()).await.unwrap();
+    assert_eq!(first.failed.len(), 1);
+
+    drop(busy);
+    let second = favs.favourites.restore(&cluster()).await.unwrap();
+    assert_eq!(second.already_running, 0, "a failed forward is not running");
+    assert_eq!(second.started.len(), 1);
+    let forwards = favs.rig.manager.list();
+    assert_eq!(forwards.len(), 1, "the dead entry is replaced, not kept");
+    assert!(is_active(&forwards[0].state));
+}

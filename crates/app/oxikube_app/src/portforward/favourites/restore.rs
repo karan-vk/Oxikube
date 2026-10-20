@@ -37,10 +37,23 @@ pub(super) async fn restore(inner: &Inner, cluster: &ClusterId) -> OxiResult<Res
         if !favourite.auto_start {
             continue;
         }
-        let forwarded = running.iter().any(|f| {
+        let same = |f: &&ForwardInfo| {
             f.spec.target == favourite.spec.target
                 && f.spec.remote_port == favourite.spec.remote_port
-        });
+        };
+        // A forward that gave up (a busy port at the last launch) is not running: drop the dead
+        // entry and retry the favourite. A user-stopped one is left alone on purpose.
+        for dead in running
+            .iter()
+            .filter(same)
+            .filter(|f| matches!(f.state, ForwardState::Failed(_)))
+        {
+            inner.manager.remove(dead.id);
+        }
+        let forwarded = running
+            .iter()
+            .filter(same)
+            .any(|f| !matches!(f.state, ForwardState::Failed(_)));
         if forwarded {
             report.already_running += 1;
         } else {
