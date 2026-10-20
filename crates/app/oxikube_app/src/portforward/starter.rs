@@ -10,16 +10,17 @@ use oxikube_domain::ids::ClusterId;
 use oxikube_domain::portforward::ForwardSpec;
 
 use super::manager::PortForwardManager;
-use super::model::{ForwardId, StartError};
+use super::model::ForwardId;
 use crate::command_bus::{CommandBus, DispatchContext, DispatchError, Outcome};
 
-/// A forward that came up.
+/// A forward the manager accepted: up, or listed and waiting for a ready pod.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StartedForward {
     /// Its id in the manager.
     pub id: ForwardId,
-    /// Where it listens.
-    pub local_addr: SocketAddr,
+    /// Where it listens; `None` while it has not bound yet (no ready pod, slow feed): it is
+    /// listed and keeps trying, so a view reports it as pending, not as failed.
+    pub local_addr: Option<SocketAddr>,
     /// The pod serving it (or the Service's pod); `None` while it waits for a ready one.
     pub pod: Option<String>,
 }
@@ -27,13 +28,16 @@ pub struct StartedForward {
 impl StartedForward {
     /// `http://127.0.0.1:<port>`: how to reach the forward from this machine (a wildcard bind is
     /// reached through loopback).
-    pub fn url(&self) -> String {
-        let host = match self.local_addr.ip() {
+    ///
+    /// `None` while the forward has not bound yet.
+    pub fn url(&self) -> Option<String> {
+        let addr = self.local_addr?;
+        let host = match addr.ip() {
             ip if ip.is_unspecified() => "127.0.0.1".to_owned(),
             IpAddr::V6(ip) => format!("[{ip}]"),
             ip => ip.to_string(),
         };
-        format!("http://{host}:{}", self.local_addr.port())
+        Some(format!("http://{host}:{}", addr.port()))
     }
 }
 
@@ -114,23 +118,16 @@ impl ForwardStarter {
             .map(ForwardId)
             .ok_or_else(|| OxiError::internal("the start did not name the forward"))?;
         let pod = data.get("pod").and_then(|p| p.as_str()).map(str::to_owned);
-        match data
+        // No address yet means the start's patience ran out while the forward waits for a ready
+        // pod: it is listed and keeps trying, which is a pending start, not a failure.
+        let local_addr = data
             .get("local_addr")
             .and_then(|a| a.as_str())
-            .and_then(|a| a.parse::<SocketAddr>().ok())
-        {
-            Some(local_addr) => Ok(StartedForward {
-                id,
-                local_addr,
-                pod,
-            }),
-            // Still waiting for a ready pod after the start's patience: the forward is listed and
-            // keeps trying, but there is no address to show yet.
-            None => Err(OxiError::from(StartError::Failed(
-                output
-                    .message
-                    .unwrap_or_else(|| "the forward did not start".to_owned()),
-            ))),
-        }
+            .and_then(|a| a.parse::<SocketAddr>().ok());
+        Ok(StartedForward {
+            id,
+            local_addr,
+            pod,
+        })
     }
 }

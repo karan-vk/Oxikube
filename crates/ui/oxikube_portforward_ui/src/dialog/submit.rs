@@ -79,7 +79,9 @@ impl StartDialog {
 /// The toast after a start: the URL, and "Open in browser" (the system browser, never an embedded
 /// web view).
 pub(super) fn success_toast(label: &str, started: &StartedForward) -> Toast {
-    let url = started.url();
+    let Some(url) = started.url() else {
+        return Toast::success(format!("Forwarding {label}: waiting for a ready pod"));
+    };
     let open = url.clone();
     Toast::success(format!("Forwarding {label} on {url}")).action(ToastAction::new(
         "Open in browser",

@@ -44,14 +44,18 @@ pub struct ForwardInfo {
 }
 
 impl ForwardInfo {
-    /// `pod/web 8080:80` or `service/api 0:http`: how the forward is named to the user.
+    /// The user's name for it, else `pod/web 8080:80` or `service/api 0:http`: how the forward is
+    /// named to the user.
     pub fn label(&self) -> String {
         label(&self.spec, self.local_addr)
     }
 }
 
-/// `kind/name local:remote`.
+/// The name the user gave, else `kind/name local:remote`.
 pub(crate) fn label(spec: &ForwardSpec, local_addr: Option<SocketAddr>) -> String {
+    if let Some(name) = spec.name.as_deref().filter(|n| !n.is_empty()) {
+        return name.to_owned();
+    }
     let local = local_addr.map_or(spec.local_port, |a| a.port());
     format!(
         "{}/{} {local}:{}",

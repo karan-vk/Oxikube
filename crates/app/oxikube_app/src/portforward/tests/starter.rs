@@ -42,13 +42,11 @@ async fn a_start_goes_through_portforward_start_and_carries_name_and_favourite()
         )
         .await
         .expect("started");
-    assert!(
-        started.url().starts_with("http://127.0.0.1:"),
-        "{}",
-        started.url()
-    );
+    let url = started.url().expect("bound");
+    assert!(url.starts_with("http://127.0.0.1:"), "{url}");
     let info = rig.manager.get(started.id).expect("listed");
     assert_eq!(info.spec.name.as_deref(), Some("my api"));
+    assert_eq!(info.label(), "my api", "notifications use the user's name");
     assert!(info.spec.favourite);
     assert_eq!(started.pod.as_deref(), Some("api-0"));
 }
@@ -74,4 +72,46 @@ async fn a_read_only_cluster_is_blocked_up_front_and_refused_with_a_typed_error(
         ..Default::default()
     });
     assert!(starter.blocked(&target("Pod", "api-0").cluster).is_none());
+}
+
+#[tokio::test]
+async fn a_failed_start_leaves_nothing_listed_so_a_retry_does_not_duplicate() {
+    let rig = Rig::new();
+    rig.backend.push("Pod", vec![pod("api-0", "Running")]);
+    let busy = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = busy.local_addr().unwrap().port();
+    let starter = starter(&rig);
+    let error = starter
+        .start(pod_spec("api-0", 80).with_local_port(port))
+        .await
+        .unwrap_err();
+    assert!(StartError::of(&error).is_some());
+    assert!(rig.manager.list().is_empty());
+    starter
+        .start(pod_spec("api-0", 80))
+        .await
+        .expect("the retry on an automatic port");
+    assert_eq!(rig.manager.list().len(), 1);
+}
+
+#[tokio::test]
+async fn a_forward_still_waiting_for_a_pod_is_a_pending_start_not_a_failure() {
+    let rig = Rig::new();
+    // The Pod feed never lists: the start's patience runs out with the forward still `Starting`.
+    let starter = starter(&rig);
+    let start = starter.start(pod_spec("api-0", 80));
+    let advance = async {
+        for _ in 0..200 {
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            rig.clock.advance(std::time::Duration::from_secs(1));
+        }
+    };
+    let (started, ()) = futures::join!(start, advance);
+    let started = started.expect("accepted");
+    assert!(started.local_addr.is_none() && started.url().is_none());
+    assert_eq!(
+        rig.manager.list().len(),
+        1,
+        "it stays listed and keeps trying"
+    );
 }
