@@ -7,7 +7,6 @@ use futures::stream::BoxStream;
 use oxikube_domain::{ErrorKind, OxiError};
 use tokio::net::TcpListener;
 use tokio::task::JoinSet;
-use tokio_util::sync::CancellationToken;
 
 use super::bridge::Bridge;
 use super::hub::StopGuard;
@@ -33,8 +32,6 @@ pub(super) struct Accept {
     pub(super) monitor: Monitor,
     pub(super) bridge: Bridge,
     pub(super) stop: StopGuard,
-    /// Cancelled by a graceful stop; the bridges watch it too.
-    pub(super) shutdown: CancellationToken,
     pub(super) max_connections: usize,
 }
 
@@ -52,9 +49,10 @@ impl Accept {
             mut monitor,
             bridge,
             stop,
-            shutdown,
             max_connections,
         } = self;
+        // Cancelled by a graceful stop; the bridges watch the same token.
+        let shutdown = bridge.shutdown.clone();
         let mut bridges = JoinSet::new();
         loop {
             tokio::select! {

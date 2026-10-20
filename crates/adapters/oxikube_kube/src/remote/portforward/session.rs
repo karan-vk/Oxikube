@@ -103,7 +103,6 @@ pub(super) async fn start_with(
         monitor,
         bridge,
         stop: StopGuard(hub.clone()),
-        shutdown: shutdown.clone(),
         max_connections,
     };
     let task = tokio::spawn(accept.run());
