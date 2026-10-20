@@ -8,6 +8,8 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 
+use futures::future::BoxFuture;
+use oxikube_domain::OxiResult;
 use oxikube_domain::ids::ClusterId;
 use oxikube_domain::notification::PortForwardChange;
 use oxikube_domain::portforward::ForwardSpec;
@@ -31,7 +33,16 @@ pub(super) struct Inner {
     pub(super) entries: Mutex<BTreeMap<ForwardId, Entry>>,
     pub(super) next_id: AtomicU64,
     pub(super) changes: watch::Sender<u64>,
+    /// Saves a forward as a favourite (set by [`PortForwardFavourites`]); `portforward::Start`
+    /// with `favourite` calls it once the forward is up.
+    ///
+    /// [`PortForwardFavourites`]: super::PortForwardFavourites
+    pub(super) favourite_saver: Mutex<Option<FavouriteSaver>>,
 }
+
+/// Saves a spec as an auto-start favourite: the favourites' `add`, held weakly by the manager.
+pub(super) type FavouriteSaver =
+    Arc<dyn Fn(ForwardSpec) -> BoxFuture<'static, OxiResult<()>> + Send + Sync>;
 
 pub(super) struct Entry {
     pub(super) spec: ForwardSpec,
@@ -45,6 +56,8 @@ pub(super) struct Entry {
     /// Bumped on every (re)start, so a stopped supervisor's late update is ignored.
     pub(super) generation: u64,
     pub(super) task: Option<TaskGuard>,
+    /// Asks the running supervisor to shut its handle down gracefully (the user's stop).
+    pub(super) stop: Option<futures::channel::oneshot::Sender<()>>,
     /// When the forward was started or last restarted.
     pub(super) started_at: jiff::Timestamp,
 }

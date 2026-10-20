@@ -12,7 +12,7 @@
 //!
 //! # Data, and what it costs
 //!
-//! The panel owns no forward: it reads the manager through a [`ForwardSource`](crate::ForwardSource).
+//! The panel owns no forward: it reads the manager through a [`ForwardSource`].
 //! A state, address or list change wakes it (the manager coalesces them); the traffic counters and
 //! the uptime are sampled on a one second timer, never per byte. Each wake builds the rows off the
 //! manager's list (a lock and a clone of a few dozen entries) and redraws only when a cell would

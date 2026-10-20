@@ -150,6 +150,7 @@ fn render(light: bool) -> anyhow::Result<RgbaImage> {
             set_image: None,
             drain: None,
             rollback: None,
+            forward: None,
         };
         cx.new(|cx| DetailView::new(target, deps, Mount::Drawer, cx))
     })?;

@@ -905,7 +905,7 @@
           ]
         },
         "annotations": {
-          "description": "Annotate forwarded objects (opt-in). Default `false`.",
+          "description": "Read the k9s `k9scli.io/port-forwards` / `auto-port-forwards` pod annotations as\nstart-dialog suggestions (opt-in; read only, nothing is written). Default `false`.",
           "type": [
             "boolean",
             "null"

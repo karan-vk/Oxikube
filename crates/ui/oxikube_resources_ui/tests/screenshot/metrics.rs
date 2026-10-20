@@ -205,6 +205,7 @@ fn render(light: bool, unreachable: bool, height: f32) -> anyhow::Result<RgbaIma
             drain: None,
             set_image: None,
             rollback: None,
+            forward: None,
         };
         cx.new(|cx| DetailView::new(target, deps, Mount::Drawer, cx))
     })?;

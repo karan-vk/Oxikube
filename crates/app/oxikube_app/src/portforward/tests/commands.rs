@@ -166,3 +166,36 @@ async fn pod_port_forward_starts_a_forward_and_port_zero_is_refused() {
     .unwrap_err();
     assert_eq!(err.kind(), ErrorKind::Validation);
 }
+
+/// Audit E15 (#18): Open-in-browser started on the hard-coded loopback default, ignoring
+/// `portforward.default_bind`.
+#[tokio::test]
+async fn open_in_browser_listens_on_the_configured_default_bind() {
+    let rig = Rig::new();
+    rig.manager.set_config(crate::portforward::ForwardConfig {
+        default_bind: "0.0.0.0".parse().unwrap(),
+        ..Default::default()
+    });
+    rig.backend.push(
+        "Service",
+        vec![service(
+            "web",
+            json!([{"name": "http", "port": 80, "targetPort": 8080}]),
+        )],
+    );
+    rig.backend.push(
+        "EndpointSlice",
+        vec![slice(
+            "web-x",
+            "web",
+            json!([{"name": "http", "port": 8080}]),
+            &[("web-a", true)],
+        )],
+    );
+    rig.manager
+        .open_service_port(target("Service", "web"), None)
+        .await
+        .expect("opened");
+    let listed = rig.manager.list();
+    assert_eq!(listed[0].spec.bind.to_string(), "0.0.0.0");
+}

@@ -24,6 +24,9 @@ pub struct StartedForward {
     pub local_addr: Option<SocketAddr>,
     /// The pod serving it (or the Service's pod); `None` while it waits for a ready one.
     pub pod: Option<String>,
+    /// Why "Keep as a favourite" could not be saved (the forward runs regardless); `None` when it
+    /// was saved or not asked for.
+    pub favourite_error: Option<String>,
 }
 
 impl StartedForward {
@@ -82,6 +85,12 @@ impl ForwardStarter {
         })
     }
 
+    /// Where a forward on `cluster` listens unless the user names an address
+    /// (`portforward.default_bind`, per-cluster override first): the start dialog's prefill.
+    pub fn default_bind(&self, cluster: &ClusterId) -> IpAddr {
+        self.manager.config_for(cluster).default_bind
+    }
+
     /// Whether pod annotations are read at all (`portforward.annotations`).
     pub fn annotations(&self) -> bool {
         self.manager.config().annotations
@@ -97,11 +106,13 @@ impl ForwardStarter {
         annotation_suggestions(pod, true, &self.manager.list())
     }
 
-    /// Starts `spec` through `portforward::Start` and waits until it is up.
+    /// Starts `spec` through `portforward::Start` and waits until it is up. With `spec.favourite`
+    /// the handler also saves it as an auto-start favourite ([`StartedForward::favourite_error`]
+    /// says when that failed).
     ///
     /// # Errors
     ///
-    /// The handler's error, whose source is the [`StartError`] ([`StartError::of`]) so a view can
+    /// The handler's error, whose source is the [`StartError`](super::StartError) ([`StartError::of`](super::StartError::of)) so a view can
     /// offer the fix; a [`DispatchError`] mapped to the shared kinds otherwise.
     pub async fn start(&self, spec: ForwardSpec) -> Result<StartedForward, OxiError> {
         let cluster = spec.target.cluster.clone();
@@ -140,10 +151,15 @@ impl ForwardStarter {
             .get("local_addr")
             .and_then(|a| a.as_str())
             .and_then(|a| a.parse::<SocketAddr>().ok());
+        let favourite_error = data
+            .get("favourite_error")
+            .and_then(|e| e.as_str())
+            .map(str::to_owned);
         Ok(StartedForward {
             id,
             local_addr,
             pod,
+            favourite_error,
         })
     }
 }

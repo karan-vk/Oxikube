@@ -1409,7 +1409,13 @@ pub static COMMANDS: &[CommandMeta] = &[
     // The port-forward manager (E15-S03). A forward changes nothing in the cluster, so these are
     // reads; the manager refuses a start on a read-only cluster unless
     // `portforward.allowed_in_readonly`. Stop, restart and remove act on the manager's own list.
-    // Favourites (E15-S06) are local state, not cluster state.
+    // Favourites (E15-S06) are local state, not cluster state. Rows stay sorted by id.
+    CommandMeta::read(
+        CommandId::PORTFORWARD_COPY_URL,
+        "Copy Port-Forward URL",
+        CommandScope::Global,
+        NONE,
+    ),
     CommandMeta::read(
         CommandId::PORTFORWARD_FAVOURITE_ADD,
         "Add Port-Forward Favourite",
@@ -1430,12 +1436,6 @@ pub static COMMANDS: &[CommandMeta] = &[
         NONE,
     ),
     // The manager panel (E15-S05): local, UI-side actions on the manager's own list.
-    CommandMeta::read(
-        CommandId::PORTFORWARD_COPY_URL,
-        "Copy Port-Forward URL",
-        CommandScope::Global,
-        NONE,
-    ),
     CommandMeta::read(
         CommandId::PORTFORWARD_OPEN_IN_BROWSER,
         "Open Port-Forward in Browser",

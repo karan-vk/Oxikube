@@ -153,6 +153,7 @@ pub(crate) fn render_with(
             set_image: None,
             drain: None,
             rollback: None,
+            forward: None,
         };
         cx.new(|cx| DetailView::new(target, deps, Mount::Drawer, cx))
     })?;

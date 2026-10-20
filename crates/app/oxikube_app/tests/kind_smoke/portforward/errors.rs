@@ -119,15 +119,14 @@ async fn closed_port_missing_pod_and_busy_local_port() {
         hint.contains(&busy.to_string()) && hint.contains("automatically"),
         "{hint}"
     );
-    let failed = forwarding
-        .manager
-        .list()
-        .into_iter()
-        .find(|f| f.spec.local_port == busy)
-        .expect("the failed forward stays listed");
+    // A start that fails is not left listed (E15-S04: a retry from the dialog must not
+    // duplicate it), so nothing on the busy port remains.
     assert!(
-        matches!(failed.state, ForwardState::Failed(_)),
-        "{:?}",
-        failed.state
+        !forwarding
+            .manager
+            .list()
+            .iter()
+            .any(|f| f.spec.local_port == busy),
+        "a failed start leaves nothing listed"
     );
 }

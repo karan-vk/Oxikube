@@ -73,8 +73,23 @@ pub(super) async fn run(
             spec.name = name.map(|n| n.trim().to_owned()).filter(|n| !n.is_empty());
             spec.bind =
                 bind.unwrap_or_else(|| manager.config_for(&spec.target.cluster).default_bind);
+            let saved = favourite.then(|| spec.clone());
             let info = manager.start_and_wait(spec).await?;
-            Ok(output(&info))
+            let mut out = output(&info);
+            // "Keep as a favourite": saved once the forward is accepted. A save that fails does
+            // not undo the forward; the output says why so the caller can tell the user.
+            if let Some(spec) = saved
+                && let Err(error) = manager.save_favourite(spec).await
+            {
+                let error = error.to_string();
+                if let Some(message) = out.message.as_mut() {
+                    message.push_str(&format!(" (not saved as a favourite: {error})"));
+                }
+                if let Some(serde_json::Value::Object(data)) = out.data.as_mut() {
+                    data.insert("favourite_error".into(), json!(error));
+                }
+            }
+            Ok(out)
         }
         Command::PodPortForward {
             target,
@@ -174,7 +189,8 @@ impl ServicePortOpener for PortForwardManager {
         let info = match active {
             Some(info) => info,
             None => {
-                self.start_and_wait(ForwardSpec::new(service, remote_port))
+                let bind = self.config_for(&service.cluster).default_bind;
+                self.start_and_wait(ForwardSpec::new(service, remote_port).with_bind(bind))
                     .await?
             }
         };

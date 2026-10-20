@@ -56,16 +56,34 @@ impl PortForwardFavourites {
         clock: Arc<dyn ClockPort>,
         notify: Option<Arc<dyn NotificationSourcePort>>,
     ) -> Self {
-        Self {
+        let favourites = Self {
             inner: Arc::new(Inner {
                 store: FavouriteStore::new(state),
-                manager,
+                manager: manager.clone(),
                 clock,
                 notify,
                 spawner,
                 restores: Mutex::new(HashMap::new()),
             }),
-        }
+        };
+        // `portforward::Start` with `favourite` (the dialog's "Keep as a favourite") saves
+        // through here. Weak: the manager must not keep the favourites alive.
+        let weak = Arc::downgrade(&favourites.inner);
+        manager.set_favourite_saver(Arc::new(move |spec: ForwardSpec| {
+            let weak = weak.clone();
+            async move {
+                let inner = weak
+                    .upgrade()
+                    .ok_or_else(|| OxiError::internal("port-forward favourites are gone"))?;
+                let name = spec.name.clone();
+                PortForwardFavourites { inner }
+                    .add(spec, name, true)
+                    .await
+                    .map(drop)
+            }
+            .boxed()
+        }));
+        favourites
     }
 
     /// Every favourite.

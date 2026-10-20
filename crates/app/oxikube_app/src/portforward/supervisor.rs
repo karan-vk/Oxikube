@@ -5,74 +5,28 @@
 //! forward, and the backoff timer of a pending attempt. A snapshot that makes the current pod
 //! unusable drops the forward and re-resolves at once; a snapshot that makes a waiting forward
 //! resolvable tries at once. A pending backoff is a deadline: snapshots neither cut it short nor
-//! push it back. The task ends when the forward fails (or is aborted by a stop).
+//! push it back. The task ends when the forward fails, or on the user's stop: then the running
+//! handle is shut down gracefully (no new connections, open ones drain within the adapter's
+//! grace period) before the task returns. A restart, or a task that outlives
+//! [`STOP_GRACE`], is aborted instead.
 
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
+use futures::channel::oneshot;
 use futures::future::{Either, FutureExt as _};
-use futures::stream::{BoxStream, StreamExt as _};
+use futures::stream::StreamExt as _;
 use jiff::Timestamp;
 use oxikube_domain::Resource;
 use oxikube_domain::portforward::{ForwardSpec, PortRange};
-use oxikube_domain::session::WatchScope;
-use oxikube_domain::view::SERVICE_NAME_LABEL;
 use oxikube_ports::{ClockPort, ForwardHandle, PodRef, PortForwardError, PortForwardPort};
 
 use super::alloc::start_in_range;
-use super::backend::ForwardBackend;
 use super::model::ForwardId;
 use super::registry::Inner;
 use super::resolve::{TargetView, Unresolved, pod_usable, resolve};
 use super::state::{ForwardEvent, ForwardState};
-use crate::network::ServiceBackends;
-use crate::store::{LabelSelector, LabelTerm, StoreFilter, StoreQuery};
-
-/// Which feed a watch item comes from.
-#[derive(Debug, Clone, Copy)]
-enum Part {
-    Pod,
-    Service,
-    Slices,
-}
-
-/// The merged watch of a forward's target.
-pub(super) struct TargetWatch(BoxStream<'static, (Part, Result<Vec<Resource>, String>)>);
-
-/// Watches what `spec`'s target needs: the pod, or the Service and its EndpointSlices.
-pub(super) fn watch_target(
-    backend: &dyn ForwardBackend,
-    spec: &ForwardSpec,
-) -> Option<TargetWatch> {
-    let target = &spec.target;
-    let cluster = &target.cluster;
-    let namespace = target.namespace.as_deref()?.to_owned();
-    let scope = WatchScope::Namespaces(vec![namespace]);
-    let by_name = StoreFilter {
-        name: Some(target.name.to_string()),
-        ..StoreFilter::default()
-    };
-    let tag = |part: Part, watch: super::backend::ObjectWatch| watch.map(move |item| (part, item));
-    if spec.targets_service() {
-        let service = StoreQuery::new(target.gvk.clone(), scope.clone()).with_filter(by_name);
-        let slices = StoreQuery::new(ServiceBackends::slice_gvk(), scope).with_selector(Some(
-            LabelSelector::from_terms(vec![LabelTerm::Eq(
-                SERVICE_NAME_LABEL.to_owned(),
-                target.name.to_string(),
-            )]),
-        ));
-        let service = tag(Part::Service, backend.watch(cluster, service)?);
-        let slices = tag(Part::Slices, backend.watch(cluster, slices)?);
-        Some(TargetWatch(
-            futures::stream::select(service, slices).boxed(),
-        ))
-    } else {
-        let pod = StoreQuery::new(target.gvk.clone(), scope).with_filter(by_name);
-        Some(TargetWatch(
-            tag(Part::Pod, backend.watch(cluster, pod)?).boxed(),
-        ))
-    }
-}
+use super::target_watch::{Part, TargetWatch, view_apply};
 
 /// One running forward. See the [module docs](self).
 pub(super) struct Supervisor {
@@ -89,14 +43,20 @@ pub(super) struct Supervisor {
     pub last_pod: Option<String>,
 }
 
+/// How long a stopping supervisor may take to drain its connections before it is aborted (the
+/// adapter's own grace is 2 s).
+pub(super) const STOP_GRACE: Duration = Duration::from_secs(3);
+
 enum Wake {
+    /// The user stopped or removed the forward (or its entry went away).
+    Stop,
     Watch(Option<(Part, Result<Vec<Resource>, String>)>),
     Forward(Option<PortForwardError>),
     Timer,
 }
 
 impl Supervisor {
-    pub(super) async fn run(mut self, mut watch: TargetWatch) {
+    pub(super) async fn run(mut self, mut watch: TargetWatch, mut stop: oneshot::Receiver<()>) {
         let service = self.spec.targets_service();
         let mut view = TargetView::default();
         let mut handle: Option<ForwardHandle> = None;
@@ -125,12 +85,19 @@ impl Supervisor {
                     None => Either::Right(futures::future::pending()),
                 };
                 futures::select_biased! {
+                    _ = stop => Wake::Stop,
                     w = watch_next.fuse() => w,
                     w = forward_next.fuse() => w,
                     w = timer.fuse() => w,
                 }
             };
             match wake {
+                Wake::Stop => {
+                    if let Some(handle) = handle.take() {
+                        handle.shutdown().await;
+                    }
+                    return;
+                }
                 Wake::Watch(Some((part, Ok(objects)))) => {
                     view_apply(&mut view, part, objects);
                     if !view.is_ready(service) {
@@ -340,12 +307,4 @@ impl Supervisor {
 fn due(clock: &dyn ClockPort, delay: Option<Duration>) -> Option<Timestamp> {
     let now = clock.now();
     delay.map(|delay| now.saturating_add(delay).unwrap_or(now))
-}
-
-fn view_apply(view: &mut TargetView, part: Part, mut objects: Vec<Resource>) {
-    match part {
-        Part::Pod => view.pod = Some(objects.pop()),
-        Part::Service => view.service = Some(objects.pop()),
-        Part::Slices => view.slices = Some(objects),
-    }
 }

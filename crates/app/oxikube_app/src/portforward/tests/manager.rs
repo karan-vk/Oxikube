@@ -478,3 +478,155 @@ async fn start_and_wait_does_not_hang_on_a_feed_that_never_lists() {
     let (info, ()) = futures::join!(wait, advance);
     assert_eq!(info.expect("still starting").state, ForwardState::Starting);
 }
+
+/// The testkit port, with a graceful stop that counts its calls.
+struct GracefulPort {
+    inner: std::sync::Arc<oxikube_testkit::FakePortForwardPort>,
+    shutdowns: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+}
+
+#[async_trait::async_trait]
+impl oxikube_ports::PortForwardPort for GracefulPort {
+    async fn forward(
+        &self,
+        namespace: &str,
+        pod: &str,
+        port: u16,
+    ) -> oxikube_domain::OxiResult<oxikube_ports::PortForwardConnection> {
+        self.inner.forward(namespace, pod, port).await
+    }
+
+    async fn start(
+        &self,
+        target: PodRef,
+        remote_port: u16,
+        bind: std::net::IpAddr,
+        local_port: Option<u16>,
+    ) -> Result<oxikube_ports::ForwardHandle, PortForwardError> {
+        use futures::FutureExt as _;
+        let mut handle = self
+            .inner
+            .start(target, remote_port, bind, local_port)
+            .await?;
+        let errors = std::mem::replace(&mut handle.errors, futures::channel::mpsc::unbounded().1);
+        let (addr, stats) = (handle.local_addr, handle.stats.clone());
+        let shutdowns = self.shutdowns.clone();
+        Ok(
+            oxikube_ports::ForwardHandle::new(addr, stats, errors, handle).with_graceful_stop(
+                move || {
+                    shutdowns.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    async {}.boxed()
+                },
+            ),
+        )
+    }
+}
+
+/// Audit E15 (#18): the user's stop and remove aborted the supervisor, so the handle was dropped
+/// (connections reset) and the adapter's graceful drain never ran.
+#[tokio::test]
+async fn stop_and_remove_shut_the_forward_down_gracefully() {
+    use std::sync::atomic::Ordering;
+    let rig = Rig::new();
+    let shutdowns = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    *rig.backend.port_override.lock() = Some(std::sync::Arc::new(GracefulPort {
+        inner: rig.port.clone(),
+        shutdowns: shutdowns.clone(),
+    }));
+    rig.backend.push("Pod", vec![pod("api-0", "Running")]);
+    let id = rig.manager.start(pod_spec("api-0", 80)).expect("start");
+    let info = rig.until(id, is_active).await;
+    let addr = info.local_addr.expect("bound");
+
+    assert_eq!(shutdowns.load(Ordering::SeqCst), 0);
+    assert!(rig.manager.stop(id));
+    for _ in 0..1000 {
+        if shutdowns.load(Ordering::SeqCst) == 1 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    assert_eq!(shutdowns.load(Ordering::SeqCst), 1, "the stop drains");
+    assert!(matches!(
+        rig.manager.get(id).unwrap().state,
+        ForwardState::Stopped
+    ));
+    // After the drain the handle is gone and the port is free.
+    let mut freed = false;
+    for _ in 0..1000 {
+        if std::net::TcpListener::bind(addr).is_ok() {
+            freed = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    assert!(freed, "the listener closed after the graceful stop");
+
+    rig.manager.restart(id).expect("start again");
+    rig.until(id, is_active).await;
+    assert!(rig.manager.remove(id));
+    for _ in 0..1000 {
+        if shutdowns.load(Ordering::SeqCst) == 2 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    assert_eq!(shutdowns.load(Ordering::SeqCst), 2, "a remove drains too");
+}
+
+/// Audit E15 (#18): the EndpointSlice watch used a server-side selector, so each Service forwarded
+/// opened its own feed and watch-budget slot. Now forwards to different Services in a namespace
+/// ask for the same feed and filter on the client.
+#[tokio::test]
+async fn service_forwards_in_a_namespace_share_one_endpoint_slice_feed() {
+    let rig = Rig::new();
+    rig.backend.push(
+        "Service",
+        vec![
+            service(
+                "web",
+                json!([{"name": "http", "port": 80, "targetPort": 8080}]),
+            ),
+            service(
+                "api",
+                json!([{"name": "http", "port": 80, "targetPort": 8080}]),
+            ),
+        ],
+    );
+    rig.backend.push(
+        "EndpointSlice",
+        vec![
+            slice(
+                "web-x",
+                "web",
+                json!([{"name": "http", "port": 8080}]),
+                &[("web-a", true)],
+            ),
+            slice(
+                "api-x",
+                "api",
+                json!([{"name": "http", "port": 8080}]),
+                &[("api-a", true)],
+            ),
+        ],
+    );
+    let web = rig.manager.start(service_spec("web", 80)).expect("web");
+    let api = rig.manager.start(service_spec("api", 80)).expect("api");
+    assert_eq!(active_pod(&rig.until(web, is_active).await), Some("web-a"));
+    assert_eq!(active_pod(&rig.until(api, is_active).await), Some("api-a"));
+    let slices: Vec<_> = rig
+        .backend
+        .queries
+        .lock()
+        .iter()
+        .filter(|q| &*q.gvk.kind == "EndpointSlice")
+        .cloned()
+        .collect();
+    assert_eq!(slices.len(), 2);
+    assert!(
+        slices.iter().all(|q| q.selector.is_none()),
+        "no server-side selector: one feed per namespace"
+    );
+    assert_eq!(slices[0].scope, slices[1].scope);
+    assert!(slices.iter().all(|q| q.filter.labels.is_some()));
+}

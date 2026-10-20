@@ -152,6 +152,7 @@ fn render(light: bool, metrics: MetricsOutcome, with_quota: bool) -> anyhow::Res
             set_image: None,
             rollback: None,
             drain: None,
+            forward: None,
         };
         cx.new(|cx| DetailView::new(target, deps, Mount::Drawer, cx))
     })?;

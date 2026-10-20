@@ -340,14 +340,8 @@ fn fifty_busy_forwards_redraw_once_per_sample(cx: &mut TestAppContext) {
         (1..=10).contains(&redraws),
         "exactly one coalesced redraw per sample at most (and the panel does repaint), saw {redraws}"
     );
-    // docs/PERFORMANCE.md: p95 frame <= 8 ms. Generous x4 for an unoptimised test build; it
-    // still catches an accidental O(n^2) in the row formatting.
-    assert!(
-        p95 < std::time::Duration::from_millis(32),
-        "frame p95 over budget: {p95:?}"
-    );
-    assert!(
-        worst < std::time::Duration::from_millis(32),
-        "a sample took {worst:?}"
-    );
+    // No wall-clock assertion here: on a shared CI runner it measured the runner, not the panel
+    // (audit E15, #18: "a sample took 41.9ms" on a loaded ubuntu runner). The frame budget for
+    // 50 forwards belongs in a `--perf` scenario (#728); this test pins what is deterministic:
+    // one coalesced redraw per sample at most.
 }

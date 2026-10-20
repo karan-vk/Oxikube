@@ -103,7 +103,11 @@ pub(super) fn slice(
 #[derive(Default)]
 pub(super) struct FakeBackend {
     pub port: Option<Arc<FakePortForwardPort>>,
+    /// Replaces `port` when set (a test's own port, e.g. one with a graceful stop).
+    pub port_override: Mutex<Option<Arc<dyn PortForwardPort>>>,
     pub read_only: Mutex<bool>,
+    /// Every query a watch was opened with.
+    pub queries: Mutex<Vec<StoreQuery>>,
     feeds: Mutex<HashMap<String, Feed>>,
 }
 
@@ -134,6 +138,9 @@ impl FakeBackend {
 
 impl ForwardBackend for FakeBackend {
     fn port_forward(&self, _: &ClusterId) -> Option<Arc<dyn PortForwardPort>> {
+        if let Some(port) = self.port_override.lock().clone() {
+            return Some(port);
+        }
         self.port.clone().map(|p| p as Arc<dyn PortForwardPort>)
     }
 
@@ -149,13 +156,17 @@ impl ForwardBackend for FakeBackend {
             let _ = tx.unbounded_send(Ok(last.clone()));
         }
         feed.watchers.push(tx);
+        drop(feeds);
+        self.queries.lock().push(query.clone());
         let name = query.filter.name;
+        let labels = query.filter.labels;
         Some(
             rx.map(move |item| {
                 item.map(|objects| {
                     objects
                         .into_iter()
                         .filter(|o| name.as_deref().is_none_or(|n| &*o.meta.name == n))
+                        .filter(|o| labels.as_ref().is_none_or(|l| l.matches(&o.meta.labels)))
                         .collect()
                 })
             })

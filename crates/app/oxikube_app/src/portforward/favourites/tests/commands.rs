@@ -82,3 +82,60 @@ async fn the_three_commands_register_with_their_declared_metadata() {
     // Registering twice is a wiring bug, reported.
     assert!(register_commands(&mut registry, favs.favourites).is_err());
 }
+
+/// Audit E15 (#18): the dialog's "Keep as a favourite" reached `portforward::Start` as
+/// `favourite: true` and nothing saved it, so restore-on-launch had nothing to restore.
+#[tokio::test]
+async fn a_start_with_favourite_saves_an_auto_start_favourite() {
+    let favs = Favs::new();
+    favs.rig.backend.push(
+        "Pod",
+        vec![crate::portforward::tests::pod("db-0", "Running")],
+    );
+    let out = crate::portforward::commands::run(
+        &favs.rig.manager,
+        Command::PortForwardStart {
+            target: pod_in(cluster(), "db-0"),
+            remote_port: ForwardPort::Number(5432),
+            local_port: None,
+            bind: None,
+            name: Some("staging db".into()),
+            favourite: true,
+        },
+    )
+    .await
+    .expect("started");
+    assert!(out.data.unwrap().get("favourite_error").is_none());
+    let saved = favs.favourites.list().await.unwrap();
+    assert_eq!(saved.len(), 1, "the start saved it");
+    assert_eq!(saved[0].name, "staging db");
+    assert!(saved[0].auto_start);
+    assert_eq!(saved[0].spec.local_port, 0, "Auto stays Auto");
+    assert_eq!(
+        favs.favourites.find(&spec("db-0", 5432)).await.unwrap(),
+        Some(saved[0].clone())
+    );
+}
+
+#[tokio::test]
+async fn a_start_without_favourite_saves_nothing() {
+    let favs = Favs::new();
+    favs.rig.backend.push(
+        "Pod",
+        vec![crate::portforward::tests::pod("db-0", "Running")],
+    );
+    crate::portforward::commands::run(
+        &favs.rig.manager,
+        Command::PortForwardStart {
+            target: pod_in(cluster(), "db-0"),
+            remote_port: ForwardPort::Number(5432),
+            local_port: None,
+            bind: None,
+            name: None,
+            favourite: false,
+        },
+    )
+    .await
+    .expect("started");
+    assert!(favs.favourites.list().await.unwrap().is_empty());
+}
