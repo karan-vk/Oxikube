@@ -161,7 +161,7 @@ proptest! {
                 let uid = format!("o{object}");
                 let all = model.query(&EventFilter::new().object(uid.as_str()));
                 let warnings = all.iter().filter(|e| e.is_warning()).count();
-                prop_assert_eq!(buffer.object_counts(&uid), (all.len(), warnings));
+                prop_assert_eq!(buffer.object_counts(&uid, None), (all.len(), warnings));
             }
         }
     }

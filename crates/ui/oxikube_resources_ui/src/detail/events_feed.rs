@@ -10,7 +10,7 @@ use std::task::Poll;
 
 use futures::Stream as _;
 use gpui::Context;
-use oxikube_app::EventsState;
+use oxikube_app::{EventsState, ObjectIdentity, ObjectTarget};
 use oxikube_runtime::notify_coalesced;
 
 use super::events::rows_of;
@@ -54,11 +54,12 @@ impl DetailView {
         let meta = object.meta();
         // A Node's events are recorded under its name as well as its uid.
         let cluster_scoped_name = self.target.namespace().is_none().then_some(&*meta.name);
-        let feed = events.object_feed(
-            &self.target.cluster,
-            meta.uid.as_deref(),
-            cluster_scoped_name,
+        // The events whose writer gave no uid are found by the object's name.
+        let target = ObjectTarget::named(
+            meta.uid.clone(),
+            ObjectIdentity::new(&self.target.gvk.kind, meta.namespace.as_deref(), &meta.name),
         );
+        let feed = events.object_feed(&self.target.cluster, &target, cluster_scoped_name);
         self.events.feed = Some(feed);
         self.events.uid = meta.uid.clone();
         self.events.error = None;
