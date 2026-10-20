@@ -6,7 +6,7 @@ use jiff::SignedDuration;
 use oxikube_domain::event::EventType;
 
 use super::{ev, t0, uids, warning};
-use crate::events::{EventBuffer, EventFilter};
+use crate::events::{EventBuffer, EventFilter, ObjectIdentity, ObjectTarget};
 
 /// a: Normal Pulled, ns-a, pod-1, t=1
 /// b: Warning BackOff, ns-a, pod-1, t=5 (reported by kubelet)
@@ -119,4 +119,84 @@ fn a_lazy_query_stops_after_what_is_taken() {
     let buffer = buffer();
     let filter = EventFilter::new();
     assert_eq!(uids(buffer.query(&filter).take(2)), ["b", "d"]);
+}
+
+/// The pod `pod-1` of `ns-a` with the uid `uid`: what a row or a tab looks up.
+fn pod_target(uid: &str) -> ObjectTarget {
+    ObjectTarget::named(
+        Some(Arc::from(uid)),
+        ObjectIdentity::new("Pod", Some("ns-a"), "pod-1"),
+    )
+}
+
+#[test]
+fn an_event_whose_writer_gave_no_uid_is_about_its_object_by_name() {
+    let mut buffer = EventBuffer::new(10);
+    buffer.upsert(ev("with-uid", "ns-a", "pod-1", 1));
+    let mut nameless = ev("no-uid", "ns-a", "pod-1", 5);
+    nameless.regarding_uid = None;
+    buffer.upsert(nameless);
+    buffer.assert_consistent();
+
+    let filter = EventFilter::new().object_target(pod_target("pod-1"));
+    assert_eq!(
+        uids(buffer.query(&filter)),
+        ["no-uid", "with-uid"],
+        "the event that gave no uid is listed too"
+    );
+}
+
+#[test]
+fn an_event_with_another_objects_uid_is_not_about_this_one() {
+    let mut buffer = EventBuffer::new(10);
+    // The pod was deleted and re-created under the same name: the old pod's event carries the
+    // old uid.
+    let mut old = ev("old", "ns-a", "pod-1", 1);
+    old.regarding_uid = Some(Arc::from("pod-1-old"));
+    buffer.upsert(old);
+    let mut nameless = ev("no-uid", "ns-a", "pod-1", 5);
+    nameless.regarding_uid = None;
+    buffer.upsert(nameless);
+    buffer.assert_consistent();
+
+    let filter = EventFilter::new().object_target(pod_target("pod-1-new"));
+    assert_eq!(
+        uids(buffer.query(&filter)),
+        ["no-uid"],
+        "the old pod's event stays with the old pod"
+    );
+}
+
+#[test]
+fn a_query_by_uid_alone_ignores_the_events_that_gave_no_uid() {
+    let mut buffer = EventBuffer::new(10);
+    let mut nameless = ev("no-uid", "ns-a", "pod-1", 5);
+    nameless.regarding_uid = None;
+    buffer.upsert(nameless);
+    // Without the name there is nothing to match the event on.
+    let filter = EventFilter::new().object("pod-1");
+    assert!(buffer.query(&filter).next().is_none());
+}
+
+#[test]
+fn a_query_by_name_alone_finds_the_events_that_gave_no_uid() {
+    let mut buffer = EventBuffer::new(10);
+    let mut nameless = ev("no-uid", "ns-a", "pod-1", 5);
+    nameless.regarding_uid = None;
+    buffer.upsert(nameless);
+    let target = ObjectTarget::named(None, ObjectIdentity::new("Pod", Some("ns-a"), "pod-1"));
+    let filter = EventFilter::new().object_target(target);
+    assert_eq!(uids(buffer.query(&filter)), ["no-uid"]);
+}
+
+#[test]
+fn the_events_of_an_object_are_counted_by_uid_and_by_name() {
+    let mut buffer = EventBuffer::new(10);
+    buffer.upsert(ev("with-uid", "ns-a", "pod-1", 1));
+    let mut nameless = warning("no-uid", "ns-a", "pod-1", 5, "BackOff");
+    nameless.regarding_uid = None;
+    buffer.upsert(nameless);
+    let identity = ObjectIdentity::new("Pod", Some("ns-a"), "pod-1");
+    assert_eq!(buffer.object_counts("pod-1", Some(&identity)), (2, 1));
+    assert_eq!(buffer.object_counts("pod-1", None), (1, 0));
 }

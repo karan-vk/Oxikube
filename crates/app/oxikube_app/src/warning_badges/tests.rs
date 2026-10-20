@@ -17,13 +17,18 @@ use oxikube_testkit::{
 };
 
 use super::{DEFAULT_WARNING_WINDOW, WarningBadges};
-use crate::events::{EventService, EventsConfig, EventsState};
+use crate::events::{EventService, EventsConfig, EventsState, ObjectIdentity, ObjectTarget};
 use crate::overview::RecentWarnings;
 use crate::session::ClusterSessionManager;
 use crate::store::Spawner;
 
 fn cluster() -> ClusterId {
     ClusterId::new("/home/me/.kube/config", &ContextName::new("a"))
+}
+
+/// The object `kind`/`ns`/`name` with the uid `uid`: what a row or a tab looks up.
+fn target(kind: &str, uid: Option<&str>, ns: Option<&str>, name: &str) -> ObjectTarget {
+    ObjectTarget::named(uid.map(Arc::from), ObjectIdentity::new(kind, ns, name))
 }
 
 fn t0() -> Timestamp {
@@ -335,6 +340,63 @@ async fn a_disconnect_forgets_the_badges() {
 }
 
 #[tokio::test]
+async fn a_warning_whose_writer_gave_no_uid_badges_the_row_by_its_name() {
+    let h = Harness::new();
+    h.connect().await;
+    let mut event = warning("w1", "web", 10, "BackOff");
+    event.regarding_uid = None;
+    h.port().install(FakeEventFeed::new().initial([event]));
+    let _track = h.badges.track(&cluster());
+    h.until("badged by name", |h| {
+        h.badges
+            .for_cluster(&cluster())
+            .get_for(&target("Pod", Some("web"), Some("ns"), "web"), None, at(20))
+            .is_some()
+    })
+    .await;
+    let badges = h.badges.for_cluster(&cluster());
+    // Another pod of the namespace is not badged by it.
+    assert!(
+        badges
+            .get_for(
+                &target("Pod", Some("other"), Some("ns"), "other"),
+                None,
+                at(20)
+            )
+            .is_none()
+    );
+}
+
+#[tokio::test]
+async fn a_warning_with_another_objects_uid_does_not_badge_the_row() {
+    let h = Harness::new();
+    h.connect().await;
+    // The pod was deleted and re-created under the same name: the warning carries the old uid.
+    let mut event = warning("w1", "web", 10, "BackOff");
+    event.regarding_uid = Some(Arc::from("web-old"));
+    h.port().install(FakeEventFeed::new().initial([event]));
+    let _track = h.badges.track(&cluster());
+    h.until("the warning is held", |h| {
+        h.badges
+            .for_cluster(&cluster())
+            .get("web-old", at(20))
+            .is_some()
+    })
+    .await;
+    let badges = h.badges.for_cluster(&cluster());
+    assert!(
+        badges
+            .get_for(
+                &target("Pod", Some("web-new"), Some("ns"), "web"),
+                None,
+                at(20)
+            )
+            .is_none(),
+        "the old pod's warning stays with the old pod"
+    );
+}
+
+#[tokio::test]
 async fn a_cluster_scoped_object_is_also_badged_under_its_name() {
     let h = Harness::new();
     h.connect().await;
@@ -347,10 +409,22 @@ async fn a_cluster_scoped_object_is_also_badged_under_its_name() {
     h.until("badged", |h| h.reason_of("node-1", at(20)).is_some())
         .await;
     let badges = h.badges.for_cluster(&cluster());
-    assert!(badges.get_for(Some("real-uid"), None, at(20)).is_none());
     assert!(
         badges
-            .get_for(Some("real-uid"), Some("node-1"), at(20))
+            .get_for(
+                &target("Node", Some("real-uid"), None, "node-1"),
+                None,
+                at(20)
+            )
+            .is_none()
+    );
+    assert!(
+        badges
+            .get_for(
+                &target("Node", Some("real-uid"), None, "node-1"),
+                Some("node-1"),
+                at(20),
+            )
             .is_some()
     );
 }
@@ -406,7 +480,11 @@ async fn an_objects_feed_lists_its_events_newest_first() {
             ])
             .add(1, warning("e5", "web", 50, "Failed")),
     );
-    let mut feed = h.badges.object_feed(&cluster(), Some("web"), None);
+    let mut feed = h.badges.object_feed(
+        &cluster(),
+        &target("Pod", Some("web"), Some("ns"), "web"),
+        None,
+    );
     tokio::time::timeout(Duration::from_secs(5), feed.next())
         .await
         .expect("a first item")
@@ -449,9 +527,11 @@ async fn a_nodes_feed_merges_its_uid_and_its_name() {
     h.port().install(
         FakeEventFeed::new().initial([on("by-uid", 10, "node-uid"), on("by-name", 20, "node-1")]),
     );
-    let mut feed = h
-        .badges
-        .object_feed(&cluster(), Some("node-uid"), Some("node-1"));
+    let mut feed = h.badges.object_feed(
+        &cluster(),
+        &target("Node", Some("node-uid"), None, "node-1"),
+        Some("node-1"),
+    );
     while feed.events().len() < 2 {
         tokio::time::timeout(Duration::from_secs(5), feed.next())
             .await
@@ -466,5 +546,65 @@ async fn a_nodes_feed_merges_its_uid_and_its_name() {
     assert_eq!(
         uids.iter().map(|u| &**u).collect::<Vec<_>>(),
         ["by-name", "by-uid"]
+    );
+}
+
+#[tokio::test]
+async fn an_objects_feed_lists_the_events_whose_writer_gave_no_uid() {
+    let h = Harness::new();
+    h.connect().await;
+    let mut nameless = normal("no-uid", "web", 20);
+    nameless.regarding_uid = None;
+    h.port()
+        .install(FakeEventFeed::new().initial([normal("e1", "web", 10), nameless]));
+    let mut feed = h.badges.object_feed(
+        &cluster(),
+        &target("Pod", Some("web"), Some("ns"), "web"),
+        None,
+    );
+    while feed.events().len() < 2 {
+        tokio::time::timeout(Duration::from_secs(5), feed.next())
+            .await
+            .expect("a change")
+            .expect("not ended");
+    }
+    let uids: Vec<_> = feed
+        .events()
+        .iter()
+        .map(|e| e.uid.clone().unwrap())
+        .collect();
+    assert_eq!(
+        uids.iter().map(|u| &**u).collect::<Vec<_>>(),
+        ["no-uid", "e1"],
+        "the event that gave no uid is listed, newest first"
+    );
+}
+
+#[tokio::test]
+async fn a_nodes_feed_lists_an_event_that_gave_no_uid_only_once() {
+    let h = Harness::new();
+    h.connect().await;
+    // The writer gave no uid: the event is found by the node's name, through both of the
+    // feed's subscriptions.
+    let mut nameless = normal("no-uid", "node-1", 20);
+    nameless.regarding.gvk = oxikube_domain::ids::Gvk::new("", "v1", "Node");
+    nameless.regarding.namespace = None;
+    nameless.regarding_uid = None;
+    h.port().install(FakeEventFeed::new().initial([nameless]));
+    let mut feed = h.badges.object_feed(
+        &cluster(),
+        &target("Node", Some("node-uid"), None, "node-1"),
+        Some("node-1"),
+    );
+    while feed.events().is_empty() {
+        tokio::time::timeout(Duration::from_secs(5), feed.next())
+            .await
+            .expect("a change")
+            .expect("not ended");
+    }
+    assert_eq!(
+        feed.events().len(),
+        1,
+        "the event is listed once, not once per subscription"
     );
 }

@@ -14,12 +14,13 @@
 //!
 //! A row shows the badge when its object has a `Warning` event last seen within the window
 //! ([`DEFAULT_WARNING_WINDOW`], one hour; `events.warning_window`). The model is a map from the
-//! involved object's uid to the newest `Warning` about it, kept up to date from a warnings-only
+//! involved object to the newest `Warning` about it, kept up to date from a warnings-only
 //! subscription: a table reads one entry per visible row (a hash lookup under a read lock, no
 //! scan of events). The window is compared at read time, so a badge expires without any event
 //! arriving; [`ClusterBadges::expired_between`] counts the entries that crossed the window between two
-//! looks so a view can redraw once when some did. Events the writer gave no involved-object uid are not badged (they stay
-//! in the events view).
+//! looks so a view can redraw once when some did. An event whose writer gave no involved-object
+//! uid is badged by the object's name (kind, namespace and name), so it reaches the row it
+//! belongs to; an event that carries another object's uid never badges this one.
 //!
 //! The cluster-wide feed is the service's one: tracking a cluster is a subscription like any
 //! other and keeps that feed running while the cluster's tab is open.
@@ -45,7 +46,7 @@ use oxikube_domain::ids::ClusterId;
 use oxikube_ports::ClockPort;
 use parking_lot::RwLock;
 
-use crate::events::{EventService, seen_at, warning_row};
+use crate::events::{EventService, ObjectTarget, seen_at, warning_row};
 use crate::overview::{RecentWarnings, WarningRow};
 use crate::store::Spawner;
 
@@ -167,10 +168,10 @@ impl WarningBadges {
     pub fn object_feed(
         &self,
         cluster: &ClusterId,
-        uid: Option<&str>,
+        target: &ObjectTarget,
         cluster_scoped_name: Option<&str>,
     ) -> ObjectEventsFeed {
-        ObjectEventsFeed::new(&self.shared.service, cluster, uid, cluster_scoped_name)
+        ObjectEventsFeed::new(&self.shared.service, cluster, target, cluster_scoped_name)
     }
 }
 

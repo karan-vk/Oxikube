@@ -43,7 +43,7 @@ fn at_capacity_the_oldest_by_last_seen_is_evicted_from_every_index() {
     assert_eq!(buffer.evicted(), 1);
     assert_eq!(uids(buffer.query(&EventFilter::new())), ["d", "b", "c"]);
     assert_eq!(
-        buffer.object_counts("pod-x"),
+        buffer.object_counts("pod-x", None),
         (0, 0),
         "no stale object entry"
     );
@@ -92,11 +92,11 @@ fn deletes_and_relists_keep_the_indexes_clean() {
         warning("w", "ns", "pod", 1, "BackOff").into(),
     ));
     buffer.apply(Delta::Applied(ev("n", "ns", "pod", 2).into()));
-    assert_eq!(buffer.object_counts("pod"), (2, 1));
+    assert_eq!(buffer.object_counts("pod", None), (2, 1));
     buffer.apply(Delta::Deleted(
         warning("w", "ns", "pod", 1, "BackOff").into(),
     ));
-    assert_eq!(buffer.object_counts("pod"), (1, 0));
+    assert_eq!(buffer.object_counts("pod", None), (1, 0));
     buffer.assert_consistent();
 
     buffer.apply(Delta::Restarted(vec![
@@ -105,7 +105,7 @@ fn deletes_and_relists_keep_the_indexes_clean() {
     ]));
     buffer.assert_consistent();
     assert_eq!(buffer.len(), 1, "a relist replaces everything and dedupes");
-    assert_eq!(buffer.object_counts("pod"), (0, 0));
+    assert_eq!(buffer.object_counts("pod", None), (0, 0));
     let all = EventFilter::new();
     let x = buffer.query(&all).next().unwrap();
     assert_eq!(x.last_seen, Some(t0() + SignedDuration::from_secs(6)));

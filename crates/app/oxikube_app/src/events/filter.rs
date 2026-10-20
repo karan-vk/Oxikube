@@ -4,12 +4,16 @@
 //! OR (`reasons(["BackOff", "Failed"])` is either reason). The text pattern is compiled once,
 //! when the filter is built, and never per event: it is the `/` filter's [`TextPattern`] (a
 //! case-insensitive substring, or a regular expression when the text has regex syntax).
+//!
+//! The object part is an [`ObjectTarget`]: the uid of the object the events are about, and the
+//! name (kind, namespace, name) the events that gave no uid are matched on.
 
 use std::sync::Arc;
 
 use jiff::Timestamp;
 use oxikube_domain::event::{Event, EventType};
 
+use super::object::{ObjectIdentity, ObjectTarget};
 use crate::store::TextPattern;
 
 /// A text pattern that did not compile.
@@ -29,7 +33,7 @@ pub struct EventFilter {
     reasons: Vec<Arc<str>>,
     kinds: Vec<Arc<str>>,
     namespaces: Vec<Arc<str>>,
-    object: Option<Arc<str>>,
+    object: Option<ObjectTarget>,
     since: Option<Timestamp>,
     text: Option<TextPattern>,
 }
@@ -85,7 +89,15 @@ impl EventFilter {
     /// Only events about the object with this uid (the involved object, `regarding.uid`).
     #[must_use]
     pub fn object(mut self, uid: impl Into<Arc<str>>) -> Self {
-        self.object = Some(uid.into());
+        self.object = Some(ObjectTarget::uid(uid));
+        self
+    }
+
+    /// Only events about this object: the events that carry its uid, and the events that gave
+    /// no uid and name it (see [`ObjectTarget`]).
+    #[must_use]
+    pub fn object_target(mut self, target: ObjectTarget) -> Self {
+        self.object = Some(target);
         self
     }
 
@@ -123,7 +135,13 @@ impl EventFilter {
 
     /// The involved-object uid this filter is limited to.
     pub fn object_uid(&self) -> Option<&str> {
-        self.object.as_deref()
+        self.object.as_ref().and_then(ObjectTarget::uid_value)
+    }
+
+    /// The name of the object this filter is limited to, when it knows one: the events that
+    /// gave no uid are matched on it.
+    pub fn object_identity(&self) -> Option<&ObjectIdentity> {
+        self.object.as_ref().and_then(ObjectTarget::identity)
     }
 
     /// The earliest last-seen time this filter accepts.
@@ -160,8 +178,8 @@ impl EventFilter {
                     .is_some_and(|ns| contains(&self.namespaces, ns)))
             && self
                 .object
-                .as_deref()
-                .is_none_or(|uid| event.regarding_uid.as_deref() == Some(uid))
+                .as_ref()
+                .is_none_or(|target| target.matches(event))
             && self
                 .since
                 .is_none_or(|since| super::key::seen_at(event) >= since)

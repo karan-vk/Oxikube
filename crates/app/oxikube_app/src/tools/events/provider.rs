@@ -26,6 +26,7 @@ use oxikube_domain::ids::{ClusterId, Gvk};
 use oxikube_domain::redact::redact;
 use oxikube_domain::{ErrorKind, OxiResult};
 use oxikube_ports::{ContextProviderPort, ContextScope, Mention};
+use std::sync::Arc;
 
 use super::block::EventsBlock;
 use super::bounds::{MAX_MENTION_EVENTS, READ_DEADLINE};
@@ -34,7 +35,7 @@ use super::install::EventsAgentDeps;
 use super::mention::EventsMention;
 use super::query::{Found, Involved, find, find_about, resolve_gvk};
 use super::render::one_line;
-use crate::events::EventFilter;
+use crate::events::{EventFilter, ObjectIdentity, ObjectTarget};
 use crate::session::ClusterSession;
 use crate::tools::metrics::{session_for, within};
 
@@ -177,15 +178,23 @@ impl EventsContextProvider {
             Lookup::Found(Some(uid)) => Some(uid.as_str()),
             _ => None,
         };
-        let mut found = by_uid.map_or_else(Found::default, |uid| {
-            find(
-                &self.deps.events,
-                cluster,
-                &EventFilter::new().object(uid),
-                |_| true,
-                MAX_MENTION_EVENTS,
-            )
-        });
+        // The object's name is known either way: the events whose writer gave no uid are found
+        // by it, and the ones that carry another object's uid are not.
+        let target = ObjectTarget::named(
+            by_uid.map(Arc::from),
+            ObjectIdentity::new(
+                &involved.kind,
+                involved.namespace.as_deref(),
+                &involved.name,
+            ),
+        );
+        let mut found = find(
+            &self.deps.events,
+            cluster,
+            &EventFilter::new().object_target(target),
+            |_| true,
+            MAX_MENTION_EVENTS,
+        );
         if found.total == 0 {
             // No uid, or the writer did not set the involved uid: find them by name.
             found = find_about(&self.deps.events, cluster, &involved, MAX_MENTION_EVENTS);
