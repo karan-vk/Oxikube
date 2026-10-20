@@ -176,6 +176,18 @@ fn two_idle_clusters_are_an_idle_phase(cx: &mut TestAppContext) {
     );
 }
 
+/// The overview of a cluster with a metrics-server and a Prometheus-compatible endpoint draws
+/// its usage bars, its top consumers and its history graphs (E13-S09-F1). The scenario fails
+/// when the graphs did not draw, so the run is the assertion.
+#[gpui::test]
+fn the_overview_with_metrics_draws_its_graphs(cx: &mut TestAppContext) {
+    let summary = run(cx, Scenario::OverviewGraphs).expect("the graphs drew");
+    assert_eq!(summary.scenario, "overview-graphs");
+    let churn = phase(&summary, "churn");
+    assert_eq!(churn.kind, PhaseKind::Driven);
+    assert!(churn.refreshes > 0, "{churn:?}");
+}
+
 #[test]
 fn every_scenario_has_a_name_a_world_and_the_frame_budget() {
     for scenario in Scenario::ALL {
@@ -188,11 +200,20 @@ fn every_scenario_has_a_name_a_world_and_the_frame_budget() {
                 assert_eq!(world.clusters.len() + world.listed_only, 50, "50 contexts");
             }
             Scenario::TabsPanes => assert_eq!(world.clusters.len(), 3),
-            Scenario::Overview => {
+            Scenario::Overview | Scenario::OverviewGraphs => {
                 assert_eq!(world.clusters.len(), 1);
                 assert_eq!(world.clusters[0].nodes, super::OVERVIEW_NODES);
                 assert_eq!(world.clusters[0].pods, super::OVERVIEW_PODS);
                 assert!(world.clusters[0].churn);
+                // Only the graphs variant has a metrics-server and a Prometheus.
+                assert_eq!(
+                    world.clusters[0].metrics,
+                    scenario == Scenario::OverviewGraphs
+                );
+                assert_eq!(
+                    world.clusters[0].prometheus,
+                    scenario == Scenario::OverviewGraphs
+                );
             }
             Scenario::PodsTable
             | Scenario::TableFilter

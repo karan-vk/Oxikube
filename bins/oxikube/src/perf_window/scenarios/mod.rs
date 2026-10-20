@@ -71,6 +71,7 @@ pub async fn run(run: &WindowRun, driver: &mut Driver<'_>) -> Result<()> {
         Scenario::Sidebar => table::sidebar(driver).await,
         Scenario::NodesTable => table::nodes_table(driver).await,
         Scenario::Overview => overview::run(driver).await,
+        Scenario::OverviewGraphs => overview::graphs(driver).await,
         Scenario::Idle => table::idle(driver).await,
         Scenario::DetailDrawer => drawer::run(driver).await,
         Scenario::TabsPanes => tabs::run(driver).await,
