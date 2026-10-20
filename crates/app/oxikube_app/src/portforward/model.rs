@@ -3,7 +3,7 @@
 
 use std::net::{IpAddr, SocketAddr};
 
-use oxikube_domain::OxiError;
+use oxikube_domain::{ErrorKind, OxiError};
 use oxikube_domain::portforward::{ForwardSpec, PortRange};
 use oxikube_ports::{ForwardStatsSnapshot, PortForwardError};
 
@@ -131,17 +131,27 @@ impl StartError {
     }
 }
 
+impl StartError {
+    /// The [`StartError`] an [`OxiError`] from a start command carries, if it is one.
+    pub fn of(error: &OxiError) -> Option<&StartError> {
+        std::error::Error::source(error)?.downcast_ref::<StartError>()
+    }
+}
+
 impl From<StartError> for OxiError {
     fn from(err: StartError) -> Self {
         let message = match err.suggestion() {
             Some(hint) => format!("{err}. {hint}"),
             None => err.to_string(),
         };
-        match err {
-            StartError::ReadOnly(_) => OxiError::forbidden(message),
-            StartError::NotConnected(_) | StartError::Unknown(_) => OxiError::not_found(message),
-            StartError::Unsupported(_) | StartError::Failed(_) => OxiError::validation(message),
-            StartError::Forward(inner) => OxiError::new(OxiError::from(inner).kind(), message),
-        }
+        // The typed error rides along as the source, so a dialog can offer the matching fix
+        // without parsing the message (see `StartError::of`).
+        let kind = match &err {
+            StartError::ReadOnly(_) => ErrorKind::Forbidden,
+            StartError::NotConnected(_) | StartError::Unknown(_) => ErrorKind::NotFound,
+            StartError::Unsupported(_) | StartError::Failed(_) => ErrorKind::Validation,
+            StartError::Forward(inner) => OxiError::from(inner.clone()).kind(),
+        };
+        OxiError::new(kind, message).with_source(err)
     }
 }

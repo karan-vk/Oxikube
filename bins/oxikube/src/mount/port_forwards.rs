@@ -159,3 +159,21 @@ pub fn mount_panel(
         _serve: serve,
     }
 }
+
+/// `actions` with the port-forward start dialog (E15-S04) over the app's manager: the Forward
+/// buttons of the Pod and Service panels, `shift-f` on a row and the palette entries open it, and
+/// its submit sends `portforward::Start` on `bus`.
+pub fn with_start_dialog(
+    actions: oxikube_resources_ui::actions::ResourceActions,
+    state: &AppState,
+    bus: &oxikube_app::CommandBus,
+) -> oxikube_resources_ui::actions::ResourceActions {
+    match state.port_forwards().cloned() {
+        Some(manager) => actions.with_forward(oxikube_app::ForwardStarter::new(
+            bus.clone(),
+            super::local_user(),
+            manager,
+        )),
+        None => actions,
+    }
+}

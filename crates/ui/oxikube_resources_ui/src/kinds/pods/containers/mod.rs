@@ -17,6 +17,7 @@
 //! background, another tab) drops both, so it keeps no poller alive; showing it again watches
 //! again and shows a poll that landed meanwhile at once.
 
+mod forward;
 mod render;
 mod rows;
 
@@ -46,6 +47,8 @@ pub struct ContainersPanel {
     /// The document the rows were built from.
     doc: Option<JsonDoc>,
     rows: Vec<ContainerRow>,
+    /// The pod's TCP container ports, for the Forward buttons (E15-S04).
+    ports: Vec<oxikube_portforward_ui::PortChoice>,
     /// How many times the rows were built (tests: once per pod version and poll).
     builds: usize,
     /// The app's metrics service, once set.
@@ -79,6 +82,7 @@ impl ContainersPanel {
                 detail,
                 doc: None,
                 rows: Vec::new(),
+                ports: Vec::new(),
                 builds: 0,
                 service: None,
                 usage: None,
@@ -184,16 +188,23 @@ impl ContainersPanel {
         let epoch = usage.as_ref().map_or(0, |usage| usage.epoch());
         let built = detail.read(cx).resource().and_then(|pod| {
             let same = self.doc.as_ref().is_some_and(|doc| doc.ptr_eq(pod.doc()));
-            (force || !same).then(|| (pod.doc().clone(), rows_of(pod, usage.as_deref())))
+            (force || !same).then(|| {
+                (
+                    pod.doc().clone(),
+                    rows_of(pod, usage.as_deref()),
+                    oxikube_portforward_ui::ports_of(pod),
+                )
+            })
         });
-        let Some((doc, rows)) = built else {
+        let Some((doc, rows, ports)) = built else {
             return;
         };
         // A poll that changed nothing on screen costs no frame.
-        let changed = !force || rows != self.rows;
+        let changed = !force || rows != self.rows || ports != self.ports;
         self.epoch = epoch;
         self.doc = Some(doc);
         self.rows = rows;
+        self.ports = ports;
         self.builds += 1;
         if changed {
             cx.notify();

@@ -38,7 +38,9 @@ mod render;
 #[cfg(test)]
 mod tests;
 
-pub use actions::{OPEN_IN_BROWSER_ORDER, SHOW_PODS_ORDER, service_row_actions};
+pub use actions::{
+    OPEN_IN_BROWSER_ORDER, PORT_FORWARD_ORDER, SHOW_PODS_ORDER, service_row_actions,
+};
 pub use browser::{ServiceBrowser, register_open_in_browser};
 pub use panel::ServicePanel;
 

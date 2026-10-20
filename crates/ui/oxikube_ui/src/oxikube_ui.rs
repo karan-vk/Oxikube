@@ -43,6 +43,7 @@ pub mod allocation_bar;
 pub mod assets;
 pub mod button;
 pub mod chart;
+pub mod checkbox;
 pub mod code_view;
 pub mod dialog;
 pub mod dock;

@@ -49,6 +49,7 @@ oxikube_notify_os.workspace = true
 # The `?` help overlay (E11-S10); `kind_exec` also reads the container picker's matches through
 # `PickerDelegate` (E11-S02).
 oxikube_palette.workspace = true
+oxikube_portforward_ui.workspace = true
 oxikube_ports.workspace = true
 # History metrics (E13-S05): provider detection and the per-cluster PromQL port.
 oxikube_prometheus.workspace = true

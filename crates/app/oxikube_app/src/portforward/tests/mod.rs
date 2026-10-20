@@ -6,6 +6,7 @@ mod agent_tools;
 mod commands;
 mod manager;
 mod resolve;
+mod starter;
 mod state;
 
 use std::collections::HashMap;

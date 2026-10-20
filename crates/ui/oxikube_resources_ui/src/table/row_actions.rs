@@ -12,6 +12,7 @@ use oxikube_app::CommandTarget;
 use oxikube_app::namespaces::{delete_advice, delete_command};
 use oxikube_domain::command::{self, CommandId, ViewContext};
 use oxikube_domain::ids::ResourceRef;
+use oxikube_portforward_ui::ForwardRequest;
 use oxikube_workspace::command_surface::CommandSurface;
 use oxikube_workspace::{Toast, Workspace};
 
@@ -178,6 +179,12 @@ impl ResourceTable {
                     .unwrap_or_else(gpui::WeakEntity::new_invalid);
                 actions.rollback_flow(workspace).begin(target, window, cx);
             }
+        } else if matches!(
+            command,
+            CommandId::POD_PORT_FORWARD | CommandId::PORTFORWARD_START
+        ) {
+            // The dialog asks for the ports; `portforward::Start` is sent when the user submits.
+            self.begin_forward(&actions, targets, window, cx);
         } else if let Some(service) = actions
             .exec_service()
             .filter(|_| ExecKind::of(command).is_some() || command == CommandId::POD_DEBUG)
@@ -205,6 +212,30 @@ impl ResourceTable {
             }
         }
         true
+    }
+
+    /// Opens the port-forward start dialog for the first of `targets` (a Pod or a Service).
+    fn begin_forward(
+        &mut self,
+        actions: &ResourceActions,
+        targets: Vec<ResourceRef>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let (Some(target), Some(workspace)) = (targets.into_iter().next(), self.workspace.clone())
+        else {
+            return;
+        };
+        match actions.forward_flow(workspace) {
+            Some(flow) => {
+                flow.begin(ForwardRequest::new(target), window, cx);
+            }
+            None => self.toast(
+                Toast::info(crate::exec::PORT_FORWARDING_UNAVAILABLE)
+                    .key("action-unavailable:port-forwards"),
+                cx,
+            ),
+        }
     }
 
     /// Opens the delete dialog for `targets`.

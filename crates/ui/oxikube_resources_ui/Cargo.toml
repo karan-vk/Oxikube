@@ -19,6 +19,7 @@ oxikube_app.workspace = true
 oxikube_domain.workspace = true
 oxikube_keymap.workspace = true
 oxikube_palette.workspace = true
+oxikube_portforward_ui.workspace = true
 oxikube_ports.workspace = true
 oxikube_runtime.workspace = true
 oxikube_settings.workspace = true

@@ -14,6 +14,7 @@
 //! * drops, recoveries and failures go to the notification centre ([`NotificationSourcePort`]),
 //!   one row per forward;
 //! * a start is refused on a read-only cluster unless [`ForwardConfig::allowed_in_readonly`];
+//! * [`ForwardStarter`]: the start dialog's way through the bus (`portforward::Start` as the user);
 //! * `portforward::Start` / `Stop` / `Restart` / `Remove` ([`register_commands`]) and
 //!   `service::OpenInBrowser` (the manager is the [`ServicePortOpener`](crate::ServicePortOpener)).
 //!
@@ -32,6 +33,7 @@ mod manager;
 mod model;
 mod registry;
 pub mod resolve;
+mod starter;
 pub mod state;
 mod supervisor;
 mod url;
@@ -46,4 +48,5 @@ pub use favourites::{
 };
 pub use manager::{ForwardChanges, PortForwardManager, START_WAIT};
 pub use model::{ForwardConfig, ForwardId, ForwardInfo, StartError};
+pub use starter::{ForwardStarter, StartedForward};
 pub use state::{Backoff, ForwardEvent, ForwardFailure, ForwardState};

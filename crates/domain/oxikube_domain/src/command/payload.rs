@@ -1045,6 +1045,12 @@ pub enum Command {
         /// Local address to listen on; `None` is loopback.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         bind: Option<IpAddr>,
+        /// The name the user gave the forward; `None` is `<kind>/<name>:<port>`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        name: Option<String>,
+        /// Whether the forward is a favourite (E15-S06 persists it).
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        favourite: bool,
     },
     /// Stop a port-forward; it stays listed and can be restarted (E15-S03).
     #[serde(rename = "portforward::Stop")]
@@ -2258,6 +2264,8 @@ mod tests {
                 remote_port: ForwardPort::Number(8080),
                 local_port: Some(18080),
                 bind: None,
+                name: None,
+                favourite: false,
             },
             Command::PortForwardStop { id: 1 },
             Command::PortForwardRestart { id: 1 },

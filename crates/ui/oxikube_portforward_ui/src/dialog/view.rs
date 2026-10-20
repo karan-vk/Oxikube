@@ -1,0 +1,322 @@
+//! [`StartDialog`]: the modal. It starts the forward through `portforward::Start`
+//! ([`ForwardStarter`]) on the Tokio bridge and shows a failure inline with its fix.
+
+use std::sync::Arc;
+
+use gpui::{
+    App, AppContext as _, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable,
+    SharedString, Subscription, Task, WeakEntity, Window,
+};
+use oxikube_app::ForwardStarter;
+use oxikube_domain::ids::ResourceRef;
+use oxikube_domain::portforward::{ForwardPort, ForwardSpec};
+use oxikube_ports::ResourceReader;
+use oxikube_runtime::spawn_kube;
+use oxikube_ui::input::{InputEvent, InputState};
+use oxikube_workspace::Workspace;
+use oxikube_workspace::modal::{ModalPlacement, ModalView};
+
+use super::form::{FormErrors, FormInput, StartForm};
+use super::ports::{PortChoice, ports_of};
+use super::prefs::LastUsed;
+use super::problem::{Fix, StartProblem};
+
+/// Where the dialog is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Stage {
+    /// Asking. Nothing has been sent.
+    Editing,
+    /// `portforward::Start` is running.
+    Starting,
+}
+
+/// The start dialog. See the [module docs](super).
+pub struct StartDialog {
+    pub(super) form: StartForm,
+    pub(super) starter: ForwardStarter,
+    pub(super) remote: Entity<InputState>,
+    pub(super) local: Entity<InputState>,
+    pub(super) bind: Entity<InputState>,
+    pub(super) name: Entity<InputState>,
+    pub(super) local_auto: bool,
+    pub(super) favourite: bool,
+    pub(super) stage: Stage,
+    pub(super) problem: Option<StartProblem>,
+    /// Whether the target's ports are still being read.
+    pub(super) loading_ports: bool,
+    pub(super) workspace: WeakEntity<Workspace>,
+    pub(super) focus: FocusHandle,
+    /// The read of the target's ports; dropped (and so aborted) with the dialog.
+    load: Option<Task<()>>,
+    _subscriptions: Vec<Subscription>,
+}
+
+impl EventEmitter<DismissEvent> for StartDialog {}
+
+impl Focusable for StartDialog {
+    fn focus_handle(&self, _: &App) -> FocusHandle {
+        self.focus.clone()
+    }
+}
+
+impl ModalView for StartDialog {
+    fn placement(&self, _: &App) -> ModalPlacement {
+        ModalPlacement::Center
+    }
+
+    /// Escape and a click outside cancel while asking; while the start runs the dialog stays
+    /// (the request is out and its answer is what the user wants to see).
+    fn on_before_dismiss(&mut self, _: &mut Window, _: &mut App) -> bool {
+        self.stage == Stage::Editing
+    }
+
+    fn dismiss_on_outside_click(&self, _: &App) -> bool {
+        self.stage == Stage::Editing
+    }
+}
+
+impl StartDialog {
+    /// A dialog for `form`, prefilled with `port` (else the target's first port), starting through
+    /// `starter` and reporting in `workspace`.
+    pub fn new(
+        form: StartForm,
+        port: Option<ForwardPort>,
+        starter: ForwardStarter,
+        workspace: WeakEntity<Workspace>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let last = LastUsed::get(cx);
+        let remote_text = match (&port, form.ports.first()) {
+            (Some(port), _) => port.to_string(),
+            (None, Some(first)) => first.number.to_string(),
+            (None, None) => String::new(),
+        };
+        let default_name = form.default_name(&remote_text);
+        let remote = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder("Port on the target, e.g. 8080")
+                .default_value(remote_text)
+        });
+        let local = cx.new(|cx| InputState::new(window, cx).placeholder("Auto"));
+        let bind = cx.new(|cx| InputState::new(window, cx).default_value(last.bind.clone()));
+        let name = cx.new(|cx| InputState::new(window, cx).placeholder(default_name));
+        let subscriptions = [&remote, &local, &bind, &name]
+            .map(|input| cx.subscribe_in(input, window, Self::on_input))
+            .into();
+        Self {
+            form,
+            starter,
+            remote,
+            local,
+            bind,
+            name,
+            local_auto: last.local_auto,
+            favourite: false,
+            stage: Stage::Editing,
+            problem: None,
+            loading_ports: false,
+            workspace,
+            focus: cx.focus_handle(),
+            load: None,
+            _subscriptions: subscriptions,
+        }
+    }
+
+    /// Focuses the local port field, where the dialog starts.
+    pub fn focus_local(&self, window: &mut Window, cx: &mut Context<Self>) {
+        self.local.update(cx, |input, cx| input.focus(window, cx));
+    }
+
+    /// Reads the target's ports from the cluster (the dialog was opened without them, from `f` or
+    /// the palette) and offers them; the dialog is usable meanwhile.
+    pub fn load_ports(
+        &mut self,
+        reader: Arc<dyn ResourceReader>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let ResourceRef {
+            gvk,
+            namespace,
+            name,
+            ..
+        } = self.form.target.clone();
+        self.loading_ports = true;
+        let read = spawn_kube(cx, async move {
+            reader.get(&gvk, namespace.as_deref(), &name).await
+        });
+        self.load = Some(cx.spawn_in(window, async move |this, cx| {
+            let ports = match read.await {
+                Ok(Ok(resource)) => ports_of(&resource),
+                Ok(Err(error)) => {
+                    tracing::debug!(%error, "the target's ports could not be read");
+                    Vec::new()
+                }
+                Err(error) => {
+                    tracing::debug!(%error, "the target's ports could not be read");
+                    Vec::new()
+                }
+            };
+            this.update_in(cx, |this, window, cx| this.set_ports(ports, window, cx))
+                .ok();
+        }));
+    }
+
+    /// Offers `ports`; an empty remote port field takes the first.
+    pub fn set_ports(
+        &mut self,
+        ports: Vec<PortChoice>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.loading_ports = false;
+        if let Some(first) = ports.first()
+            && self.remote.read(cx).value().trim().is_empty()
+        {
+            let text = first.number.to_string();
+            self.remote
+                .update(cx, |input, cx| input.set_value(text, window, cx));
+        }
+        self.form.ports = ports;
+        cx.notify();
+    }
+
+    /// Shows `problem` under the fields, as a failed start does.
+    pub fn show_problem(&mut self, problem: StartProblem, cx: &mut Context<Self>) {
+        self.problem = Some(problem);
+        cx.notify();
+    }
+
+    /// Where the dialog is.
+    pub fn stage(&self) -> Stage {
+        self.stage
+    }
+
+    /// The problem under the fields, if the last start failed.
+    pub fn problem(&self) -> Option<&StartProblem> {
+        self.problem.as_ref()
+    }
+
+    /// The fields as typed.
+    pub fn input(&self, cx: &App) -> FormInput {
+        let text = |input: &Entity<InputState>| input.read(cx).value().trim().to_owned();
+        FormInput {
+            remote_port: text(&self.remote),
+            local_auto: self.local_auto,
+            local_port: text(&self.local),
+            bind: text(&self.bind),
+            name: text(&self.name),
+            favourite: self.favourite,
+        }
+    }
+
+    /// What is wrong with the fields now.
+    pub fn errors(&self, cx: &App) -> FormErrors {
+        self.form.errors(&self.input(cx))
+    }
+
+    /// Whether Forward can be pressed: asking, and every field valid.
+    pub fn can_submit(&self, cx: &App) -> bool {
+        self.stage == Stage::Editing && self.form.can_submit(&self.input(cx))
+    }
+
+    /// Types `remote`, a fixed `local` port (empty is Auto) and `bind` into the fields.
+    pub fn fill(
+        &mut self,
+        remote: &str,
+        local: &str,
+        bind: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        for (input, text) in [
+            (&self.remote, remote),
+            (&self.local, local),
+            (&self.bind, bind),
+        ] {
+            input.update(cx, |input, cx| input.set_value(text.to_owned(), window, cx));
+        }
+        self.local_auto = local.is_empty();
+        cx.notify();
+    }
+
+    /// Chooses `port` as the remote port.
+    pub fn choose_port(&mut self, port: &PortChoice, window: &mut Window, cx: &mut Context<Self>) {
+        let text = port.number.to_string();
+        self.remote
+            .update(cx, |input, cx| input.set_value(text, window, cx));
+    }
+
+    /// The Auto checkbox: Auto clears the fixed port.
+    pub fn set_auto(&mut self, auto: bool, window: &mut Window, cx: &mut Context<Self>) {
+        self.local_auto = auto;
+        if auto {
+            self.local
+                .update(cx, |input, cx| input.set_value("", window, cx));
+        }
+        self.problem = None;
+        cx.notify();
+    }
+
+    /// The favourite checkbox.
+    pub fn set_favourite(&mut self, favourite: bool, cx: &mut Context<Self>) {
+        self.favourite = favourite;
+        cx.notify();
+    }
+
+    /// Applies the one-click fix of the problem shown (it does not resubmit).
+    pub fn apply_fix(&mut self, fix: Fix, window: &mut Window, cx: &mut Context<Self>) {
+        match fix {
+            Fix::UseAuto => self.set_auto(true, window, cx),
+            Fix::UseLoopback => {
+                let loopback = ForwardSpec::DEFAULT_BIND.to_string();
+                self.bind
+                    .update(cx, |input, cx| input.set_value(loopback, window, cx));
+            }
+        }
+        self.problem = None;
+        cx.notify();
+    }
+
+    /// Cancels while asking: nothing is sent.
+    pub fn cancel(&mut self, cx: &mut Context<Self>) {
+        if self.stage == Stage::Editing {
+            cx.emit(DismissEvent);
+        }
+    }
+
+    fn on_input(
+        &mut self,
+        input: &Entity<InputState>,
+        event: &InputEvent,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            InputEvent::Change => {
+                self.problem = None;
+                // Typing a port leaves Auto.
+                if *input == self.local && !input.read(cx).value().trim().is_empty() {
+                    self.local_auto = false;
+                }
+                cx.notify();
+            }
+            InputEvent::PressEnter { .. } => self.submit(cx),
+            InputEvent::Focus | InputEvent::Blur => {}
+        }
+    }
+}
+
+impl StartDialog {
+    /// The title: `Port-forward pod/web`.
+    pub(super) fn title(&self) -> SharedString {
+        let target = &self.form.target;
+        format!(
+            "Port-forward {}/{}",
+            target.gvk.kind.to_ascii_lowercase(),
+            target.name
+        )
+        .into()
+    }
+}

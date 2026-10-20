@@ -158,8 +158,8 @@ pub use notifications::{NotificationRules, NotificationService};
 pub use os_notifications::{ClickAction, Delivery, OsNotificationService};
 pub use overview::{FixedWarnings, NoRecentWarnings, RecentWarnings, WarningRow};
 pub use portforward::{
-    ForwardBackend, ForwardChanges, ForwardConfig, ForwardId, ForwardInfo, ForwardState,
-    PortForwardManager, SessionBackend, StartError,
+    ForwardBackend, ForwardChanges, ForwardConfig, ForwardId, ForwardInfo, ForwardStarter,
+    ForwardState, PortForwardManager, SessionBackend, StartError, StartedForward,
 };
 pub use references::{
     OwnerCache, PodKey, PodUse, ReferenceFeed, ReferenceHub, ReferenceIndex, Usage, UsageStatus,

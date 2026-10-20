@@ -74,6 +74,9 @@ pub struct ResourceActions {
     drain: Option<oxikube_app::nodes::DrainFlow>,
     /// Plans and runs the bulk commands for the bulk dialog (E12-S19).
     selection: SelectionFlow,
+    /// Starts `portforward::Start` for the start dialog (E15-S04); `None` until the app has a
+    /// port-forward manager.
+    forward: Option<oxikube_app::ForwardStarter>,
 }
 
 impl ResourceActions {
@@ -122,7 +125,31 @@ impl ResourceActions {
             storage: StorageFlows::new(bus, &sessions, &who),
             namespace_creator: NamespaceCreator::new(bus.clone(), who),
             drain: None,
+            forward: None,
         }
+    }
+
+    /// Lets the Forward buttons, `shift-f` and the palette open the start dialog over `starter`
+    /// (the app's port-forward manager on the same bus). Without it they say port forwarding is
+    /// not available.
+    #[must_use]
+    pub fn with_forward(mut self, starter: oxikube_app::ForwardStarter) -> Self {
+        self.forward = Some(starter);
+        self
+    }
+
+    /// The flow that opens the port-forward start dialog in `workspace` (E15-S04): the Pod and
+    /// Service panels' Forward buttons, `shift-f` and the palette. `None` without a starter.
+    pub fn forward_flow(
+        &self,
+        workspace: gpui::WeakEntity<oxikube_workspace::Workspace>,
+    ) -> Option<oxikube_portforward_ui::StartFlow> {
+        let starter = self.forward.clone()?;
+        Some(oxikube_portforward_ui::StartFlow::new(
+            starter,
+            self.sessions.clone(),
+            workspace,
+        ))
     }
 
     /// Lets "Drain…" open the drain dialog over `flow` (the app's `NodeService`, on the same

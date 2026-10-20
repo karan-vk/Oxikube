@@ -1,5 +1,6 @@
 //! `portforward::Start`, `Stop`, `Restart` and `Remove` on the command bus (each with its MCP
-//! tool stub), and the manager as the [`ServicePortOpener`] behind `service::OpenInBrowser`.
+//! tool stub), `pod::PortForward` (a start on a pod port, the row action the start dialog stands
+//! in front of), and the manager as the [`ServicePortOpener`] behind `service::OpenInBrowser`.
 //!
 //! None changes a cluster, so none goes through a guard tier; the read-only policy is the
 //! manager's (`portforward.allowed_in_readonly`).
@@ -22,7 +23,8 @@ use crate::network::{OpenedServicePort, ServicePortOpener};
 use crate::store::{StoreFilter, StoreQuery};
 
 /// The commands [`register_commands`] installs.
-pub const COMMANDS: [CommandId; 4] = [
+pub const COMMANDS: [CommandId; 5] = [
+    CommandId::POD_PORT_FORWARD,
     CommandId::PORTFORWARD_START,
     CommandId::PORTFORWARD_STOP,
     CommandId::PORTFORWARD_RESTART,
@@ -60,13 +62,34 @@ pub(super) async fn run(
             remote_port,
             local_port,
             bind,
+            name,
+            favourite,
         } => {
-            let mut spec = ForwardSpec::new(target, remote_port);
+            if remote_port == ForwardPort::Number(0) {
+                return Err(OxiError::validation("choose the port to forward"));
+            }
+            let mut spec = ForwardSpec::new(target, remote_port).with_favourite(favourite);
             spec.local_port = local_port.unwrap_or(0);
+            spec.name = name.map(|n| n.trim().to_owned()).filter(|n| !n.is_empty());
             spec.bind =
                 bind.unwrap_or_else(|| manager.config_for(&spec.target.cluster).default_bind);
             let info = manager.start_and_wait(spec).await?;
             Ok(output(&info))
+        }
+        Command::PodPortForward {
+            target,
+            local_port,
+            remote_port,
+        } => {
+            let start = Command::PortForwardStart {
+                target,
+                remote_port: ForwardPort::Number(remote_port),
+                local_port,
+                bind: None,
+                name: None,
+                favourite: false,
+            };
+            Box::pin(run(manager, start)).await
         }
         Command::PortForwardStop { id } => {
             known(manager.stop(ForwardId(id)), id)?;

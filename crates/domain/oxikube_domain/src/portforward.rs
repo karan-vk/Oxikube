@@ -49,6 +49,13 @@ pub struct ForwardSpec {
     /// Local address to bind. Defaults to [`ForwardSpec::DEFAULT_BIND`] (loopback).
     #[serde(default = "default_bind")]
     pub bind: IpAddr,
+    /// The name the user gave the forward (the start dialog's name field); `None` shows the
+    /// default `<kind>/<name>:<port>`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Whether the user marked the forward a favourite (kept for E15-S06, which persists it).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub favourite: bool,
 }
 
 fn default_bind() -> IpAddr {
@@ -66,7 +73,33 @@ impl ForwardSpec {
             remote_port,
             local_port: 0,
             bind: Self::DEFAULT_BIND,
+            name: None,
+            favourite: false,
         }
+    }
+
+    /// Names the forward.
+    #[must_use]
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    /// Marks the forward a favourite.
+    #[must_use]
+    pub fn with_favourite(mut self, favourite: bool) -> Self {
+        self.favourite = favourite;
+        self
+    }
+
+    /// `<kind>/<name>:<port>`: the name a forward gets when the user gave none.
+    pub fn default_name(&self) -> String {
+        format!(
+            "{}/{}:{}",
+            self.target.gvk.kind.to_ascii_lowercase(),
+            self.target.name,
+            self.remote_port
+        )
     }
 
     /// Listens on `local_port` instead of a free one.
@@ -221,6 +254,23 @@ mod tests {
         assert!(spec.bind.is_loopback());
         assert!(!spec.targets_service());
         assert!(ForwardSpec::new(target("Service"), ForwardPort::Number(80)).targets_service());
+    }
+
+    #[test]
+    fn a_name_and_a_favourite_flag_round_trip_and_default_off() {
+        let spec = ForwardSpec::new(target("Pod"), ForwardPort::Number(8080));
+        assert_eq!(spec.default_name(), "pod/web:8080");
+        let named = spec.clone().with_name("my web").with_favourite(true);
+        let json = serde_json::to_value(&named).expect("serialise");
+        assert_eq!(json["name"], "my web");
+        assert_eq!(json["favourite"], true);
+        let back: ForwardSpec = serde_json::from_value(json).expect("deserialise");
+        assert_eq!(back, named);
+        // A spec saved before the dialog had these fields reads back unnamed and not a favourite.
+        let plain = serde_json::to_value(&spec).expect("serialise");
+        assert!(plain.get("name").is_none() && plain.get("favourite").is_none());
+        let old: ForwardSpec = serde_json::from_value(plain).expect("deserialise");
+        assert_eq!((old.name, old.favourite), (None, false));
     }
 
     #[test]

@@ -11,7 +11,7 @@
 //! | `d` | `ViewDescribe` | `resource::ViewDescribe` | the detail drawer opens on its Describe tab |
 //! | `e` | `EditSelected` | `resource::Edit` | the row action the manifest editor registers (E10-S06): an editable `kind/name` tab; a toast says so when the editor is not installed |
 //! | `l` | `ViewLogs` | `pod::ViewLogs`, `workload::ViewLogs` | the log viewer, for the pod or for the workload's pods |
-//! | `shift-f` | `PortForward` | `pod::PortForward` | the row action port forwarding registers; a toast says so until then |
+//! | `shift-f` | `PortForward` | `pod::PortForward` | the start dialog for the row's pod (a Service row: `portforward::Start`); it sends `portforward::Start` on submit (E15-S04) |
 //! | `f` | `ShowPortForwards` | `portforward::TogglePanel` | the Port Forwards panel opens in the bottom dock, listing the forwards of every cluster (E15-S05) |
 //! | `ctrl-w` | `ToggleWide` | `table::ToggleWide` | the wide columns of every table of the kind show or hide |
 //! | `u` (Services) | `ShowServicePods` | `service::ShowPods` | the Pods table, filtered by the Service's selector (E12-S13) |
@@ -100,15 +100,21 @@ impl ResourceTable {
         self.run_action(command, targets, window, cx);
     }
 
-    /// `shift-f`: the `pod::PortForward` row action, which port forwarding registers.
+    /// `shift-f`: the start dialog for the cursor row. A pod's row action is `pod::PortForward`; a
+    /// Service's is `portforward::Start`. The dialog sends `portforward::Start` when submitted.
     pub(super) fn on_port_forward(
         &mut self,
         _: &PortForward,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let command = if self.kind.gvk.is_service() {
+            CommandId::PORTFORWARD_START
+        } else {
+            CommandId::POD_PORT_FORWARD
+        };
         let targets = self.action_targets(cx);
-        self.run_action(CommandId::POD_PORT_FORWARD, targets, window, cx);
+        self.run_action(command, targets, window, cx);
     }
 
     /// `u` on a Service: the `service::ShowPods` row action, the Pods table filtered by the

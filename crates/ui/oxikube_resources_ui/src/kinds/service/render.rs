@@ -8,7 +8,7 @@ use gpui::{
 };
 use oxikube_domain::Capabilities;
 use oxikube_ui::button::{Button, ButtonVariants as _};
-use oxikube_ui::layout::{StyledExt as _, h_flex, v_flex};
+use oxikube_ui::layout::{Disableable as _, StyledExt as _, h_flex, v_flex};
 use oxikube_ui::{ActiveTokens as _, Icon, IconName, Sizable as _, Tokens, u};
 
 use super::browser::ServiceBrowser;
@@ -42,12 +42,21 @@ impl ServicePanel {
     }
 }
 
+impl ServicePanel {
+    /// What the Forward buttons do: `None` when forwarding is not wired, else why they are
+    /// disabled now, if they are.
+    fn forward_state(&self, cx: &gpui::App) -> Option<Option<String>> {
+        self.detail.upgrade()?.read(cx).forward_state()
+    }
+}
+
 impl Render for ServicePanel {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let tokens = cx.tokens();
         let colors = tokens.colors;
         let tones = ToneColors::current(cx);
         let browser = self.can_open_in_browser(cx);
+        let forward = self.forward_state(cx);
         let root = v_flex()
             .id("service-panel")
             .debug_selector(|| "service-panel".to_owned())
@@ -71,7 +80,7 @@ impl Render for ServicePanel {
                     .child(text.clone())
             }))
             .child(facts(view, &tokens))
-            .child(self.ports(view, browser, &tokens, cx))
+            .child(self.ports(view, browser, forward, &tokens, cx))
             .child(self.slices(view, &tokens, &tones, cx))
             .child(self.pods(view, &tokens, &tones, cx))
     }
@@ -122,6 +131,7 @@ impl ServicePanel {
         &self,
         view: &ServiceView,
         browser: bool,
+        forward: Option<Option<String>>,
         tokens: &Tokens,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -135,7 +145,7 @@ impl ServicePanel {
                 view.ports
                     .iter()
                     .enumerate()
-                    .map(|(i, port)| self.port_row(port, i, browser, tokens, cx)),
+                    .map(|(i, port)| self.port_row(port, i, browser, forward.as_ref(), tokens, cx)),
             )
             .into_any_element()
     }
@@ -145,6 +155,7 @@ impl ServicePanel {
         port: &PortRow,
         index: usize,
         browser: bool,
+        forward: Option<&Option<String>>,
         tokens: &Tokens,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -166,6 +177,28 @@ impl ServicePanel {
                     .text_color(colors.text_muted)
                     .child(format!("→ {}", port.target)),
             )
+            .when_some(forward.filter(|_| port.browsable), |row, blocked| {
+                let tooltip = match blocked {
+                    Some(reason) => reason.clone(),
+                    None => format!("Forward port {number} to a local port"),
+                };
+                row.child(
+                    div()
+                        .debug_selector(move || format!("service-forward-{number}"))
+                        .child(
+                            Button::new(("service-forward", usize::from(number)))
+                                .xsmall()
+                                .ghost()
+                                .icon(Icon::new(IconName::ExternalLink).size(u(px(13.))))
+                                .label("Forward")
+                                .disabled(blocked.is_some())
+                                .tooltip(tooltip)
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.forward(number, window, cx)
+                                })),
+                        ),
+                )
+            })
             .when(browser && port.browsable, |row| {
                 row.child(
                     div()
