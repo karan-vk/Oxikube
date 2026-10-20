@@ -243,6 +243,7 @@ impl PortForwardManager {
             local_port: (local_port != 0).then_some(local_port),
             port,
             inner: Arc::downgrade(&self.inner),
+            last_pod: entry.pod.clone(),
         };
         entry.task = Some(spawn_guarded(&self.inner.spawner, supervisor.run(watch)));
         Ok(())

@@ -82,6 +82,8 @@ pub(super) struct Supervisor {
     pub local_port: Option<u16>,
     pub port: Arc<dyn PortForwardPort>,
     pub inner: Weak<Inner>,
+    /// The pod of the last connection, preferred when a Service forward re-resolves.
+    pub last_pod: Option<String>,
 }
 
 enum Wake {
@@ -208,18 +210,22 @@ impl Supervisor {
     /// Resolves and starts the port's forward; the error is the event to feed.
     async fn connect(&mut self, view: &TargetView) -> Result<ForwardHandle, ForwardEvent> {
         let service = self.spec.targets_service();
-        let previous = self.current_pod();
-        let resolved = resolve(view, service, &self.spec.remote_port, previous.as_deref())
-            .map_err(|unresolved| match unresolved {
-                Unresolved::Waiting(reason) => ForwardEvent::Unresolvable {
-                    reason,
-                    permanent: false,
-                },
-                Unresolved::Invalid(reason) => ForwardEvent::Unresolvable {
-                    reason,
-                    permanent: true,
-                },
-            })?;
+        let resolved = resolve(
+            view,
+            service,
+            &self.spec.remote_port,
+            self.last_pod.as_deref(),
+        )
+        .map_err(|unresolved| match unresolved {
+            Unresolved::Waiting(reason) => ForwardEvent::Unresolvable {
+                reason,
+                permanent: false,
+            },
+            Unresolved::Invalid(reason) => ForwardEvent::Unresolvable {
+                reason,
+                permanent: true,
+            },
+        })?;
         let namespace = self.spec.target.namespace.as_deref().unwrap_or_default();
         let pod = PodRef::new(namespace, resolved.pod.as_str());
         let handle = self
@@ -228,6 +234,7 @@ impl Supervisor {
             .await
             .map_err(ForwardEvent::Lost)?;
         self.local_port = Some(handle.local_addr.port());
+        self.last_pod = Some(resolved.pod.clone());
         let local_addr = handle.local_addr;
         self.set_handle(Some(&handle));
         self.event(ForwardEvent::Connected {

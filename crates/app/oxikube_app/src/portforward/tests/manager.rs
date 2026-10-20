@@ -173,6 +173,40 @@ async fn pod_gone_from_the_forward_reconnects_at_once() {
 }
 
 #[tokio::test]
+async fn a_service_reconnect_prefers_the_pod_it_served() {
+    let rig = Rig::new();
+    web_service(&rig);
+    web_slices(&rig, &[("web-b", true)]);
+    let id = rig.manager.start(service_spec("web", 80)).expect("start");
+    assert_eq!(active_pod(&rig.until(id, is_active).await), Some("web-b"));
+    // A pod that sorts first joins; the forward stays on web-b.
+    web_slices(&rig, &[("web-a", true), ("web-b", true)]);
+    tokio::time::sleep(Duration::from_millis(30)).await;
+    // The adapter drops the forward while the watch still lists web-b as ready.
+    rig.port
+        .inject_error(&PortForwardError::PodGone(format!("{NS}/web-b")));
+    rig.until(id, |i| !is_active(i)).await;
+    rig.advance_until(
+        id,
+        Duration::from_millis(100),
+        Duration::from_secs(3),
+        is_active,
+    )
+    .await;
+    assert_eq!(
+        active_pod(&rig.manager.get(id).unwrap()),
+        Some("web-b"),
+        "the previous pod is preferred over the first ready one"
+    );
+    let calls = rig.port.recorded_calls();
+    assert!(
+        matches!(calls.last(), Some(PortForwardCall::Start { target, .. })
+            if *target == PodRef::new(NS, "web-b")),
+        "reconnected to web-b: {calls:?}"
+    );
+}
+
+#[tokio::test]
 async fn repeated_failures_back_off_and_then_connect() {
     let rig = Rig::new();
     rig.backend.push("Pod", vec![pod("api-0", "Running")]);
