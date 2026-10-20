@@ -35,6 +35,7 @@ mod notification_centre;
 mod notifications;
 mod overview;
 mod palette;
+mod port_forwards;
 mod pulses;
 mod resources;
 mod rollback;

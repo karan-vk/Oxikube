@@ -134,6 +134,9 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "portforward::Stop" => Command::PortForwardStop { id: 1 },
         "portforward::Restart" => Command::PortForwardRestart { id: 1 },
         "portforward::Remove" => Command::PortForwardRemove { id: 1 },
+        "portforward::CopyUrl" => Command::PortForwardCopyUrl { id: 1 },
+        "portforward::OpenInBrowser" => Command::PortForwardOpenInBrowser { id: 1 },
+        "portforward::TogglePanel" => Command::PortForwardTogglePanel { show: false },
         "notifications::OpenLink" => Command::NotificationsOpenLink {
             url: "https://example.com".to_owned(),
         },

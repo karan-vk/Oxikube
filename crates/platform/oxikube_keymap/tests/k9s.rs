@@ -291,9 +291,9 @@ fn u_shows_what_uses_the_row_on_the_five_referenced_kinds_only(cx: &mut TestAppC
     );
 }
 
-/// Verbs whose handler only toasts "not available yet" (port forwarding has not landed), so they
-/// stand for no command.
-const PLACEHOLDER_VERBS: &[&str] = &["resource_table::ShowPortForwards"];
+/// Verbs whose handler only toasts "not available yet", so they stand for no command. None at
+/// present.
+const PLACEHOLDER_VERBS: &[&str] = &[];
 
 #[gpui::test]
 fn every_verb_is_a_command_or_stands_for_one(cx: &mut TestAppContext) {

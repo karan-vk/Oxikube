@@ -551,6 +551,48 @@
     }
   },
   {
+    // The Port Forwards panel (E15-S05, `:pf`): ctrl-shift-f shows (and focuses) it in the bottom
+    // dock or hides it, from anywhere. In it: up and down select a forward, s stops it, r restarts
+    // it (or starts a stopped one), d removes it, c copies its URL, o or enter opens it in the
+    // browser, / goes to the filter, escape closes the panel.
+    "bindings": {
+      "ctrl-shift-f": "portforward::TogglePanel"
+    }
+  },
+  {
+    "context": "PortForwards && !Editing",
+    "bindings": {
+      "up": "port_forwards::SelectPrevious",
+      "k": "port_forwards::SelectPrevious",
+      "down": "port_forwards::SelectNext",
+      "j": "port_forwards::SelectNext",
+      "home": "port_forwards::SelectFirst",
+      "g": "port_forwards::SelectFirst",
+      "end": "port_forwards::SelectLast",
+      "shift-g": "port_forwards::SelectLast",
+      "s": "port_forwards::StopSelected",
+      "r": "port_forwards::RestartSelected",
+      "d": "port_forwards::RemoveSelected",
+      "delete": "port_forwards::RemoveSelected",
+      "c": "port_forwards::CopyUrlSelected",
+      "o": "port_forwards::OpenSelected",
+      "enter": "port_forwards::OpenSelected",
+      "/": "port_forwards::FocusFilter"
+    }
+  },
+  {
+    "context": "PortForwards",
+    "bindings": {
+      "escape": "port_forwards::Close"
+    }
+  },
+  {
+    "context": "PortForwards && Editing",
+    "bindings": {
+      "escape": "port_forwards::FocusTable"
+    }
+  },
+  {
     // Terminals (E09-S07): ctrl-` shows (and focuses) the shown cluster's terminal panel in the
     // bottom dock or hides it; ctrl-~ opens a new shell there (a plain shell tab when no cluster
     // tab is shown).

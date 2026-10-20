@@ -42,6 +42,8 @@ pub(super) struct Entry {
     /// Bumped on every (re)start, so a stopped supervisor's late update is ignored.
     pub(super) generation: u64,
     pub(super) task: Option<TaskGuard>,
+    /// When the forward was started or last restarted.
+    pub(super) started_at: jiff::Timestamp,
 }
 
 impl Entry {
@@ -64,6 +66,7 @@ impl Entry {
                 active_connections: live.active_connections,
                 total_connections: self.carried.total_connections + live.total_connections,
             },
+            started_at: self.started_at,
         }
     }
 }

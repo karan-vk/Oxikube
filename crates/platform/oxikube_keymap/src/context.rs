@@ -98,6 +98,8 @@ pub mod contexts {
     pub const PULSES: &str = "Pulses";
     /// The cluster's events view (E14-S03); carries `Editing`, `faults` and `paused`.
     pub const EVENTS: &str = "EventsView";
+    /// The Port Forwards panel (E15-S05); carries `Editing` while its filter field has the focus.
+    pub const PORT_FORWARDS: &str = "PortForwards";
     /// The contexts of the Phase 1 views, the ones the default keymaps define sections for
     /// (E11-S07), in the order of the table in the [module docs](super). A new view that takes
     /// keys adds its name here so the defaults tests cover it.

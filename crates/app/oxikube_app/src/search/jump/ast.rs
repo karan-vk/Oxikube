@@ -86,6 +86,9 @@ pub enum JumpCommand {
     Ns(Option<Spanned<String>>),
     /// `:pulses`: the shown cluster's pulses page (E13-S10).
     Pulses,
+    /// `:pf`: the Port Forwards panel (E15-S05). Not tied to a cluster: it lists every cluster's
+    /// forwards.
+    PortForwards,
     /// `:q`: quit.
     Quit,
     /// `-`, `[`, `]`: move through the history.
@@ -120,6 +123,7 @@ impl fmt::Display for JumpCommand {
             Self::Ns(None) => f.write_str("ns"),
             Self::Ns(Some(name)) => write!(f, "ns {}", name.value),
             Self::Pulses => f.write_str("pulses"),
+            Self::PortForwards => f.write_str("pf"),
             Self::Quit => f.write_str("q"),
             Self::History(step) => f.write_str(step.symbol()),
         }
@@ -129,6 +133,6 @@ impl fmt::Display for JumpCommand {
 impl JumpCommand {
     /// Whether running the command goes into the history (`-`, `[`, `]` and `:q` do not).
     pub fn is_recorded(&self) -> bool {
-        !matches!(self, Self::History(_) | Self::Quit)
+        !matches!(self, Self::History(_) | Self::Quit | Self::PortForwards)
     }
 }

@@ -16,6 +16,7 @@
 //! | `:ctx prod` | `cluster::Select { prod }` (or `cluster::Connect`) |
 //! | `:ns` | `resource::OpenList { Namespace }` |
 //! | `:pulses` | `cluster::ShowPulses` (E13-S10) |
+//! | `:pf` | `portforward::TogglePanel { show: true }`: the Port Forwards panel (E15-S05) |
 //! | `:ev`, `:events kube-system /BackOff` | `events::Open { namespace, filter }`: the events view (E14-S03), not the generic table |
 //! | `:ns kube-system` | `namespace::Select { [kube-system] }` |
 //! | `:q` | `app::Quit` (which asks first while operations are running) |
@@ -113,6 +114,9 @@ fn resolve_at(
         JumpCommand::Ctx(name) => ctx_plan(name.as_ref(), env)?,
         JumpCommand::Ns(name) => ns_plan(name.as_ref(), env)?,
         JumpCommand::Pulses => pulses_plan(env)?,
+        JumpCommand::PortForwards => {
+            JumpPlan::now(vec![Command::PortForwardTogglePanel { show: true }])
+        }
         JumpCommand::Quit => JumpPlan::now(vec![Command::AppQuit]),
         JumpCommand::History(step) => JumpPlan::now(vec![match step {
             HistoryStep::Last => Command::JumpLast,

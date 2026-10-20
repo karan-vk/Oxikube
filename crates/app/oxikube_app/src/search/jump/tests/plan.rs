@@ -328,6 +328,18 @@ fn pulses_opens_the_shown_clusters_pulses() {
     assert_eq!(planned("pu").record.as_deref(), Some("pulses"));
 }
 
+#[test]
+fn pf_shows_the_port_forwards_panel_without_a_history_entry() {
+    for line in ["pf", "portforward", "portforwards"] {
+        assert_eq!(
+            planned(line).commands,
+            [Command::PortForwardTogglePanel { show: true }],
+            "{line}"
+        );
+    }
+    assert_eq!(planned("pf").record, None);
+}
+
 fn events(namespace: Option<&str>, filter: Option<&str>) -> Command {
     Command::EventsOpen {
         cluster: cluster("dev"),

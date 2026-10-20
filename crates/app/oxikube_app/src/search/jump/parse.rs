@@ -3,10 +3,11 @@
 //! The grammar, in the order tokens are read:
 //!
 //! ```text
-//! line     = [ ":" ] ( resource | ctx | ns | pulses | quit | history )
+//! line     = [ ":" ] ( resource | ctx | ns | pulses | pf | quit | history )
 //! resource = alias { ns | "/" filter | selector | "@" context }     (each at most once)
 //! ctx      = "ctx" [ name ]        ns   = "ns" [ name ]        quit = "q" | "quit"
 //! pulses   = "pulses" | "pulse" | "pu"
+//! pf       = "pf" | "portforward" | "portforwards" | "port-forwards"
 //! history  = "-" | "[" | "]"
 //! ```
 //!
@@ -52,6 +53,10 @@ pub fn parse(line: &str) -> Result<JumpCommand, ParseError> {
         "pulses" | "pulse" | "pu" => {
             no_more(rest, "`pulses` takes no arguments")?;
             Ok(JumpCommand::Pulses)
+        }
+        "pf" | "portforward" | "portforwards" | "port-forwards" => {
+            no_more(rest, "`pf` takes no arguments")?;
+            Ok(JumpCommand::PortForwards)
         }
         "ctx" | "context" => Ok(JumpCommand::Ctx(optional_name(rest, "ctx")?)),
         "ns" => Ok(JumpCommand::Ns(optional_name(rest, "ns")?)),

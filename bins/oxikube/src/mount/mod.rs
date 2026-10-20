@@ -221,6 +221,8 @@ pub struct Wiring {
     _events_views: Entity<oxikube_events_ui::EventsViews>,
     /// The notification centre: panel, status-bar bell and toasts (E14-S05).
     _notification_centre: Rc<notifications::CentreMount>,
+    /// The Port Forwards panel of the bottom dock and the task serving its commands (E15-S05).
+    _port_forward_panel: port_forwards::PanelMount,
 }
 
 /// Mounts the cluster UI in the main window. See the [module docs](self).
@@ -248,6 +250,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let dispatcher_for_pulses = dispatcher.clone();
     let dispatcher_for_notifications = dispatcher.clone();
     let dispatcher_for_events = dispatcher.clone();
+    let dispatcher_for_port_forwards = dispatcher.clone();
 
     // The log service every log viewer opens its sessions on (E08-S01); `logs.buffer_lines` follows
     // the settings.
@@ -360,6 +363,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (overview_sink, overview_rx) = oxikube_overview_ui::OverviewRequestSink::channel();
     let (events_sink, events_rx) = oxikube_events_ui::EventsCommandSink::channel();
     let (panel_sink, panel_rx) = oxikube_workspace::notifications::NotificationPanelSink::channel();
+    let (port_forward_sink, port_forward_rx) = oxikube_portforward_ui::PortForwardUiSink::channel();
     let (port_forwards, port_forward_favourites) =
         port_forwards::manager(&state, &services, stores.clone(), cx);
     let registry = bus::build_registry(bus::BusParts {
@@ -399,8 +403,9 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         events_views: events_sink,
         notifications: services.notifications.clone(),
         notification_panel: panel_sink,
-        port_forwards,
+        port_forwards: port_forwards.clone(),
         port_forward_favourites,
+        port_forward_ui: port_forward_sink,
     });
     let registry = match registry {
         Ok(registry) => registry,
@@ -643,6 +648,18 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         window,
         cx,
     );
+    // The Port Forwards panel (E15-S05): the bottom dock, closed until `:pf`, the table's `f`, the
+    // palette or the key; it lists the app's one manager's forwards of every cluster.
+    let port_forward_panel = port_forwards::mount_panel(
+        &workspace,
+        port_forwards,
+        services.sessions.clone(),
+        dispatcher_for_port_forwards,
+        ports.clusters.clock.clone(),
+        port_forward_rx,
+        window,
+        cx,
+    );
     // The events view (E14-S03): `events::Open` (`:ev`, the sidebar, the palette) opens it in the
     // cluster tab over the app's one events feed per cluster.
     let events_views = events::start_views(
@@ -689,6 +706,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _notification_clicks: notification_clicks,
         _events_views: events_views,
         _notification_centre: centre,
+        _port_forward_panel: port_forward_panel,
     });
     workspace.update(cx, |ws, _| ws.attach(wiring));
 }

@@ -281,6 +281,13 @@ impl CommandId {
     /// `portforward::FavouriteToggleAutoStart`: switch a favourite's start on connect (E15-S06).
     pub const PORTFORWARD_FAVOURITE_TOGGLE_AUTO_START: CommandId =
         CommandId::new("portforward::FavouriteToggleAutoStart");
+    /// `portforward::CopyUrl`: copy a port-forward's local URL (E15-S05).
+    pub const PORTFORWARD_COPY_URL: CommandId = CommandId::new("portforward::CopyUrl");
+    /// `portforward::OpenInBrowser`: open a port-forward's local URL in the system browser
+    /// (E15-S05).
+    pub const PORTFORWARD_OPEN_IN_BROWSER: CommandId = CommandId::new("portforward::OpenInBrowser");
+    /// `portforward::TogglePanel`: show the Port Forwards panel, or hide it (E15-S05).
+    pub const PORTFORWARD_TOGGLE_PANEL: CommandId = CommandId::new("portforward::TogglePanel");
     /// `pod::Sanitize`: delete the Completed and Failed pods of a view.
     pub const POD_SANITIZE: CommandId = CommandId::new("pod::Sanitize");
     /// `pod::ShowNode`: open the Node a pod runs on.
@@ -1422,6 +1429,19 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Global,
         NONE,
     ),
+    // The manager panel (E15-S05): local, UI-side actions on the manager's own list.
+    CommandMeta::read(
+        CommandId::PORTFORWARD_COPY_URL,
+        "Copy Port-Forward URL",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::PORTFORWARD_OPEN_IN_BROWSER,
+        "Open Port-Forward in Browser",
+        CommandScope::Global,
+        NONE,
+    ),
     CommandMeta::read(
         CommandId::PORTFORWARD_REMOVE,
         "Remove Port-Forward",
@@ -1444,6 +1464,12 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::PORTFORWARD_STOP,
         "Stop Port-Forward",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::PORTFORWARD_TOGGLE_PANEL,
+        "Toggle Port Forwards",
         CommandScope::Global,
         NONE,
     ),

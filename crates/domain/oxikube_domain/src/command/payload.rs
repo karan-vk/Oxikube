@@ -1097,6 +1097,25 @@ pub enum Command {
     PortForwardFavouriteToggleAutoStart {
         /// The favourite's id, as the favourites list it.
         id: String,
+    /// Copy a port-forward's local URL to the clipboard (E15-S05).
+    #[serde(rename = "portforward::CopyUrl")]
+    PortForwardCopyUrl {
+        /// The forward's id, as the manager lists it.
+        id: u64,
+    },
+    /// Open a port-forward's local URL in the system browser (E15-S05).
+    #[serde(rename = "portforward::OpenInBrowser")]
+    PortForwardOpenInBrowser {
+        /// The forward's id, as the manager lists it.
+        id: u64,
+    },
+    /// Show the Port Forwards panel and focus it, or hide it (E15-S05). `show` only ever opens it
+    /// (`:pf`, the table's `f`); without it a shown panel is hidden again.
+    #[serde(rename = "portforward::TogglePanel")]
+    PortForwardTogglePanel {
+        /// Open the panel instead of toggling it.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        show: bool,
     },
     /// Open a pod's logs.
     #[serde(rename = "pod::ViewLogs")]
@@ -1663,6 +1682,9 @@ impl Command {
             Command::PortForwardFavouriteToggleAutoStart { .. } => {
                 CommandId::PORTFORWARD_FAVOURITE_TOGGLE_AUTO_START
             }
+            Command::PortForwardCopyUrl { .. } => CommandId::PORTFORWARD_COPY_URL,
+            Command::PortForwardOpenInBrowser { .. } => CommandId::PORTFORWARD_OPEN_IN_BROWSER,
+            Command::PortForwardTogglePanel { .. } => CommandId::PORTFORWARD_TOGGLE_PANEL,
             Command::PodViewLogs { .. } => CommandId::POD_VIEW_LOGS,
             Command::LogsClear { .. } => CommandId::LOGS_CLEAR,
             Command::LogsCopy { .. } => CommandId::LOGS_COPY,
@@ -2249,6 +2271,10 @@ mod tests {
             },
             Command::PortForwardFavouriteRemove { id: "fav-1".into() },
             Command::PortForwardFavouriteToggleAutoStart { id: "fav-1".into() },
+            Command::PortForwardCopyUrl { id: 1 },
+            Command::PortForwardOpenInBrowser { id: 1 },
+            Command::PortForwardTogglePanel { show: false },
+            Command::PortForwardTogglePanel { show: true },
             Command::PodViewLogs {
                 target: pod(),
                 container: None,
@@ -2625,6 +2651,9 @@ mod tests {
                     | Command::PortForwardRestart { .. }
                     | Command::PortForwardRemove { .. }
                     | Command::PortForwardFavouriteAdd { .. }
+                    | Command::PortForwardCopyUrl { .. }
+                    | Command::PortForwardOpenInBrowser { .. }
+                    | Command::PortForwardTogglePanel { .. }
                     | Command::ServiceShowPods { .. }
                     | Command::ResourceShowUsedBy { .. }
                     | Command::TableFocusFilter { .. }

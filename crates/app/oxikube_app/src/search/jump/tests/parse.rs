@@ -137,6 +137,14 @@ fn pulses_has_k9s_short_forms_and_takes_no_arguments() {
 }
 
 #[test]
+fn pf_takes_no_arguments() {
+    for line in ["pf", "portforward", "portforwards", ":PF"] {
+        assert_eq!(parse(line), Ok(JumpCommand::PortForwards), "{line}");
+    }
+    assert!(parse("pf kube-system").is_err());
+}
+
+#[test]
 fn the_history_words() {
     for (line, step) in [
         ("-", HistoryStep::Last),

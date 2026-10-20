@@ -33,6 +33,7 @@ mod registry;
 pub mod resolve;
 pub mod state;
 mod supervisor;
+mod url;
 
 #[cfg(test)]
 mod tests;

@@ -210,6 +210,14 @@ const VIEW_LOCAL: &[&str] = &[
     "events_view::SelectLast",
     "events_view::FocusFilter",
     "events_view::FocusTable",
+    // The Port Forwards panel's list and focus (E15-S05).
+    "port_forwards::SelectNext",
+    "port_forwards::SelectPrevious",
+    "port_forwards::SelectFirst",
+    "port_forwards::SelectLast",
+    "port_forwards::FocusFilter",
+    "port_forwards::FocusTable",
+    "port_forwards::Close",
     // The notification centre's list (E14-S05).
     "notification_panel::SelectNext",
     "notification_panel::SelectPrevious",
@@ -222,10 +230,10 @@ const VIEW_LOCAL: &[&str] = &[
     "oxikube::OpenPreferences",
 ];
 
-/// Actions bound by a default whose handler only toasts "not available yet" (port forwarding has
-/// not landed): they stand for no command and are not view navigation either. An entry leaves this
-/// list when its handler dispatches a command and `stands_for` names it.
-const PLACEHOLDERS: &[&str] = &["resource_table::ShowPortForwards"];
+/// Actions bound by a default whose handler only toasts "not available yet": they stand for no
+/// command and are not view navigation either. An entry leaves this list when its handler
+/// dispatches a command and `stands_for` names it. None at present.
+const PLACEHOLDERS: &[&str] = &[];
 
 fn action_names(platform: KeymapPlatform) -> Vec<String> {
     let mut names = Vec::new();

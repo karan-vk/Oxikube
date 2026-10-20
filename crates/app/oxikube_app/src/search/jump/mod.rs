@@ -15,6 +15,7 @@
 //! :<alias> [ns] [/filter] [k=v,..] [@ctx]     a resource list
 //! :ctx [name]     :ns [name]     :q           context, namespaces, quit
 //! :pulses (:pulse, :pu)                        the cluster's pulses page (E13-S10)
+//! :pf (:portforwards)                          the Port Forwards panel (E15-S05)
 //! :-   :[   :]                                 history
 //! ```
 //!

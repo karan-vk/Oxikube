@@ -38,6 +38,9 @@ pub struct ForwardInfo {
     pub last_error: Option<String>,
     /// Traffic since the forward was started (summed across reconnects), sampled when listed.
     pub stats: ForwardStatsSnapshot,
+    /// When the forward was started (or last restarted), on the manager's clock: uptime is
+    /// measured from here.
+    pub started_at: jiff::Timestamp,
 }
 
 impl ForwardInfo {

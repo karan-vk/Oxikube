@@ -115,21 +115,6 @@ fn l_on_a_kind_without_logs_says_which_have_them(cx: &mut TestAppContext) {
 
 const PORT_FORWARDS: &str = "Port forwarding is not available yet";
 
-/// Takes the toast with `key` off the screen (the layer keeps toasts until they expire).
-fn dismiss_toast(f: &mut Fixture, key: &str) {
-    let tabs = f.tabs.clone();
-    f.vcx.update(|_, cx| {
-        let tab = tabs
-            .read(cx)
-            .tab(&cluster())
-            .cloned()
-            .expect("the cluster tab");
-        let layer = tab.read(cx).workspace().read(cx).toast_layer().clone();
-        let gone = layer.update(cx, |layer, cx| layer.dismiss_key(key, cx));
-        assert!(gone, "the toast was showing");
-    });
-}
-
 #[gpui::test]
 fn e_and_the_port_forward_keys_say_when_their_feature_is_not_installed(cx: &mut TestAppContext) {
     let (mut f, table) = open(cx);
@@ -141,17 +126,13 @@ fn e_and_the_port_forward_keys_say_when_their_feature_is_not_installed(cx: &mut 
         ["Editing is not available yet", PORT_FORWARDS]
     );
 
-    // `f` is checked on its own: with the `shift-f` toast gone, only `f` can bring it back.
-    dismiss_toast(
-        &mut f,
-        &format!("action-unavailable:{}", CommandId::POD_PORT_FORWARD),
-    );
-    assert_eq!(messages(&mut f), ["Editing is not available yet"]);
+    // `f` shows the Port Forwards panel: a command on the bus, not a toast.
     f.keys(&table, "f");
     assert_eq!(
-        messages(&mut f),
-        ["Editing is not available yet", PORT_FORWARDS]
+        f.dispatcher.sent(),
+        [Command::PortForwardTogglePanel { show: true }]
     );
+    f.dispatcher.clear();
     assert!(f.dispatcher.sent().is_empty(), "nothing ran");
 }
 

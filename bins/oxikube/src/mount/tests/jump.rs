@@ -38,7 +38,7 @@ fn namespace(name: &str) -> oxikube_domain::Resource {
 
 impl App {
     /// A connected cluster with its Pods table open and focused (the view `:` is pressed in).
-    fn with_pods_table(cx: &mut TestAppContext) -> Self {
+    pub(super) fn with_pods_table(cx: &mut TestAppContext) -> Self {
         let mut app = App::start(cx, TestPorts::seeded());
         // The cluster's own namespace list, which a namespace in a line is checked against.
         let ports = app.ports.connector.ports_for(&TestPorts::cluster_id());
@@ -86,7 +86,7 @@ impl App {
         })
     }
 
-    fn bar_is_open(&mut self) -> bool {
+    pub(super) fn bar_is_open(&mut self) -> bool {
         let ws = self.workspace();
         self.vcx.update(|_, cx| {
             ws.read(cx)
@@ -98,7 +98,7 @@ impl App {
     }
 
     /// Opens the bar with `:`, types `line` and presses Enter.
-    fn jump(&mut self, line: &str) {
+    pub(super) fn jump(&mut self, line: &str) {
         self.press(":");
         assert!(self.bar_is_open(), "`:` opened the jump bar");
         // The contexts and the namespaces are read in the background when the bar opens.
