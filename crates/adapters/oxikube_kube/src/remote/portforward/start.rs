@@ -50,9 +50,8 @@ pub(super) async fn start(
         .start_with_stats(&spec, stats.clone())
         .await
         .map_err(|err| classify(&err, &target, requested, remote_port))?;
-    tracing::debug!(pod = %target, remote_port, local_addr = %listener.local_addr(), "port forward started");
-
     let local_addr = listener.local_addr();
+    tracing::debug!(pod = %target, remote_port, %local_addr, "port forward started");
     let (errors_tx, errors) = mpsc::unbounded();
     let task = tokio::spawn(report_errors(
         listener,
