@@ -143,6 +143,35 @@ async fn stop_closes_in_flight_connections_cleanly_within_the_grace_period() {
 }
 
 #[tokio::test]
+async fn stop_lets_an_in_flight_reply_reach_the_client_before_closing() {
+    const REPLY_DELAY: Duration = Duration::from_millis(300);
+    let Forward {
+        _cluster: _keep,
+        handle,
+        ..
+    } = pod_forward(vec![Behaviour::SlowEcho(REPLY_DELAY)]).await;
+    let stats = handle.stats().clone();
+    let mut socket = TcpStream::connect(handle.local_addr())
+        .await
+        .expect("connect");
+    socket.write_all(b"request").await.expect("write");
+    // The request has reached the pod, whose reply is still on its way.
+    eventually("the request to reach the pod", || {
+        stats.snapshot().bytes_out == 7
+    })
+    .await;
+
+    let stop = tokio::spawn(handle.stop());
+    let mut reply = Vec::new();
+    tokio::time::timeout(DEADLINE, socket.read_to_end(&mut reply))
+        .await
+        .expect("closed")
+        .expect("a clean end of stream");
+    assert_eq!(reply, b"request", "the in-flight reply is not cut off");
+    stop.await.expect("stop");
+}
+
+#[tokio::test]
 async fn the_graceful_stop_behind_the_port_handle_drains_and_stops() {
     let Forward {
         _cluster: _keep,

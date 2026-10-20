@@ -126,6 +126,8 @@ impl Cluster for FakeCluster {
 pub(super) enum Behaviour {
     /// Echo every byte back.
     Echo,
+    /// Echo every chunk back after this delay (a pod still working on its reply).
+    SlowEcho(Duration),
     /// Fail to open.
     Refuse(OxiError),
     /// Open, then report `error` on the error channel and close.
@@ -179,6 +181,23 @@ impl PortForwardPort for FakeConnector {
                 tokio::spawn(async move {
                     let (mut read, mut write) = tokio::io::split(theirs);
                     let _ = tokio::io::copy(&mut read, &mut write).await;
+                    let _ = write.shutdown().await;
+                });
+                Ok(PortForwardConnection {
+                    stream: Box::pin(ours.compat()),
+                    closed: Box::pin(futures::future::pending()),
+                })
+            }
+            Behaviour::SlowEcho(delay) => {
+                tokio::spawn(async move {
+                    let (mut read, mut write) = tokio::io::split(theirs);
+                    let mut chunk = vec![0u8; 16 * 1024];
+                    while let Ok(n @ 1..) = read.read(&mut chunk).await {
+                        tokio::time::sleep(delay).await;
+                        if write.write_all(&chunk[..n]).await.is_err() {
+                            break;
+                        }
+                    }
                     let _ = write.shutdown().await;
                 });
                 Ok(PortForwardConnection {

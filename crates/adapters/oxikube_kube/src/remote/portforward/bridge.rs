@@ -19,6 +19,7 @@ use tokio::sync::watch;
 use tokio_util::compat::FuturesAsyncReadCompatExt;
 use tokio_util::sync::CancellationToken;
 
+use super::accept::STOP_GRACE;
 use super::hub::StatusHub;
 use super::plan::Target;
 
@@ -26,6 +27,10 @@ use super::plan::Target;
 /// sends the error before it closes the data channel, but the two reach us through different
 /// tasks.
 const ERROR_GRACE: Duration = Duration::from_millis(150);
+
+/// How long a graceful stop lets one connection drain before it is cut. Shorter than
+/// [`STOP_GRACE`] so the bridge can still send its FINs before the accept task aborts it.
+const DRAIN: Duration = STOP_GRACE.saturating_sub(Duration::from_millis(250));
 
 /// Marks the forward healthy once, at the first sign that a connection works: a byte from the
 /// pod, or a close the pod did not report an error for. Opening the websocket proves nothing,
@@ -93,6 +98,46 @@ impl<S: AsyncWrite + Unpin> AsyncWrite for Probed<S> {
     }
 }
 
+/// The local side of a bridge. Once `stop` is cancelled, a read that would wait reports end of
+/// stream instead: what the client already sent still goes to the pod, then the pod side is
+/// half-closed, so the pod can finish its reply and hang up while the bridge drains.
+struct Drained<S> {
+    inner: S,
+    stop: CancellationToken,
+}
+
+impl<S: AsyncRead + Unpin> AsyncRead for Drained<S> {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        let polled = Pin::new(&mut self.inner).poll_read(cx, buf);
+        if polled.is_pending() && self.stop.is_cancelled() {
+            return Poll::Ready(Ok(()));
+        }
+        polled
+    }
+}
+
+impl<S: AsyncWrite + Unpin> AsyncWrite for Drained<S> {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        data: &[u8],
+    ) -> Poll<std::io::Result<usize>> {
+        Pin::new(&mut self.inner).poll_write(cx, data)
+    }
+
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.inner).poll_flush(cx)
+    }
+
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.inner).poll_shutdown(cx)
+    }
+}
+
 /// What every bridge of one forward shares. Cheap to clone.
 #[derive(Clone)]
 pub(super) struct Bridge {
@@ -108,7 +153,7 @@ pub(super) struct Bridge {
 
 impl Bridge {
     /// Serves `local` until either side closes. Failures are published, never returned.
-    pub(super) async fn serve(self, mut local: TcpStream) {
+    pub(super) async fn serve(self, local: TcpStream) {
         let Some(target) = self.target.borrow().clone() else {
             // Between pods: refuse by closing, the client sees a reset.
             tracing::debug!("port-forward connection refused: no target pod right now");
@@ -117,6 +162,10 @@ impl Bridge {
         let _active = self.stats.open_connection();
         // Interactive protocols (ssh, redis) must not wait for Nagle.
         let _ = local.set_nodelay(true);
+        let mut local = Drained {
+            inner: local,
+            stop: self.shutdown.clone(),
+        };
         let opened = tokio::select! {
             () = self.shutdown.cancelled() => return,
             opened = self.connector.forward(&self.namespace, &target.pod, target.port) => opened,
@@ -143,15 +192,20 @@ impl Bridge {
         };
         let mut closed: BoxFuture<'static, Option<OxiError>> = closed;
 
-        // Boxed so a graceful stop can drop it and use both sockets again.
+        // Boxed so a graceful stop can drain it, then drop it and use both sockets again.
         let mut copy = Box::pin(copy_bidirectional(&mut local, &mut remote));
         let mut closed_early = false;
         let result = loop {
             tokio::select! {
                 result = &mut copy => break result,
                 () = self.shutdown.cancelled() => {
-                    // Graceful stop: end the copy (bytes still in its buffer are dropped) and
-                    // send FIN both ways, so the client sees a clean end of stream, not a reset.
+                    // Graceful stop: keep copying so in-flight bytes reach both ends. `Drained`
+                    // now ends the client's side once it has nothing more to read, which
+                    // half-closes the pod side; the copy finishes when the pod hangs up.
+                    if tokio::time::timeout(DRAIN, &mut copy).await.is_err() {
+                        tracing::debug!("port-forward connection cut after the drain window");
+                    }
+                    // Send FIN both ways, so the client sees a clean end of stream.
                     drop(copy);
                     let _ = local.shutdown().await;
                     let _ = remote.shutdown().await;

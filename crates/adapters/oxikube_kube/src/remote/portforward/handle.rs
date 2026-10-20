@@ -87,8 +87,8 @@ impl ForwardHandle {
     }
 
     /// Stops the forward gracefully and waits until it has ended: the listener closes first,
-    /// open connections are asked to close cleanly and get up to 2 s, then whatever is left is
-    /// aborted. The last status is `Stopped`.
+    /// open connections finish their in-flight bytes and close cleanly within 2 s, then
+    /// whatever is left is aborted. The last status is `Stopped`.
     pub async fn stop(mut self) {
         self.shutdown.cancel();
         if tokio::time::timeout(STOP_GRACE + STOP_SLACK, &mut self.task)
