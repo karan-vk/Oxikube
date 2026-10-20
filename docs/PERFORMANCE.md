@@ -1563,10 +1563,10 @@ the other scenarios keep their E08-F520 numbers. The Linux seed is from nightly 
 on the E10-S11 story branch. The runner measured `open_ms` p50 318 ms,
 `validation_ms` 346 ms, `draw_ms` p95 0.64 ms, `scroll_frame_ms` p95 1.53 ms, `slow_frame_pct` 0 and
 `peak_rss_mib` 229. The macOS seed (E10-F153, #643) is from
-[nightly run 39226944238](https://github.com/karan-vk/Oxikube/actions/runs/39226944238), whose macOS
-perf smoke tests passed. Across seven launches it measured `open_ms` p50 357 ms (p95 394 ms),
-`validation_ms` p50 757 ms, `draw_ms` p95 2.16 ms, `scroll_frame_ms` p95 4.31 ms,
-`slow_frame_pct` 0 and `peak_rss_mib` 179. All four editor budgets pass. The advisory macOS
+[nightly run 39346156417](https://github.com/karan-vk/Oxikube/actions/runs/39346156417), whose macOS
+perf smoke tests passed. Across seven launches it measured `open_ms` p50 269 ms (p95 296 ms),
+`validation_ms` p50 596 ms, `draw_ms` p95 1.17 ms, `scroll_frame_ms` p95 3.12 ms,
+`slow_frame_pct` 0 and `peak_rss_mib` 182. All four editor budgets pass. The advisory macOS
 comparison now has a baseline for the scenario. Baselines store the median of each per-launch
 percentile summary; the cold-open p95 above comes from the report's separate across-launch
 statistics.
