@@ -1097,6 +1097,7 @@ pub enum Command {
     PortForwardFavouriteToggleAutoStart {
         /// The favourite's id, as the favourites list it.
         id: String,
+    },
     /// Copy a port-forward's local URL to the clipboard (E15-S05).
     #[serde(rename = "portforward::CopyUrl")]
     PortForwardCopyUrl {
