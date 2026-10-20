@@ -263,6 +263,29 @@
   shift-r          notifications::MarkAllRead
   up               notification_panel::SelectPrevious
 [(everywhere)]
+  cmd-shift-f      portforward::TogglePanel
+[PortForwards && !Editing]
+  /                port_forwards::FocusFilter
+  c                port_forwards::CopyUrlSelected
+  d                port_forwards::RemoveSelected
+  delete           port_forwards::RemoveSelected
+  down             port_forwards::SelectNext
+  end              port_forwards::SelectLast
+  enter            port_forwards::OpenSelected
+  g                port_forwards::SelectFirst
+  home             port_forwards::SelectFirst
+  j                port_forwards::SelectNext
+  k                port_forwards::SelectPrevious
+  o                port_forwards::OpenSelected
+  r                port_forwards::RestartSelected
+  s                port_forwards::StopSelected
+  shift-g          port_forwards::SelectLast
+  up               port_forwards::SelectPrevious
+[PortForwards]
+  escape           port_forwards::Close
+[PortForwards && Editing]
+  escape           port_forwards::FocusTable
+[(everywhere)]
   ctrl-`           terminal_panel::TogglePanel
   ctrl-~           terminal::New
 [Terminal]

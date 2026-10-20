@@ -33,6 +33,8 @@
 //! | `oxikube_app::os_notifications` | `app::ToggleOsNotifications` (the `events.os_notifications` opt-in in `settings.json`), `app::SendTestNotification` (one desktop notification, only once opted in); neither changes a cluster (E14-S06) |
 //! | `oxikube_app::notifications` | `notifications::MarkRead`, `notifications::MarkAllRead`, `notifications::MuteCluster`, `notifications::UnmuteCluster` (the notification centre's read state and the per-cluster mute, kept in the state db; no cluster is changed; E14-S05) |
 //! | `oxikube_app::portforward` | `portforward::Start`, `Stop`, `Restart`, `Remove` (the app's one `PortForwardManager`: forwards to pods and Services that follow pod churn; refused on a read-only cluster by default; no cluster is changed; E15-S03) and `service::OpenInBrowser` (the manager as the Service port opener, the URL to the system browser); `portforward::FavouriteAdd`, `FavouriteRemove`, `FavouriteToggleAutoStart` (saved forwards in the state db, restored when the cluster's session becomes Ready; E15-S06) |
+//! | `oxikube_app::portforward` | `portforward::Start`, `Stop`, `Restart`, `Remove` (the app's one `PortForwardManager`: forwards to pods and Services that follow pod churn; refused on a read-only cluster by default; no cluster is changed; E15-S03) and `service::OpenInBrowser` (the manager as the Service port opener, the URL to the system browser) |
+//! | `oxikube_portforward_ui` | `portforward::CopyUrl`, `OpenInBrowser` (the forward's local URL to the clipboard, to the system browser) and `TogglePanel` (the Port Forwards panel in the bottom dock: `:pf`, the table's `f`, the palette; no cluster is changed; E15-S05) |
 //! | `oxikube_workspace::notifications` | `notifications::TogglePanel` (the notification centre panel in the right dock; E14-S05) |
 //! | `oxikube_settings_ui` | `cluster::ShowMetricsSettings` (the cluster's metrics page, a tab of its tab; E13-S05) |
 //! | `oxikube_overview_ui` | `cluster::ShowPulses` (the cluster's pulses page, `:pulses`; E13-S10) |
@@ -173,6 +175,9 @@ pub struct BusParts {
     /// The saved port-forwards (`portforward::FavouriteAdd`, `FavouriteRemove`,
     /// `FavouriteToggleAutoStart`; E15-S06).
     pub port_forward_favourites: oxikube_app::portforward::PortForwardFavourites,
+    /// Where `portforward::CopyUrl`, `OpenInBrowser` and `TogglePanel` send their requests
+    /// (applied on the UI thread; E15-S05).
+    pub port_forward_ui: oxikube_portforward_ui::PortForwardUiSink,
 }
 
 /// Every handler of the app, each installed under its owner (see the [module docs](self)).
@@ -236,6 +241,13 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     registry.install("oxikube_app::nodes", |r| {
         oxikube_app::nodes::register_commands(r)?;
         oxikube_app::nodes::register_drain_command(r, parts.nodes)
+    })?;
+    registry.install("oxikube_portforward_ui", |r| {
+        oxikube_portforward_ui::register_commands(
+            r,
+            Arc::new(parts.port_forwards.clone()),
+            parts.port_forward_ui,
+        )
     })?;
     registry.install("oxikube_app::portforward", |r| {
         oxikube_app::portforward::register_commands(r, parts.port_forwards.clone())?;

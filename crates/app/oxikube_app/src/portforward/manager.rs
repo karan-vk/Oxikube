@@ -47,6 +47,11 @@ impl std::fmt::Debug for PortForwardManager {
 pub struct ForwardChanges(watch::Receiver<u64>);
 
 impl ForwardChanges {
+    /// A change stream over `changes`, for a fake that is not a manager.
+    pub fn new(changes: watch::Receiver<u64>) -> Self {
+        Self(changes)
+    }
+
     /// Waits for the next change; `false` once the manager is gone.
     pub async fn changed(&mut self) -> bool {
         self.0.changed().await.is_ok()
@@ -113,6 +118,7 @@ impl PortForwardManager {
             carried: ForwardStatsSnapshot::default(),
             generation: 0,
             task: None,
+            started_at: self.inner.clock.now(),
         };
         self.inner.entries.lock().insert(id, entry);
         if let Err(err) = self.launch(id) {
@@ -174,8 +180,9 @@ impl PortForwardManager {
     /// [`StartError::Unknown`], or the [`start`](Self::start) policy errors.
     pub fn restart(&self, id: ForwardId) -> Result<(), StartError> {
         self.stop(id).then_some(()).ok_or(StartError::Unknown(id))?;
+        let now = self.inner.clock.now();
         self.inner
-            .transition(id, None, ForwardEvent::Restart, |_| {});
+            .transition(id, None, ForwardEvent::Restart, |e| e.0.started_at = now);
         self.launch(id)
     }
 

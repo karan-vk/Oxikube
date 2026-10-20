@@ -220,6 +220,9 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::PortForwardRemove { .. }
         | Command::PortForwardFavouriteRemove { .. }
         | Command::PortForwardFavouriteToggleAutoStart { .. }
+        | Command::PortForwardCopyUrl { .. }
+        | Command::PortForwardOpenInBrowser { .. }
+        | Command::PortForwardTogglePanel { .. }
         | Command::NotificationsOpenLink { .. }
         | Command::JumpBack
         | Command::JumpForward

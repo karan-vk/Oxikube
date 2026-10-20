@@ -862,6 +862,14 @@ crate's `README.md` for its allowed dependencies. Highlights:
   the displayed tab. `cluster::ShowPulses` (a read, tool `app.cluster_show_pulses`) opens it: the palette's "Show Pulses", the
   `:pulses` / `:pulse` / `:pu` reserved words of the jump bar, and the sidebar's Metrics > Pulses entry; the window's
   `PulsesViews` applies it (`mount::pulses`).
+- `oxikube_portforward_ui` (E15-S05) — the Port Forwards panel (`PortForwardPanel`, a `Panel` of the window's bottom dock,
+  closed until asked for; key context `PortForwards`): a virtualised `oxikube_ui::Table` of every cluster's forwards (cluster,
+  target, `local -> remote`, status, traffic, uptime), a text and cluster filter, and the row actions Start / Stop / Restart /
+  Remove / Copy URL / Open in Browser (`s`, `r`, `d`, `c`, `o`). It reads the app's `PortForwardManager` through `ForwardSource`
+  (a state change wakes it, coalesced; traffic and uptime are sampled once a second), so a failure shows the port's message
+  and suggestion and a reconnect its attempt and next retry. `portforward::TogglePanel` (`:pf`, `f` in a resource table, the
+  palette, `cmd-shift-f`), `portforward::CopyUrl` and `portforward::OpenInBrowser` (reads, tools `k8s.portforward_*`) are queued
+  to the window (`mount::port_forwards`); `Stop`, `Restart` and `Remove` are the app's.
 - `oxikube_events_ui` (E14-S03) — the cluster's events view (`:ev` / `:event` / `:events`, the sidebar's Events heading, the
   palette's "Show Events"; `events::Open`, tool `k8s.events_open`): `EventsView`, a workspace item of the cluster's tab (key
   `events`, key context `EventsView`) with a virtualised table (Type, Reason, Namespace, Object, Source, Count, Age, Last seen,

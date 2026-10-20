@@ -12,7 +12,7 @@
 //! | `e` | `EditSelected` | `resource::Edit` | the row action the manifest editor registers (E10-S06): an editable `kind/name` tab; a toast says so when the editor is not installed |
 //! | `l` | `ViewLogs` | `pod::ViewLogs`, `workload::ViewLogs` | the log viewer, for the pod or for the workload's pods |
 //! | `shift-f` | `PortForward` | `pod::PortForward` | the row action port forwarding registers; a toast says so until then |
-//! | `f` | `ShowPortForwards` | | a toast says so until port forwarding is installed |
+//! | `f` | `ShowPortForwards` | `portforward::TogglePanel` | the Port Forwards panel opens in the bottom dock, listing the forwards of every cluster (E15-S05) |
 //! | `ctrl-w` | `ToggleWide` | `table::ToggleWide` | the wide columns of every table of the kind show or hide |
 //! | `u` (Services) | `ShowServicePods` | `service::ShowPods` | the Pods table, filtered by the Service's selector (E12-S13) |
 //! | `o` (Services) | `OpenInBrowser` | `service::OpenInBrowser` | a port of the Service in the browser, once port forwarding is installed (E12-S13) |
@@ -26,14 +26,12 @@
 use gpui::{App, Context, Window};
 use oxikube_domain::command::{Command, CommandId};
 use oxikube_domain::ids::ResourceRef;
-use oxikube_workspace::Toast;
 
 use super::actions::{
     EditDecodedSelected, EditSelected, OpenInBrowser, PortForward, RevealSelected,
     ShowPortForwards, ShowServicePods, ShowUsedBy, ToggleWide, ViewDescribe, ViewLogs, ViewYaml,
 };
 use super::view::ResourceTable;
-use crate::exec::PORT_FORWARDING_UNAVAILABLE;
 
 impl ResourceTable {
     /// `y`: dispatches `resource::ViewYaml` for the cursor row.
@@ -149,17 +147,17 @@ impl ResourceTable {
         self.run_action(CommandId::SERVICE_OPEN_IN_BROWSER, targets, window, cx);
     }
 
-    /// `f`: the list of active port forwards, which port forwarding provides.
+    /// `f`: shows the Port Forwards panel, which lists every cluster's forwards
+    /// (`portforward::TogglePanel`, shown rather than toggled).
     pub(super) fn on_show_port_forwards(
         &mut self,
         _: &ShowPortForwards,
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.toast(
-            Toast::info(PORT_FORWARDING_UNAVAILABLE).key("action-unavailable:port-forwards"),
-            cx,
-        );
+        self.deps
+            .dispatcher
+            .dispatch(Command::PortForwardTogglePanel { show: true }, cx);
     }
 
     /// `ctrl-w`: dispatches `table::ToggleWide`; the bus hands it back to

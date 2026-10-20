@@ -81,10 +81,29 @@ pub const STANDS_FOR: &[(&str, CommandId)] = &[
         "resource_table::SelectNamespaceSlot",
         CommandId::NAMESPACE_USE_FAVOURITE,
     ),
-    // `resource_table::ShowPortForwards` (`f`) is deliberately absent: its handler only toasts
-    // "not available yet" until port forwarding lands, so it stands for no command. Once it
-    // dispatches `view::Open` with the view `port_forwards`, list it here and drop it from
-    // `PLACEHOLDER_VERBS` in `tests/k9s.rs`.
+    // `f` shows the Port Forwards panel (E15-S05).
+    (
+        "resource_table::ShowPortForwards",
+        CommandId::PORTFORWARD_TOGGLE_PANEL,
+    ),
+    // The Port Forwards panel (E15-S05): the row actions act on the selected forward.
+    ("port_forwards::StopSelected", CommandId::PORTFORWARD_STOP),
+    (
+        "port_forwards::RestartSelected",
+        CommandId::PORTFORWARD_RESTART,
+    ),
+    (
+        "port_forwards::RemoveSelected",
+        CommandId::PORTFORWARD_REMOVE,
+    ),
+    (
+        "port_forwards::CopyUrlSelected",
+        CommandId::PORTFORWARD_COPY_URL,
+    ),
+    (
+        "port_forwards::OpenSelected",
+        CommandId::PORTFORWARD_OPEN_IN_BROWSER,
+    ),
     ("resource_table::ToggleWide", CommandId::TABLE_TOGGLE_WIDE),
     // CronJobs and Jobs (E12-S08): `t` triggers, `s` suspends or, when suspended, resumes.
     (

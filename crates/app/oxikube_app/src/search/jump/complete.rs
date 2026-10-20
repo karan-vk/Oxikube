@@ -74,9 +74,8 @@ pub fn site(line: &str) -> CompletionSite {
     match head.as_str() {
         "ctx" | "context" if index == 1 => with(Slot::Context, partial, span),
         "ns" if index == 1 => with(Slot::Namespace, partial, span),
-        "q" | "quit" | "-" | "[" | "]" | "ctx" | "context" | "ns" | "pulses" | "pulse" | "pu" => {
-            nothing(span)
-        }
+        "q" | "quit" | "-" | "[" | "]" | "ctx" | "context" | "ns" | "pulses" | "pulse" | "pu"
+        | "pf" | "portforward" | "portforwards" | "port-forwards" => nothing(span),
         _ => {
             let is_flag = |text: &str| text.strip_prefix('/').is_some_and(takes_operand);
             // The word right after `/-l` is the filter's operand, not a namespace.
@@ -128,9 +127,10 @@ pub fn candidates(slot: Slot, env: &dyn JumpEnv) -> Vec<Candidate> {
     }
 }
 
-const RESERVED: [(&str, &str); 4] = [
+const RESERVED: [(&str, &str); 5] = [
     ("ctx", "switch the cluster context"),
     ("ns", "namespaces"),
+    ("pf", "port-forwards of every cluster"),
     ("pulses", "gauges and history per kind"),
     ("q", "quit"),
 ];
