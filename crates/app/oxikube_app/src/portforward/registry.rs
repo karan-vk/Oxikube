@@ -3,11 +3,12 @@
 //! ([`Inner::transition`]: the state machine step, the phase-change notification, the change
 //! signal).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 
+use oxikube_domain::ids::ClusterId;
 use oxikube_domain::notification::PortForwardChange;
 use oxikube_domain::portforward::ForwardSpec;
 use oxikube_ports::{ClockPort, ForwardStats, ForwardStatsSnapshot, NotificationSourcePort};
@@ -25,6 +26,8 @@ pub(super) struct Inner {
     pub(super) clock: Arc<dyn ClockPort>,
     pub(super) notify: Option<Arc<dyn NotificationSourcePort>>,
     pub(super) config: Mutex<ForwardConfig>,
+    /// Per-cluster overrides of `config` (`clusters.<id>.portforward`).
+    pub(super) clusters: Mutex<HashMap<ClusterId, ForwardConfig>>,
     pub(super) entries: Mutex<BTreeMap<ForwardId, Entry>>,
     pub(super) next_id: AtomicU64,
     pub(super) changes: watch::Sender<u64>,

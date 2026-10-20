@@ -3,11 +3,11 @@
 //! task (`supervisor`) owned by its entry and aborted when the forward stops, is removed or
 //! the manager is dropped.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use oxikube_domain::ids::Gvk;
+use oxikube_domain::ids::{ClusterId, Gvk};
 use oxikube_domain::portforward::ForwardSpec;
 use oxikube_ports::{ClockPort, ForwardStatsSnapshot, NotificationSourcePort};
 use parking_lot::Mutex;
@@ -74,6 +74,7 @@ impl PortForwardManager {
                 clock,
                 notify,
                 config: Mutex::new(ForwardConfig::default()),
+                clusters: Mutex::new(HashMap::new()),
                 entries: Mutex::new(BTreeMap::new()),
                 next_id: AtomicU64::new(1),
                 changes: watch::channel(0).0,
@@ -86,6 +87,27 @@ impl PortForwardManager {
         *self.inner.config.lock() = config;
     }
 
+    /// Replaces the per-cluster overrides (`clusters.<id>.portforward`, already resolved over
+    /// the global values). Clusters not listed follow [`config`](Self::config). Like
+    /// [`set_config`](Self::set_config), only forwards started afterwards see it.
+    pub fn set_cluster_configs(&self, clusters: HashMap<ClusterId, ForwardConfig>) {
+        *self.inner.clusters.lock() = clusters;
+    }
+
+    /// The configuration in force for `cluster`: its override, else the global one. The backoff
+    /// is the global one in both cases.
+    pub fn config_for(&self, cluster: &ClusterId) -> ForwardConfig {
+        let global = self.config();
+        self.inner
+            .clusters
+            .lock()
+            .get(cluster)
+            .map_or(global, |c| ForwardConfig {
+                backoff: global.backoff,
+                ..*c
+            })
+    }
+
     /// The cluster side.
     pub(super) fn backend(&self) -> &Arc<dyn ForwardBackend> {
         &self.inner.backend
@@ -94,6 +116,14 @@ impl PortForwardManager {
     /// The configuration in force.
     pub fn config(&self) -> ForwardConfig {
         *self.inner.config.lock()
+    }
+
+    /// Why a forward could not start on `cluster` right now, if so: it is read-only and
+    /// `portforward.allowed_in_readonly` is off for it. (Whether it is connected is learnt at the
+    /// start.) Lets a caller refuse before asking anyone for permission.
+    pub fn refusal(&self, cluster: &ClusterId) -> Option<StartError> {
+        (self.inner.backend.is_read_only(cluster) && !self.config_for(cluster).allowed_in_readonly)
+            .then(|| StartError::ReadOnly(cluster.to_string()))
     }
 
     /// Starts forwarding `spec` and returns its id at once; the forward resolves its target and
@@ -229,8 +259,9 @@ impl PortForwardManager {
             });
             Err(err)
         };
-        if self.inner.backend.is_read_only(cluster) && !self.config().allowed_in_readonly {
-            return refuse(StartError::ReadOnly(cluster.to_string()));
+        let config = self.config_for(cluster);
+        if let Some(err) = self.refusal(cluster) {
+            return refuse(err);
         }
         let Some(port) = self.inner.backend.port_forward(cluster) else {
             return refuse(StartError::NotConnected(cluster.to_string()));
@@ -248,6 +279,7 @@ impl PortForwardManager {
             generation: entry.generation,
             spec,
             local_port: (local_port != 0).then_some(local_port),
+            port_range: config.port_range,
             port,
             inner: Arc::downgrade(&self.inner),
             last_pod: entry.pod.clone(),

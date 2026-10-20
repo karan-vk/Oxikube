@@ -16,10 +16,14 @@ use std::sync::Arc;
 use futures::channel::mpsc;
 use gpui::{App, Entity, Global, Task, Window};
 use oxikube_app::portforward::PortForwardFavourites;
-use oxikube_app::{ClusterSessionManager, PortForwardManager, ResourceStores, SessionBackend};
+use oxikube_app::tools::portforward::{self as agent_tools, DenyForwards};
+use oxikube_app::{
+    ClusterSessionManager, ForwardConfig, PortForwardManager, ResourceStores, SessionBackend,
+};
 use oxikube_portforward_ui::{PortForwardPanel, PortForwardPanelDeps, UiRequest};
 use oxikube_ports::ClockPort;
 use oxikube_resources_ui::kinds::service::ServiceBrowser;
+use oxikube_settings::{PortForwardSettings, Settings as _};
 use oxikube_workspace::{CommandDispatcher, Workspace};
 
 use crate::app_state::{AppState, ClusterServices};
@@ -73,7 +77,51 @@ pub fn manager(
     let follow = favourites.follow(&services.sessions);
     let task = cx.spawn(async move |_| follow.await);
     cx.set_global(FavouritesFollow(task));
+    follow_settings(&manager, cx);
+    install_agent_tools(state, &manager);
     (manager, favourites)
+}
+
+/// The manager's configuration from one resolved `portforward` setting.
+fn config(settings: &PortForwardSettings) -> ForwardConfig {
+    ForwardConfig {
+        allowed_in_readonly: settings.allowed_in_readonly,
+        default_bind: settings.default_bind,
+        port_range: settings.port_range,
+        annotations: settings.annotations,
+        ..ForwardConfig::default()
+    }
+}
+
+/// Pushes the `portforward.*` settings (global and per cluster) into `manager` now and on every
+/// change (E15-S08). Forwards started afterwards use them; running ones are not restarted. The
+/// subscription lives as long as the app, like the manager.
+fn follow_settings(manager: &PortForwardManager, cx: &mut App) {
+    fn push(manager: &PortForwardManager, cx: &App) {
+        let (global, clusters) = PortForwardSettings::table(cx);
+        manager.set_config(config(&global));
+        manager.set_cluster_configs(
+            clusters
+                .iter()
+                .map(|(cluster, settings)| (cluster.clone(), config(settings)))
+                .collect(),
+        );
+    }
+    push(manager, cx);
+    let manager = manager.clone();
+    PortForwardSettings::observe(cx, move |cx| push(&manager, cx)).detach();
+}
+
+/// Registers `portforward.list_port_forwards` and the gated `portforward.start_port_forward` for
+/// hosted agents. No agent may start a forward until the permission prompt of E27 exists
+/// ([`DenyForwards`]).
+fn install_agent_tools(state: &AppState, manager: &PortForwardManager) {
+    let Some(hooks) = state.agent_hooks() else {
+        return;
+    };
+    if let Err(error) = agent_tools::install(&hooks.tools, manager, Arc::new(DenyForwards)) {
+        tracing::error!(%error, "the port-forward tools could not be registered");
+    }
 }
 
 /// The Port Forwards panel of one window and the task serving its commands; keep it as long as

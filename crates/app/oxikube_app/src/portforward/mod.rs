@@ -24,6 +24,7 @@
 //! [`start`]: PortForwardManager::start
 //! [`NotificationSourcePort`]: oxikube_ports::NotificationSourcePort
 
+mod alloc;
 mod backend;
 mod commands;
 pub mod favourites;

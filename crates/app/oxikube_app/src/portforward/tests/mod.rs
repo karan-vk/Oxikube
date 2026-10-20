@@ -2,6 +2,7 @@
 //! a fake backend (watch snapshots pushed by the test), the testkit's `FakePortForwardPort` (a
 //! real loopback echo listener), a manual clock and the notification hooks' fake.
 
+mod agent_tools;
 mod commands;
 mod manager;
 mod resolve;

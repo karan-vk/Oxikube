@@ -178,6 +178,9 @@
             "null"
           ]
         },
+        "portforward": {
+          "$ref": "#/$defs/PortForwardSettingsContent"
+        },
         "prometheus": {
           "anyOf": [
             {
@@ -889,6 +892,50 @@
       ],
       "pattern": "^(/?[A-Za-z0-9_.~-]+)*/?$",
       "type": "string"
+    },
+    "PortForwardSettingsContent": {
+      "additionalProperties": false,
+      "description": "What one settings layer says about port-forwards.",
+      "properties": {
+        "allowed_in_readonly": {
+          "description": "Allow forwards on a read-only cluster. Default `false`.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "annotations": {
+          "description": "Annotate forwarded objects (opt-in). Default `false`.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "default_bind": {
+          "description": "The IP address a forward listens on unless the request names another. Default\n`127.0.0.1` (loopback only). Anything else exposes the forwarded port to the network.",
+          "format": "ip",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "port_range": {
+          "description": "`[first, last]`, the local ports automatic allocation picks from: inclusive,\n`first` at least 1024 and not above `last`. Unset lets the OS pick.",
+          "items": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
     },
     "PrometheusContent": {
       "additionalProperties": false,
@@ -1702,6 +1749,9 @@
         "string",
         "null"
       ]
+    },
+    "portforward": {
+      "$ref": "#/$defs/PortForwardSettingsContent"
     },
     "prometheus": {
       "anyOf": [

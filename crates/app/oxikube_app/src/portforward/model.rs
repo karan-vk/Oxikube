@@ -1,10 +1,10 @@
 //! The manager's vocabulary: [`ForwardId`], the [`ForwardInfo`] rows it lists, the
 //! [`ForwardConfig`] it follows and the [`StartError`] a start can fail with.
 
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 
 use oxikube_domain::OxiError;
-use oxikube_domain::portforward::ForwardSpec;
+use oxikube_domain::portforward::{ForwardSpec, PortRange};
 use oxikube_ports::{ForwardStatsSnapshot, PortForwardError};
 
 use super::state::{Backoff, ForwardState};
@@ -61,14 +61,36 @@ pub(crate) fn label(spec: &ForwardSpec, local_addr: Option<SocketAddr>) -> Strin
     )
 }
 
-/// What the manager follows. In-code defaults until the `portforward.*` settings (E15-S08).
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+/// What the manager follows: the `portforward.*` settings (E15-S08), global or for one cluster
+/// (see [`PortForwardManager::config_for`](super::PortForwardManager::config_for)). A change
+/// reaches forwards started afterwards; running ones are not restarted.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ForwardConfig {
     /// Whether forwards may start on a read-only cluster (`portforward.allowed_in_readonly`,
     /// default `false`).
     pub allowed_in_readonly: bool,
+    /// Where a forward listens unless its request names an address (`portforward.default_bind`,
+    /// default loopback).
+    pub default_bind: IpAddr,
+    /// The local ports a forward that asks for a free one picks from (`portforward.port_range`);
+    /// `None` lets the OS pick.
+    pub port_range: Option<PortRange>,
+    /// Whether forwarded objects are annotated (`portforward.annotations`, default `false`).
+    pub annotations: bool,
     /// The delays between reconnect attempts.
     pub backoff: Backoff,
+}
+
+impl Default for ForwardConfig {
+    fn default() -> Self {
+        Self {
+            allowed_in_readonly: false,
+            default_bind: ForwardSpec::DEFAULT_BIND,
+            port_range: None,
+            annotations: false,
+            backoff: Backoff::default(),
+        }
+    }
 }
 
 /// Why a forward did not start.
