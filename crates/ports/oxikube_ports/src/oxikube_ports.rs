@@ -183,7 +183,10 @@ pub use notifier::{
     ActivationHandler, MAX_BODY_CHARS, MAX_TITLE_CHARS, Notification, NotificationActivation,
     NotificationLevel, NotifierPort, NotifierStatus, is_unavailable, unavailable,
 };
-pub use portforward::{DuplexStream, PortForwardConnection, PortForwardPort};
+pub use portforward::{
+    ActiveConnection, DuplexStream, FIRST_UNPRIVILEGED_PORT, ForwardHandle, ForwardStats,
+    ForwardStatsSnapshot, PodRef, PortForwardConnection, PortForwardError, PortForwardPort,
+};
 pub use promql::{
     DEFAULT_MAX_RESPONSE_BYTES, DEFAULT_TIMEOUT, PromAuth, PromEndpoint, PromSecret, PromTls,
     PromqlEndpointPort, PromqlError, PromqlPort, PromqlSeries, PromqlValue, TimeRange,

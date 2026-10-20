@@ -3,13 +3,22 @@
 use std::io;
 use std::net::SocketAddr;
 
-use oxikube_domain::OxiError;
 use oxikube_domain::redact::redact;
+use oxikube_domain::{ErrorKind, OxiError};
+use oxikube_ports::{PodRef, PortForwardError};
 
 use crate::auth::classify;
 
 /// The longest server message kept for the UI, in characters.
 const MAX_MESSAGE: usize = 300;
+
+/// Wording shared by the producers of these errors and [`to_port_error`], which maps them to the
+/// typed taxonomy. One place, so the two cannot drift apart (the tests pin both).
+const IN_USE: &str = "is already in use";
+const PRIVILEGED: &str = "ports below 1024";
+const NOT_LOCAL: &str = "does not belong to this machine";
+const REMOTE_PREFIX: &str = "the pod reported a port-forward error: ";
+const REFUSED_UPGRADE: &str = "the cluster refused to forward port";
 
 /// The failure to open the `portforward` websocket for `namespace/pod`.
 ///
@@ -30,7 +39,7 @@ pub(super) fn open_error(err: &kube::Error, namespace: &str, pod: &str, port: u1
         )),
         404 => OxiError::not_found(format!("pod {namespace}/{pod} not found")),
         400 | 422 => OxiError::validation(format!(
-            "the cluster refused to forward port {port} of pod {namespace}/{pod} (is the pod running?)"
+            "{REFUSED_UPGRADE} {port} of pod {namespace}/{pod} (is the pod running?)"
         )),
         408 | 504 => OxiError::timeout("the port-forward request to the cluster timed out"),
         code => OxiError::network(format!(
@@ -48,25 +57,68 @@ pub(super) fn remote_failure(message: &str) -> OxiError {
         .find(|l| !l.trim().is_empty())
         .unwrap_or("");
     let line: String = line.trim().chars().take(MAX_MESSAGE).collect();
-    OxiError::network(format!("the pod reported a port-forward error: {line}"))
+    OxiError::network(format!("{REMOTE_PREFIX}{line}"))
 }
 
 /// Binding the local listener failed.
 pub(super) fn bind_error(addr: SocketAddr, err: &io::Error) -> OxiError {
     match err.kind() {
         io::ErrorKind::AddrInUse => OxiError::conflict(format!(
-            "local port {} on {} is already in use",
+            "local port {} on {} {IN_USE}",
             addr.port(),
             addr.ip()
         )),
         io::ErrorKind::PermissionDenied => OxiError::validation(format!(
-            "not allowed to listen on local port {} (ports below 1024 usually need privileges)",
+            "not allowed to listen on local port {} ({PRIVILEGED} usually need privileges)",
             addr.port()
         )),
         io::ErrorKind::AddrNotAvailable => OxiError::validation(format!(
-            "cannot listen on {}: the address does not belong to this machine",
+            "cannot listen on {}: the address {NOT_LOCAL}",
             addr.ip()
         )),
         _ => OxiError::internal(format!("could not listen on {addr}: {err}")),
     }
+}
+
+/// Maps an error from starting or running a forward to the port's taxonomy.
+///
+/// `requested` is the local address the forward asked for and `remote_port` the pod port;
+/// both only fill in the variants that name them. This is the only place the adapter's
+/// [`OxiError`]s become [`PortForwardError`]s.
+pub(super) fn to_port_error(
+    err: &OxiError,
+    pod: &PodRef,
+    requested: SocketAddr,
+    remote_port: u16,
+) -> PortForwardError {
+    let message = err.message();
+    match err.kind() {
+        ErrorKind::NotFound => PortForwardError::PodGone(pod.to_string()),
+        ErrorKind::Forbidden => PortForwardError::Forbidden(format!("pod {pod}")),
+        ErrorKind::Conflict if message.contains(IN_USE) => {
+            bind_failed(requested, io::ErrorKind::AddrInUse)
+        }
+        ErrorKind::Conflict => PortForwardError::PodNotReady(pod.to_string()),
+        ErrorKind::Validation if message.contains(PRIVILEGED) => {
+            bind_failed(requested, io::ErrorKind::PermissionDenied)
+        }
+        ErrorKind::Validation if message.contains(NOT_LOCAL) => {
+            bind_failed(requested, io::ErrorKind::AddrNotAvailable)
+        }
+        ErrorKind::Validation if message.contains(REFUSED_UPGRADE) => {
+            PortForwardError::PodNotReady(pod.to_string())
+        }
+        ErrorKind::Network if message.starts_with(REMOTE_PREFIX) => PortForwardError::PortClosed {
+            port: remote_port,
+            detail: message.trim_start_matches(REMOTE_PREFIX).to_owned(),
+        },
+        ErrorKind::Network | ErrorKind::Timeout => {
+            PortForwardError::Disconnected(message.to_owned())
+        }
+        _ => PortForwardError::Other(message.to_owned()),
+    }
+}
+
+fn bind_failed(addr: SocketAddr, kind: io::ErrorKind) -> PortForwardError {
+    PortForwardError::BindFailed { addr, kind }
 }

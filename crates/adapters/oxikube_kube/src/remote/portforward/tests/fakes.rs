@@ -10,7 +10,7 @@ use futures::channel::mpsc;
 use futures::stream::BoxStream;
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
 use oxikube_domain::{ForwardPort, ForwardSpec, ForwardStatus, OxiError, OxiResult};
-use oxikube_ports::{PortForwardConnection, PortForwardPort};
+use oxikube_ports::{PodRef, PortForwardConnection, PortForwardError, PortForwardPort};
 use parking_lot::Mutex;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_util::compat::TokioAsyncReadCompatExt;
@@ -155,6 +155,16 @@ impl FakeConnector {
 
 #[async_trait]
 impl PortForwardPort for FakeConnector {
+    async fn start(
+        &self,
+        _: PodRef,
+        _: u16,
+        _: std::net::IpAddr,
+        _: Option<u16>,
+    ) -> Result<oxikube_ports::ForwardHandle, PortForwardError> {
+        self.unsupported_start().await
+    }
+
     async fn forward(&self, ns: &str, pod: &str, port: u16) -> OxiResult<PortForwardConnection> {
         self.calls
             .lock()
@@ -194,6 +204,15 @@ impl PortForwardPort for FakeConnector {
                 })
             }
         }
+    }
+}
+
+impl FakeConnector {
+    /// The connector only serves `forward`; `start` is the adapter's own job.
+    async fn unsupported_start(&self) -> Result<oxikube_ports::ForwardHandle, PortForwardError> {
+        Err(PortForwardError::Other(
+            "FakeConnector does not start forwards".into(),
+        ))
     }
 }
 

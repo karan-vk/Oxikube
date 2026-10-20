@@ -10,7 +10,10 @@ use k8s_openapi::api::core::v1::Pod;
 use kube::api::Portforwarder;
 use kube::{Api, Client};
 use oxikube_domain::{ForwardSpec, OxiError, OxiResult};
-use oxikube_ports::{PortForwardConnection, PortForwardPort};
+use oxikube_ports::{
+    ForwardStats, PodRef, PortForwardConnection, PortForwardError, PortForwardPort,
+};
+use std::net::IpAddr;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio_util::compat::TokioAsyncReadCompatExt;
@@ -18,7 +21,7 @@ use tokio_util::compat::TokioAsyncReadCompatExt;
 use super::cluster::{Cluster, KubeCluster};
 use super::error::{open_error, remote_failure};
 use super::handle::ForwardHandle;
-use super::session;
+use super::{session, start};
 
 /// Port forwarding on one connected cluster. Cheap to clone; clones share the client.
 ///
@@ -61,6 +64,15 @@ impl KubePortForward {
     pub async fn start(&self, spec: &ForwardSpec) -> OxiResult<ForwardHandle> {
         session::start(Arc::new(self.clone()), self.cluster.clone(), spec).await
     }
+
+    /// [`start`](Self::start) counting traffic into `stats`.
+    pub(super) async fn start_with_stats(
+        &self,
+        spec: &ForwardSpec,
+        stats: Arc<ForwardStats>,
+    ) -> OxiResult<ForwardHandle> {
+        session::start_with_stats(Arc::new(self.clone()), self.cluster.clone(), spec, stats).await
+    }
 }
 
 impl std::fmt::Debug for KubePortForward {
@@ -92,6 +104,18 @@ impl PortForwardPort for KubePortForward {
             stream: Box::pin(stream.compat()),
             closed: Box::pin(async move { errors.await.map(|message| remote_failure(&message)) }),
         })
+    }
+
+    /// A pod forward on a local listener; see [`start`](Self::start) for the richer
+    /// [`ForwardSpec`] form (services, named ports).
+    async fn start(
+        &self,
+        target: PodRef,
+        remote_port: u16,
+        bind: IpAddr,
+        local_port: Option<u16>,
+    ) -> Result<oxikube_ports::ForwardHandle, PortForwardError> {
+        start::start(self, target, remote_port, bind, local_port).await
     }
 }
 

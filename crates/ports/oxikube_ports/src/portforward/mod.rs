@@ -5,9 +5,17 @@
 //! future that resolves with the port's error (`take_error`). Here that is one
 //! [`PortForwardConnection`] per call, using the runtime-neutral
 //! `futures::io` traits; the adapter bridges tokio's with `tokio_util::compat`.
-//! Local TCP listeners, service-to-pod resolution and restarts belong to the
-//! app's `PortForwardManager`, not to this port.
+//! [`PortForwardPort::start`] runs a whole forward (local listener, one
+//! `Portforwarder` per accepted connection) behind a [`ForwardHandle`]. Service-to-pod
+//! resolution and restarts belong to the app's `PortForwardManager`, not to this port.
 
+mod error;
+mod handle;
+
+pub use error::{FIRST_UNPRIVILEGED_PORT, PortForwardError};
+pub use handle::{ActiveConnection, ForwardHandle, ForwardStats, ForwardStatsSnapshot, PodRef};
+
+use std::net::IpAddr;
 use std::pin::Pin;
 
 use async_trait::async_trait;
@@ -67,6 +75,26 @@ pub trait PortForwardPort: Send + Sync {
         pod: &str,
         port: u16,
     ) -> OxiResult<PortForwardConnection>;
+
+    /// Starts a forward of `remote_port` on `target`: binds `bind:local_port` (`None` asks
+    /// the OS for a free port; the handle reports the real address) and bridges every
+    /// accepted connection to the pod, one [`forward`](Self::forward) each.
+    ///
+    /// Dropping the returned handle stops the forward. Failures after the start arrive on
+    /// [`ForwardHandle::errors`]. Callers choose the bind address: loopback unless the user
+    /// chose otherwise.
+    ///
+    /// # Errors
+    ///
+    /// [`PortForwardError`]: `PodGone`, `PodNotReady`, `Forbidden`, `BindFailed` (address in
+    /// use, privileged port), `Disconnected`, `Other`.
+    async fn start(
+        &self,
+        target: PodRef,
+        remote_port: u16,
+        bind: IpAddr,
+        local_port: Option<u16>,
+    ) -> Result<ForwardHandle, PortForwardError>;
 }
 
 #[cfg(test)]

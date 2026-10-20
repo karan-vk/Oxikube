@@ -2,7 +2,10 @@
 
 use std::net::SocketAddr;
 
+use std::sync::Arc;
+
 use oxikube_domain::ForwardStatus;
+use oxikube_ports::ForwardStats;
 use tokio::sync::{broadcast, watch};
 use tokio::task::JoinHandle;
 
@@ -22,16 +25,28 @@ use super::hub::StatusHub;
 pub struct ForwardHandle {
     local_addr: SocketAddr,
     hub: StatusHub,
+    stats: Arc<ForwardStats>,
     task: JoinHandle<()>,
 }
 
 impl ForwardHandle {
-    pub(super) fn new(local_addr: SocketAddr, hub: StatusHub, task: JoinHandle<()>) -> Self {
+    pub(super) fn new(
+        local_addr: SocketAddr,
+        hub: StatusHub,
+        stats: Arc<ForwardStats>,
+        task: JoinHandle<()>,
+    ) -> Self {
         Self {
             local_addr,
             hub,
+            stats,
             task,
         }
+    }
+
+    /// Live traffic counters (atomics; sample them on a timer).
+    pub fn stats(&self) -> &Arc<ForwardStats> {
+        &self.stats
     }
 
     /// The bound local address, with the real port when the spec asked for port `0`.

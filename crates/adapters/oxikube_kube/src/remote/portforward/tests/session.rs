@@ -354,3 +354,31 @@ async fn binding_another_address_is_honoured() {
         Err(err) => assert_eq!(err.kind(), ErrorKind::Validation),
     }
 }
+
+#[tokio::test]
+async fn bridged_traffic_is_counted_in_the_handles_stats() {
+    let (cluster, connector) = pod_forward();
+    let handle = start(
+        &cluster,
+        &connector,
+        &spec("Pod", "web-1", ForwardPort::Number(80)),
+    )
+    .await
+    .expect("start");
+    assert_eq!(handle.stats().snapshot().total_connections, 0);
+    echo_through(&handle, b"hello").await;
+
+    let stats = handle.stats().clone();
+    tokio::time::timeout(DEADLINE, async {
+        loop {
+            let s = stats.snapshot();
+            if s.bytes_out == 5 && s.bytes_in == 5 && s.active_connections == 0 {
+                assert_eq!(s.total_connections, 1);
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("counters settle");
+}
