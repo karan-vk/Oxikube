@@ -86,6 +86,7 @@ mod cluster;
 mod data;
 mod drain;
 mod events;
+mod forward_start;
 mod infra;
 mod integration;
 mod merge;

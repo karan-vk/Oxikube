@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use futures::future::BoxFuture;
 use oxikube_domain::OxiError;
-use oxikube_ports::{PortForwardConnection, PortForwardPort};
+use oxikube_ports::{ForwardStats, PortForwardConnection, PortForwardPort};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf, copy_bidirectional};
 use tokio::net::TcpStream;
 use tokio::sync::watch;
@@ -50,6 +50,7 @@ impl Recovery {
 struct Probed<S> {
     inner: S,
     recovery: Recovery,
+    stats: Arc<ForwardStats>,
 }
 
 impl<S: AsyncRead + Unpin> AsyncRead for Probed<S> {
@@ -61,6 +62,8 @@ impl<S: AsyncRead + Unpin> AsyncRead for Probed<S> {
         let before = buf.filled().len();
         let polled = Pin::new(&mut self.inner).poll_read(cx, buf);
         if matches!(polled, Poll::Ready(Ok(()))) && buf.filled().len() > before {
+            self.stats
+                .add_bytes_in((buf.filled().len() - before) as u64);
             self.recovery.healthy();
         }
         polled
@@ -73,7 +76,11 @@ impl<S: AsyncWrite + Unpin> AsyncWrite for Probed<S> {
         cx: &mut Context<'_>,
         data: &[u8],
     ) -> Poll<std::io::Result<usize>> {
-        Pin::new(&mut self.inner).poll_write(cx, data)
+        let polled = Pin::new(&mut self.inner).poll_write(cx, data);
+        if let Poll::Ready(Ok(written)) = &polled {
+            self.stats.add_bytes_out(*written as u64);
+        }
+        polled
     }
 
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
@@ -93,6 +100,7 @@ pub(super) struct Bridge {
     pub(super) target: watch::Receiver<Option<Target>>,
     pub(super) hub: StatusHub,
     pub(super) local_addr: SocketAddr,
+    pub(super) stats: Arc<ForwardStats>,
 }
 
 impl Bridge {
@@ -103,6 +111,7 @@ impl Bridge {
             tracing::debug!("port-forward connection refused: no target pod right now");
             return;
         };
+        let _active = self.stats.open_connection();
         // Interactive protocols (ssh, redis) must not wait for Nagle.
         let _ = local.set_nodelay(true);
         let connection = match self
@@ -127,6 +136,7 @@ impl Bridge {
         let mut remote = Probed {
             inner: stream.compat(),
             recovery: recovery.clone(),
+            stats: self.stats.clone(),
         };
         let mut closed: BoxFuture<'static, Option<OxiError>> = closed;
 

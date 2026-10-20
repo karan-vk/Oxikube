@@ -259,6 +259,15 @@ impl PortForwardPort for Stub {
     async fn forward(&self, _: &str, _: &str, _: u16) -> OxiResult<PortForwardConnection> {
         stub()
     }
+    async fn start(
+        &self,
+        _: PodRef,
+        _: u16,
+        _: std::net::IpAddr,
+        _: Option<u16>,
+    ) -> Result<ForwardHandle, PortForwardError> {
+        Err(PortForwardError::Other("stub".into()))
+    }
 }
 
 fn assert_send_sync<T: ?Sized + Send + Sync>() {}

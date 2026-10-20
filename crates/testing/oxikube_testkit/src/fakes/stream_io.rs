@@ -15,11 +15,12 @@ use futures::io::{AsyncRead, AsyncWrite};
 use futures::{FutureExt, StreamExt, sink, stream};
 use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::{
-    ExecOptions, ExecSession, ExecStreamPort, ExitStatus, PortForwardConnection, PortForwardPort,
-    TerminalSize,
+    ExecOptions, ExecSession, ExecStreamPort, ExitStatus, ForwardHandle, PodRef,
+    PortForwardConnection, PortForwardError, PortForwardPort, TerminalSize,
 };
 use parking_lot::Mutex;
 
+use super::forward_start::ForwardStarts;
 use crate::script::{CallLog, Script};
 
 // --- ExecStreamPort ----------------------------------------------------------------------------
@@ -411,13 +412,31 @@ pub enum PortForwardCall {
         /// Pod port.
         port: u16,
     },
+    /// `start`.
+    Start {
+        /// The pod.
+        target: PodRef,
+        /// Pod port.
+        remote_port: u16,
+        /// Requested bind address.
+        bind: std::net::IpAddr,
+        /// Requested local port (`None`: any free one).
+        local_port: Option<u16>,
+    },
 }
 
-/// Fake `PortForwardPort`. Scripted only: each call takes the next [`ForwardScript`].
+/// Fake `PortForwardPort`.
+///
+/// * `forward`: scripted; each call takes the next [`ForwardScript`].
+/// * `start`: a real loopback listener that echoes every byte back and counts it in the
+///   handle's stats. [`fail_next_start`](Self::fail_next_start) queues start failures;
+///   [`inject_error`](Self::inject_error) reports a runtime error on every live forward
+///   (a pod going away, a lost connection). Needs a tokio runtime.
 #[derive(Debug, Default)]
 pub struct FakePortForwardPort {
     script: PortForwardScripts,
     calls: CallLog<PortForwardCall>,
+    starts: ForwardStarts,
 }
 
 fake_plumbing!(FakePortForwardPort, PortForwardScripts, PortForwardCall);
@@ -426,6 +445,16 @@ impl FakePortForwardPort {
     /// A fake with nothing scripted.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Makes the next `start` fail with `err` (queued in call order).
+    pub fn fail_next_start(&self, err: PortForwardError) {
+        self.starts.fail_next(err);
+    }
+
+    /// Reports `err` on the error stream of every live forward; returns how many got it.
+    pub fn inject_error(&self, err: &PortForwardError) -> usize {
+        self.starts.inject(err)
     }
 }
 
@@ -447,6 +476,24 @@ impl PortForwardPort for FakePortForwardPort {
             .forward
             .next_or_unscripted("FakePortForwardPort", "forward")?;
         Ok(script.into_connection())
+    }
+
+    async fn start(
+        &self,
+        target: PodRef,
+        remote_port: u16,
+        bind: std::net::IpAddr,
+        local_port: Option<u16>,
+    ) -> Result<ForwardHandle, PortForwardError> {
+        self.calls.record(PortForwardCall::Start {
+            target: target.clone(),
+            remote_port,
+            bind,
+            local_port,
+        });
+        self.starts
+            .start(target, remote_port, bind, local_port)
+            .await
     }
 }
 

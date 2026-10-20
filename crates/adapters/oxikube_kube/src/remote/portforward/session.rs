@@ -8,7 +8,7 @@ use futures::StreamExt;
 use futures::stream::BoxStream;
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::{ForwardSpec, OxiError, OxiResult};
-use oxikube_ports::PortForwardPort;
+use oxikube_ports::{ForwardStats, PortForwardPort};
 use tokio::net::TcpListener;
 use tokio::sync::watch;
 use tokio::task::JoinSet;
@@ -33,6 +33,16 @@ pub(super) async fn start(
     connector: Arc<dyn PortForwardPort>,
     cluster: Arc<dyn Cluster>,
     spec: &ForwardSpec,
+) -> OxiResult<ForwardHandle> {
+    start_with_stats(connector, cluster, spec, Arc::default()).await
+}
+
+/// [`start`] counting traffic into `stats`.
+pub(super) async fn start_with_stats(
+    connector: Arc<dyn PortForwardPort>,
+    cluster: Arc<dyn Cluster>,
+    spec: &ForwardSpec,
+    stats: Arc<ForwardStats>,
 ) -> OxiResult<ForwardHandle> {
     let (namespace, name) = target_of(spec)?;
     let plan = if spec.targets_service() {
@@ -66,10 +76,11 @@ pub(super) async fn start(
         target: target_rx,
         hub: hub.clone(),
         local_addr,
+        stats: stats.clone(),
     };
     let pods = cluster.watch_pods(namespace, &selector);
     let task = tokio::spawn(run(listener, pods, monitor, bridge, StopGuard(hub.clone())));
-    Ok(ForwardHandle::new(local_addr, hub, task))
+    Ok(ForwardHandle::new(local_addr, hub, stats, task))
 }
 
 /// The namespace and name of a Pod or Service target.

@@ -3,13 +3,13 @@
 use http::StatusCode;
 use kube::client::UpgradeConnectionError;
 use oxikube_domain::{ErrorKind, ForwardPort};
-use oxikube_ports::PortForwardPort;
+use oxikube_ports::{PodRef, PortForwardError, PortForwardPort};
 use serde_json::json;
 
 use crate::fake_api::{FakeApi, status_body};
 use crate::remote::portforward::KubePortForward;
 use crate::remote::portforward::cluster::{Cluster, KubeCluster};
-use crate::remote::portforward::error::{bind_error, open_error, remote_failure};
+use crate::remote::portforward::error::{bind_error, open_error, remote_failure, to_port_error};
 use crate::remote::portforward::plan::{Plan, PodSelector};
 
 fn upgrade_refused(status: StatusCode) -> kube::Error {
@@ -168,4 +168,92 @@ async fn the_kube_cluster_reads_services_and_selects_pods_server_side() {
         .await
         .expect_err("no such service");
     assert_eq!(err.kind(), ErrorKind::NotFound);
+}
+
+/// The one mapping table: every native failure the issue names, to the typed taxonomy.
+#[test]
+fn native_failures_map_to_the_port_forward_taxonomy() {
+    use std::io::{Error, ErrorKind as Io};
+    let pod = PodRef::new("ns", "web");
+    let addr = |port: u16| std::net::SocketAddr::from(([127, 0, 0, 1], port));
+    let map = |err: oxikube_domain::OxiError, port: u16| to_port_error(&err, &pod, addr(port), 80);
+
+    // 404 on the websocket upgrade: the pod is gone.
+    let err = open_error(&upgrade_refused(StatusCode::NOT_FOUND), "ns", "web", 80);
+    assert_eq!(map(err, 8080), PortForwardError::PodGone("ns/web".into()));
+    // 403: RBAC on pods/portforward.
+    let err = open_error(&upgrade_refused(StatusCode::FORBIDDEN), "ns", "web", 80);
+    let mapped = map(err, 8080);
+    assert!(
+        matches!(mapped, PortForwardError::Forbidden(_)),
+        "{mapped:?}"
+    );
+    assert!(
+        mapped
+            .suggestion()
+            .expect("hint")
+            .contains("pods/portforward")
+    );
+    // 400/422: the pod cannot take the stream (not running).
+    let err = open_error(&upgrade_refused(StatusCode::BAD_REQUEST), "ns", "web", 80);
+    assert_eq!(
+        map(err, 8080),
+        PortForwardError::PodNotReady("ns/web".into())
+    );
+    // Container refused the connection (reported on the error channel).
+    let err = remote_failure(
+        "error forwarding port 80: dial tcp 127.0.0.1:80: connect: connection refused",
+    );
+    let PortForwardError::PortClosed { port, detail } = map(err, 8080) else {
+        panic!("expected PortClosed");
+    };
+    assert_eq!(port, 80);
+    assert!(detail.contains("connection refused"), "{detail}");
+    // Address in use, and permission denied on port 80.
+    let in_use = map(bind_error(addr(8080), &Error::from(Io::AddrInUse)), 8080);
+    assert_eq!(
+        in_use,
+        PortForwardError::BindFailed {
+            addr: addr(8080),
+            kind: Io::AddrInUse
+        }
+    );
+    assert!(in_use.suggestion().expect("hint").contains("another port"));
+    let denied = map(bind_error(addr(80), &Error::from(Io::PermissionDenied)), 80);
+    assert_eq!(
+        denied,
+        PortForwardError::BindFailed {
+            addr: addr(80),
+            kind: Io::PermissionDenied
+        }
+    );
+    assert!(denied.suggestion().expect("hint").contains("1024"));
+    let unlocal = map(bind_error(addr(80), &Error::from(Io::AddrNotAvailable)), 80);
+    assert!(matches!(
+        unlocal,
+        PortForwardError::BindFailed {
+            kind: Io::AddrNotAvailable,
+            ..
+        }
+    ));
+    // Transport trouble and timeouts are a disconnect; pod states from the plan map too.
+    assert!(matches!(
+        map(oxikube_domain::OxiError::network("reset"), 1),
+        PortForwardError::Disconnected(_)
+    ));
+    assert!(matches!(
+        map(oxikube_domain::OxiError::timeout("slow"), 1),
+        PortForwardError::Disconnected(_)
+    ));
+    assert_eq!(
+        map(
+            oxikube_domain::OxiError::conflict("pod ns/web is terminating"),
+            1
+        ),
+        PortForwardError::PodNotReady("ns/web".into())
+    );
+    assert!(matches!(
+        map(oxikube_domain::OxiError::internal("boom"), 1),
+        PortForwardError::Other(_)
+    ));
 }

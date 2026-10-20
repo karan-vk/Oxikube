@@ -17,6 +17,7 @@
 //! | service and pod reads, the pod watch | `cluster` |
 //! | following the pod set, `TargetGone`, switching pods | `monitor` |
 //! | accept loop, task ownership | `session` |
+//! | `PortForwardPort::start` (pod forward behind the port's handle) | `start` |
 //! | one local connection to one pod connection | `bridge` |
 //! | status publishing | `hub`, [`ForwardHandle`] |
 //! | error mapping | `error` |
@@ -61,6 +62,7 @@ mod monitor;
 mod plan;
 mod pods;
 mod session;
+mod start;
 #[cfg(test)]
 mod tests;
 
