@@ -35,6 +35,10 @@ use oxikube_domain::ids::ResourceRef;
 /// and the name are compared exactly. The parts are shared (`Arc`), so an identity costs
 /// nothing to build from parts that are already shared: a table's row reads its badge on every
 /// frame.
+///
+/// The three parts must be the ones the event's writer gave: an event that leaves
+/// `involvedObject.namespace` out as well as the uid names a cluster-scoped object, and the
+/// events of a namespaced object are not found by it.
 #[derive(Debug, Clone, Eq)]
 pub struct ObjectIdentity {
     kind: Arc<str>,
