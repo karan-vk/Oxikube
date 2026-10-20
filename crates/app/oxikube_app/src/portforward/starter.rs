@@ -91,8 +91,7 @@ impl ForwardStarter {
     /// (a taken local port carries a warning). Empty while `portforward.annotations` is off:
     /// the annotations are then not even parsed. Pure and cheap; call it when the dialog opens.
     pub fn annotation_suggestions(&self, pod: &Resource) -> Vec<AnnotationSuggestion> {
-        let enabled = self.manager.config().annotations;
-        if !enabled {
+        if !self.annotations() {
             return Vec::new();
         }
         annotation_suggestions(pod, true, &self.manager.list())

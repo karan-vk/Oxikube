@@ -158,7 +158,7 @@ fn cut(text: &str, max: usize) -> &str {
 }
 
 /// `text` safe to display: control characters dropped, length bounded.
-pub(super) fn shown(text: &str) -> String {
+fn shown(text: &str) -> String {
     let clean: String = text.chars().filter(|c| !c.is_control()).collect();
     let clean = clean.trim();
     if clean.chars().count() > MAX_SHOWN {
