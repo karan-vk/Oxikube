@@ -33,7 +33,7 @@ use serde::{Deserialize, Serialize};
 use summary::{Spread, Summary, WINDOWED_SCHEMA, aggregate};
 
 /// Every scenario `oxikube --perf-scenario-window` knows, in report order (`Scenario::ALL`).
-pub const SCENARIOS: [&str; 13] = [
+pub const SCENARIOS: [&str; 14] = [
     "pods-table",
     "table-filter",
     "namespaces",
@@ -44,6 +44,7 @@ pub const SCENARIOS: [&str; 13] = [
     "sidebar",
     "nodes-table",
     "overview",
+    "overview-graphs",
     "logs",
     "terminal",
     "idle",

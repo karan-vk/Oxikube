@@ -518,9 +518,10 @@ mod tests {
         assert!(Cli::try_parse_from(["perf", "--windowed", "--all", "--check"]).is_err());
         assert!(Cli::try_parse_from(["perf", "--all", "--enforce"]).is_err());
         assert!(
-            windowed::SCENARIOS.contains(&"terminal") && windowed::SCENARIOS.len() == 13,
+            windowed::SCENARIOS.contains(&"terminal") && windowed::SCENARIOS.len() == 14,
             "the list oxikube's Scenario::ALL has"
         );
+        assert!(windowed::SCENARIOS.contains(&"overview-graphs"));
     }
 
     #[test]
