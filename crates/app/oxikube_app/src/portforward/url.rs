@@ -5,16 +5,21 @@ use std::net::{IpAddr, SocketAddr};
 
 use oxikube_domain::portforward::ForwardPort;
 
+use super::ForwardState;
 use super::model::ForwardInfo;
 
 /// Ports that speak TLS by convention (the same list as a Service port's browser scheme).
 const TLS_PORTS: [u16; 2] = [443, 8443];
 
 impl ForwardInfo {
-    /// `http://127.0.0.1:8080`: where the forward listens, once it is bound. An unspecified bind
+    /// `http://127.0.0.1:8080`: where the forward listens while it is [`Active`](ForwardState::Active);
+    /// `None` when it is starting, restarting, stopped or failed, since nothing is listening then. An unspecified bind
     /// (`0.0.0.0`, `::`) is reached through loopback; IPv6 hosts are bracketed. The scheme is
     /// `https` for a remote port named `https` / `tls` or one of the usual TLS ports, else `http`.
     pub fn url(&self) -> Option<String> {
+        if !matches!(self.state, ForwardState::Active { .. }) {
+            return None;
+        }
         let addr = self.local_addr?;
         Some(format!("{}://{}", self.scheme(), host_port(addr)))
     }
@@ -62,7 +67,13 @@ mod tests {
         ForwardInfo {
             id: ForwardId(1),
             spec: ForwardSpec::new(target, remote),
-            state: ForwardState::Stopped,
+            state: match local_addr {
+                Some(a) => ForwardState::Active {
+                    pod: "web-0".into(),
+                    local_addr: a.parse().unwrap(),
+                },
+                None => ForwardState::Starting,
+            },
             local_addr: local_addr.map(|a| a.parse().unwrap()),
             pod: None,
             last_error: None,
@@ -107,6 +118,19 @@ mod tests {
         ] {
             let i = info(remote, Some("127.0.0.1:9000"));
             assert_eq!(i.url().as_deref(), Some("https://127.0.0.1:9000"));
+        }
+    }
+
+    #[test]
+    fn no_url_once_the_forward_is_not_active() {
+        for state in [
+            ForwardState::Starting,
+            ForwardState::Stopped,
+            ForwardState::Failed(crate::portforward::ForwardFailure::message("boom")),
+        ] {
+            let mut i = info(ForwardPort::Number(80), Some("127.0.0.1:18080"));
+            i.state = state;
+            assert_eq!(i.url(), None);
         }
     }
 
