@@ -66,7 +66,12 @@ const ROUTE_COLUMNS: &[&str] = &[
 
 pub(super) const CASES: &[KindCase] = &[
     KindCase {
-        actions: &[CommandId::WORKLOAD_VIEW_LOGS, CommandId::SERVICE_SHOW_PODS],
+        // `service::OpenInBrowser` is on the bus since the port-forward manager (E15-S03).
+        actions: &[
+            CommandId::WORKLOAD_VIEW_LOGS,
+            CommandId::SERVICE_SHOW_PODS,
+            CommandId::SERVICE_OPEN_IN_BROWSER,
+        ],
         ..network(
             "",
             "v1",

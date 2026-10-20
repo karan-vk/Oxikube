@@ -9,6 +9,7 @@
 //! | cluster services | the state itself ([`ClusterServices`]: session manager, catalog, namespaces, integrations) | [`AppState::services`] |
 //! | command bus | set once by the main window's mount ([`CommandBus`] with its `MutationGuard`) | [`AppState::command_bus`] |
 //! | resource stores | set once by the main window's mount (`ResourceStores`: one `ResourceStore` per connected cluster) | [`AppState::resource_stores`] |
+//! | port-forwards | set once by the main window's mount (`PortForwardManager`: every forward of every cluster, E15-S03) | [`AppState::port_forwards`] |
 //! | log service | set once by the main window's mount (`LogService`: the log sessions of every cluster, bounded by `logs.buffer_lines`) | [`AppState::log_service`] |
 //! | exec service | set once by the main window's mount (`ExecService`: shells, attaches and commands in pod containers, the last container chosen per pod) | [`AppState::exec_service`] |
 //! | agent hooks | set once by the main window's mount (`AgentHooks`: the `@`-mention `ContextRegistry` with `@logs`, the `ToolRegistry` with `k8s.get_logs`, and the queue "Send to agent" fills) | [`AppState::agent_hooks`] |
@@ -85,6 +86,7 @@ pub struct AppState {
     services: ClusterServices,
     bus: OnceLock<CommandBus>,
     stores: OnceLock<Arc<ResourceStores>>,
+    port_forwards: OnceLock<oxikube_app::PortForwardManager>,
     logs: OnceLock<Arc<LogService>>,
     exec: OnceLock<Arc<ExecService>>,
     agent: OnceLock<AgentHooks>,
@@ -111,6 +113,7 @@ impl AppState {
             ports,
             bus: OnceLock::new(),
             stores: OnceLock::new(),
+            port_forwards: OnceLock::new(),
             logs: OnceLock::new(),
             exec: OnceLock::new(),
             agent: OnceLock::new(),
@@ -189,6 +192,17 @@ impl AppState {
     /// Stores the resource stores. The first ones stay: `false` when some were set already.
     pub fn set_resource_stores(&self, stores: Arc<ResourceStores>) -> bool {
         self.stores.set(stores).is_ok()
+    }
+
+    /// The port-forward manager, once the main window has been mounted (`None` before). One per
+    /// app: every window lists the same forwards (E15-S03).
+    pub fn port_forwards(&self) -> Option<&oxikube_app::PortForwardManager> {
+        self.port_forwards.get()
+    }
+
+    /// Stores the port-forward manager. The first one stays: `false` when one was set already.
+    pub fn set_port_forwards(&self, manager: oxikube_app::PortForwardManager) -> bool {
+        self.port_forwards.set(manager).is_ok()
     }
 
     /// The log service behind every log viewer, once the main window has been mounted (`None`

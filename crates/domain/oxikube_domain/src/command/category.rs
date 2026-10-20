@@ -38,6 +38,8 @@ pub enum CommandCategory {
     Node,
     /// Services (`service::*`).
     Service,
+    /// Port-forwards (`portforward::*`).
+    PortForward,
     /// Storage (`pvc::*`, `storageclass::*`).
     Storage,
     /// The log viewer (`logs::*`).
@@ -54,7 +56,7 @@ pub enum CommandCategory {
 
 impl CommandCategory {
     /// Every category, in display order.
-    pub const ALL: [CommandCategory; 16] = [
+    pub const ALL: [CommandCategory; 17] = [
         CommandCategory::App,
         CommandCategory::Window,
         CommandCategory::View,
@@ -65,6 +67,7 @@ impl CommandCategory {
         CommandCategory::Pod,
         CommandCategory::Node,
         CommandCategory::Service,
+        CommandCategory::PortForward,
         CommandCategory::Storage,
         CommandCategory::Logs,
         CommandCategory::Terminal,
@@ -75,7 +78,7 @@ impl CommandCategory {
 
     /// The category of the command `id`, from its namespace.
     pub const fn of(id: CommandId) -> Self {
-        const NAMESPACES: [(&str, CommandCategory); 30] = [
+        const NAMESPACES: [(&str, CommandCategory); 31] = [
             ("app", CommandCategory::App),
             ("notifications", CommandCategory::App),
             ("window", CommandCategory::Window),
@@ -100,6 +103,7 @@ impl CommandCategory {
             ("pod", CommandCategory::Pod),
             ("node", CommandCategory::Node),
             ("service", CommandCategory::Service),
+            ("portforward", CommandCategory::PortForward),
             ("pvc", CommandCategory::Storage),
             ("storageclass", CommandCategory::Storage),
             ("logs", CommandCategory::Logs),
@@ -130,6 +134,7 @@ impl CommandCategory {
             CommandCategory::Pod => "Pod",
             CommandCategory::Node => "Node",
             CommandCategory::Service => "Service",
+            CommandCategory::PortForward => "Port Forwarding",
             CommandCategory::Storage => "Storage",
             CommandCategory::Logs => "Logs",
             CommandCategory::Terminal => "Terminal",

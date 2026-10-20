@@ -117,6 +117,7 @@ mod metrics;
 mod notifications;
 mod overview;
 mod palette;
+mod port_forwards;
 mod pulses;
 mod resources;
 mod tabs;
@@ -396,6 +397,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         events_views: events_sink,
         notifications: services.notifications.clone(),
         notification_panel: panel_sink,
+        port_forwards: port_forwards::manager(&state, &services, stores.clone(), cx),
     });
     let registry = match registry {
         Ok(registry) => registry,

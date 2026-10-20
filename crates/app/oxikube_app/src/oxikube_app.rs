@@ -37,6 +37,7 @@
 //! | [`tools`] | E08-S09 | [`ToolRegistry`]: read-only tools by name, listed, hidden without their capabilities and invoked after a schema check; `tools::k8s::get_logs` (`k8s.get_logs`: a pod's or a selector's newest lines, bounded and redacted); `tools::metrics` (E13-S12: `k8s.top_pods`, `k8s.top_nodes`, `k8s.query_promql`, bounded, with absence as a visible `unavailable` result); `tools::events` (E14-S08: `k8s.get_events`, the `@events` mention and `events::SendToAgent`, read from the [`EventService`], bounded and redacted, the feed started on demand) |
 //! | [`rollout`] | E12-S06 | [`RolloutService`]: a Deployment's, StatefulSet's or DaemonSet's revision history (ReplicaSets or ControllerRevisions, read on demand through the pure algorithm of `oxikube_domain::rollout`) and `kubectl rollout undo` as the guarded `workload::Rollback` (medium risk, a server dry run first, audit with `from=` and `to=`); [`RollbackRunner`] runs it from a dialog |
 //! | [`workloads`] | E12-S08, E12-S04, E12-S03 | [`WorkloadService`]: trigger a CronJob (a Job from its template, `kubectl create job --from`), suspend and resume CronJobs and Jobs, and scale the replica controllers (`workload::Scale`, low risk, medium for zero: [`WorkloadService::plan_scale`] reads the `scale` subresource and any autoscaler, [`WorkloadService::scale`] patches `spec.replicas` through it, [`ScaleRunner`] runs it from a dialog); the `cronjob::*`, `job::*` and `workload::Scale` handlers (guarded, audited with the Job's name or the replica counts); evict, delete, force delete and sweep pods (`pod::Evict`, `pod::Delete`, `pod::ForceDelete`, `pod::Sanitize`: medium, high for the force delete, one audit record per pod under a batch id); the pod panel's reads (owner chain, node, environment sources) |
+//! | [`portforward`] | E15-S03 | [`PortForwardManager`]: port-forwards to pods and Services across clusters (a registry keyed by [`ForwardId`], Service to ready pod through EndpointSlices preferring the previous pod, the target watched through the store, a pure restart state machine with backoff, the same local port across reconnects), drops / recoveries / failures to the notification centre, the read-only policy, a coalesced change subscription, `portforward::*` commands and the `service::OpenInBrowser` opener |
 //! | [`overview`] | E12-S07 | the Workloads overview's inputs outside the store: [`RecentWarnings`], the hook the Events feed (E14) implements for the warnings panel, with [`NoRecentWarnings`] until then; the counters themselves are [`WorkloadCounters`] and the status buckets of `store::counts` |
 //! | [`selection`] | E12-S19 | The bulk actions on a selection: `selection::Delete`, `selection::Restart` and `selection::Label` (labels or annotations); one guarded command each, one confirmation at the riskiest object's tier, a result and an audit record per object under a batch id; [`SelectionFlow`] plans and runs them for a dialog |
 //! | [`cluster_overview`] | E13-S09 | the cluster overview's numbers: [`OverviewFeed`](cluster_overview::OverviewFeed) (pods by phase, nodes by readiness, capacity and allocation, live usage, top consumers, kept incrementally off the UI thread and published as an [`OverviewSnapshot`](cluster_overview::OverviewSnapshot)), [`detect_distribution`](cluster_overview::detect_distribution) and the Prometheus graphs' [`fetch_cluster_history`](cluster_overview::fetch_cluster_history) |
@@ -74,6 +75,7 @@ pub mod nodes;
 pub mod notifications;
 pub mod os_notifications;
 pub mod overview;
+pub mod portforward;
 pub mod references;
 pub mod rollout;
 pub mod search;
@@ -155,6 +157,10 @@ pub use network::{
 pub use notifications::{NotificationRules, NotificationService};
 pub use os_notifications::{ClickAction, Delivery, OsNotificationService};
 pub use overview::{FixedWarnings, NoRecentWarnings, RecentWarnings, WarningRow};
+pub use portforward::{
+    ForwardBackend, ForwardChanges, ForwardConfig, ForwardId, ForwardInfo, ForwardState,
+    PortForwardManager, SessionBackend, StartError,
+};
 pub use references::{
     OwnerCache, PodKey, PodUse, ReferenceFeed, ReferenceHub, ReferenceIndex, Usage, UsageStatus,
     UsedBy, WorkloadUse, used_by,

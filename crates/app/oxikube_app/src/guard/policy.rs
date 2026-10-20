@@ -145,6 +145,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::PodExec { target, .. }
         | Command::PodDebug { target, .. }
         | Command::PodPortForward { target, .. }
+        | Command::PortForwardStart { target, .. }
         | Command::ServiceOpenInBrowser { target, .. }
         | Command::ServiceShowPods { target }
         | Command::ResourceShowUsedBy { target }
@@ -213,6 +214,9 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::NotificationsTogglePanel
         | Command::NotificationsMarkRead { .. }
         | Command::NotificationsMarkAllRead
+        | Command::PortForwardStop { .. }
+        | Command::PortForwardRestart { .. }
+        | Command::PortForwardRemove { .. }
         | Command::NotificationsOpenLink { .. }
         | Command::JumpBack
         | Command::JumpForward

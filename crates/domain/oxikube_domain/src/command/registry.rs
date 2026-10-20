@@ -265,6 +265,14 @@ impl CommandId {
     pub const POD_JUMP_TO_OWNER: CommandId = CommandId::new("pod::JumpToOwner");
     /// `pod::PortForward`: forward a local port to a pod port.
     pub const POD_PORT_FORWARD: CommandId = CommandId::new("pod::PortForward");
+    /// `portforward::Start`: start a port-forward to a pod or a Service (E15-S03).
+    pub const PORTFORWARD_START: CommandId = CommandId::new("portforward::Start");
+    /// `portforward::Stop`: stop a port-forward, keeping it listed (E15-S03).
+    pub const PORTFORWARD_STOP: CommandId = CommandId::new("portforward::Stop");
+    /// `portforward::Restart`: start a port-forward again (E15-S03).
+    pub const PORTFORWARD_RESTART: CommandId = CommandId::new("portforward::Restart");
+    /// `portforward::Remove`: stop a port-forward and drop it from the list (E15-S03).
+    pub const PORTFORWARD_REMOVE: CommandId = CommandId::new("portforward::Remove");
     /// `pod::Sanitize`: delete the Completed and Failed pods of a view.
     pub const POD_SANITIZE: CommandId = CommandId::new("pod::Sanitize");
     /// `pod::ShowNode`: open the Node a pod runs on.
@@ -420,6 +428,9 @@ const NONE: Capabilities = Capabilities::empty();
 const TABLE_VIEWS: &[ViewContext] = &[ViewContext::Table, ViewContext::Detail];
 /// The kinds a restart rolls: the pod-template workloads whose controller replaces pods when the
 /// template changes (a ReplicaSet and a ReplicationController never do).
+/// What `portforward::Start` forwards to: a pod, or the pods behind a Service.
+const FORWARDABLE_KINDS: &[(&str, &str)] = &[("", "Pod"), ("", "Service")];
+
 const ROLLABLE_KINDS: &[(&str, &str)] = &[
     ("apps", "Deployment"),
     ("apps", "StatefulSet"),
@@ -1380,6 +1391,34 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::core("Pod")),
+    // The port-forward manager (E15-S03). A forward changes nothing in the cluster, so these are
+    // reads; the manager refuses a start on a read-only cluster unless
+    // `portforward.allowed_in_readonly`. Stop, restart and remove act on the manager's own list.
+    CommandMeta::read(
+        CommandId::PORTFORWARD_REMOVE,
+        "Remove Port-Forward",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::PORTFORWARD_RESTART,
+        "Restart Port-Forward",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::PORTFORWARD_START,
+        "Start Port-Forward",
+        CommandScope::Selection,
+        Capabilities::PORTFORWARD,
+    )
+    .selecting(SelectionKind::AnyOf(FORWARDABLE_KINDS)),
+    CommandMeta::read(
+        CommandId::PORTFORWARD_STOP,
+        "Stop Port-Forward",
+        CommandScope::Global,
+        NONE,
+    ),
     // The resize dialog (E12-S15) is the confirmation's front: it checks growth and
     // `allowVolumeExpansion`, names the old and the new size, then the guard asks (simple confirm
     // naming the claim and the cluster). The handler dry-runs the patch first.
