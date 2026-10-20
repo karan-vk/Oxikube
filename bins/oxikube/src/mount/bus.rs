@@ -32,6 +32,7 @@
 //! | `oxikube_app::metrics_provider` | `cluster::RedetectMetrics` (run provider detection again, or re-check the configured endpoint), `cluster::ToggleMetrics` (`prometheus.enabled` in `settings.json`); neither changes a cluster (E13-S05) |
 //! | `oxikube_app::os_notifications` | `app::ToggleOsNotifications` (the `events.os_notifications` opt-in in `settings.json`), `app::SendTestNotification` (one desktop notification, only once opted in); neither changes a cluster (E14-S06) |
 //! | `oxikube_app::notifications` | `notifications::MarkRead`, `notifications::MarkAllRead`, `notifications::MuteCluster`, `notifications::UnmuteCluster` (the notification centre's read state and the per-cluster mute, kept in the state db; no cluster is changed; E14-S05) |
+//! | `oxikube_app::portforward` | `portforward::Start`, `Stop`, `Restart`, `Remove` (the app's one `PortForwardManager`: forwards to pods and Services that follow pod churn; refused on a read-only cluster by default; no cluster is changed; E15-S03) and `service::OpenInBrowser` (the manager as the Service port opener, the URL to the system browser) |
 //! | `oxikube_workspace::notifications` | `notifications::TogglePanel` (the notification centre panel in the right dock; E14-S05) |
 //! | `oxikube_settings_ui` | `cluster::ShowMetricsSettings` (the cluster's metrics page, a tab of its tab; E13-S05) |
 //! | `oxikube_overview_ui` | `cluster::ShowPulses` (the cluster's pulses page, `:pulses`; E13-S10) |
@@ -166,6 +167,9 @@ pub struct BusParts {
     pub notifications: oxikube_app::NotificationService,
     /// Where `notifications::TogglePanel` sends its requests (applied on the UI thread; E14-S05).
     pub notification_panel: oxikube_workspace::notifications::NotificationPanelSink,
+    /// The port-forward manager (`portforward::Start`, `Stop`, `Restart`, `Remove`, and the
+    /// opener behind `service::OpenInBrowser`; E15-S03).
+    pub port_forwards: oxikube_app::PortForwardManager,
 }
 
 /// Every handler of the app, each installed under its owner (see the [module docs](self)).
@@ -229,6 +233,14 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     registry.install("oxikube_app::nodes", |r| {
         oxikube_app::nodes::register_commands(r)?;
         oxikube_app::nodes::register_drain_command(r, parts.nodes)
+    })?;
+    registry.install("oxikube_app::portforward", |r| {
+        oxikube_app::portforward::register_commands(r, parts.port_forwards.clone())?;
+        oxikube_resources_ui::kinds::service::register_open_in_browser(
+            r,
+            Arc::new(parts.port_forwards),
+            parts.resources.clone(),
+        )
     })?;
     registry.install("oxikube_resources_ui", |r| {
         oxikube_resources_ui::navigate::register_commands(r, parts.kinds)?;

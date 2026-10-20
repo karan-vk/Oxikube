@@ -1,6 +1,7 @@
 //! The [`Command`] payload enum: navigation plus resource verbs.
 
 use std::collections::BTreeMap;
+use std::net::IpAddr;
 
 use serde::{Deserialize, Serialize};
 
@@ -12,6 +13,7 @@ use super::registry;
 use crate::colour::ClusterColour;
 use crate::ids::{ClusterId, Gvk, ResourceRef};
 use crate::log::{LevelChip, LogRange, LogSaveScope};
+use crate::portforward::ForwardPort;
 use crate::preset::ClusterPreset;
 use crate::selection::{LabelEdit, LabelField};
 
@@ -1028,6 +1030,40 @@ pub enum Command {
         /// The pod's port.
         remote_port: u16,
     },
+    /// Start a port-forward to a pod or a Service (E15-S03). A Service resolves to one of its
+    /// ready pods, and the forward follows the pod when it is replaced. Not a cluster mutation;
+    /// refused on a read-only cluster unless `portforward.allowed_in_readonly`.
+    #[serde(rename = "portforward::Start")]
+    PortForwardStart {
+        /// The core `v1` `Pod` or `Service` to forward to.
+        target: ResourceRef,
+        /// The port on the target (for a Service, the Service port).
+        remote_port: ForwardPort,
+        /// Local port; `None` picks a free one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        local_port: Option<u16>,
+        /// Local address to listen on; `None` is loopback.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        bind: Option<IpAddr>,
+    },
+    /// Stop a port-forward; it stays listed and can be restarted (E15-S03).
+    #[serde(rename = "portforward::Stop")]
+    PortForwardStop {
+        /// The forward's id, as the manager lists it.
+        id: u64,
+    },
+    /// Restart a port-forward: stopped, failed or running, it starts again (E15-S03).
+    #[serde(rename = "portforward::Restart")]
+    PortForwardRestart {
+        /// The forward's id, as the manager lists it.
+        id: u64,
+    },
+    /// Stop a port-forward and remove it from the list (E15-S03).
+    #[serde(rename = "portforward::Remove")]
+    PortForwardRemove {
+        /// The forward's id, as the manager lists it.
+        id: u64,
+    },
     /// Open a pod's logs.
     #[serde(rename = "pod::ViewLogs")]
     PodViewLogs {
@@ -1584,6 +1620,10 @@ impl Command {
             Command::PodExec { .. } => CommandId::POD_EXEC,
             Command::PodDebug { .. } => CommandId::POD_DEBUG,
             Command::PodPortForward { .. } => CommandId::POD_PORT_FORWARD,
+            Command::PortForwardStart { .. } => CommandId::PORTFORWARD_START,
+            Command::PortForwardStop { .. } => CommandId::PORTFORWARD_STOP,
+            Command::PortForwardRestart { .. } => CommandId::PORTFORWARD_RESTART,
+            Command::PortForwardRemove { .. } => CommandId::PORTFORWARD_REMOVE,
             Command::PodViewLogs { .. } => CommandId::POD_VIEW_LOGS,
             Command::LogsClear { .. } => CommandId::LOGS_CLEAR,
             Command::LogsCopy { .. } => CommandId::LOGS_COPY,
@@ -1698,6 +1738,7 @@ impl Command {
             | Command::PodExec { target, .. }
             | Command::PodDebug { target, .. }
             | Command::PodPortForward { target, .. }
+            | Command::PortForwardStart { target, .. }
             | Command::ServiceOpenInBrowser { target, .. }
             | Command::ServiceShowPods { target }
             | Command::ResourceShowUsedBy { target }
@@ -2149,6 +2190,15 @@ mod tests {
                 local_port: None,
                 remote_port: 8080,
             },
+            Command::PortForwardStart {
+                target: pod(),
+                remote_port: ForwardPort::Number(8080),
+                local_port: Some(18080),
+                bind: None,
+            },
+            Command::PortForwardStop { id: 1 },
+            Command::PortForwardRestart { id: 1 },
+            Command::PortForwardRemove { id: 1 },
             Command::PodViewLogs {
                 target: pod(),
                 container: None,
@@ -2520,6 +2570,10 @@ mod tests {
                     | Command::ResourceRefreshDescribe { .. }
                     | Command::ResourceSelectAll { .. }
                     | Command::ServiceOpenInBrowser { .. }
+                    | Command::PortForwardStart { .. }
+                    | Command::PortForwardStop { .. }
+                    | Command::PortForwardRestart { .. }
+                    | Command::PortForwardRemove { .. }
                     | Command::ServiceShowPods { .. }
                     | Command::ResourceShowUsedBy { .. }
                     | Command::TableFocusFilter { .. }

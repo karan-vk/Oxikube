@@ -111,6 +111,15 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "app::SendTestNotification" => Command::AppSendTestNotification,
         "app::ToggleOsNotifications" => Command::AppToggleOsNotifications { enabled: None },
         "notifications::MarkAllRead" => Command::NotificationsMarkAllRead,
+        "portforward::Start" => Command::PortForwardStart {
+            target: target(),
+            remote_port: oxikube_domain::portforward::ForwardPort::Number(80),
+            local_port: None,
+            bind: None,
+        },
+        "portforward::Stop" => Command::PortForwardStop { id: 1 },
+        "portforward::Restart" => Command::PortForwardRestart { id: 1 },
+        "portforward::Remove" => Command::PortForwardRemove { id: 1 },
         "notifications::OpenLink" => Command::NotificationsOpenLink {
             url: "https://example.com".to_owned(),
         },
