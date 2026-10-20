@@ -16,7 +16,8 @@
 //! | k8s objects to the model, pod set from watch events | `pods` |
 //! | service and pod reads, the pod watch | `cluster` |
 //! | following the pod set, `TargetGone`, switching pods | `monitor` |
-//! | accept loop, task ownership | `session` |
+//! | starting a forward (resolve, bind, spawn) | `session` |
+//! | accept loop, connection cap, graceful stop, task ownership | `accept` |
 //! | `PortForwardPort::start` (pod forward behind the port's handle) | `start` |
 //! | one local connection to one pod connection | `bridge` |
 //! | status publishing | `hub`, [`ForwardHandle`] |
@@ -42,6 +43,15 @@
 //!   manager. A pod target counts as usable while it is running and not terminating:
 //!   readiness is not required, so a failing readiness probe does not tear down a forward
 //!   someone opened to debug it. A service target needs `Ready`.
+//! * **Connection cap.** A forward serves at most
+//!   [`max_connections`](KubePortForward::with_max_connections) connections at once
+//!   ([`DEFAULT_MAX_CONNECTIONS`] by default); one more is closed at once and a
+//!   `BudgetExceeded` error is published (once, not per refused connection).
+//! * **Counters.** Bytes each way and open/total connections are relaxed atomics in
+//!   `ForwardStats`, counted in a thin wrapper around the copy (no per-read events).
+//! * **Graceful stop.** [`ForwardHandle::stop`] (and the port handle's `shutdown`) stops
+//!   accepting, asks every open connection to close cleanly (FIN to the client and the
+//!   pod), waits up to 2 s, then aborts what is left. Dropping a handle still aborts at once.
 //! * **Ownership.** [`ForwardHandle`] owns the task that owns the listener and every bridge;
 //!   dropping it aborts them all and frees the port. Dropping a stream from
 //!   [`forward`](oxikube_ports::PortForwardPort::forward) aborts its `Portforwarder`.
@@ -52,6 +62,7 @@
 //! should is the caller's decision (`Capability::PortForward`, E15). The default bind is
 //! loopback; binding elsewhere logs a warning.
 
+mod accept;
 mod bridge;
 mod cluster;
 mod connect;
@@ -66,5 +77,6 @@ mod start;
 #[cfg(test)]
 mod tests;
 
+pub use accept::DEFAULT_MAX_CONNECTIONS;
 pub use connect::KubePortForward;
 pub use handle::ForwardHandle;

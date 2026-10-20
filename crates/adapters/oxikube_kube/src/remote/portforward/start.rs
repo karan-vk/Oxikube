@@ -53,6 +53,7 @@ pub(super) async fn start(
     let local_addr = listener.local_addr();
     tracing::debug!(pod = %target, remote_port, %local_addr, "port forward started");
     let (errors_tx, errors) = mpsc::unbounded();
+    let graceful = listener.graceful_stop();
     let task = tokio::spawn(report_errors(
         listener,
         target,
@@ -60,12 +61,10 @@ pub(super) async fn start(
         remote_port,
         errors_tx,
     ));
-    Ok(ForwardHandle::new(
-        local_addr,
-        stats,
-        errors,
-        AbortOnDrop(task),
-    ))
+    Ok(
+        ForwardHandle::new(local_addr, stats, errors, AbortOnDrop(task))
+            .with_graceful_stop(move || Box::pin(graceful)),
+    )
 }
 
 /// Turns the listener's status transitions into [`PortForwardError`]s until the forward ends.

@@ -5,6 +5,8 @@
 mod errors;
 mod failover;
 mod fakes;
+mod multiplex;
+mod multiplex_bench;
 mod plan;
 mod pods;
 mod session;

@@ -159,3 +159,65 @@ async fn start_reports_a_missing_pod_a_busy_port_and_a_closed_remote_port() {
         "{reported:?}"
     );
 }
+
+/// E15-S02: many concurrent connections on one listener, each on its own pod stream, then a
+/// graceful `shutdown` that closes the ones still open.
+#[tokio::test]
+async fn concurrent_connections_share_one_listener_and_shutdown_drains_them() {
+    const CONNS: usize = 20;
+    let Some(kind) = common::kind().await else {
+        return;
+    };
+    let ns = TestNamespace::create(kind.context.as_str()).expect("test namespace");
+    let client = kind.admin_client().await;
+    create_nginx_pod(&client, ns.name(), "web", "web").await;
+    wait_ready(&client, ns.name(), "web").await;
+    let forwarder = KubePortForward::new((*client).clone());
+    let handle = start(
+        &forwarder,
+        PodRef::new(ns.name(), "web"),
+        80,
+        LOOPBACK,
+        None,
+    )
+    .await
+    .expect("start");
+    let addr = handle.local_addr;
+
+    let pages = futures::future::join_all((0..CONNS).map(|_| get_welcome_page(addr))).await;
+    assert!(pages.iter().all(|p| p.starts_with("HTTP/1.1 200 OK")));
+
+    // Keep-alive connections that are open when the forward shuts down.
+    let mut open = Vec::new();
+    for _ in 0..3 {
+        let mut socket = tokio::net::TcpStream::connect(addr).await.expect("connect");
+        socket
+            .write_all(b"GET / HTTP/1.1\r\nHost: x\r\n\r\n")
+            .await
+            .expect("write");
+        let mut first = [0u8; 15];
+        tokio::time::timeout(DEADLINE, socket.read_exact(&mut first))
+            .await
+            .expect("response in time")
+            .expect("response");
+        assert_eq!(&first, b"HTTP/1.1 200 OK");
+        open.push(socket);
+    }
+    let stats = handle.stats.clone();
+    // `get_welcome_page` retries until nginx answers, so there may be a few more.
+    assert!(stats.snapshot().total_connections >= (CONNS + 3) as u64);
+
+    tokio::time::timeout(DEADLINE, handle.shutdown())
+        .await
+        .expect("shutdown finishes within the grace period");
+    for socket in &mut open {
+        let mut rest = Vec::new();
+        let closed = tokio::time::timeout(DEADLINE, socket.read_to_end(&mut rest)).await;
+        assert!(closed.is_ok(), "an open connection ends on shutdown");
+    }
+    assert_eq!(stats.snapshot().active_connections, 0);
+    assert!(
+        tokio::net::TcpStream::connect(addr).await.is_err(),
+        "listener closed"
+    );
+}
