@@ -135,3 +135,19 @@ them, so a latency is the app's own and not the kubelet's.
 | a Deployment's burst: one row per pod up to the group threshold, one group row for the rest, each raised once; mute holds new warnings back and is saved; unmute resumes | `oxikube_app/tests/kind_smoke/events_chain/notify.rs` |
 | the running app: `:ev <ns>` and `ctrl-z` show the Warning within 1 s, the pods table's badge, the drawer's Events tab (`resource::ViewEvents`), the toast; muted, a new failing pod is in the view and not in the centre; unmuted, the next one notifies | `bins/oxikube/tests/kind_events.rs` |
 | the notification centre in the app: the toast, the bell, the panel key, mute saved in the state db | `bins/oxikube/tests/kind_notifications.rs` (E14-S05) |
+
+## Epic E15 acceptance items (port-forward manager, E15-S09)
+
+The `PortForwardManager` over the real session (`KubeConnector`, so `KubePortForward`), the
+shared `ResourceStores` and `SessionBackend`; nginx fixtures and the HTTP assertions are
+`oxikube_testkit::integration::nginx`. Timings print as `perf-jsonl` lines; a reconnect is timed
+from the replacement pod becoming Ready (polled on the API server) to the manager's `Active`.
+
+| Item | Test |
+|---|---|
+| the adapter: `start`, traffic counters, `PodGone`, `BindFailed`, `PortClosed`, a Service through its named target port, `Forbidden` | `portforward_port`, `portforward`, `portforward_restart` (E15-S01, E04-S10) |
+| a pod forward answers HTTP on an Auto port; its pod is recreated (StatefulSet) and the forward goes `Reconnecting` and back to `Active` on the same port, drop and recovery reported | `oxikube_app/tests/kind_smoke/portforward/pod.rs` |
+| a Service forward goes to the EndpointSlice's ready pod; the pod is replaced (within 3 s of Ready); scale to zero waits, scale back recovers | `oxikube_app/tests/kind_smoke/portforward/service.rs` |
+| an auto-start favourite comes back after a restart over the same SQLite file once the session is Ready | `oxikube_app/tests/kind_smoke/portforward/favourites.rs` |
+| a closed remote port, a missing pod, a busy local port (with its suggestion) through the manager | `oxikube_app/tests/kind_smoke/portforward/errors.rs` |
+| 50 concurrent forwards to one Service, each answering | `oxikube_app/tests/kind_smoke/portforward/concurrent.rs` |

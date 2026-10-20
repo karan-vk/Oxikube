@@ -6,6 +6,13 @@ name: integration
 # The E06 smoke test (`crates/app/oxikube_app/tests/kind_smoke`, E06-S12) runs in the same job through
 # the `oxikube_app/integration` feature of SUITE: two contexts, one session manager, no UI.
 #
+# The port-forward manager suite (E15-S09, `oxikube_app/tests/kind_smoke/portforward`) runs in the
+# `kind` job too: a pod forward that answers HTTP and recovers when its pod is recreated, a
+# Service forward through its EndpointSlice across pod replacement and scale to zero, an
+# auto-start favourite restored over the same SQLite file, the error taxonomy and 50 concurrent
+# forwards. Its timings print as `perf-jsonl {...}` lines, kept in `suite.log` with the rest of
+# the output and uploaded with the diagnostics when the job fails.
+#
 # The data plane suite (E04-S14) is `crates/adapters/oxikube_kube/tests/`; its README maps every
 # port method and epic acceptance item to the test that exercises it. The nightly run executes the
 # whole suite twice on the same cluster as a flake check: a test that passes once and fails once is
@@ -92,10 +99,15 @@ jobs:
       - name: Build the suite
         run: $SUITE --no-run
       - name: Integration tests
-        run: $SUITE -- --nocapture
+        run: |
+          set -o pipefail
+          mkdir -p diagnostics
+          $SUITE -- --nocapture 2>&1 | tee diagnostics/suite.log
       - name: Integration tests (flake check, second run)
         if: ${{ github.event_name == 'schedule' }}
-        run: $SUITE -- --nocapture
+        run: |
+          set -o pipefail
+          $SUITE -- --nocapture 2>&1 | tee -a diagnostics/suite.log
       # A failed test's namespace is deleted with its events when the test ends, so those events
       # are saved by the test itself into diagnostics/namespaces/<ns>.events.txt. This step adds
       # the cluster-wide events still present (kube-system, nodes, namespaces still running), pods,
@@ -111,6 +123,7 @@ jobs:
           kubectl --context kind-oxikube get pods -A -o wide > diagnostics/pods.txt || true
           kubectl --context kind-oxikube get nodes -o wide > diagnostics/nodes.txt || true
           kind export logs diagnostics/kind --name oxikube || true
+          sed -n 's/^perf-jsonl //p' diagnostics/suite.log > diagnostics/perf.jsonl || true
       - name: Upload cluster diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@v7

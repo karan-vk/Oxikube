@@ -15,6 +15,7 @@ use std::process::Command;
 
 pub mod events;
 pub mod metrics;
+pub mod nginx;
 pub mod pods;
 
 /// Environment variable naming the kubectl context of the kind cluster under test.

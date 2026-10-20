@@ -43,6 +43,7 @@ mod namespaces;
 mod node_shell;
 mod nodes;
 mod pods;
+mod portforward;
 mod rollback;
 mod rollout;
 mod scale;
