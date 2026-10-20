@@ -14,11 +14,12 @@ use futures::future::{Either, FutureExt as _};
 use futures::stream::{BoxStream, StreamExt as _};
 use jiff::Timestamp;
 use oxikube_domain::Resource;
-use oxikube_domain::portforward::ForwardSpec;
+use oxikube_domain::portforward::{ForwardSpec, PortRange};
 use oxikube_domain::session::WatchScope;
 use oxikube_domain::view::SERVICE_NAME_LABEL;
 use oxikube_ports::{ClockPort, ForwardHandle, PodRef, PortForwardError, PortForwardPort};
 
+use super::alloc::start_in_range;
 use super::backend::ForwardBackend;
 use super::model::ForwardId;
 use super::registry::Inner;
@@ -80,6 +81,8 @@ pub(super) struct Supervisor {
     pub spec: ForwardSpec,
     /// The local port to bind: the spec's, then the one first bound, kept across reconnects.
     pub local_port: Option<u16>,
+    /// Where to look for a free port when `local_port` is unset (`portforward.port_range`).
+    pub port_range: Option<PortRange>,
     pub port: Arc<dyn PortForwardPort>,
     pub inner: Weak<Inner>,
     /// The pod of the last connection, preferred when a Service forward re-resolves.
@@ -191,7 +194,7 @@ impl Supervisor {
                 }
                 Wake::Timer => {
                     retry_at = None;
-                    match self.connect(&view).await {
+                    match self.connect(&view, &*clock).await {
                         Ok(h) => handle = Some(h),
                         // No ready pod yet: wait on the watch, which retries once it resolves.
                         Err(event @ ForwardEvent::Unresolvable { .. }) => {
@@ -208,7 +211,11 @@ impl Supervisor {
     }
 
     /// Resolves and starts the port's forward; the error is the event to feed.
-    async fn connect(&mut self, view: &TargetView) -> Result<ForwardHandle, ForwardEvent> {
+    async fn connect(
+        &mut self,
+        view: &TargetView,
+        clock: &dyn ClockPort,
+    ) -> Result<ForwardHandle, ForwardEvent> {
         let service = self.spec.targets_service();
         let resolved = resolve(
             view,
@@ -228,11 +235,28 @@ impl Supervisor {
         })?;
         let namespace = self.spec.target.namespace.as_deref().unwrap_or_default();
         let pod = PodRef::new(namespace, resolved.pod.as_str());
-        let handle = self
-            .port
-            .start(pod, resolved.port, self.spec.bind, self.local_port)
-            .await
-            .map_err(ForwardEvent::Lost)?;
+        let started = match (self.local_port, self.port_range) {
+            (None, Some(range)) => {
+                let offset = (self.id.0 as u32)
+                    .wrapping_mul(7919)
+                    .wrapping_add(self.nanos(clock));
+                start_in_range(
+                    &*self.port,
+                    &pod,
+                    resolved.port,
+                    self.spec.bind,
+                    range,
+                    offset,
+                )
+                .await
+            }
+            (local_port, _) => {
+                self.port
+                    .start(pod, resolved.port, self.spec.bind, local_port)
+                    .await
+            }
+        };
+        let handle = started.map_err(ForwardEvent::Lost)?;
         self.local_port = Some(handle.local_addr.port());
         self.last_pod = Some(resolved.pod.clone());
         let local_addr = handle.local_addr;
@@ -242,6 +266,11 @@ impl Supervisor {
             local_addr,
         });
         Ok(handle)
+    }
+
+    /// The clock's sub-second part: a cheap per-start offset into the port range.
+    fn nanos(&self, clock: &dyn ClockPort) -> u32 {
+        clock.now().subsec_nanosecond().unsigned_abs()
     }
 
     /// Feeds `event`; returns the delay of the next attempt when the forward is reconnecting.

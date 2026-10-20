@@ -810,6 +810,12 @@ crate's `README.md` for its allowed dependencies. Highlights:
   chosen range is kept in `StatePort` under `metrics.history_range` (a per-viewer convenience). No polling here: the view asks,
   and dropping the future cancels the queries. The service is built by `bins/oxikube::metrics_provider` and handed to the views
   as the `oxikube_resources_ui::detail::MetricsHistory` global.
+- `oxikube_settings::portforward` + `oxikube_app::tools::portforward` (E15-S08) — the `portforward` setting (`default_bind`
+  loopback by default, `allowed_in_readonly` false, `port_range` unset = OS-assigned, `annotations` false; also under
+  `clusters.<id>.portforward`) and the agent tools `portforward.list_port_forwards` (read-only) and
+  `portforward.start_port_forward` (needs the `portforward` capability and a `ForwardPermission`; `DenyForwards` until E27).
+  `bins/oxikube::mount::port_forwards` pushes the resolved settings into `PortForwardManager::{set_config,
+  set_cluster_configs}` on every change (new forwards only; running ones are not restarted).
 - `oxikube_settings::cluster::prometheus` (E13-S05) — the `prometheus` block of the per-cluster layer, the settings of
   history metrics: `enabled`, `provider` (`auto` | `manual` | `off`; unset is `manual` when a `url` or `path` is set, else
   `auto`), `kind` (the stack of a manual endpoint), `url` or `path` (`namespace/service:port` through the API server),

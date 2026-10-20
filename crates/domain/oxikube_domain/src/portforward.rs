@@ -89,6 +89,61 @@ impl ForwardSpec {
     }
 }
 
+/// The local ports automatic allocation may pick from (`portforward.port_range`, E15-S08):
+/// inclusive, unprivileged, `start <= end`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct PortRange {
+    start: u16,
+    end: u16,
+}
+
+impl PortRange {
+    /// The lowest port a range may start at: below it a port is privileged.
+    pub const MIN_START: u16 = 1024;
+
+    /// `start..=end`, or `None` when `start` is privileged or above `end`.
+    pub fn new(start: u16, end: u16) -> Option<Self> {
+        (start >= Self::MIN_START && start <= end).then_some(Self { start, end })
+    }
+
+    /// The first port.
+    pub fn start(&self) -> u16 {
+        self.start
+    }
+
+    /// The last port (inclusive).
+    pub fn end(&self) -> u16 {
+        self.end
+    }
+
+    /// How many ports the range holds.
+    pub fn len(&self) -> u32 {
+        u32::from(self.end) - u32::from(self.start) + 1
+    }
+
+    /// Always `false`: a range holds at least one port.
+    pub fn is_empty(&self) -> bool {
+        false
+    }
+
+    /// Whether `port` is in the range.
+    pub fn contains(&self, port: u16) -> bool {
+        (self.start..=self.end).contains(&port)
+    }
+
+    /// The `n`th candidate from the range, wrapping, so a caller can walk it from any offset.
+    pub fn nth_wrapping(&self, n: u32) -> u16 {
+        // `n % len` is below `len <= 64512`, so the sum stays within `u16`.
+        self.start + (n % self.len()) as u16
+    }
+}
+
+impl std::fmt::Display for PortRange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}-{}", self.start, self.end)
+    }
+}
+
 /// How a running forward is doing. Transitions are published in order; the last one before
 /// the forward ends is always [`Stopped`](Self::Stopped).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -135,6 +190,20 @@ impl ForwardStatus {
 mod tests {
     use super::*;
     use crate::ids::{ClusterId, ContextName};
+
+    #[test]
+    fn a_port_range_is_unprivileged_and_ordered() {
+        assert!(PortRange::new(1023, 2000).is_none());
+        assert!(PortRange::new(3000, 2000).is_none());
+        let range = PortRange::new(20000, 20009).unwrap();
+        assert_eq!(range.len(), 10);
+        assert!(range.contains(20009) && !range.contains(20010));
+        assert_eq!(range.nth_wrapping(12), 20002);
+        assert_eq!(
+            PortRange::new(1024, 65535).unwrap().nth_wrapping(u32::MAX),
+            1024 + (u32::MAX % 64512) as u16
+        );
+    }
 
     fn target(kind: &str) -> ResourceRef {
         ResourceRef::new(

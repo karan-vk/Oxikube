@@ -72,6 +72,21 @@
       "memory": { "warn": 70, "critical": 90 }
     }
   },
+  // Port-forwards (E15-S08). Also valid under `clusters.<id>.portforward` for one cluster. Edits
+  // apply to forwards started afterwards; running forwards are left alone.
+  //   default_bind  the IP address a forward listens on unless asked otherwise. Loopback keeps the
+  //                 forwarded port private to this machine; any other address exposes it to the
+  //                 network.
+  //   allowed_in_readonly  let forwards start on a read-only cluster (they change nothing in the
+  //                 cluster, but the default is strict).
+  //   port_range    `[first, last]`: the unprivileged local ports a forward that asks for a free
+  //                 port picks from, for example [20000, 40000]. Not set: the OS picks.
+  //   annotations   annotate the objects you forward (opt-in).
+  "portforward": {
+    "default_bind": "127.0.0.1",
+    "allowed_in_readonly": false,
+    "annotations": false
+  },
   // Session restore: reopen the clusters, tabs and namespaces of your last session at launch.
   // Off by default. Restoring starts after the window is drawn, so it never delays start-up, and a
   // cluster that fails or cannot be reached only shows an error in its own tab.

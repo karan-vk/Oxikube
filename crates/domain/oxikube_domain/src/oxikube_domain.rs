@@ -99,7 +99,7 @@ pub use metric_query::{
     MetricTarget, MetricUnit, PodSelector, RangePreset, RangeSteps, steps_for,
 };
 pub use metrics_provider::MetricsProviderKind;
-pub use portforward::{ForwardPort, ForwardSpec, ForwardStatus};
+pub use portforward::{ForwardPort, ForwardSpec, ForwardStatus, PortRange};
 pub use preset::ClusterPreset;
 pub use quantity::{Quantity, QuantityError, QuantityFormat};
 pub use resource::{ObjectMeta, OwnerRef, Resource, ResourceError, StrMap};

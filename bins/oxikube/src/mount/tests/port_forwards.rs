@@ -101,3 +101,54 @@ fn the_palette_lists_the_toggle_in_a_table_and_f_and_pf_show_the_panel(cx: &mut 
     assert!(panel_open(&mut app), "`:pf` shows the panel");
     assert!(!app.bar_is_open());
 }
+
+#[gpui::test]
+fn the_portforward_settings_reach_the_manager_live_and_the_agent_tools_are_registered(
+    cx: &mut TestAppContext,
+) {
+    use gpui::BorrowAppContext as _;
+    use oxikube_settings::SettingsStore;
+
+    let mut app = App::start(cx, TestPorts::seeded());
+    let state = app.vcx.update(|_, cx| AppState::global(cx));
+    let manager = state.port_forwards().expect("the manager").clone();
+    assert!(!manager.config().allowed_in_readonly, "strict by default");
+    assert_eq!(manager.config().default_bind.to_string(), "127.0.0.1");
+    assert!(manager.config().port_range.is_none());
+
+    let cluster = TestPorts::cluster_id();
+    let text = format!(
+        r#"{{ "portforward": {{ "default_bind": "10.1.2.3", "port_range": [20000, 20100] }},
+             "clusters": {{ "{cluster}": {{ "portforward": {{ "allowed_in_readonly": true }} }} }} }}"#
+    );
+    app.vcx.update(|_, cx| {
+        cx.update_global::<SettingsStore, _>(|store, _| store.set_user_settings(&text).unwrap());
+    });
+    app.tick();
+
+    let config = manager.config();
+    assert_eq!(config.default_bind.to_string(), "10.1.2.3");
+    assert_eq!(
+        config.port_range.map(|r| (r.start(), r.end())),
+        Some((20000, 20100))
+    );
+    assert!(!config.allowed_in_readonly, "the global value is unchanged");
+    assert!(
+        manager.config_for(&cluster).allowed_in_readonly,
+        "the cluster's override"
+    );
+
+    let hooks = state.agent_hooks().expect("agent hooks");
+    let names: Vec<String> = hooks
+        .tools
+        .defs()
+        .iter()
+        .map(|d| d.name.to_string())
+        .collect();
+    for tool in [
+        "portforward.list_port_forwards",
+        "portforward.start_port_forward",
+    ] {
+        assert!(names.iter().any(|n| n == tool), "{tool} in {names:?}");
+    }
+}

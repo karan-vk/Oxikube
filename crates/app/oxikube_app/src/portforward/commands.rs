@@ -63,9 +63,8 @@ pub(super) async fn run(
         } => {
             let mut spec = ForwardSpec::new(target, remote_port);
             spec.local_port = local_port.unwrap_or(0);
-            if let Some(bind) = bind {
-                spec.bind = bind;
-            }
+            spec.bind =
+                bind.unwrap_or_else(|| manager.config_for(&spec.target.cluster).default_bind);
             let info = manager.start_and_wait(spec).await?;
             Ok(output(&info))
         }
