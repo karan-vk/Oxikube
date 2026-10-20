@@ -34,6 +34,7 @@ impl Render for StartDialog {
         };
         let body = v_flex()
             .gap(u(px(10.)))
+            .children(self.suggestion_list(&tokens, cx))
             .child(self.port_chips(&tokens, cx))
             .child(field(&tokens, "Remote port", "pf-remote", &self.remote))
             .children(note("pf-remote-problem", errors.remote_port.clone(), true))
@@ -237,6 +238,62 @@ impl StartDialog {
                         ),
                     ))
                 })
+                .into_any_element(),
+        )
+    }
+}
+
+impl StartDialog {
+    /// "Suggested from annotations": one row per k9s annotation entry; a click fills the fields.
+    /// `None` without suggestions (a plain pod, or the setting off).
+    fn suggestion_list(&self, tokens: &Tokens, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if self.suggestions.is_empty() {
+            return None;
+        }
+        let colors = tokens.colors;
+        let rows = self.suggestions.iter().enumerate().map(|(i, suggestion)| {
+            let mut label = suggestion.label();
+            if suggestion.forward.auto {
+                label.push_str(" (auto)");
+            }
+            let button = Button::new(("pf-suggestion", i))
+                .xsmall()
+                .label(SharedString::from(label))
+                .on_click(
+                    cx.listener(move |this, _, window, cx| this.use_suggestion(i, window, cx)),
+                );
+            let button = if self.applied == Some(i) {
+                button.primary()
+            } else {
+                button.outline()
+            };
+            h_flex()
+                .gap(u(px(8.)))
+                .items_center()
+                .child(
+                    div()
+                        .debug_selector(move || format!("pf-suggestion-{i}"))
+                        .child(button),
+                )
+                .children(suggestion.conflict.clone().map(|text| {
+                    div()
+                        .debug_selector(move || format!("pf-suggestion-conflict-{i}"))
+                        .text_size(u(px(12.)))
+                        .text_color(colors.warning)
+                        .child(text)
+                }))
+        });
+        Some(
+            v_flex()
+                .debug_selector(|| "pf-suggestions".into())
+                .gap(u(px(6.)))
+                .child(
+                    div()
+                        .text_size(u(px(12.)))
+                        .text_color(colors.text_muted)
+                        .child("Suggested from annotations"),
+                )
+                .children(rows)
                 .into_any_element(),
         )
     }

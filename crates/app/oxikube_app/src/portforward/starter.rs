@@ -3,12 +3,13 @@
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
-use oxikube_domain::OxiError;
 use oxikube_domain::audit::Initiator;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::ClusterId;
 use oxikube_domain::portforward::ForwardSpec;
+use oxikube_domain::{OxiError, Resource};
 
+use super::annotations::{AnnotationSuggestion, annotation_suggestions};
 use super::manager::PortForwardManager;
 use super::model::ForwardId;
 use crate::command_bus::{CommandBus, DispatchContext, DispatchError, Outcome};
@@ -79,6 +80,22 @@ impl ForwardStarter {
             let hint = e.suggestion().map(|h| format!(" {h}")).unwrap_or_default();
             format!("{e}.{hint}")
         })
+    }
+
+    /// Whether pod annotations are read at all (`portforward.annotations`).
+    pub fn annotations(&self) -> bool {
+        self.manager.config().annotations
+    }
+
+    /// The forwards `pod`'s k9s annotations suggest, each checked against the forwards listed now
+    /// (a taken local port carries a warning). Empty while `portforward.annotations` is off:
+    /// the annotations are then not even parsed. Pure and cheap; call it when the dialog opens.
+    pub fn annotation_suggestions(&self, pod: &Resource) -> Vec<AnnotationSuggestion> {
+        let enabled = self.manager.config().annotations;
+        if !enabled {
+            return Vec::new();
+        }
+        annotation_suggestions(pod, true, &self.manager.list())
     }
 
     /// Starts `spec` through `portforward::Start` and waits until it is up.

@@ -21,12 +21,12 @@ use crate::actions::tests::toasts;
 use crate::detail::tests::fixture::edited;
 use crate::table::ResourceTable;
 
-fn apple() -> ResourceRef {
+pub(super) fn apple() -> ResourceRef {
     ResourceRef::namespaced(cluster(), Gvk::new("", "v1", "Pod"), "x", "apple-1")
 }
 
 /// A pod `x/apple-1` with two container ports.
-fn apple_pod() -> oxikube_domain::Resource {
+pub(super) fn apple_pod() -> oxikube_domain::Resource {
     edited(p("x", "apple-1", "1"), |json| {
         json["spec"]["containers"] = json!([
             {"name": "app", "image": "app:1", "ports": [
@@ -37,7 +37,7 @@ fn apple_pod() -> oxikube_domain::Resource {
     })
 }
 
-fn open(cx: &mut TestAppContext) -> (Fixture, gpui::Entity<ResourceTable>) {
+pub(super) fn open(cx: &mut TestAppContext) -> (Fixture, gpui::Entity<ResourceTable>) {
     let mut f = Fixture::with_forward(cx);
     f.connect_with([apple_pod(), p("x", "web-1", "1")]);
     let table = f.open_pods();
@@ -47,7 +47,7 @@ fn open(cx: &mut TestAppContext) -> (Fixture, gpui::Entity<ResourceTable>) {
     (f, table)
 }
 
-fn dialog(f: &mut Fixture) -> Option<gpui::Entity<StartDialog>> {
+pub(super) fn dialog(f: &mut Fixture) -> Option<gpui::Entity<StartDialog>> {
     let tabs = f.tabs.clone();
     f.vcx.update(|_, cx| {
         let tab = tabs.read(cx).tab(&cluster())?.clone();
@@ -57,7 +57,10 @@ fn dialog(f: &mut Fixture) -> Option<gpui::Entity<StartDialog>> {
     })
 }
 
-fn open_dialog(f: &mut Fixture, table: &gpui::Entity<ResourceTable>) -> gpui::Entity<StartDialog> {
+pub(super) fn open_dialog(
+    f: &mut Fixture,
+    table: &gpui::Entity<ResourceTable>,
+) -> gpui::Entity<StartDialog> {
     f.keys(table, "shift-f");
     dialog(f).expect("shift-f opens the start dialog")
 }
@@ -69,7 +72,7 @@ fn messages(f: &mut Fixture) -> Vec<String> {
         .collect()
 }
 
-fn click(f: &mut Fixture, selector: &'static str) {
+pub(super) fn click(f: &mut Fixture, selector: &'static str) {
     f.vcx.update(|window, cx| window.draw(cx).clear(cx));
     let bounds = f
         .vcx
@@ -79,7 +82,7 @@ fn click(f: &mut Fixture, selector: &'static str) {
     f.settle();
 }
 
-fn shown(f: &mut Fixture, selector: &'static str) -> bool {
+pub(super) fn shown(f: &mut Fixture, selector: &'static str) -> bool {
     f.vcx.update(|window, cx| window.draw(cx).clear(cx));
     f.vcx.debug_bounds(selector).is_some()
 }

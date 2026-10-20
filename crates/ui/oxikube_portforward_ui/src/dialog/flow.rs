@@ -96,9 +96,9 @@ impl StartFlow {
             });
             return None;
         }
-        let reader = request
-            .ports
-            .is_empty()
+        // A pod is read for its annotations too, when they are on.
+        let wants_annotations = &*request.target.gvk.kind == "Pod" && self.starter.annotations();
+        let reader = (request.ports.is_empty() || wants_annotations)
             .then(|| {
                 self.sessions
                     .get(&request.target.cluster)
