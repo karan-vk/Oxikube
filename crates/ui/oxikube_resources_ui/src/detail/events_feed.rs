@@ -57,7 +57,11 @@ impl DetailView {
         // The events whose writer gave no uid are found by the object's name.
         let target = ObjectTarget::named(
             meta.uid.clone(),
-            ObjectIdentity::new(&self.target.gvk.kind, meta.namespace.as_deref(), &meta.name),
+            ObjectIdentity::shared(
+                self.target.gvk.kind.clone(),
+                meta.namespace.clone(),
+                meta.name.clone(),
+            ),
         );
         let feed = events.object_feed(&self.target.cluster, &target, cluster_scoped_name);
         self.events.feed = Some(feed);
