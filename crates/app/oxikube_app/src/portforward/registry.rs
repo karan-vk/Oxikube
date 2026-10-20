@@ -5,8 +5,8 @@
 
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
-use std::sync::{Arc, Weak};
 
 use oxikube_domain::notification::PortForwardChange;
 use oxikube_domain::portforward::ForwardSpec;
@@ -138,11 +138,6 @@ impl Inner {
             drop(entries);
             self.bump();
         }
-    }
-
-    /// The upgrade of a supervisor's handle on the manager.
-    pub(super) fn upgrade(weak: &Weak<Self>) -> Option<Arc<Self>> {
-        weak.upgrade()
     }
 }
 

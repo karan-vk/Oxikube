@@ -96,7 +96,7 @@ impl Supervisor {
         // When the next attempt is due; `Some(ZERO)` tries as soon as the view is ready.
         let mut retry_in = Some(Duration::ZERO);
         loop {
-            let Some(inner) = Inner::upgrade(&self.inner) else {
+            let Some(inner) = self.inner.upgrade() else {
                 return;
             };
             let clock = inner.clock.clone();
@@ -238,12 +238,13 @@ impl Supervisor {
 
     /// Feeds `event` to the state machine; `false` when this supervisor is no longer current.
     fn event(&self, event: ForwardEvent) -> bool {
-        Inner::upgrade(&self.inner)
+        self.inner
+            .upgrade()
             .is_some_and(|inner| inner.transition(self.id, Some(self.generation), event, |_| {}))
     }
 
     fn state(&self) -> Option<ForwardState> {
-        Inner::upgrade(&self.inner)?.state(self.id, self.generation)
+        self.inner.upgrade()?.state(self.id, self.generation)
     }
 
     /// Whether the forward still wants this supervisor (not failed, stopped or replaced).
@@ -259,14 +260,14 @@ impl Supervisor {
     }
 
     fn set_handle(&self, handle: Option<&ForwardHandle>) {
-        if let Some(inner) = Inner::upgrade(&self.inner) {
+        if let Some(inner) = self.inner.upgrade() {
             let stats = handle.map(|h| h.stats.clone());
             inner.edit(self.id, self.generation, |e| e.set_stats(stats));
         }
     }
 
     fn note_connection_error(&self, error: &PortForwardError) {
-        if let Some(inner) = Inner::upgrade(&self.inner) {
+        if let Some(inner) = self.inner.upgrade() {
             let message = error.to_string();
             inner.edit(self.id, self.generation, |e| {
                 e.set_last_error(Some(message))
