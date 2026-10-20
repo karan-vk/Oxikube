@@ -63,10 +63,13 @@ impl std::fmt::Debug for EventsContextProvider {
 
 /// What reading the named object came to.
 enum Lookup {
-    /// It exists; its uid when the server gave one, and whether it is cluster-scoped.
+    /// It exists; its uid when the server gave one, its namespace, and whether it is
+    /// cluster-scoped.
     Found {
         /// The object's uid, when the server gave one.
         uid: Option<String>,
+        /// The object's namespace; `None` for a cluster-scoped object.
+        namespace: Option<String>,
         /// Whether the object is cluster-scoped (no namespace).
         cluster_scoped: bool,
     },
@@ -185,27 +188,21 @@ impl EventsContextProvider {
             Lookup::Found {
                 uid: Some(uid),
                 cluster_scoped: false,
+                namespace,
             } => {
+                // The object's own namespace, not the mention's: the events whose writer gave
+                // no uid name their object, and they are the ones of this namespace.
                 let target = ObjectTarget::named(
                     Some(Arc::from(uid.as_str())),
-                    ObjectIdentity::new(
-                        &involved.kind,
-                        involved.namespace.as_deref(),
-                        &involved.name,
-                    ),
+                    ObjectIdentity::new(&involved.kind, namespace.as_deref(), &involved.name),
                 );
-                let mut found = find(
+                find(
                     &self.deps.events,
                     cluster,
                     &EventFilter::new().object_target(target),
                     |_| true,
                     MAX_MENTION_EVENTS,
-                );
-                if found.total == 0 {
-                    // The writer did not set the involved uid: find them by name.
-                    found = find_about(&self.deps.events, cluster, &involved, MAX_MENTION_EVENTS);
-                }
-                found
+                )
             }
             // A cluster-scoped object is recorded under its name (the kubelet records a
             // Node's events with the node's name as the uid), and an object that could not
@@ -249,6 +246,7 @@ impl EventsContextProvider {
             None => Lookup::Unchecked("the read timed out".to_owned()),
             Some(Ok(Some(found))) => Lookup::Found {
                 uid: found.meta.uid.as_deref().map(str::to_owned),
+                namespace: found.meta.namespace.as_deref().map(str::to_owned),
                 cluster_scoped: found.meta.namespace.is_none(),
             },
             Some(Ok(None)) => Lookup::Missing,

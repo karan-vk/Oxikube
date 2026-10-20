@@ -89,11 +89,13 @@ impl ObjectEventsFeed {
             .iter()
             .flat_map(|s| s.latest(MAX_OBJECT_EVENTS))
             .collect();
-        events.sort_by_key(|e| std::cmp::Reverse(seen_at(e)));
-        // Two subscriptions (a cluster-scoped object's uid and its name) hold the same event
-        // when the event gave no uid: it is listed once.
-        let mut seen: HashSet<EventKey> = HashSet::with_capacity(events.len());
-        events.retain(|event| seen.insert(EventKey::of(event)));
+        if self.subscriptions.len() > 1 {
+            // Two subscriptions (a cluster-scoped object's uid and its name) hold the same
+            // event when the event gave no uid: it is listed once, newest first.
+            events.sort_by_key(|e| std::cmp::Reverse(seen_at(e)));
+            let mut seen: HashSet<EventKey> = HashSet::with_capacity(events.len());
+            events.retain(|event| seen.insert(EventKey::of(event)));
+        }
         events.truncate(MAX_OBJECT_EVENTS);
         events
     }

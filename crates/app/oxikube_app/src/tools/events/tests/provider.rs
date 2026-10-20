@@ -102,6 +102,21 @@ async fn a_cluster_scoped_objects_events_are_found_under_its_name() {
 }
 
 #[tokio::test]
+async fn an_object_that_was_re_created_does_not_quote_the_old_objects_events() {
+    // The pod was deleted and re-created under the same name: the old pod's event carries the
+    // old uid and stays with the old pod.
+    let old = ev("e1", "Pod", "shop", "web-0", "uid-old", 10);
+    let h = Harness::with_events(vec![old]).await;
+    h.objects().insert(pod_object("shop", "web-0", "uid-new"));
+    let blocks = resolve(&h, "@events/pod/shop/web-0", &scope()).await;
+    assert!(
+        !blocks[0].body.contains("Pulled"),
+        "the old pod's event is not quoted: {}",
+        blocks[0].body
+    );
+}
+
+#[tokio::test]
 async fn an_object_that_does_not_exist_is_a_clear_error_block() {
     let h = Harness::with_events(web_events()).await;
     let blocks = resolve(&h, "@events/pod/shop/ghost", &scope()).await;
