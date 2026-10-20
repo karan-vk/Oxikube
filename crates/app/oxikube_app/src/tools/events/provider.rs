@@ -179,7 +179,7 @@ impl EventsContextProvider {
         let lookup = self.lookup(session, &gvk, namespace, name).await;
         let mut notes = Vec::new();
         let feed = open(&self.deps, cluster).await;
-        let mut found = match &lookup {
+        let found = match &lookup {
             // The object is there and namespaced: its events are the ones that carry its uid
             // and the ones that gave no uid and named it.
             Lookup::Found {
