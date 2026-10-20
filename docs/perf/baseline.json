@@ -304,11 +304,58 @@
       }
     },
     "macos": {
-      "source": "github-actions macos-latest nightly run 37715509006 (all scenarios, E08-F520 re-seed)",
-      "updated": "2026-10-08",
+      "source": "github-actions macos-latest nightly run 37715509006 (all scenarios, E08-F520 re-seed); editor-5mb from nightly run 39226944238 (E10-F153 seed)",
+      "updated": "2026-10-20",
       "profile": "release-fast",
       "samples_per_scenario": 7,
       "scenarios": {
+        "editor-5mb": {
+          "draw_ms": {
+            "p50": 0.77,
+            "p95": 2.155,
+            "p99": 2.659
+          },
+          "frame_ms": {
+            "p50": 0.711,
+            "p95": 1.782,
+            "p99": 2.365
+          },
+          "open_ms": {
+            "p50": 356.69,
+            "p95": 356.69,
+            "p99": 356.69
+          },
+          "peak_rss_mib": {
+            "p50": 179.094,
+            "p95": 179.094,
+            "p99": 179.094
+          },
+          "rss_mib": {
+            "p50": 178.984,
+            "p95": 179.094,
+            "p99": 179.094
+          },
+          "scroll_draw_ms": {
+            "p50": 1.849,
+            "p95": 4.134,
+            "p99": 5.345
+          },
+          "scroll_frame_ms": {
+            "p50": 2.058,
+            "p95": 4.312,
+            "p99": 5.366
+          },
+          "slow_frame_pct": {
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0
+          },
+          "validation_ms": {
+            "p50": 756.718,
+            "p95": 756.718,
+            "p99": 756.718
+          }
+        },
         "logs-stream": {
           "draw_ms": {
             "p50": 2.176,
