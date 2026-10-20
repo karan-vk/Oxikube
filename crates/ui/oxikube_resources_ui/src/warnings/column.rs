@@ -76,9 +76,10 @@ impl RowWarnings {
     pub(crate) fn badge(&self, object: &StoreObject, now: Timestamp) -> Option<WarningBadge> {
         let meta = object.meta();
         // The events whose writer gave no uid name their object by kind, namespace and name.
+        // The parts are shared: a row reads its badge on every frame.
         let target = ObjectTarget::named(
             meta.uid.clone(),
-            ObjectIdentity::new(&self.kind, meta.namespace.as_deref(), &meta.name),
+            ObjectIdentity::shared(self.kind.clone(), meta.namespace.clone(), meta.name.clone()),
         );
         self.badges
             .get_for(&target, self.cluster_scoped.then_some(&*meta.name), now)

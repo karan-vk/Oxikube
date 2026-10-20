@@ -190,6 +190,27 @@ fn a_query_by_name_alone_finds_the_events_that_gave_no_uid() {
 }
 
 #[test]
+fn the_two_indexes_of_an_object_are_merged_newest_first() {
+    let mut buffer = EventBuffer::new(10);
+    // Two events carry the object's uid, two gave none: the list is one run, newest first.
+    buffer.upsert(ev("uid-old", "ns-a", "pod-1", 1));
+    let mut nameless_old = ev("no-uid-old", "ns-a", "pod-1", 3);
+    nameless_old.regarding_uid = None;
+    buffer.upsert(nameless_old);
+    buffer.upsert(ev("uid-new", "ns-a", "pod-1", 4));
+    let mut nameless_new = ev("no-uid-new", "ns-a", "pod-1", 7);
+    nameless_new.regarding_uid = None;
+    buffer.upsert(nameless_new);
+    buffer.assert_consistent();
+
+    let filter = EventFilter::new().object_target(pod_target("pod-1"));
+    assert_eq!(
+        uids(buffer.query(&filter)),
+        ["no-uid-new", "uid-new", "no-uid-old", "uid-old"]
+    );
+}
+
+#[test]
 fn the_events_of_an_object_are_counted_by_uid_and_by_name() {
     let mut buffer = EventBuffer::new(10);
     buffer.upsert(ev("with-uid", "ns-a", "pod-1", 1));

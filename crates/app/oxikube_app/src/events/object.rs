@@ -20,6 +20,7 @@
 //! An event with a uid and a target without one are matched by name: the target's uid is
 //! unknown, so the name is all there is.
 
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use oxikube_domain::event::Event;
@@ -28,40 +29,72 @@ use oxikube_domain::ids::ResourceRef;
 /// The name of an object: its kind, its namespace (`None` for a cluster-scoped object) and its
 /// name.
 ///
-/// The kind is held lowercased and compared case-insensitively, like the events filter's kind
-/// rule; the namespace and the name are compared exactly.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// The kind is compared case-insensitively, like the events filter's kind rule; the namespace
+/// and the name are compared exactly. The parts are shared (`Arc`), so an identity costs
+/// nothing to build from parts that are already shared: a table's row reads its badge on every
+/// frame.
+#[derive(Debug, Clone, Eq)]
 pub struct ObjectIdentity {
     kind: Arc<str>,
     namespace: Option<Arc<str>>,
     name: Arc<str>,
 }
 
+impl PartialEq for ObjectIdentity {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind.eq_ignore_ascii_case(&other.kind)
+            && self.namespace == other.namespace
+            && self.name == other.name
+    }
+}
+
+impl Hash for ObjectIdentity {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // The kind compares case-insensitively, so it hashes that way too: equal identities must
+        // hash equally. Lowercasing a byte at a time copies nothing.
+        for byte in self.kind.bytes() {
+            state.write_u8(byte.to_ascii_lowercase());
+        }
+        state.write_u8(0);
+        self.namespace.hash(state);
+        self.name.hash(state);
+    }
+}
+
 impl ObjectIdentity {
     /// The identity of the object `kind`, `namespace` and `name` name.
     pub fn new(kind: &str, namespace: Option<&str>, name: &str) -> Self {
+        Self::shared(Arc::from(kind), namespace.map(Arc::from), Arc::from(name))
+    }
+
+    /// The identity of an object whose parts are already shared: nothing is copied.
+    pub fn shared(kind: Arc<str>, namespace: Option<Arc<str>>, name: Arc<str>) -> Self {
         Self {
-            kind: Arc::from(kind.to_ascii_lowercase()),
-            namespace: namespace.map(Arc::from),
-            name: Arc::from(name),
+            kind,
+            namespace,
+            name,
         }
     }
 
     /// The identity of the object `object` names.
     pub fn of(object: &ResourceRef) -> Self {
-        Self::new(&object.gvk.kind, object.namespace(), &object.name)
+        Self::shared(
+            object.gvk.kind.clone(),
+            object.namespace.clone(),
+            object.name.clone(),
+        )
     }
 
     /// The identity of the object `event` is about.
     pub fn of_event(event: &Event) -> Self {
-        Self::new(
-            &event.regarding.gvk.kind,
-            event.regarding.namespace(),
-            &event.regarding.name,
+        Self::shared(
+            event.regarding.gvk.kind.clone(),
+            event.regarding.namespace.clone(),
+            event.regarding.name.clone(),
         )
     }
 
-    /// The kind, lowercased.
+    /// The kind.
     pub fn kind(&self) -> &str {
         &self.kind
     }
@@ -161,7 +194,7 @@ mod tests {
     #[test]
     fn an_identity_is_the_kind_the_namespace_and_the_name() {
         let identity = ObjectIdentity::new("Pod", Some("shop"), "web-0");
-        assert_eq!(identity.kind(), "pod");
+        assert_eq!(identity.kind(), "Pod");
         assert_eq!(identity.namespace(), Some("shop"));
         assert_eq!(identity.name(), "web-0");
         assert_eq!(
