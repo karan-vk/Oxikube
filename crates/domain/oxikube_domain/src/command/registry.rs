@@ -273,6 +273,14 @@ impl CommandId {
     pub const PORTFORWARD_RESTART: CommandId = CommandId::new("portforward::Restart");
     /// `portforward::Remove`: stop a port-forward and drop it from the list (E15-S03).
     pub const PORTFORWARD_REMOVE: CommandId = CommandId::new("portforward::Remove");
+    /// `portforward::FavouriteAdd`: save a port-forward as a favourite (E15-S06).
+    pub const PORTFORWARD_FAVOURITE_ADD: CommandId = CommandId::new("portforward::FavouriteAdd");
+    /// `portforward::FavouriteRemove`: remove a favourite (E15-S06).
+    pub const PORTFORWARD_FAVOURITE_REMOVE: CommandId =
+        CommandId::new("portforward::FavouriteRemove");
+    /// `portforward::FavouriteToggleAutoStart`: switch a favourite's start on connect (E15-S06).
+    pub const PORTFORWARD_FAVOURITE_TOGGLE_AUTO_START: CommandId =
+        CommandId::new("portforward::FavouriteToggleAutoStart");
     /// `pod::Sanitize`: delete the Completed and Failed pods of a view.
     pub const POD_SANITIZE: CommandId = CommandId::new("pod::Sanitize");
     /// `pod::ShowNode`: open the Node a pod runs on.
@@ -1394,6 +1402,26 @@ pub static COMMANDS: &[CommandMeta] = &[
     // The port-forward manager (E15-S03). A forward changes nothing in the cluster, so these are
     // reads; the manager refuses a start on a read-only cluster unless
     // `portforward.allowed_in_readonly`. Stop, restart and remove act on the manager's own list.
+    // Favourites (E15-S06) are local state, not cluster state.
+    CommandMeta::read(
+        CommandId::PORTFORWARD_FAVOURITE_ADD,
+        "Add Port-Forward Favourite",
+        CommandScope::Selection,
+        Capabilities::PORTFORWARD,
+    )
+    .selecting(SelectionKind::AnyOf(FORWARDABLE_KINDS)),
+    CommandMeta::read(
+        CommandId::PORTFORWARD_FAVOURITE_REMOVE,
+        "Remove Port-Forward Favourite",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::PORTFORWARD_FAVOURITE_TOGGLE_AUTO_START,
+        "Toggle Port-Forward Favourite Auto-Start",
+        CommandScope::Global,
+        NONE,
+    ),
     CommandMeta::read(
         CommandId::PORTFORWARD_REMOVE,
         "Remove Port-Forward",

@@ -26,6 +26,7 @@
 
 mod backend;
 mod commands;
+pub mod favourites;
 mod manager;
 mod model;
 mod registry;
@@ -38,6 +39,9 @@ mod tests;
 
 pub use backend::{ForwardBackend, ObjectWatch, SessionBackend};
 pub use commands::{COMMANDS, register_commands};
+pub use favourites::{
+    FavouriteForward, FavouriteId, FavouriteStore, PortForwardFavourites, RestoreReport,
+};
 pub use manager::{ForwardChanges, PortForwardManager, START_WAIT};
 pub use model::{ForwardConfig, ForwardId, ForwardInfo, StartError};
 pub use state::{Backoff, ForwardEvent, ForwardFailure, ForwardState};

@@ -117,6 +117,20 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             local_port: None,
             bind: None,
         },
+        "portforward::FavouriteAdd" => Command::PortForwardFavouriteAdd {
+            target: target(),
+            remote_port: oxikube_domain::portforward::ForwardPort::Number(80),
+            local_port: None,
+            bind: None,
+            name: None,
+            auto_start: None,
+        },
+        "portforward::FavouriteRemove" => {
+            Command::PortForwardFavouriteRemove { id: "fav-1".into() }
+        }
+        "portforward::FavouriteToggleAutoStart" => {
+            Command::PortForwardFavouriteToggleAutoStart { id: "fav-1".into() }
+        }
         "portforward::Stop" => Command::PortForwardStop { id: 1 },
         "portforward::Restart" => Command::PortForwardRestart { id: 1 },
         "portforward::Remove" => Command::PortForwardRemove { id: 1 },

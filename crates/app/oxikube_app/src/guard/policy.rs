@@ -146,6 +146,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::PodDebug { target, .. }
         | Command::PodPortForward { target, .. }
         | Command::PortForwardStart { target, .. }
+        | Command::PortForwardFavouriteAdd { target, .. }
         | Command::ServiceOpenInBrowser { target, .. }
         | Command::ServiceShowPods { target }
         | Command::ResourceShowUsedBy { target }
@@ -217,6 +218,8 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::PortForwardStop { .. }
         | Command::PortForwardRestart { .. }
         | Command::PortForwardRemove { .. }
+        | Command::PortForwardFavouriteRemove { .. }
+        | Command::PortForwardFavouriteToggleAutoStart { .. }
         | Command::NotificationsOpenLink { .. }
         | Command::JumpBack
         | Command::JumpForward
