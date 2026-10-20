@@ -1,7 +1,7 @@
 //! `portforward::*` handlers and the `service::OpenInBrowser` opener.
 
 use oxikube_domain::ErrorKind;
-use oxikube_domain::command::{self, Command};
+use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::portforward::ForwardPort;
 use serde_json::json;
 
@@ -21,6 +21,8 @@ async fn the_commands_start_stop_restart_and_remove() {
             remote_port: ForwardPort::Number(80),
             local_port: None,
             bind: None,
+            name: None,
+            favourite: false,
         },
     )
     .await
@@ -52,6 +54,8 @@ async fn a_refused_start_says_why_and_what_to_do() {
             remote_port: ForwardPort::Number(80),
             local_port: None,
             bind: None,
+            name: None,
+            favourite: false,
         },
     )
     .await
@@ -71,7 +75,10 @@ fn every_command_is_registered_with_its_tool() {
     for id in COMMANDS {
         let meta = *command::lookup(id).unwrap();
         assert!(!meta.mutating, "{id} changes no cluster");
-        assert!(id.tool_name().starts_with("k8s.portforward_"), "{id}");
+        assert!(
+            id == CommandId::POD_PORT_FORWARD || id.tool_name().starts_with("k8s.portforward_"),
+            "{id}"
+        );
         let again = registry.register(meta, |_: Command, _: HandlerContext| async {
             Ok(crate::command_bus::CommandOutput::default())
         });
@@ -125,5 +132,37 @@ async fn open_in_browser_forwards_a_service_port_and_reuses_it() {
         .open_service_port(target("Service", "web"), Some(443))
         .await
         .unwrap_err();
+    assert_eq!(err.kind(), ErrorKind::Validation);
+}
+
+#[tokio::test]
+async fn pod_port_forward_starts_a_forward_and_port_zero_is_refused() {
+    let rig = Rig::new();
+    rig.backend.push("Pod", vec![pod("api-0", "Running")]);
+    let out = run(
+        &rig.manager,
+        Command::PodPortForward {
+            target: target("Pod", "api-0"),
+            local_port: None,
+            remote_port: 80,
+        },
+    )
+    .await
+    .expect("start");
+    assert!(out.message.unwrap().starts_with("Forwarding 127.0.0.1:"));
+
+    let err = run(
+        &rig.manager,
+        Command::PortForwardStart {
+            target: target("Pod", "api-0"),
+            remote_port: ForwardPort::Number(0),
+            local_port: None,
+            bind: None,
+            name: None,
+            favourite: false,
+        },
+    )
+    .await
+    .unwrap_err();
     assert_eq!(err.kind(), ErrorKind::Validation);
 }

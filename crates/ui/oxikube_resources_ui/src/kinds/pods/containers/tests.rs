@@ -321,3 +321,37 @@ fn a_hidden_detail_stops_watching_and_shows_a_missed_poll_when_shown_again(
     d.f.vcx.run_until_parked();
     assert!(watching(&mut d));
 }
+
+#[gpui::test]
+fn a_forward_button_per_container_port_opens_the_dialog_on_that_port(cx: &mut TestAppContext) {
+    let mut d = Detail::with_forward(cx, [multi_container_pod()]);
+    d.f.vcx.update(|_, cx| crate::kinds::init(cx));
+    let view = d.open(&pod_ref("api-0"));
+    let panel = panel(&mut d, &view);
+    let ports: Vec<u16> =
+        d.f.vcx
+            .update(|_, cx| panel.read(cx).ports().iter().map(|p| p.number).collect());
+    assert_eq!(ports, [8080, 9090]);
+    assert!(d.shown("pod-forward-8080") && d.shown("pod-forward-9090"));
+
+    d.click("pod-forward-8080");
+    let dialog = d
+        .modal::<oxikube_portforward_ui::StartDialog>()
+        .expect("Forward opens the start dialog");
+    let input = d.f.vcx.update(|_, cx| dialog.read(cx).input(cx));
+    assert_eq!(input.remote_port, "8080");
+    assert!(
+        d.shown("pf-port-0") && d.shown("pf-port-1"),
+        "the pod's ports are offered"
+    );
+    assert!(d.f.forward.as_ref().unwrap().calls.lock().is_empty());
+}
+
+#[gpui::test]
+fn without_a_port_forward_manager_there_are_no_forward_buttons(cx: &mut TestAppContext) {
+    let mut d = Detail::new(cx, [multi_container_pod()]);
+    d.f.vcx.update(|_, cx| crate::kinds::init(cx));
+    d.open(&pod_ref("api-0"));
+    assert!(d.shown("pod-containers"));
+    assert!(!d.shown("pod-forward-8080"));
+}

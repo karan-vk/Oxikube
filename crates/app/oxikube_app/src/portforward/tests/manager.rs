@@ -253,12 +253,10 @@ async fn a_permanent_error_fails_with_its_suggestion() {
         StartError::Forward(PortForwardError::Forbidden(_))
     ));
     assert!(err.suggestion().unwrap().contains("pods/portforward"));
-    let listed = rig.manager.list();
-    assert_eq!(listed.len(), 1, "a failed forward stays listed");
-    let ForwardState::Failed(failure) = &listed[0].state else {
-        panic!("failed: {listed:?}");
-    };
-    assert!(failure.suggestion().is_some());
+    assert!(
+        rig.manager.list().is_empty(),
+        "a failed start is not left listed for a retry to duplicate"
+    );
     assert!(
         notified(&rig)
             .iter()
@@ -279,6 +277,7 @@ async fn a_busy_local_port_fails_the_start() {
         .await
         .unwrap_err();
     assert!(err.suggestion().unwrap().contains("another port"), "{err}");
+    assert!(rig.manager.list().is_empty(), "the failed attempt is gone");
 }
 
 #[tokio::test]

@@ -31,6 +31,7 @@ use oxikube_workspace::sidebar::{self, SidebarDeps};
 use oxikube_workspace::test_support::open_workspace;
 use oxikube_workspace::{ClusterTabs, ClusterTabsDeps, CommandDispatcher, Workspace};
 
+use super::forward_rig::ForwardRig;
 use super::pods_kind;
 use crate::actions::ResourceActions;
 use crate::navigate::{OpenKind, open_kind};
@@ -51,8 +52,12 @@ fn actions_rig(
     workloads: bool,
     storage: bool,
     drain: &Arc<FakeDrainPort>,
+    forward: Option<&ForwardRig>,
 ) -> ResourceActions {
     let mut registry = CommandRegistry::new();
+    if let Some(forward) = forward {
+        forward.register(&mut registry);
+    }
     // `node::Drain` (E12-S10): the real handler and node service over the scripted drain port.
     let nodes = Arc::new(oxikube_app::nodes::NodeService::new(
         drain.clone(),
@@ -238,6 +243,14 @@ fn actions_rig(
         ResourceActions::with_registry(&bus, sessions.clone(), "alice", &rows).with_drain(
             oxikube_app::nodes::DrainFlow::new(bus.clone(), nodes, "alice"),
         );
+    let actions = match forward {
+        Some(forward) => actions.with_forward(oxikube_app::ForwardStarter::new(
+            bus,
+            "alice",
+            forward.manager.clone(),
+        )),
+        None => actions,
+    };
     if exec {
         actions.with_exec(Arc::new(oxikube_app::ExecService::new(sessions.clone())))
     } else {
@@ -258,6 +271,9 @@ enum Rig {
     Workloads,
     /// [`Rig::Actions`] and the storage actions (E12-S15).
     Storage,
+    /// [`Rig::Actions`] and the port-forward start dialog over fake `portforward::Start`
+    /// handlers (E15-S04).
+    Forward,
 }
 
 /// The cluster of every test.
@@ -314,6 +330,8 @@ pub(crate) struct Fixture {
     pub(crate) deps: ResourceTableDeps,
     /// The drain port behind `node::Drain` (E12-S10); script a run before draining.
     pub(crate) drain: Arc<FakeDrainPort>,
+    /// The port-forward rig of [`Self::with_forward`] (E15-S04).
+    pub(crate) forward: Option<ForwardRig>,
     _open_kinds: Task<()>,
 }
 
@@ -346,6 +364,13 @@ impl Fixture {
     /// `workload::Scale` handler behind the real guard, over the fake resource port.
     pub(crate) fn with_workloads(cx: &mut TestAppContext) -> Self {
         Self::build(cx, Arc::new(FakeStatePort::new()), Rig::Workloads)
+    }
+
+    /// [`Self::with_actions`] plus the port-forward start dialog (E15-S04): a manager whose
+    /// read-only policy the test sets, and `portforward::Start` / `pod::PortForward` handlers that
+    /// record and answer as scripted ([`Self::forward`]).
+    pub(crate) fn with_forward(cx: &mut TestAppContext) -> Self {
+        Self::build(cx, Arc::new(FakeStatePort::new()), Rig::Forward)
     }
 
     /// [`Self::with_actions`] plus the storage commands (`pvc::Resize`,
@@ -396,6 +421,7 @@ impl Fixture {
         let tabs = vcx.update(|window, cx| ClusterTabs::start(&workspace, tabs_deps, window, cx));
         let clock_port: Arc<dyn ClockPort> = clock.clone();
         let drain = Arc::new(FakeDrainPort::new());
+        let forward = (rig == Rig::Forward).then(|| ForwardRig::new(clock_port.clone()));
         // One object at a time: scripted responses then follow the selection's order.
         let actions = (rig != Rig::None).then(|| {
             actions_rig(
@@ -407,6 +433,7 @@ impl Fixture {
                 rig == Rig::Workloads,
                 rig == Rig::Storage,
                 &drain,
+                forward.as_ref(),
             )
             .with_concurrency(1)
         });
@@ -465,6 +492,7 @@ impl Fixture {
             dispatcher,
             deps,
             drain,
+            forward,
             _open_kinds: open_kinds,
         }
     }

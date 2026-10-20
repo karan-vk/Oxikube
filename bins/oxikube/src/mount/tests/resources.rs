@@ -654,10 +654,18 @@ fn the_k9s_verbs_work_through_the_real_keymap_and_bus(cx: &mut TestAppContext) {
     app.tick();
     assert!(!qos(&mut app), "and a second one hid them");
 
-    // `shift-f` names what is missing instead of doing nothing.
+    // `shift-f` opens the port-forward start dialog for the cursor row (E15-S04).
     app.press("shift-f");
     app.tick();
-    app.expect_toast("Port forwarding is not available yet");
+    let dialog = app.vcx.update(|_, cx| {
+        let layer = ws.read(cx).modal_layer().clone();
+        layer
+            .read(cx)
+            .active_modal::<oxikube_portforward_ui::StartDialog>()
+    });
+    assert!(dialog.is_some(), "shift-f opened the start dialog");
+    app.press("escape");
+    app.tick();
     // `e` opens the cursor row in the manifest editor (and takes the focus).
     app.press("e");
     app.tick();

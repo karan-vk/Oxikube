@@ -3,8 +3,8 @@
 
 use std::net::{IpAddr, SocketAddr};
 
-use oxikube_domain::OxiError;
 use oxikube_domain::portforward::{ForwardSpec, PortRange};
+use oxikube_domain::{ErrorKind, OxiError};
 use oxikube_ports::{ForwardStatsSnapshot, PortForwardError};
 
 use super::state::{Backoff, ForwardState};
@@ -44,14 +44,18 @@ pub struct ForwardInfo {
 }
 
 impl ForwardInfo {
-    /// `pod/web 8080:80` or `service/api 0:http`: how the forward is named to the user.
+    /// The user's name for it, else `pod/web 8080:80` or `service/api 0:http`: how the forward is
+    /// named to the user.
     pub fn label(&self) -> String {
         label(&self.spec, self.local_addr)
     }
 }
 
-/// `kind/name local:remote`.
+/// The name the user gave, else `kind/name local:remote`.
 pub(crate) fn label(spec: &ForwardSpec, local_addr: Option<SocketAddr>) -> String {
+    if let Some(name) = spec.name.as_deref().filter(|n| !n.is_empty()) {
+        return name.to_owned();
+    }
     let local = local_addr.map_or(spec.local_port, |a| a.port());
     format!(
         "{}/{} {local}:{}",
@@ -131,17 +135,27 @@ impl StartError {
     }
 }
 
+impl StartError {
+    /// The [`StartError`] an [`OxiError`] from a start command carries, if it is one.
+    pub fn of(error: &OxiError) -> Option<&StartError> {
+        std::error::Error::source(error)?.downcast_ref::<StartError>()
+    }
+}
+
 impl From<StartError> for OxiError {
     fn from(err: StartError) -> Self {
         let message = match err.suggestion() {
             Some(hint) => format!("{err}. {hint}"),
             None => err.to_string(),
         };
-        match err {
-            StartError::ReadOnly(_) => OxiError::forbidden(message),
-            StartError::NotConnected(_) | StartError::Unknown(_) => OxiError::not_found(message),
-            StartError::Unsupported(_) | StartError::Failed(_) => OxiError::validation(message),
-            StartError::Forward(inner) => OxiError::new(OxiError::from(inner).kind(), message),
-        }
+        // The typed error rides along as the source, so a dialog can offer the matching fix
+        // without parsing the message (see `StartError::of`).
+        let kind = match &err {
+            StartError::ReadOnly(_) => ErrorKind::Forbidden,
+            StartError::NotConnected(_) | StartError::Unknown(_) => ErrorKind::NotFound,
+            StartError::Unsupported(_) | StartError::Failed(_) => ErrorKind::Validation,
+            StartError::Forward(inner) => OxiError::from(inner.clone()).kind(),
+        };
+        OxiError::new(kind, message).with_source(err)
     }
 }

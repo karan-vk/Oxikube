@@ -116,6 +116,8 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             remote_port: oxikube_domain::portforward::ForwardPort::Number(80),
             local_port: None,
             bind: None,
+            name: None,
+            favourite: false,
         },
         "portforward::FavouriteAdd" => Command::PortForwardFavouriteAdd {
             target: target(),

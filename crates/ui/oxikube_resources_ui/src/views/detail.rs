@@ -97,6 +97,14 @@ impl ResourceViews {
             .map(|flow| {
                 crate::kinds::node::drain::DrainOpener::new(flow.clone(), workspace.downgrade())
             });
+        // A Pod's container ports and a Service's ports forward through the same dialog as the
+        // table's `shift-f`.
+        deps.forward = self
+            .deps
+            .table
+            .actions
+            .as_ref()
+            .and_then(|actions| actions.forward_flow(workspace.downgrade()));
         let target = target.clone();
         let origin = self
             .tables(&target.cluster, &target.gvk, cx)

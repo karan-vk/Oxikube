@@ -11,7 +11,9 @@ use gpui::{AnyView, App, AppContext as _, Context, Task, WeakEntity, Window};
 use oxikube_app::ServiceBackends;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::ResourceRef;
+use oxikube_domain::portforward::ForwardPort;
 use oxikube_domain::view::ServiceSummary;
+use oxikube_portforward_ui::{ForwardRequest, PortChoice};
 use oxikube_runtime::notify_coalesced;
 
 use super::feeds::Feeds;
@@ -159,6 +161,30 @@ impl ServicePanel {
             let port = Some(port);
             self.dispatch(Command::ServiceOpenInBrowser { target, port }, cx);
         }
+    }
+
+    /// The Forward button of a port: opens the start dialog on it, with the Service's TCP ports to
+    /// choose from (E15-S04).
+    pub fn forward(&mut self, port: u16, window: &mut Window, cx: &mut Context<Self>) {
+        let (Some(target), Some(summary), Some(detail)) =
+            (self.target.clone(), &self.summary, self.detail.upgrade())
+        else {
+            return;
+        };
+        let ports = summary
+            .ports
+            .iter()
+            .filter(|p| p.is_tcp())
+            .map(|p| PortChoice {
+                number: p.port,
+                name: p.name.as_deref().map(str::to_owned),
+                container: None,
+            })
+            .collect();
+        let request = ForwardRequest::new(target)
+            .with_port(ForwardPort::Number(port))
+            .with_ports(ports);
+        detail.update(cx, |detail, cx| detail.open_forward(request, window, cx));
     }
 
     /// "Show pods": sends `service::ShowPods`, which opens the Pods table filtered by the

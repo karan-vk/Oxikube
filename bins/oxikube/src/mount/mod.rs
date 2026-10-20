@@ -438,7 +438,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
                 columns: Arc::new(CoreColumns::new()),
                 state: ports.state.clone(),
                 dispatcher: dispatcher.clone(),
-                actions: Some(
+                actions: Some(port_forwards::with_start_dialog(
                     ResourceActions::with_registry(
                         &bus,
                         services.sessions.clone(),
@@ -451,7 +451,9 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
                         nodes,
                         local_user(),
                     )),
-                ),
+                    &state,
+                    &bus,
+                )),
             },
             tabs: tabs.downgrade(),
             fs: ports.clusters.fs.clone(),
@@ -734,7 +736,7 @@ fn open_views(
 }
 
 /// The local user's name, for the audit log's "who".
-fn local_user() -> String {
+pub(crate) fn local_user() -> String {
     ["USER", "USERNAME"]
         .iter()
         .find_map(|key| std::env::var(key).ok().filter(|v| !v.is_empty()))

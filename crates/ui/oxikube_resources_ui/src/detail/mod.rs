@@ -63,6 +63,7 @@ mod events_tab;
 mod exec;
 mod find;
 mod follow;
+mod forward;
 mod full;
 mod keys;
 mod kind_panel;

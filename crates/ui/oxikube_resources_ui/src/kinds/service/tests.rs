@@ -17,6 +17,7 @@ use crate::detail::DetailView;
 use crate::detail::tests::fixture::Detail;
 use crate::table::tests::fixture::cluster;
 
+mod forward;
 mod verbs;
 
 fn service_ref(name: &str) -> ResourceRef {

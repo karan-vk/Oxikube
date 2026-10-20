@@ -19,20 +19,36 @@ oxikube_app.workspace = true
 oxikube_domain.workspace = true
 oxikube_keymap.workspace = true
 oxikube_ports.workspace = true
-# `notify_coalesced`: the panel redraws at frame cadence however many changes arrive.
 oxikube_runtime.workspace = true
 oxikube_ui.workspace = true
 oxikube_workspace.workspace = true
 serde_json.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
 gpui = { workspace = true, features = ["test-support"] }
 gpui_platform = { workspace = true, features = ["test-support"] }
 oxikube_assets.workspace = true
-oxikube_testkit = { workspace = true, features = ["gpui-test"] }
+oxikube_testkit = { workspace = true, features = ["gpui-test", "gpui-screenshot"] }
 oxikube_workspace = { workspace = true, features = ["test-support"] }
 parking_lot.workspace = true
 tokio.workspace = true
+
+[features]
+default = []
+# Headless GPU screenshots of the start dialog, normal and with a failed start
+# (`tests/dialog_screenshot.rs`, harness = false so it runs on the process main thread). Needs
+# Metal / Vulkan, so never part of the default gate; the nightly workflow runs it:
+# `cargo test -p oxikube_portforward_ui --features screenshot --test dialog_screenshot`.
+screenshot = []
+
+[[test]]
+name = "dialog_screenshot"
+path = "tests/dialog_screenshot.rs"
+harness = false
+required-features = ["screenshot"]
 
 [lints]
 workspace = true

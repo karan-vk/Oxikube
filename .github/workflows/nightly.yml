@@ -107,6 +107,7 @@ jobs:
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_resources_ui --features screenshot --test screenshot --profile "$CARGO_PROFILE"
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_resources_ui --features screenshot --test states_screenshot --profile "$CARGO_PROFILE"
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_resources_ui --features screenshot --test overview_screenshot --profile "$CARGO_PROFILE"
+          ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_portforward_ui --features screenshot --test dialog_screenshot --profile "$CARGO_PROFILE"
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_terminal --features screenshot --test screenshot --profile "$CARGO_PROFILE"
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_terminal --features screenshot --test screenshot_programs --profile "$CARGO_PROFILE"
           exit $failed

@@ -27,6 +27,8 @@ use oxikube_domain::kinds::ResourceKind;
 const JUMP_TO_OWNER_ORDER: u16 = 40;
 /// Where "Show node" sits: right after "Jump to owner".
 const SHOW_NODE_ORDER: u16 = 50;
+/// Where "Port-Forward" sits: after the exec actions (110 to 130).
+const PORT_FORWARD_ORDER: u16 = 140;
 /// Where "Evict" sits: after the exec actions (110 to 130).
 const EVICT_ORDER: u16 = 200;
 /// Where "Delete" sits: with the other deletes, last but two.
@@ -59,6 +61,18 @@ pub fn row_actions() -> Vec<RowActionSpec> {
         .label("Show Node")
         .kinds(KindFilter::Matching(is_pod))
         .order(SHOW_NODE_ORDER),
+        // The table opens the start dialog, which sends `portforward::Start` when it is submitted;
+        // this builder serves a caller that has only a row (port `0` asks for a port).
+        RowActionSpec::new(CommandId::POD_PORT_FORWARD, |target| {
+            Command::PodPortForward {
+                target: target.clone(),
+                local_port: None,
+                remote_port: 0,
+            }
+        })
+        .label("Port-Forward…")
+        .kinds(KindFilter::Matching(is_pod))
+        .order(PORT_FORWARD_ORDER),
         RowActionSpec::new(CommandId::POD_EVICT, |target| Command::PodEvict {
             target: target.clone(),
         })

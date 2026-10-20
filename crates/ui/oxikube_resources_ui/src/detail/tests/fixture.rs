@@ -127,6 +127,14 @@ impl Detail {
         Self::over(Fixture::new(cx), objects)
     }
 
+    /// [`Self::new`] over the fixture with the port-forward start dialog (E15-S04).
+    pub(crate) fn with_forward(
+        cx: &mut TestAppContext,
+        objects: impl IntoIterator<Item = Resource>,
+    ) -> Self {
+        Self::over(Fixture::with_forward(cx), objects)
+    }
+
     /// [`Self::new`] with the app's events index over fakes (E14-S04): `feed` is what the
     /// cluster's events watch lists and then delivers. The rig holds the index.
     pub(crate) fn with_events(
@@ -198,6 +206,18 @@ impl Detail {
             .expect("the cluster has a tab");
         self.settle();
         view
+    }
+
+    /// The modal of type `V` open in the cluster tab, if any.
+    pub(crate) fn modal<V: oxikube_workspace::ModalView>(&mut self) -> Option<Entity<V>> {
+        let workspace = self.workspace();
+        self.f.vcx.update(|_, cx| {
+            workspace
+                .read(cx)
+                .modal_layer()
+                .read(cx)
+                .active_modal::<V>()
+        })
     }
 
     /// The drawer of the cluster tab.

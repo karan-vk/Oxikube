@@ -55,6 +55,7 @@ impl Render for ContainersPanel {
                     .px(u(tokens.spacing.lg))
                     .child(table),
             )
+            .children(self.forward_row(&tokens, cx))
             .into_any_element()
     }
 }

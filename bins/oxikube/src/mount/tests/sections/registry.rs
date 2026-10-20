@@ -19,7 +19,7 @@ use crate::app_state::AppState;
 /// Actions a kind's spec may declare without a row action: they live on a key or a button of the
 /// table or the panel instead of the row menu.
 const NOT_ON_ROWS: &[CommandId] = &[
-    // `shift-f` on a pod; the port-forward dialog.
+    // `shift-f` on a pod, which also has the row action; the port-forward dialog.
     CommandId::POD_PORT_FORWARD,
     // Per port, in the Service's panel.
     CommandId::SERVICE_OPEN_IN_BROWSER,

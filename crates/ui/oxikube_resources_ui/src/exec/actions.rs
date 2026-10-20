@@ -81,6 +81,7 @@ pub(crate) fn acts_on_cursor_row(command: CommandId) -> bool {
             | CommandId::SECRET_REVEAL
             | CommandId::SECRET_EDIT_DECODED
             | CommandId::POD_PORT_FORWARD
+            | CommandId::PORTFORWARD_START
             | CommandId::CRONJOB_TRIGGER
             | CommandId::CRONJOB_SUSPEND
             | CommandId::CRONJOB_RESUME
@@ -103,7 +104,8 @@ pub(crate) fn acts_on_cursor_row(command: CommandId) -> bool {
     )
 }
 
-/// What the port forwarding keys say while port forwarding is not installed.
+/// What the port forwarding keys say when there is nothing to forward to (no port-forward manager,
+/// or a kind that is neither a Pod nor a Service).
 pub(crate) const PORT_FORWARDING_UNAVAILABLE: &str = "Port forwarding is not available yet";
 
 /// The line that says which kinds a single-object command is for, or why it is not there, shown
@@ -158,7 +160,9 @@ pub(crate) fn availability_hint(command: CommandId) -> Option<&'static str> {
         }
         CommandId::SECRET_REVEAL => Some("Reveal is available for Secrets"),
         CommandId::SECRET_EDIT_DECODED => Some("Edit decoded is available for Secrets"),
-        CommandId::POD_PORT_FORWARD => Some(PORT_FORWARDING_UNAVAILABLE),
+        CommandId::POD_PORT_FORWARD | CommandId::PORTFORWARD_START => {
+            Some(PORT_FORWARDING_UNAVAILABLE)
+        }
         CommandId::SERVICE_SHOW_PODS => Some("Show Pods is available for Services"),
         CommandId::RESOURCE_SHOW_USED_BY => Some(
             "Used by is available for Service Accounts, ConfigMaps, Secrets, Persistent Volume \

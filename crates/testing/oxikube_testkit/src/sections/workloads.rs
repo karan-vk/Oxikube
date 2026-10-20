@@ -80,6 +80,7 @@ pub(super) const CASES: &[KindCase] = &[
             CommandId::POD_SHELL,
             CommandId::POD_ATTACH,
             CommandId::POD_DEBUG,
+            CommandId::POD_PORT_FORWARD,
             CommandId::POD_EVICT,
             CommandId::POD_DELETE,
             CommandId::POD_FORCE_DELETE,

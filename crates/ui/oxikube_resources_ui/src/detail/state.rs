@@ -41,6 +41,9 @@ pub struct DetailDeps {
     /// Opens the drain dialog from a node's panel (E12-S10). `None`: the panel has no Drain
     /// button.
     pub drain: Option<crate::kinds::node::drain::DrainOpener>,
+    /// Opens the port-forward start dialog from a Pod's container ports and a Service's ports
+    /// (E15-S04). `None`: the panels have no Forward buttons.
+    pub forward: Option<oxikube_portforward_ui::StartFlow>,
 }
 
 impl From<&ResourceTableDeps> for DetailDeps {
@@ -55,6 +58,7 @@ impl From<&ResourceTableDeps> for DetailDeps {
             set_image: None,
             rollback: None,
             drain: None,
+            forward: None,
         }
     }
 }

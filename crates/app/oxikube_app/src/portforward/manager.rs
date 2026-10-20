@@ -160,8 +160,8 @@ impl PortForwardManager {
 
     /// [`start`](Self::start), then waits until the forward has left `Starting`: `Active` (or
     /// already reconnecting: no ready pod yet) is `Ok`, `Failed` is the start's error, with its
-    /// suggestion. The forward stays listed either way. Gives up waiting (with the forward still
-    /// `Starting`, as `Ok`) after [`START_WAIT`] of the manager's clock, so a command or a tool
+    /// suggestion; a failed start is removed again, so a retry does not leave a dead duplicate. Gives up waiting (with the forward still
+    /// `Starting`, as `Ok`, still listed) after [`START_WAIT`] of the manager's clock, so a command or a tool
     /// never hangs on a feed that does not list.
     ///
     /// # Errors
@@ -175,10 +175,12 @@ impl PortForwardManager {
             match &info.state {
                 ForwardState::Starting => {}
                 ForwardState::Failed(failure) => {
-                    return Err(match &failure.error {
+                    let err = match &failure.error {
                         Some(err) => StartError::Forward(err.clone()),
                         None => StartError::Failed(failure.message.clone()),
-                    });
+                    };
+                    self.remove(id);
+                    return Err(err);
                 }
                 _ => return Ok(info),
             }
