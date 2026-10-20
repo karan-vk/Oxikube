@@ -52,6 +52,9 @@ pub struct StartDialog {
     pub(super) applied: Option<usize>,
     /// Whether the caller named the port: a preselected suggestion then leaves the fields alone.
     explicit_port: bool,
+    /// The remote and local texts the dialog itself last put in the fields: when the fields still
+    /// hold them, the user has not edited anything, and a late preselect may replace them.
+    seeded: (String, String),
     pub(super) workspace: WeakEntity<Workspace>,
     pub(super) focus: FocusHandle,
     /// The read of the target's ports; dropped (and so aborted) with the dialog.
@@ -102,6 +105,7 @@ impl StartDialog {
             (None, None) => String::new(),
         };
         let default_name = form.default_name(&remote_text);
+        let seeded = (remote_text.clone(), String::new());
         let remote = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder("Port on the target, e.g. 8080")
@@ -128,6 +132,7 @@ impl StartDialog {
             suggestions: Vec::new(),
             applied: None,
             explicit_port,
+            seeded,
             workspace,
             focus: cx.focus_handle(),
             load: None,
@@ -172,7 +177,11 @@ impl StartDialog {
             };
             this.update_in(cx, |this, window, cx| match read {
                 Some(resource) => this.set_object(&resource, window, cx),
-                None => this.set_ports(Vec::new(), window, cx),
+                None => {
+                    // A failed read keeps the ports the dialog was opened with.
+                    let kept = this.form.ports.clone();
+                    this.set_ports(kept, window, cx);
+                }
             })
             .ok();
         }));
@@ -204,8 +213,11 @@ impl StartDialog {
             .suggestions
             .iter()
             .position(|s| s.forward.auto && s.conflict.is_none());
+        let untouched = self.remote.read(cx).value().trim() == self.seeded.0
+            && self.local.read(cx).value().trim() == self.seeded.1;
         if let Some(index) = preselect
             && !self.explicit_port
+            && untouched
         {
             self.use_suggestion(index, window, cx);
         }
@@ -247,6 +259,7 @@ impl StartDialog {
             && self.remote.read(cx).value().trim().is_empty()
         {
             let text = first.number.to_string();
+            self.seeded.0.clone_from(&text);
             self.remote
                 .update(cx, |input, cx| input.set_value(text, window, cx));
         }
@@ -309,6 +322,7 @@ impl StartDialog {
         ] {
             input.update(cx, |input, cx| input.set_value(text.to_owned(), window, cx));
         }
+        self.seeded = (remote.to_owned(), local.to_owned());
         self.local_auto = local.is_empty();
         cx.notify();
     }
@@ -316,6 +330,7 @@ impl StartDialog {
     /// Chooses `port` as the remote port.
     pub fn choose_port(&mut self, port: &PortChoice, window: &mut Window, cx: &mut Context<Self>) {
         let text = port.number.to_string();
+        self.seeded.0.clone_from(&text);
         self.remote
             .update(cx, |input, cx| input.set_value(text, window, cx));
     }
@@ -324,6 +339,7 @@ impl StartDialog {
     pub fn set_auto(&mut self, auto: bool, window: &mut Window, cx: &mut Context<Self>) {
         self.local_auto = auto;
         if auto {
+            self.seeded.1.clear();
             self.local
                 .update(cx, |input, cx| input.set_value("", window, cx));
         }
