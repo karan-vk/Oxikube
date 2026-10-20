@@ -44,9 +44,13 @@ fn build(uid: u8, ns: u8, object: u8, secs: i64, warn: bool, count: u32) -> Even
         ev(&uid, &ns, &object, secs)
     };
     e.count = count;
-    // Two of the objects: the writer left the object's uid out (E14 #704), so they are found
-    // by their name alone.
-    if matches!(object.as_str(), "o0" | "o3") {
+    // Every other event: the writer left the object's uid out (E14 #704), so the object has
+    // events in both indexes.
+    if uid
+        .as_bytes()
+        .last()
+        .is_some_and(|last| (last - b'0') % 2 == 1)
+    {
         e.regarding_uid = None;
     }
     e

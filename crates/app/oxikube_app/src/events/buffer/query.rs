@@ -127,23 +127,24 @@ impl EventBuffer {
         let index = |set: Option<&'a btree_set::BTreeSet<Order>>| {
             set.map_or(Source::Empty, |set| Source::Index(set.range(from..).rev()))
         };
-        let source = if let Some(uid) = filter.object_uid() {
-            let by_uid = self.index.by_object.get(uid).map(|o| &o.orders);
+        let source = if filter.has_object() {
+            // The events about one object: the ones that carry its uid, and the ones whose
+            // writer gave no uid and named it. The two indexes never share an event.
+            let by_uid = filter
+                .object_uid()
+                .and_then(|uid| self.index.by_object.get(uid));
             let by_name = filter
                 .object_identity()
-                .and_then(|identity| self.index.by_named.get(identity))
-                .map(|o| &o.orders);
+                .and_then(|identity| self.index.by_named.get(identity));
             match (by_uid, by_name) {
                 (Some(by_uid), Some(by_name)) => Source::Union(Union::new(
-                    by_uid.range(from..).rev(),
-                    by_name.range(from..).rev(),
+                    by_uid.orders.range(from..).rev(),
+                    by_name.orders.range(from..).rev(),
                 )),
-                (Some(by_uid), None) => Source::Index(by_uid.range(from..).rev()),
-                (None, Some(by_name)) => Source::Index(by_name.range(from..).rev()),
+                (Some(by_uid), None) => Source::Index(by_uid.orders.range(from..).rev()),
+                (None, Some(by_name)) => Source::Index(by_name.orders.range(from..).rev()),
                 (None, None) => Source::Empty,
             }
-        } else if let Some(identity) = filter.object_identity() {
-            index(self.index.by_named.get(identity).map(|o| &o.orders))
         } else if filter.is_warnings_only() {
             index(Some(&self.index.warnings))
         } else if let Some(namespace) = filter.single_namespace() {

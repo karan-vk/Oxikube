@@ -138,6 +138,11 @@ impl EventFilter {
         self.object.as_ref().and_then(ObjectTarget::uid_value)
     }
 
+    /// Whether the filter is limited to one object, even one it knows nothing about.
+    pub fn has_object(&self) -> bool {
+        self.object.is_some()
+    }
+
     /// The name of the object this filter is limited to, when it knows one: the events that
     /// gave no uid are matched on it.
     pub fn object_identity(&self) -> Option<&ObjectIdentity> {

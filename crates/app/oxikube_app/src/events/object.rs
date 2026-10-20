@@ -14,11 +14,13 @@
 //! object deleted and re-created under the same name is a different object, and the old
 //! object's events stay with it. So an event is about a target when
 //!
-//! - it names the target's uid, or
+//! - it carries the target's uid, or
 //! - it gives no uid at all and names the target (kind, namespace and name).
 //!
-//! An event with a uid and a target without one are matched by name: the target's uid is
-//! unknown, so the name is all there is.
+//! The second rule is the fallback for the events whose writer left the uid out: they name
+//! their object, and the name is what the index keeps them under. An event that carries a uid
+//! is never about a target that has none: the uid says which object it is about, and a target
+//! without a uid cannot be that one.
 
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
@@ -120,8 +122,8 @@ impl ObjectIdentity {
 /// The object a query is about: its uid when it has one, and the name the events that gave no
 /// uid are matched on.
 ///
-/// A target with no uid matches the events that gave no uid and name it; a target with a uid
-/// matches those and the events that carry its uid.
+/// A target with a uid matches the events that carry it and the events that gave no uid and
+/// name it; a target with only a name matches the events that gave no uid and named it.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ObjectTarget {
     uid: Option<Arc<str>>,
@@ -162,10 +164,14 @@ impl ObjectTarget {
 
     /// Whether `event` is about this object: it carries the target's uid, or it gives no uid
     /// and names the target.
+    ///
+    /// An event that carries a uid is about the object only when the uid is the object's own:
+    /// an event about another object stays with that object, even when it names this one (an
+    /// object deleted and re-created under the same name is a different object).
     pub fn matches(&self, event: &Event) -> bool {
-        match (event.regarding_uid.as_deref(), self.uid.as_deref()) {
-            (Some(event_uid), Some(uid)) => event_uid == uid,
-            _ => self
+        match event.regarding_uid.as_deref() {
+            Some(event_uid) => self.uid.as_deref() == Some(event_uid),
+            None => self
                 .identity
                 .as_ref()
                 .is_some_and(|identity| identity.matches(event)),

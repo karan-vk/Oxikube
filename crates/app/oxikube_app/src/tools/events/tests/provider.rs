@@ -80,6 +80,28 @@ async fn a_kind_word_and_a_cluster_scoped_object_resolve_too() {
 }
 
 #[tokio::test]
+async fn a_cluster_scoped_objects_events_are_found_under_its_name() {
+    // The kubelet records a Node's events with the node's name as the uid, not its own.
+    let mut kubelet = ev("n1", "Node", "default", "worker-1", "worker-1", 5);
+    kubelet.regarding.namespace = None;
+    kubelet.reason = "NodeNotReady".into();
+    let h = Harness::with_events([kubelet]).await;
+    h.objects().insert(
+        Resource::from_json(serde_json::json!({
+            "apiVersion": "v1", "kind": "Node",
+            "metadata": {"name": "worker-1", "uid": "real-node-uid"},
+        }))
+        .expect("a node"),
+    );
+    let blocks = resolve(&h, "@events/node/worker-1", &scope()).await;
+    assert!(
+        blocks[0].body.contains("NodeNotReady"),
+        "the kubelet's events are quoted: {}",
+        blocks[0].body
+    );
+}
+
+#[tokio::test]
 async fn an_object_that_does_not_exist_is_a_clear_error_block() {
     let h = Harness::with_events(web_events()).await;
     let blocks = resolve(&h, "@events/pod/shop/ghost", &scope()).await;

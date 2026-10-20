@@ -29,16 +29,33 @@ impl DetailView {
     }
 
     /// A version of the object arrived: a tab shown before the object was known can follow its
-    /// events now, and a tab following an object that was deleted and recreated under the same
-    /// name (a new uid) follows the new one.
+    /// events now, a tab following an object that was deleted and recreated under the same
+    /// name (a new uid) follows the new one, and a renamed one follows its new name (the
+    /// events whose writer gave no uid are found by the name).
     pub(super) fn object_known_for_events(&mut self, cx: &mut Context<Self>) {
         if !self.events.started {
             return;
         }
-        let uid = self.object.as_ref().and_then(|o| o.meta().uid.clone());
-        if self.events.feed.is_none() || self.events.uid != uid {
+        let target = self.events_target();
+        if self.events.feed.is_none() || self.events.target != target {
             self.subscribe_events(cx);
         }
+    }
+
+    /// The object the Events tab follows: its uid, its name (the events whose writer gave no
+    /// uid are found by it) and, for a cluster-scoped object, the name its events are recorded
+    /// under.
+    fn events_target(&self) -> Option<ObjectTarget> {
+        let object = self.object.as_ref()?;
+        let meta = object.meta();
+        Some(ObjectTarget::named(
+            meta.uid.clone(),
+            ObjectIdentity::shared(
+                self.target.gvk.kind.clone(),
+                meta.namespace.clone(),
+                meta.name.clone(),
+            ),
+        ))
     }
 
     fn subscribe_events(&mut self, cx: &mut Context<Self>) {
@@ -48,24 +65,15 @@ impl DetailView {
             return;
         };
         // Without the object there is no uid to follow: the skeleton shows until it arrives.
-        let Some(object) = self.object.as_ref() else {
+        let Some(target) = self.events_target() else {
             return;
         };
-        let meta = object.meta();
+        let meta = self.object.as_ref().expect("the object").meta();
         // A Node's events are recorded under its name as well as its uid.
         let cluster_scoped_name = self.target.namespace().is_none().then_some(&*meta.name);
-        // The events whose writer gave no uid are found by the object's name.
-        let target = ObjectTarget::named(
-            meta.uid.clone(),
-            ObjectIdentity::shared(
-                self.target.gvk.kind.clone(),
-                meta.namespace.clone(),
-                meta.name.clone(),
-            ),
-        );
         let feed = events.object_feed(&self.target.cluster, &target, cluster_scoped_name);
         self.events.feed = Some(feed);
-        self.events.uid = meta.uid.clone();
+        self.events.target = Some(target);
         self.events.error = None;
         self.refresh_events(cx);
         self.events.task = Some(Self::poll(Feed::Events, cx));

@@ -5,7 +5,9 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::Task;
-use oxikube_app::{ClusterSessionManager, CoreColumns, ObjectEventsFeed, ResourceStores};
+use oxikube_app::{
+    ClusterSessionManager, CoreColumns, ObjectEventsFeed, ObjectTarget, ResourceStores,
+};
 use oxikube_domain::Resource;
 use oxikube_workspace::CommandDispatcher;
 
@@ -127,8 +129,9 @@ pub(super) struct EventsTab {
     /// The object's events in the app's index; `None` until the tab was shown and the object
     /// is known.
     pub(super) feed: Option<ObjectEventsFeed>,
-    /// The uid `feed` follows: an object recreated under the same name has a new one.
-    pub(super) uid: Option<std::sync::Arc<str>>,
+    /// The object `feed` follows: an object recreated under the same name has a new uid, and a
+    /// renamed one a new name (the events whose writer gave no uid are found by the name).
+    pub(super) target: Option<ObjectTarget>,
     pub(super) rows: Vec<EventRow>,
     pub(super) ready: bool,
     pub(super) error: Option<String>,
