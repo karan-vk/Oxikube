@@ -20,7 +20,9 @@ use k8s_openapi::api::core::v1::Pod;
 use kube::Api;
 use kube::api::PostParams;
 use oxikube_app::events::DEFAULT_EVENTS_BUFFER;
-use oxikube_app::events::{EventFilter, EventService, EventsConfig, EventsState};
+use oxikube_app::events::{
+    EventFilter, EventService, EventsConfig, EventsState, ObjectIdentity, ObjectTarget,
+};
 use oxikube_app::session::{ClusterSessionManager, SessionManagerConfig, SessionOptions};
 use oxikube_app::store::Spawner;
 use oxikube_app::{DEFAULT_WARNING_WINDOW, RecentWarnings, WarningBadges};
@@ -140,14 +142,14 @@ async fn one_feed_fills_the_buffer_and_its_indexes_from_the_cluster() {
     })
     .await;
     let (events, warning_count) = service
-        .read(&cluster, |buffer| buffer.object_counts(&stuck_uid))
+        .read(&cluster, |buffer| buffer.object_counts(&stuck_uid, None))
         .expect("a buffer");
     assert!(
         events >= 1 && warning_count >= 1,
         "{events} events, {warning_count} warnings"
     );
     assert_eq!(
-        service.read(&cluster, |b| b.object_counts(&running_uid).1),
+        service.read(&cluster, |b| b.object_counts(&running_uid, None).1),
         Some(0),
         "the running pod has no warnings"
     );
@@ -234,7 +236,14 @@ async fn a_stuck_pod_has_a_warning_badge_and_its_events_from_the_index() {
     );
     let track = badges.track(&cluster);
     let for_cluster = badges.for_cluster(&cluster);
-    let feed = badges.object_feed(&cluster, Some(stuck_uid.as_str()), None);
+    let feed = badges.object_feed(
+        &cluster,
+        &ObjectTarget::named(
+            Some(Arc::from(stuck_uid.as_str())),
+            ObjectIdentity::new("Pod", Some(ns.name()), "bd-stuck"),
+        ),
+        None,
+    );
     let diagnostics = || {
         format!(
             "state {:?}, status {:?}, badged objects {}",
