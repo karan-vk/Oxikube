@@ -3,8 +3,8 @@
 
 use std::net::{IpAddr, SocketAddr};
 
-use oxikube_domain::{ErrorKind, OxiError};
 use oxikube_domain::portforward::{ForwardSpec, PortRange};
+use oxikube_domain::{ErrorKind, OxiError};
 use oxikube_ports::{ForwardStatsSnapshot, PortForwardError};
 
 use super::state::{Backoff, ForwardState};

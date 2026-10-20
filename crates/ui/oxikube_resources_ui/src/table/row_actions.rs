@@ -231,7 +231,7 @@ impl ResourceTable {
                 flow.begin(ForwardRequest::new(target), window, cx);
             }
             None => self.toast(
-                Toast::info(crate::exec::PORT_FORWARDING_UNAVAILABLE)
+                Toast::info(crate::exec::actions::PORT_FORWARDING_UNAVAILABLE)
                     .key("action-unavailable:port-forwards"),
                 cx,
             ),

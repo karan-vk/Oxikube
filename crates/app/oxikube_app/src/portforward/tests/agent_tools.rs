@@ -383,6 +383,8 @@ async fn a_config_change_reaches_new_forwards_and_leaves_running_ones_alone() {
             remote_port: ForwardPort::Number(8080),
             local_port: None,
             bind: None,
+            name: None,
+            favourite: false,
         },
     )
     .await

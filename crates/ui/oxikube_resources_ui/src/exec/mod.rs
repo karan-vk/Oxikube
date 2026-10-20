@@ -29,7 +29,7 @@
 //!
 //! [`oxikube_terminal`'s `TerminalViews`]: https://github.com/karan-vk/Oxikube/blob/main/docs/ARCHITECTURE.md
 
-mod actions;
+pub(crate) mod actions;
 mod debug;
 mod flow;
 mod picker;
