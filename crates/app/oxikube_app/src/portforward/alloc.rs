@@ -30,15 +30,12 @@ pub(super) async fn start_in_range(
             .start(pod.clone(), remote_port, bind, Some(candidate))
             .await
         {
-            Err(PortForwardError::BindFailed {
-                kind: std::io::ErrorKind::AddrInUse,
-                addr,
-            }) => {
-                last = Some(PortForwardError::BindFailed {
+            Err(
+                err @ PortForwardError::BindFailed {
                     kind: std::io::ErrorKind::AddrInUse,
-                    addr,
-                });
-            }
+                    ..
+                },
+            ) => last = Some(err),
             other => return other,
         }
     }

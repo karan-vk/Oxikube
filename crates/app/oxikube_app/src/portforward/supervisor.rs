@@ -239,7 +239,7 @@ impl Supervisor {
             (None, Some(range)) => {
                 let offset = (self.id.0 as u32)
                     .wrapping_mul(7919)
-                    .wrapping_add(self.nanos(clock));
+                    .wrapping_add(clock.now().subsec_nanosecond().unsigned_abs());
                 start_in_range(
                     &*self.port,
                     &pod,
@@ -266,11 +266,6 @@ impl Supervisor {
             local_addr,
         });
         Ok(handle)
-    }
-
-    /// The clock's sub-second part: a cheap per-start offset into the port range.
-    fn nanos(&self, clock: &dyn ClockPort) -> u32 {
-        clock.now().subsec_nanosecond().unsigned_abs()
     }
 
     /// Feeds `event`; returns the delay of the next attempt when the forward is reconnecting.
