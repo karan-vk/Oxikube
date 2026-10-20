@@ -1,6 +1,6 @@
 //! The `portforward` setting (E15-S08): where a port-forward listens by default, whether it may
 //! start on a read-only cluster, which local ports automatic allocation uses, and whether the
-//! app annotates the objects it forwards.
+//! start dialog reads k9s port-forward annotations on pods as suggestions.
 //!
 //! ```json
 //! "portforward": {
@@ -19,7 +19,9 @@
 //! * `port_range` is `[first, last]`, inclusive, unprivileged (`first >= 1024`, `first <= last`):
 //!   a forward that asks for a free port gets one from it. Unset keeps the OS-assigned default; a
 //!   range that breaks the rules is ignored with a warning.
-//! * `annotations` (default `false`) opts in to annotating forwarded objects.
+//! * `annotations` (default `false`) opts in to reading the k9s `k9scli.io/port-forwards` and
+//!   `k9scli.io/auto-port-forwards` pod annotations as start-dialog suggestions. It only reads:
+//!   nothing is ever written to the cluster.
 //!
 //! Objects merge across layers, so `clusters.<id>.portforward` overrides single keys for one
 //! cluster. [`PortForwardSettings::table`] hands the binary the resolved values of every cluster;
@@ -55,7 +57,8 @@ pub struct PortForwardSettingsContent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(length(min = 2, max = 2))]
     pub port_range: Option<[u16; 2]>,
-    /// Annotate forwarded objects (opt-in). Default `false`.
+    /// Read the k9s `k9scli.io/port-forwards` / `auto-port-forwards` pod annotations as
+    /// start-dialog suggestions (opt-in; read only, nothing is written). Default `false`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub annotations: Option<bool>,
 }
@@ -69,7 +72,7 @@ pub struct PortForwardSettings {
     pub allowed_in_readonly: bool,
     /// The ports automatic allocation uses; `None` lets the OS pick.
     pub port_range: Option<PortRange>,
-    /// Whether forwarded objects are annotated.
+    /// Whether k9s port-forward pod annotations are read as start-dialog suggestions.
     pub annotations: bool,
 }
 

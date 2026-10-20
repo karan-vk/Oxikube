@@ -152,3 +152,41 @@ async fn annotation_suggestions_follow_the_setting_and_see_the_listed_forwards()
         "{found:?}"
     );
 }
+
+#[tokio::test]
+async fn a_favourite_start_without_favourites_wired_still_forwards_and_says_why() {
+    let rig = Rig::new();
+    rig.backend.push("Pod", vec![pod("api-0", "Running")]);
+    let started = starter(&rig)
+        .start(pod_spec("api-0", 80).with_favourite(true))
+        .await
+        .expect("the forward runs regardless");
+    assert!(started.local_addr.is_some());
+    let why = started
+        .favourite_error
+        .expect("the save failure is reported");
+    assert!(why.contains("favourites"), "{why}");
+}
+
+/// Audit E15 (#18): the dialog prefilled 127.0.0.1 whatever `portforward.default_bind` said.
+#[tokio::test]
+async fn the_default_bind_follows_the_setting_and_its_cluster_override() {
+    let rig = Rig::new();
+    let starter = starter(&rig);
+    let cluster = target("Pod", "api-0").cluster;
+    assert_eq!(starter.default_bind(&cluster).to_string(), "127.0.0.1");
+    rig.manager.set_config(crate::portforward::ForwardConfig {
+        default_bind: "0.0.0.0".parse().unwrap(),
+        ..Default::default()
+    });
+    assert_eq!(starter.default_bind(&cluster).to_string(), "0.0.0.0");
+    rig.manager
+        .set_cluster_configs(std::collections::HashMap::from([(
+            cluster.clone(),
+            crate::portforward::ForwardConfig {
+                default_bind: "::1".parse().unwrap(),
+                ..Default::default()
+            },
+        )]));
+    assert_eq!(starter.default_bind(&cluster).to_string(), "::1");
+}

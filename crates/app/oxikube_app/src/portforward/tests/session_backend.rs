@@ -67,3 +67,68 @@ async fn the_session_backend_reads_ports_flags_and_watches() {
             .is_none()
     );
 }
+
+fn delta(
+    rows: crate::store::RowChange,
+    state: crate::store::FeedState,
+) -> crate::store::StoreDelta {
+    crate::store::StoreDelta {
+        rows,
+        state,
+        columns: None,
+        len: 0,
+        total: 0,
+    }
+}
+
+/// Audit E15 (#18): a name-filtered subscription wakes with `Unchanged` rows whenever any object
+/// in the namespace is added or deleted; each such wake re-resolved the forward.
+#[test]
+fn namespace_churn_that_leaves_the_target_alone_is_not_a_new_snapshot() {
+    use crate::portforward::backend::watch_item;
+    use crate::store::{FeedState, RowChange};
+    let (mut rows, mut emitted) = (Vec::new(), false);
+    let first = watch_item(
+        &delta(RowChange::Unchanged, FeedState::Ready),
+        &mut rows,
+        &mut emitted,
+    );
+    assert!(
+        matches!(first, Some(Ok(_))),
+        "the first ready item always goes out"
+    );
+    for _ in 0..100 {
+        let churn = watch_item(
+            &delta(RowChange::Unchanged, FeedState::Ready),
+            &mut rows,
+            &mut emitted,
+        );
+        assert!(churn.is_none(), "a count-only wake is skipped");
+    }
+    let changed = watch_item(
+        &delta(RowChange::Ops(Vec::new()), FeedState::Ready),
+        &mut rows,
+        &mut emitted,
+    );
+    assert!(matches!(changed, Some(Ok(_))), "a row change goes out");
+    let warming = watch_item(
+        &delta(RowChange::Ops(Vec::new()), FeedState::Warming),
+        &mut rows,
+        &mut emitted,
+    );
+    assert!(warming.is_none());
+    let gone = watch_item(
+        &delta(
+            RowChange::Unchanged,
+            FeedState::Forbidden {
+                message: "no".into(),
+            },
+        ),
+        &mut rows,
+        &mut emitted,
+    );
+    assert!(
+        matches!(gone, Some(Err(_))),
+        "a terminal state always goes out"
+    );
+}

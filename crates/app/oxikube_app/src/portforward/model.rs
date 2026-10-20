@@ -79,7 +79,8 @@ pub struct ForwardConfig {
     /// The local ports a forward that asks for a free one picks from (`portforward.port_range`);
     /// `None` lets the OS pick.
     pub port_range: Option<PortRange>,
-    /// Whether forwarded objects are annotated (`portforward.annotations`, default `false`).
+    /// Whether the k9s port-forward pod annotations are read as start-dialog suggestions
+    /// (`portforward.annotations`, default `false`; read only, nothing is written).
     pub annotations: bool,
     /// The delays between reconnect attempts.
     pub backoff: Backoff,

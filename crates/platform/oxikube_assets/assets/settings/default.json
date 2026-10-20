@@ -81,7 +81,9 @@
   //                 cluster, but the default is strict).
   //   port_range    `[first, last]`: the unprivileged local ports a forward that asks for a free
   //                 port picks from, for example [20000, 40000]. Not set: the OS picks.
-  //   annotations   annotate the objects you forward (opt-in).
+  //   annotations   read the k9s `k9scli.io/port-forwards` / `auto-port-forwards` pod
+  //                 annotations as start-dialog suggestions (opt-in; read only, Oxikube never
+  //                 writes annotations).
   "portforward": {
     "default_bind": "127.0.0.1",
     "allowed_in_readonly": false,

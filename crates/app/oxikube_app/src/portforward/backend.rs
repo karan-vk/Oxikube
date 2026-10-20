@@ -11,7 +11,7 @@ use oxikube_domain::ids::ClusterId;
 use oxikube_ports::PortForwardPort;
 
 use crate::session::ClusterSessionManager;
-use crate::store::{FeedState, ResourceStores, StoreObject, StoreQuery};
+use crate::store::{FeedState, ResourceStores, RowChange, StoreDelta, StoreObject, StoreQuery};
 
 /// The objects matching a query, whole, each time they change: `Err` when the feed stopped for
 /// good (forbidden, unknown kind). The first item comes once the feed has listed.
@@ -58,25 +58,39 @@ impl ForwardBackend for SessionBackend {
         let session = self.sessions.get(cluster)?;
         let subscription = self.stores.for_session(&session)?.subscribe(query);
         let mut rows: Vec<Arc<StoreObject>> = Vec::new();
+        let mut emitted = false;
         Some(
             subscription
                 .filter_map(move |delta| {
-                    delta.apply_to(&mut rows);
-                    let item = if delta.state.is_terminal() {
-                        Some(Err(feed_failure(&delta.state)))
-                    } else if delta.state.is_ready() {
-                        Some(Ok(rows
-                            .iter()
-                            .filter_map(|o| o.resource().cloned())
-                            .collect()))
-                    } else {
-                        None
-                    };
-                    futures::future::ready(item)
+                    futures::future::ready(watch_item(&delta, &mut rows, &mut emitted))
                 })
                 .boxed(),
         )
     }
+}
+
+/// What one store delta means to a forward's watch: `None` when it has nothing new.
+///
+/// A name-filtered subscription also wakes when the namespace's object count moves (any pod
+/// added or deleted there) with its rows `Unchanged`; once a snapshot went out, such a wake is
+/// skipped, so a forward re-resolves on changes to its target only, not on namespace churn.
+pub(super) fn watch_item(
+    delta: &StoreDelta,
+    rows: &mut Vec<Arc<StoreObject>>,
+    emitted: &mut bool,
+) -> Option<Result<Vec<Resource>, String>> {
+    delta.apply_to(rows);
+    if delta.state.is_terminal() {
+        return Some(Err(feed_failure(&delta.state)));
+    }
+    if !delta.state.is_ready() || (*emitted && matches!(delta.rows, RowChange::Unchanged)) {
+        return None;
+    }
+    *emitted = true;
+    Some(Ok(rows
+        .iter()
+        .filter_map(|o| o.resource().cloned())
+        .collect()))
 }
 
 /// One line on why a feed stopped.

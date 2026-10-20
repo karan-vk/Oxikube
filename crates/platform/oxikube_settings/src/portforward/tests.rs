@@ -96,3 +96,16 @@ fn the_schema_describes_the_keys() {
         assert!(schema.contains(key), "{key} missing from {schema}");
     }
 }
+
+/// Audit E15 (#18): `annotations` was documented as annotating forwarded objects (a cluster
+/// write), while it only turns on reading k9s pod annotations as dialog suggestions.
+#[test]
+fn the_annotations_key_is_described_as_reading_k9s_suggestions_not_writing() {
+    let schema = store("{}").json_schema();
+    let text = serde_json::to_string(&schema).unwrap();
+    assert!(text.contains("k9scli.io/port-forwards"), "{text}");
+    assert!(!text.contains("Annotate forwarded objects"), "{text}");
+    let defaults = include_str!("../../../oxikube_assets/assets/settings/default.json");
+    assert!(!defaults.contains("annotate the objects you forward"));
+    assert!(defaults.contains("k9scli.io/port-forwards"));
+}

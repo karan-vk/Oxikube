@@ -27,7 +27,10 @@ impl StartDialog {
         cx.notify();
         let (starter, workspace) = (self.starter.clone(), self.workspace.clone());
         let label = spec.name.clone().unwrap_or_else(|| spec.default_name());
-        let (bind, auto) = (input.bind.clone(), input.local_auto);
+        // Remember the bind only when it is not the setting's, so the setting keeps applying.
+        let default_bind = starter.default_bind(&spec.target.cluster).to_string();
+        let bind = (input.bind.trim() != default_bind).then(|| input.bind.trim().to_owned());
+        let auto = input.local_auto;
         // Detached: the start must finish even if the dialog goes away meanwhile (the forward is
         // listed either way); the task ends itself and clears nothing.
         cx.spawn(async move |this, cx| {
@@ -79,11 +82,18 @@ impl StartDialog {
 /// The toast after a start: the URL, and "Open in browser" (the system browser, never an embedded
 /// web view).
 pub(super) fn success_toast(label: &str, started: &StartedForward) -> Toast {
+    let unsaved = started
+        .favourite_error
+        .as_ref()
+        .map(|e| format!(" (not saved as a favourite: {e})"))
+        .unwrap_or_default();
     let Some(url) = started.url() else {
-        return Toast::success(format!("Forwarding {label}: waiting for a ready pod"));
+        return Toast::success(format!(
+            "Forwarding {label}: waiting for a ready pod{unsaved}"
+        ));
     };
     let open = url.clone();
-    Toast::success(format!("Forwarding {label} on {url}")).action(ToastAction::new(
+    Toast::success(format!("Forwarding {label} on {url}{unsaved}")).action(ToastAction::new(
         "Open in browser",
         move |_, cx| {
             cx.open_url(&open);

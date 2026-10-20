@@ -39,6 +39,7 @@ pub mod resolve;
 mod starter;
 pub mod state;
 mod supervisor;
+mod target_watch;
 mod url;
 
 #[cfg(test)]

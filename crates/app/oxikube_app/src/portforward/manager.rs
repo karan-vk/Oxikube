@@ -15,7 +15,7 @@ use tokio::sync::watch;
 
 use super::backend::ForwardBackend;
 use super::model::{ForwardConfig, ForwardId, ForwardInfo, StartError};
-use super::registry::{Entry, Inner};
+use super::registry::{Entry, FavouriteSaver, Inner};
 use super::state::{ForwardEvent, ForwardState};
 use super::supervisor::Supervisor;
 use crate::store::{Spawner, spawn_guarded};
@@ -78,7 +78,28 @@ impl PortForwardManager {
                 entries: Mutex::new(BTreeMap::new()),
                 next_id: AtomicU64::new(1),
                 changes: watch::channel(0).0,
+                favourite_saver: Mutex::new(None),
             }),
+        }
+    }
+
+    /// Installs how a forward started with `favourite` is saved (the favourites do this).
+    pub(super) fn set_favourite_saver(&self, saver: FavouriteSaver) {
+        *self.inner.favourite_saver.lock() = Some(saver);
+    }
+
+    /// Saves `spec` as an auto-start favourite through the installed saver.
+    ///
+    /// # Errors
+    ///
+    /// An unsupported error when no favourites are wired, else the saver's own errors.
+    pub(super) async fn save_favourite(&self, spec: ForwardSpec) -> oxikube_domain::OxiResult<()> {
+        let saver = self.inner.favourite_saver.lock().clone();
+        match saver {
+            Some(save) => save(spec).await,
+            None => Err(oxikube_domain::OxiError::unsupported(
+                "port-forward favourites are not available",
+            )),
         }
     }
 
@@ -148,6 +169,7 @@ impl PortForwardManager {
             carried: ForwardStatsSnapshot::default(),
             generation: 0,
             task: None,
+            stop: None,
             started_at: self.inner.clock.now(),
         };
         self.inner.entries.lock().insert(id, entry);
@@ -195,14 +217,40 @@ impl PortForwardManager {
         }
     }
 
-    /// Stops forward `id` (the listener closes); it stays listed as `Stopped`. Returns whether
-    /// there was one.
+    /// Stops forward `id`; it stays listed as `Stopped`. Returns whether there was one.
+    ///
+    /// The stop is graceful: the listener stops accepting at once, connections in flight get the
+    /// adapter's grace period to finish (a download or a transaction ends cleanly instead of
+    /// being reset), and whatever is left after [`STOP_GRACE`](super::supervisor::STOP_GRACE)
+    /// is aborted.
     pub fn stop(&self, id: ForwardId) -> bool {
-        self.inner
+        self.halt(id, true)
+    }
+
+    /// Stops `id`'s supervisor: `graceful` signals it and gives it [`STOP_GRACE`] to drain before
+    /// aborting it; otherwise it is aborted at once (a restart, which rebinds the same port).
+    ///
+    /// [`STOP_GRACE`]: super::supervisor::STOP_GRACE
+    fn halt(&self, id: ForwardId, graceful: bool) -> bool {
+        let mut running = None;
+        let found = self
+            .inner
             .transition(id, None, ForwardEvent::Stop, |entry| {
-                entry.0.task = None;
+                running = entry.0.task.take().zip(entry.0.stop.take());
                 entry.0.generation += 1;
-            })
+            });
+        if let Some((task, stop)) = running.filter(|_| graceful)
+            && stop.send(()).is_ok()
+        {
+            let clock = self.inner.clock.clone();
+            self.inner.spawner.spawn(Box::pin(async move {
+                // Holding the guard keeps the supervisor alive while it drains; dropping it
+                // after the grace aborts whatever is left.
+                let _task = task;
+                clock.sleep(super::supervisor::STOP_GRACE).await;
+            }));
+        }
+        found
     }
 
     /// Starts forward `id` again from `Starting`, whatever its state, on the same local port.
@@ -211,7 +259,9 @@ impl PortForwardManager {
     ///
     /// [`StartError::Unknown`], or the [`start`](Self::start) policy errors.
     pub fn restart(&self, id: ForwardId) -> Result<(), StartError> {
-        self.stop(id).then_some(()).ok_or(StartError::Unknown(id))?;
+        self.halt(id, false)
+            .then_some(())
+            .ok_or(StartError::Unknown(id))?;
         let now = self.inner.clock.now();
         self.inner
             .transition(id, None, ForwardEvent::Restart, |e| e.0.started_at = now);
@@ -268,7 +318,7 @@ impl PortForwardManager {
         let Some(port) = self.inner.backend.port_forward(cluster) else {
             return refuse(StartError::NotConnected(cluster.to_string()));
         };
-        let Some(watch) = super::supervisor::watch_target(&*self.inner.backend, &spec) else {
+        let Some(watch) = super::target_watch::watch_target(&*self.inner.backend, &spec) else {
             return refuse(StartError::NotConnected(cluster.to_string()));
         };
         let mut entries = self.inner.entries.lock();
@@ -286,7 +336,12 @@ impl PortForwardManager {
             inner: Arc::downgrade(&self.inner),
             last_pod: entry.pod.clone(),
         };
-        entry.task = Some(spawn_guarded(&self.inner.spawner, supervisor.run(watch)));
+        let (stop, stopped) = futures::channel::oneshot::channel();
+        entry.stop = Some(stop);
+        entry.task = Some(spawn_guarded(
+            &self.inner.spawner,
+            supervisor.run(watch, stopped),
+        ));
         Ok(())
     }
 }

@@ -36,6 +36,10 @@ impl ForwardBackend for Backend {
 }
 
 fn starter() -> ForwardStarter {
+    starter_with(oxikube_app::ForwardConfig::default())
+}
+
+fn starter_with(config: oxikube_app::ForwardConfig) -> ForwardStarter {
     let clock = Arc::new(FakeClockPort::default());
     let sessions = ClusterSessionManager::new(
         Arc::new(FakeClusterConnectorPort::new()),
@@ -46,6 +50,7 @@ fn starter() -> ForwardStarter {
     let bus = CommandBus::new(CommandRegistry::new(), guard);
     let spawner: Arc<dyn Spawner> = Arc::new(|_: futures::future::BoxFuture<'static, ()>| {});
     let manager = PortForwardManager::new(Arc::new(Backend), spawner, clock, None);
+    manager.set_config(config);
     ForwardStarter::new(bus, "alice", manager)
 }
 
@@ -65,12 +70,20 @@ fn dialog(
     ports: Vec<PortChoice>,
     cx: &mut TestAppContext,
 ) -> (Entity<StartDialog>, &mut VisualTestContext) {
+    dialog_with(ports, starter(), cx)
+}
+
+fn dialog_with(
+    ports: Vec<PortChoice>,
+    starter: ForwardStarter,
+    cx: &mut TestAppContext,
+) -> (Entity<StartDialog>, &mut VisualTestContext) {
     let (dialog, cx) = cx.add_window_view(|window, cx| {
         oxikube_ui::init(cx);
         StartDialog::new(
             StartForm::new(target("Pod", "web"), ports),
             None,
-            starter(),
+            starter,
             WeakEntity::new_invalid(),
             window,
             cx,
@@ -129,4 +142,28 @@ fn a_failed_read_keeps_the_ports_the_dialog_was_opened_with(cx: &mut TestAppCont
         assert_eq!(d.form.ports, vec![port]);
         assert!(!d.loading_ports);
     });
+}
+
+/// Audit E15 (#18): the Bind field always showed 127.0.0.1, whatever `portforward.default_bind`.
+#[gpui::test]
+fn the_bind_field_starts_from_the_default_bind_setting(cx: &mut TestAppContext) {
+    let config = oxikube_app::ForwardConfig {
+        default_bind: "0.0.0.0".parse().unwrap(),
+        ..Default::default()
+    };
+    let (dialog, cx) = dialog_with(Vec::new(), starter_with(config), cx);
+    assert_eq!(text(&dialog, cx, |d| &d.bind), "0.0.0.0");
+}
+
+#[gpui::test]
+fn a_bind_the_user_chose_over_the_setting_is_remembered(cx: &mut TestAppContext) {
+    cx.update(|cx| crate::dialog::prefs::LastUsed::set(Some("::1".into()), true, cx));
+    let (dialog, cx) = dialog(Vec::new(), cx);
+    assert_eq!(text(&dialog, cx, |d| &d.bind), "::1");
+}
+
+#[gpui::test]
+fn without_a_choice_the_bind_field_shows_loopback(cx: &mut TestAppContext) {
+    let (dialog, cx) = dialog(Vec::new(), cx);
+    assert_eq!(text(&dialog, cx, |d| &d.bind), "127.0.0.1");
 }

@@ -172,10 +172,16 @@ async fn a_pod_forward_reports_target_gone_then_stops_and_closes_its_port() {
         .await
         .is_ok()
     );
-    assert!(
-        tokio::net::TcpStream::connect(addr).await.is_err(),
-        "the listener is closed"
-    );
+    // The listener is dropped as the task unwinds, which can trail `is_finished` by a moment
+    // under a loaded parallel run: poll until a connect is refused instead of asserting on the
+    // first try (audit E15, #18: this flaked in `cargo test --workspace` and on CI).
+    let closed = tokio::time::timeout(DEADLINE, async {
+        while tokio::net::TcpStream::connect(addr).await.is_ok() {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await;
+    assert!(closed.is_ok(), "the listener is closed");
 }
 
 #[tokio::test]

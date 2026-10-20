@@ -1048,7 +1048,8 @@ pub enum Command {
         /// The name the user gave the forward; `None` is `<kind>/<name>:<port>`.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         name: Option<String>,
-        /// Whether the forward is a favourite (E15-S06 persists it).
+        /// Whether to also save the forward as an auto-start favourite once it is accepted (the
+        /// start dialog's "Keep as a favourite", E15-S06).
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         favourite: bool,
     },

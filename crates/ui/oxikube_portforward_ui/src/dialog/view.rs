@@ -112,7 +112,11 @@ impl StartDialog {
                 .default_value(remote_text)
         });
         let local = cx.new(|cx| InputState::new(window, cx).placeholder("Auto"));
-        let bind = cx.new(|cx| InputState::new(window, cx).default_value(last.bind.clone()));
+        let bind_text = last
+            .bind
+            .clone()
+            .unwrap_or_else(|| starter.default_bind(&form.target.cluster).to_string());
+        let bind = cx.new(|cx| InputState::new(window, cx).default_value(bind_text));
         let name = cx.new(|cx| InputState::new(window, cx).placeholder(default_name));
         let subscriptions = [&remote, &local, &bind, &name]
             .map(|input| cx.subscribe_in(input, window, Self::on_input))
