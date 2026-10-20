@@ -96,6 +96,11 @@ impl FavouriteForward {
         &self.spec.target.cluster
     }
 
+    /// `staging db (pod/db 5432:5432)`: the name and the label, for notifications.
+    pub(super) fn display(&self) -> String {
+        format!("{} ({})", self.name, self.label())
+    }
+
     /// `pod/db 5432:5432`, or `service/api auto:http`: the forward as the notifications name it.
     pub fn label(&self) -> String {
         let local = match self.spec.local_port {
@@ -103,9 +108,8 @@ impl FavouriteForward {
             port => port.to_string(),
         };
         format!(
-            "{}/{} {local}:{}",
-            self.spec.target.gvk.kind.to_ascii_lowercase(),
-            self.spec.target.name,
+            "{} {local}:{}",
+            target_ref(&self.spec),
             self.spec.remote_port
         )
     }
@@ -113,10 +117,14 @@ impl FavouriteForward {
 
 /// `pod/db:5432`.
 fn default_name(spec: &ForwardSpec) -> String {
+    format!("{}:{}", target_ref(spec), spec.remote_port)
+}
+
+/// `pod/db`.
+fn target_ref(spec: &ForwardSpec) -> String {
     format!(
-        "{}/{}:{}",
+        "{}/{}",
         spec.target.gvk.kind.to_ascii_lowercase(),
-        spec.target.name,
-        spec.remote_port
+        spec.target.name
     )
 }

@@ -71,7 +71,9 @@ pub(super) async fn run(
         Command::PortForwardFavouriteRemove { id } => {
             let id = FavouriteId::new(id);
             if !favourites.remove(&id).await? {
-                return Err(unknown(&id));
+                return Err(OxiError::not_found(format!(
+                    "no port-forward favourite {id}"
+                )));
             }
             Ok(CommandOutput {
                 message: Some(format!("Removed favourite {id}")),
@@ -98,8 +100,4 @@ pub(super) async fn run(
             other.id()
         ))),
     }
-}
-
-fn unknown(id: &FavouriteId) -> OxiError {
-    OxiError::not_found(format!("no port-forward favourite {id}"))
 }

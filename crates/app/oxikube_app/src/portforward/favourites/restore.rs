@@ -108,7 +108,7 @@ fn tell(inner: &Inner, cluster: &ClusterId, report: &RestoreReport) {
     for favourite in &report.missing {
         send(
             format!("favourite-{}", favourite.id),
-            format!("{} ({})", favourite.name, favourite.label()),
+            favourite.display(),
             Some(favourite),
             format!(
                 "{} {} no longer exists. Edit or remove the favourite.",
@@ -119,7 +119,7 @@ fn tell(inner: &Inner, cluster: &ClusterId, report: &RestoreReport) {
     for (favourite, why) in &report.failed {
         send(
             format!("favourite-{}", favourite.id),
-            format!("{} ({})", favourite.name, favourite.label()),
+            favourite.display(),
             Some(favourite),
             format!("The favourite did not start: {why}"),
         );
