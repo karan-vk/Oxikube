@@ -193,6 +193,43 @@ fn a_click_selects_and_a_double_click_opens_in_the_browser(cx: &mut TestAppConte
     fx.vcx.simulate_click(target, gpui::Modifiers::none());
     fx.settle();
     assert!(fx.selected().is_some(), "the click selected a row");
+    assert!(
+        !fx.recorder
+            .sent()
+            .iter()
+            .any(|c| matches!(c, Command::PortForwardOpenInBrowser { .. })),
+        "a single click does not open the browser"
+    );
+
+    // The second click of a double click arrives with `click_count` 2.
+    fx.recorder.clear();
+    let at = |count| {
+        (
+            gpui::MouseDownEvent {
+                position: target,
+                modifiers: gpui::Modifiers::none(),
+                button: gpui::MouseButton::Left,
+                click_count: count,
+                first_mouse: false,
+            },
+            gpui::MouseUpEvent {
+                position: target,
+                modifiers: gpui::Modifiers::none(),
+                button: gpui::MouseButton::Left,
+                click_count: count,
+            },
+        )
+    };
+    let (down, up) = at(2);
+    fx.vcx.simulate_event(down);
+    fx.vcx.simulate_event(up);
+    fx.settle();
+    let id = fx.selected().expect("still selected");
+    assert_eq!(
+        fx.recorder.sent(),
+        [Command::PortForwardOpenInBrowser { id }],
+        "the double click opens the selected forward"
+    );
 }
 
 #[gpui::test]
@@ -275,13 +312,20 @@ fn fifty_busy_forwards_redraw_once_per_sample(cx: &mut TestAppContext) {
         .vcx
         .update(|_, cx| cx.observe(&panel, move |_, _| counter.set(counter.get() + 1)));
     let mut worst = std::time::Duration::ZERO;
+    let mut frames = Vec::new();
     for round in 1..=10 {
         // Counters move between samples; no change signal, as with real traffic.
         fx.source.set_quietly(busy(round));
         let started = std::time::Instant::now();
         fx.advance(crate::SAMPLE_INTERVAL);
         worst = worst.max(started.elapsed());
+        // The frame the redraw produces (layout + prepaint + paint of the virtualised table).
+        let frame = std::time::Instant::now();
+        fx.vcx.update(|window, cx| window.draw(cx).clear(cx));
+        frames.push(frame.elapsed());
     }
+    frames.sort();
+    let p95 = frames[frames.len() - 1];
     assert_eq!(
         fx.cells()[0][4].split(' ').nth(1),
         Some("19.1"),
@@ -289,9 +333,21 @@ fn fifty_busy_forwards_redraw_once_per_sample(cx: &mut TestAppContext) {
         fx.cells()[0]
     );
     let redraws = redraws.get();
-    eprintln!("50 forwards, 10 samples: {redraws} redraws, slowest sample {worst:?}");
+    eprintln!(
+        "50 forwards, 10 samples: {redraws} redraws, slowest sample {worst:?}, frame p95 {p95:?}"
+    );
     assert!(
-        redraws <= 10,
-        "one redraw per sample at most, saw {redraws}"
+        (1..=10).contains(&redraws),
+        "exactly one coalesced redraw per sample at most (and the panel does repaint), saw {redraws}"
+    );
+    // docs/PERFORMANCE.md: p95 frame <= 8 ms. Generous x4 for an unoptimised test build; it
+    // still catches an accidental O(n^2) in the row formatting.
+    assert!(
+        p95 < std::time::Duration::from_millis(32),
+        "frame p95 over budget: {p95:?}"
+    );
+    assert!(
+        worst < std::time::Duration::from_millis(32),
+        "a sample took {worst:?}"
     );
 }
