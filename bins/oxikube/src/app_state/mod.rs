@@ -66,7 +66,7 @@ use oxikube_settings::SettingsStore;
 use oxikube_theme::{ActiveTheme, ThemeRegistry, ThemeTokens};
 
 pub use agent::AgentHooks;
-pub use ports::{AppPorts, ClusterAdapters};
+pub use ports::{AppPorts, ClusterAdapters, PrometheusPorts};
 pub use services::ClusterServices;
 
 /// Why [`AppState::install`] refused.

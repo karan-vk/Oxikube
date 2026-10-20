@@ -25,7 +25,7 @@ mod writer;
 use std::sync::Arc;
 
 use gpui::{App, Subscription, Task};
-use oxikube_app::metrics_provider::Resolved;
+use oxikube_app::metrics_provider::{NoSink, Resolved};
 use oxikube_app::store::Spawner;
 use oxikube_app::tools::metrics::MetricsAgentDeps;
 use oxikube_app::{
@@ -84,24 +84,41 @@ impl MetricsServices {
 
 /// The services over `ports`, following `sessions`. Constructs only.
 pub fn build(ports: &AppPorts, sessions: &ClusterSessionManager) -> MetricsServices {
-    let client = Arc::new(match &ports.secrets {
-        Some(secrets) => PromqlClient::with_secret_store(secrets.clone()),
-        None => PromqlClient::new(),
-    });
-    let port = Arc::new(
-        PrometheusPort::new(client.clone())
-            .with_proxies(Arc::new(SessionProxies(sessions.clone()))),
-    );
-    let detector: Arc<dyn ProviderDetectorPort> = Arc::new(ProviderDetector::with_client(client));
-    let sink = Arc::new(PromqlSink(port.clone()));
-    let provider = MetricsProviderService::new(sessions.clone(), detector, sink);
     let catalogue: Arc<dyn QueryCataloguePort> = Arc::new(PromqlCatalogue);
-    let history =
-        MetricsHistoryService::new(Arc::new(provider.clone()), port.clone(), catalogue.clone())
-            .with_state(ports.state.clone());
+    let (provider, promql) = match &ports.prometheus {
+        // The synthetic world brings its own PromQL port and detector (E13-S09-F1): the graphs
+        // read from it and there is no endpoint to publish, so nothing is published.
+        Some(given) => (
+            MetricsProviderService::new(sessions.clone(), given.detector.clone(), Arc::new(NoSink)),
+            given.promql.clone(),
+        ),
+        None => {
+            let client = Arc::new(match &ports.secrets {
+                Some(secrets) => PromqlClient::with_secret_store(secrets.clone()),
+                None => PromqlClient::new(),
+            });
+            let port = Arc::new(
+                PrometheusPort::new(client.clone())
+                    .with_proxies(Arc::new(SessionProxies(sessions.clone()))),
+            );
+            let detector: Arc<dyn ProviderDetectorPort> =
+                Arc::new(ProviderDetector::with_client(client));
+            let sink = Arc::new(PromqlSink(port.clone()));
+            (
+                MetricsProviderService::new(sessions.clone(), detector, sink),
+                port as Arc<dyn PromqlPort>,
+            )
+        }
+    };
+    let history = MetricsHistoryService::new(
+        Arc::new(provider.clone()),
+        promql.clone(),
+        catalogue.clone(),
+    )
+    .with_state(ports.state.clone());
     MetricsServices {
         provider,
-        promql: port,
+        promql,
         catalogue,
         history,
     }
