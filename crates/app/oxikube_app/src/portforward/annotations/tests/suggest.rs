@@ -29,6 +29,7 @@ fn active(local: u16) -> ForwardInfo {
         pod: Some("db".into()),
         last_error: None,
         stats: Default::default(),
+        started_at: jiff::Timestamp::UNIX_EPOCH,
     }
 }
 
