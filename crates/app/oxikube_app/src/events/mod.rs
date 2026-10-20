@@ -22,6 +22,7 @@
 //! | one cluster's feed life: first subscriber starts it, the last stops it after the grace | `cluster`, the feed task `driver`, what it applies `apply` |
 //! | the ring, dedupe by key, the indexes, eviction, capacity changes | [`EventBuffer`] (`buffer`) |
 //! | identity of an event: uid, else (object, reason, message) | [`EventKey`] (`key`) |
+//! | the object an event is about: its uid, and its name for the events whose writer gave no uid | [`ObjectIdentity`], [`ObjectTarget`] (`object`) |
 //! | what a query or a subscription wants | [`EventFilter`], [`EventFilterError`] (`filter`) |
 //! | what a subscriber is told, merged per event until it polls | [`EventsChanged`] (`changes`), [`EventsSubscription`] (`subscription`) |
 //! | the feed's state | [`EventsState`] (`state`) |
@@ -63,6 +64,7 @@ mod driver;
 mod filter;
 mod follow;
 mod key;
+mod object;
 mod service;
 mod state;
 mod subscription;
@@ -79,6 +81,7 @@ pub use config::{
 pub use filter::{EventFilter, EventFilterError};
 pub use key::EventKey;
 pub(crate) use key::seen_at;
+pub use object::{ObjectIdentity, ObjectTarget};
 pub use service::EventService;
 pub use state::EventsState;
 pub use subscription::EventsSubscription;

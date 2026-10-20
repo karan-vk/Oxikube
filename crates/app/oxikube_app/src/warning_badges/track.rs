@@ -57,8 +57,8 @@ impl WarningBadges {
             let (applied, lost) = badges.apply(&change.removed, events);
             changed |= applied;
             // An object that lost the warning it showed may have an older one.
-            for uid in lost {
-                let filter = EventFilter::warnings().object(uid.clone());
+            for target in lost {
+                let filter = EventFilter::warnings().object_target(target);
                 let next = service
                     .read(cluster, |buffer| buffer.query(&filter).next().cloned())
                     .flatten();

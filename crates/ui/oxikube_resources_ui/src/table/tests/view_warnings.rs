@@ -248,6 +248,50 @@ fn a_cluster_scoped_object_is_badged_through_its_name(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn a_warning_whose_writer_gave_no_uid_badges_its_row(cx: &mut TestAppContext) {
+    let mut f = Fixture::new(cx);
+    // The writer left `involvedObject.uid` out: the row is badged by the object's name.
+    let mut nameless = warning_event("w-a", "x", "a", "uid-a", "BackOff", MINUTES_5);
+    nameless.regarding_uid = None;
+    let _rig = f.install_events(FakeEventFeed::new().initial([nameless]));
+    f.connect_with([pod_with_uid("a"), pod_with_uid("b")]);
+    let table = f.open_pods();
+    f.vcx.update(|window, cx| {
+        table.update(cx, |t, cx| {
+            oxikube_workspace::Item::set_active(t, true, window, cx)
+        });
+    });
+    f.settle();
+    assert_eq!(
+        badge_texts(&mut f, &table),
+        ["Warning: BackOff", ""],
+        "a is badged by the event that gave no uid; b is not"
+    );
+}
+
+#[gpui::test]
+fn a_warning_with_another_objects_uid_does_not_badge_the_row(cx: &mut TestAppContext) {
+    let mut f = Fixture::new(cx);
+    // The pod was deleted and re-created under the same name: the warning carries the old uid.
+    let mut old = warning_event("w-a", "x", "a", "uid-a-old", "BackOff", MINUTES_5);
+    old.regarding_uid = Some("uid-a-old".into());
+    let _rig = f.install_events(FakeEventFeed::new().initial([old]));
+    f.connect_with([pod_with_uid("a")]);
+    let table = f.open_pods();
+    f.vcx.update(|window, cx| {
+        table.update(cx, |t, cx| {
+            oxikube_workspace::Item::set_active(t, true, window, cx)
+        });
+    });
+    f.settle();
+    assert_eq!(
+        badge_texts(&mut f, &table),
+        [""],
+        "the old pod's warning stays with the old pod"
+    );
+}
+
+#[gpui::test]
 fn events_tables_have_no_badge_column(cx: &mut TestAppContext) {
     let mut f = Fixture::new(cx);
     let _rig = f.install_events(FakeEventFeed::new());

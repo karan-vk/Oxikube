@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicIsize, Ordering};
 use std::time::{Duration, Instant};
 
 use jiff::{SignedDuration, Timestamp};
-use oxikube_app::events::{EventBuffer, EventFilter};
+use oxikube_app::events::{EventBuffer, EventFilter, ObjectIdentity, ObjectTarget};
 use oxikube_domain::event::{Event, EventType};
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
 
@@ -154,7 +154,12 @@ fn run(n: usize, runs: usize) {
     // object's tab, and a badge per visible row.
     let all = EventFilter::new();
     let faults = EventFilter::warnings();
-    let object = EventFilter::new().object(source[n / 2].regarding_uid.clone().expect("a uid"));
+    // One object's tab: by its uid, and by its name for the events that gave no uid.
+    let middle = &source[n / 2];
+    let object = EventFilter::new().object_target(ObjectTarget::named(
+        middle.regarding_uid.clone(),
+        ObjectIdentity::of_event(middle),
+    ));
     let started = Instant::now();
     let shown = buffer.query(&all).take(60).count() + buffer.query(&faults).take(60).count();
     let screens = started.elapsed();
@@ -166,8 +171,9 @@ fn run(n: usize, runs: usize) {
         .iter()
         .take(60)
         .map(|e| {
+            let identity = ObjectIdentity::of_event(e);
             buffer
-                .object_counts(e.regarding_uid.as_deref().unwrap_or(""))
+                .object_counts(e.regarding_uid.as_deref().unwrap_or(""), Some(&identity))
                 .1
         })
         .sum();

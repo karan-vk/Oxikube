@@ -252,10 +252,12 @@ fn definition() -> ToolDef {
         "List Kubernetes events from the events Oxikube holds for the cluster (like `kubectl get \
          events`, newest first): type, reason, object, count, age and message. Filter by \
          namespace (`ns`), by the object they are about (`involved`: a kind and name, or a uid), \
-         by time (`since`: a duration like 15m or an RFC 3339 timestamp) and by `type`. The list \
-         is capped (`limit`, at most 100): `truncated` and `total` say when to narrow the \
-         query. No events is an empty list with a note; a cluster whose events cannot be read has \
-         status \"unavailable\" and the reason.",
+         by time (`since`: a duration like 15m or an RFC 3339 timestamp) and by `type`. A kind and \
+         a name match every event about that name, in any namespace (like `kubectl get events \
+         --field-selector involvedObject.name=`); a uid matches the events that carry that uid \
+         (like `kubectl describe`). The list is capped (`limit`, at most 100): `truncated` and \
+         `total` say when to narrow the query. No events is an empty list with a note; a cluster \
+         whose events cannot be read has status \"unavailable\" and the reason.",
         json!({
             "type": "object",
             "properties": {

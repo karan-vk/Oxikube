@@ -26,6 +26,7 @@ use oxikube_domain::ids::{ClusterId, Gvk};
 use oxikube_domain::redact::redact;
 use oxikube_domain::{ErrorKind, OxiResult};
 use oxikube_ports::{ContextProviderPort, ContextScope, Mention};
+use std::sync::Arc;
 
 use super::block::EventsBlock;
 use super::bounds::{MAX_MENTION_EVENTS, READ_DEADLINE};
@@ -34,7 +35,7 @@ use super::install::EventsAgentDeps;
 use super::mention::EventsMention;
 use super::query::{Found, Involved, find, find_about, resolve_gvk};
 use super::render::one_line;
-use crate::events::EventFilter;
+use crate::events::{EventFilter, ObjectIdentity, ObjectTarget};
 use crate::session::ClusterSession;
 use crate::tools::metrics::{session_for, within};
 
@@ -62,8 +63,16 @@ impl std::fmt::Debug for EventsContextProvider {
 
 /// What reading the named object came to.
 enum Lookup {
-    /// It exists; its uid when the server gave one.
-    Found(Option<String>),
+    /// It exists; its uid when the server gave one, its namespace, and whether it is
+    /// cluster-scoped.
+    Found {
+        /// The object's uid, when the server gave one.
+        uid: Option<String>,
+        /// The object's namespace; `None` for a cluster-scoped object.
+        namespace: Option<String>,
+        /// Whether the object is cluster-scoped (no namespace).
+        cluster_scoped: bool,
+    },
     /// The cluster has no such object.
     Missing,
     /// It could not be checked (no connection, no permission, too slow); the events are still
@@ -173,25 +182,35 @@ impl EventsContextProvider {
         let lookup = self.lookup(session, &gvk, namespace, name).await;
         let mut notes = Vec::new();
         let feed = open(&self.deps, cluster).await;
-        let by_uid = match &lookup {
-            Lookup::Found(Some(uid)) => Some(uid.as_str()),
-            _ => None,
+        let found = match &lookup {
+            // The object is there and namespaced: its events are the ones that carry its uid
+            // and the ones that gave no uid and named it.
+            Lookup::Found {
+                uid: Some(uid),
+                cluster_scoped: false,
+                namespace,
+            } => {
+                // The object's own namespace, not the mention's: the events whose writer gave
+                // no uid name their object, and they are the ones of this namespace.
+                let target = ObjectTarget::named(
+                    Some(Arc::from(uid.as_str())),
+                    ObjectIdentity::new(&involved.kind, namespace.as_deref(), &involved.name),
+                );
+                find(
+                    &self.deps.events,
+                    cluster,
+                    &EventFilter::new().object_target(target),
+                    |_| true,
+                    MAX_MENTION_EVENTS,
+                )
+            }
+            // A cluster-scoped object is recorded under its name (the kubelet records a
+            // Node's events with the node's name as the uid), and an object that could not
+            // be read is matched by name as well.
+            _ => find_about(&self.deps.events, cluster, &involved, MAX_MENTION_EVENTS),
         };
-        let mut found = by_uid.map_or_else(Found::default, |uid| {
-            find(
-                &self.deps.events,
-                cluster,
-                &EventFilter::new().object(uid),
-                |_| true,
-                MAX_MENTION_EVENTS,
-            )
-        });
-        if found.total == 0 {
-            // No uid, or the writer did not set the involved uid: find them by name.
-            found = find_about(&self.deps.events, cluster, &involved, MAX_MENTION_EVENTS);
-        }
         match lookup {
-            Lookup::Found(_) => {}
+            Lookup::Found { .. } => {}
             Lookup::Missing if found.total == 0 && !feed.unavailable() => {
                 return error_block(
                     title,
@@ -225,7 +244,11 @@ impl EventsContextProvider {
         let read = reader.get_opt(gvk, namespace, name);
         match within(self.deps.clock.as_ref(), READ_DEADLINE, read).await {
             None => Lookup::Unchecked("the read timed out".to_owned()),
-            Some(Ok(Some(found))) => Lookup::Found(found.meta.uid.as_deref().map(str::to_owned)),
+            Some(Ok(Some(found))) => Lookup::Found {
+                uid: found.meta.uid.as_deref().map(str::to_owned),
+                namespace: found.meta.namespace.as_deref().map(str::to_owned),
+                cluster_scoped: found.meta.namespace.is_none(),
+            },
             Some(Ok(None)) => Lookup::Missing,
             Some(Err(error)) if error.kind() == ErrorKind::NotFound => Lookup::Missing,
             Some(Err(error)) => Lookup::Unchecked(redact(error.message()).into_owned()),

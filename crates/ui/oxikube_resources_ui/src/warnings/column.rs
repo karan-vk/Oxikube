@@ -6,7 +6,9 @@ use gpui::App;
 use jiff::Timestamp;
 use oxikube_app::columns::{Align, SortKind};
 use oxikube_app::store::StoreObject;
-use oxikube_app::{ClusterBadges, Column, ColumnId, WarningBadge, WarningBadges};
+use oxikube_app::{
+    ClusterBadges, Column, ColumnId, ObjectIdentity, ObjectTarget, WarningBadge, WarningBadges,
+};
 use oxikube_domain::ids::ClusterId;
 use oxikube_domain::kinds::ResourceKind;
 
@@ -38,6 +40,8 @@ pub fn badge_column() -> Column {
 #[derive(Clone)]
 pub(crate) struct RowWarnings {
     badges: ClusterBadges,
+    /// The kind the table lists: the events that gave no uid name their object by it.
+    kind: Arc<str>,
     /// A cluster-scoped object is also looked up by name: the kubelet records a Node's events
     /// with the node's name as the uid.
     cluster_scoped: bool,
@@ -56,6 +60,7 @@ impl RowWarnings {
         let handle = ObjectEvents::get(cx)?;
         Some(Self {
             badges: handle.for_cluster(cluster),
+            kind: kind.gvk.kind.clone(),
             cluster_scoped: !kind.namespaced,
             handle,
             checked: Timestamp::now(),
@@ -70,11 +75,14 @@ impl RowWarnings {
     /// The warning that badges `object` at `now`, if any. `O(1)`.
     pub(crate) fn badge(&self, object: &StoreObject, now: Timestamp) -> Option<WarningBadge> {
         let meta = object.meta();
-        self.badges.get_for(
-            meta.uid.as_deref(),
-            self.cluster_scoped.then_some(&*meta.name),
-            now,
-        )
+        // The events whose writer gave no uid name their object by kind, namespace and name.
+        // The parts are shared: a row reads its badge on every frame.
+        let target = ObjectTarget::named(
+            meta.uid.clone(),
+            ObjectIdentity::shared(self.kind.clone(), meta.namespace.clone(), meta.name.clone()),
+        );
+        self.badges
+            .get_for(&target, self.cluster_scoped.then_some(&*meta.name), now)
     }
 
     /// Whether a badge expired since the last call (the tick redraws then): some warning was

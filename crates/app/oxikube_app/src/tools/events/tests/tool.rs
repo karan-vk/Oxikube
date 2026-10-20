@@ -88,6 +88,25 @@ async fn it_filters_by_the_involved_object_by_kind_and_name_or_by_uid() {
 }
 
 #[tokio::test]
+async fn it_finds_an_event_whose_writer_gave_no_uid_by_the_objects_name() {
+    let mut nameless = ev("e6", "Pod", "shop", "web-0", "uid-web", 40);
+    nameless.regarding_uid = None;
+    let h = Harness::with_events([fixture(), vec![nameless]].concat()).await;
+    // The name finds it: the writer left the involved uid out.
+    let by_name = h
+        .get_events(json!({"involved": {"kind": "Pod", "name": "web-0"}}))
+        .await;
+    assert_eq!(reasons(&by_name), ["Pulled", "BackOff", "Pulled"]);
+    // A uid cannot: the event carries none, and kubectl's rule is the same.
+    let by_uid = h.get_events(json!({"involved": {"uid": "uid-web"}})).await;
+    assert_eq!(
+        structured(&by_uid)["total"],
+        2,
+        "only the events that carry the uid"
+    );
+}
+
+#[tokio::test]
 async fn it_filters_by_since_as_a_duration_or_a_timestamp() {
     let h = Harness::with_events(fixture()).await;
     // Ten minutes after t0 is "now": 10m back is t0 itself, 9m back is t0 + 60s (all older).

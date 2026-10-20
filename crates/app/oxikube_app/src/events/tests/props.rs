@@ -10,7 +10,7 @@ use proptest::prelude::*;
 
 use super::{ev, warning};
 use crate::events::key::seen_at;
-use crate::events::{EventBuffer, EventFilter, EventKey};
+use crate::events::{EventBuffer, EventFilter, EventKey, ObjectIdentity, ObjectTarget};
 
 #[derive(Debug, Clone)]
 enum Op {
@@ -44,6 +44,15 @@ fn build(uid: u8, ns: u8, object: u8, secs: i64, warn: bool, count: u32) -> Even
         ev(&uid, &ns, &object, secs)
     };
     e.count = count;
+    // Every other event: the writer left the object's uid out (E14 #704), so the object has
+    // events in both indexes.
+    if uid
+        .as_bytes()
+        .last()
+        .is_some_and(|last| (last - b'0') % 2 == 1)
+    {
+        e.regarding_uid = None;
+    }
     e
 }
 
@@ -109,6 +118,7 @@ impl Model {
 
 fn filters() -> Vec<EventFilter> {
     let since: Timestamp = super::t0() + jiff::SignedDuration::from_secs(30);
+    let identity = ObjectIdentity::new("Pod", Some("ns1"), "o3");
     vec![
         EventFilter::new(),
         EventFilter::warnings(),
@@ -120,6 +130,10 @@ fn filters() -> Vec<EventFilter> {
         EventFilter::new().since(since),
         EventFilter::warnings().namespaces(["ns0"]).since(since),
         EventFilter::new().text("e1").expect("a substring"),
+        // By name alone: the events whose writer gave no uid.
+        EventFilter::new().object_target(ObjectTarget::named(None, identity.clone())),
+        // By uid and by name: both indexes, merged.
+        EventFilter::new().object_target(ObjectTarget::named(Some(Arc::from("o3")), identity)),
     ]
 }
 
@@ -161,7 +175,7 @@ proptest! {
                 let uid = format!("o{object}");
                 let all = model.query(&EventFilter::new().object(uid.as_str()));
                 let warnings = all.iter().filter(|e| e.is_warning()).count();
-                prop_assert_eq!(buffer.object_counts(&uid), (all.len(), warnings));
+                prop_assert_eq!(buffer.object_counts(&uid, None), (all.len(), warnings));
             }
         }
     }
