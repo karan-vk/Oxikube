@@ -11,7 +11,7 @@ use super::PortForwardPanel;
 use crate::model::Row;
 
 /// How often the counters and uptimes are sampled while the panel is displayed.
-pub(super) const SAMPLE_INTERVAL: Duration = Duration::from_secs(1);
+pub const SAMPLE_INTERVAL: Duration = Duration::from_secs(1);
 
 impl PortForwardPanel {
     /// Wires the filter, the change stream and the sampler, and reads the forwards.

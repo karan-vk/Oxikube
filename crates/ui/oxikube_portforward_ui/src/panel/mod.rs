@@ -28,7 +28,6 @@ mod render;
 
 use std::rc::Rc;
 use std::sync::Arc;
-use std::time::Duration;
 
 use gpui::{
     Action, App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable, Pixels,
@@ -47,16 +46,12 @@ pub use actions::{
     SelectFirst, SelectLast, SelectNext, SelectPrevious, StopSelected, TogglePanel,
 };
 pub use delegate::PanelDelegate;
+pub use live::SAMPLE_INTERVAL;
 
 use crate::source::ForwardSource;
 
 /// The panel's name in saved layouts. Once chosen, never change it.
 pub const PANEL_NAME: &str = "PortForwardsPanel";
-
-/// How often the uptime and the traffic counters are sampled.
-pub fn tick_interval() -> Duration {
-    live::SAMPLE_INTERVAL
-}
 
 /// What the panel is built over.
 #[derive(Clone)]

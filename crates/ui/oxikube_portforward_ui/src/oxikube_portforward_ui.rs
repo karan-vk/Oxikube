@@ -25,7 +25,7 @@ pub mod source;
 pub use commands::{PortForwardUiSink, UiRequest, register_commands, serve};
 pub use model::{PanelModel, Row, StatusKind};
 pub use panel::{
-    PANEL_NAME, PortForwardPanel, PortForwardPanelDeps, TogglePanel, install, tick_interval,
+    PANEL_NAME, PortForwardPanel, PortForwardPanelDeps, SAMPLE_INTERVAL, TogglePanel, install,
 };
 pub use source::ForwardSource;
 

@@ -233,7 +233,7 @@ fn traffic_and_uptime_are_sampled_each_second_without_a_change_signal(cx: &mut T
         "\u{2193} 0 B \u{2191} 0 B \u{b7} 0 conn",
         "nothing is read between samples"
     );
-    fx.advance(crate::tick_interval());
+    fx.advance(crate::SAMPLE_INTERVAL);
     assert_eq!(
         fx.cells()[0][4],
         "\u{2193} 3.0 MB \u{2191} 512 B \u{b7} 2 conn"
@@ -241,7 +241,7 @@ fn traffic_and_uptime_are_sampled_each_second_without_a_change_signal(cx: &mut T
 
     // Uptime moves with the clock.
     fx.clock.advance(Duration::from_secs(125));
-    fx.advance(crate::tick_interval());
+    fx.advance(crate::SAMPLE_INTERVAL);
     assert_eq!(fx.cells()[0][5], "2m5s");
 }
 
@@ -279,7 +279,7 @@ fn fifty_busy_forwards_redraw_once_per_sample(cx: &mut TestAppContext) {
         // Counters move between samples; no change signal, as with real traffic.
         fx.source.set_quietly(busy(round));
         let started = std::time::Instant::now();
-        fx.advance(crate::tick_interval());
+        fx.advance(crate::SAMPLE_INTERVAL);
         worst = worst.max(started.elapsed());
     }
     assert_eq!(
