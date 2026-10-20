@@ -18,10 +18,12 @@ use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
+use super::accept::DEFAULT_MAX_CONNECTIONS;
 use super::cluster::{Cluster, KubeCluster};
 use super::error::{open_error, remote_failure};
 use super::handle::ForwardHandle;
-use super::{session, start};
+use super::session::{self, Options};
+use super::start;
 
 /// Port forwarding on one connected cluster. Cheap to clone; clones share the client.
 ///
@@ -38,6 +40,7 @@ use super::{session, start};
 pub struct KubePortForward {
     client: Client,
     cluster: Arc<dyn Cluster>,
+    max_connections: usize,
 }
 
 impl KubePortForward {
@@ -46,6 +49,23 @@ impl KubePortForward {
         Self {
             cluster: Arc::new(KubeCluster::new(client.clone())),
             client,
+            max_connections: DEFAULT_MAX_CONNECTIONS,
+        }
+    }
+
+    /// Caps the connections each forward serves at once (default
+    /// [`DEFAULT_MAX_CONNECTIONS`]). One more is closed immediately and reported as a
+    /// `BudgetExceeded` error on the forward. `0` is treated as `1`.
+    #[must_use]
+    pub fn with_max_connections(mut self, max: usize) -> Self {
+        self.max_connections = max.max(1);
+        self
+    }
+
+    fn options(&self, stats: Arc<ForwardStats>) -> Options {
+        Options {
+            stats,
+            max_connections: self.max_connections,
         }
     }
 
@@ -62,7 +82,8 @@ impl KubePortForward {
     /// terminating, and for a local port that is already in use (the message names it);
     /// plus the usual transport kinds for the lookups.
     pub async fn start(&self, spec: &ForwardSpec) -> OxiResult<ForwardHandle> {
-        session::start(Arc::new(self.clone()), self.cluster.clone(), spec).await
+        let options = self.options(Arc::default());
+        session::start_with(Arc::new(self.clone()), self.cluster.clone(), spec, options).await
     }
 
     /// [`start`](Self::start) counting traffic into `stats`.
@@ -71,7 +92,8 @@ impl KubePortForward {
         spec: &ForwardSpec,
         stats: Arc<ForwardStats>,
     ) -> OxiResult<ForwardHandle> {
-        session::start_with_stats(Arc::new(self.clone()), self.cluster.clone(), spec, stats).await
+        let options = self.options(stats);
+        session::start_with(Arc::new(self.clone()), self.cluster.clone(), spec, options).await
     }
 }
 

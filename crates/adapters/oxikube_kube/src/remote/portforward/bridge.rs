@@ -13,10 +13,11 @@ use std::time::Duration;
 use futures::future::BoxFuture;
 use oxikube_domain::OxiError;
 use oxikube_ports::{ForwardStats, PortForwardConnection, PortForwardPort};
-use tokio::io::{AsyncRead, AsyncWrite, ReadBuf, copy_bidirectional};
+use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt, ReadBuf, copy_bidirectional};
 use tokio::net::TcpStream;
 use tokio::sync::watch;
 use tokio_util::compat::FuturesAsyncReadCompatExt;
+use tokio_util::sync::CancellationToken;
 
 use super::hub::StatusHub;
 use super::plan::Target;
@@ -101,6 +102,8 @@ pub(super) struct Bridge {
     pub(super) hub: StatusHub,
     pub(super) local_addr: SocketAddr,
     pub(super) stats: Arc<ForwardStats>,
+    /// Cancelled by a graceful stop: close cleanly and return.
+    pub(super) shutdown: CancellationToken,
 }
 
 impl Bridge {
@@ -114,11 +117,11 @@ impl Bridge {
         let _active = self.stats.open_connection();
         // Interactive protocols (ssh, redis) must not wait for Nagle.
         let _ = local.set_nodelay(true);
-        let connection = match self
-            .connector
-            .forward(&self.namespace, &target.pod, target.port)
-            .await
-        {
+        let opened = tokio::select! {
+            () = self.shutdown.cancelled() => return,
+            opened = self.connector.forward(&self.namespace, &target.pod, target.port) => opened,
+        };
+        let connection = match opened {
             Ok(connection) => connection,
             Err(err) => {
                 tracing::debug!(kind = %err.kind(), "port-forward connection failed to open");
@@ -140,12 +143,20 @@ impl Bridge {
         };
         let mut closed: BoxFuture<'static, Option<OxiError>> = closed;
 
-        let copy = copy_bidirectional(&mut local, &mut remote);
-        tokio::pin!(copy);
+        // Boxed so a graceful stop can drop it and use both sockets again.
+        let mut copy = Box::pin(copy_bidirectional(&mut local, &mut remote));
         let mut closed_early = false;
         let result = loop {
             tokio::select! {
                 result = &mut copy => break result,
+                () = self.shutdown.cancelled() => {
+                    // Graceful stop: end the copy (bytes still in its buffer are dropped) and
+                    // send FIN both ways, so the client sees a clean end of stream, not a reset.
+                    drop(copy);
+                    let _ = local.shutdown().await;
+                    let _ = remote.shutdown().await;
+                    return;
+                }
                 // A server-reported error ends the forward at once. A clean close (`None`)
                 // does not: bytes may still be queued for the local side.
                 reported = &mut closed, if !closed_early => {

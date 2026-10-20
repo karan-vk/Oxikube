@@ -132,6 +132,8 @@ pub(super) enum Behaviour {
     ServerError(OxiError),
     /// Open, then close without a byte and without an error.
     CleanClose,
+    /// Open, send these bytes, then close cleanly (the pod's process hung up mid-session).
+    SendThenClose(Vec<u8>),
 }
 
 /// The pod side, in memory. Records `(namespace, pod, port)` of every call.
@@ -184,6 +186,17 @@ impl PortForwardPort for FakeConnector {
                     closed: Box::pin(futures::future::pending()),
                 })
             }
+            Behaviour::SendThenClose(bytes) => {
+                tokio::spawn(async move {
+                    let mut theirs = theirs;
+                    let _ = theirs.write_all(&bytes).await;
+                    let _ = theirs.shutdown().await;
+                });
+                Ok(PortForwardConnection {
+                    stream: Box::pin(ours.compat()),
+                    closed: Box::pin(futures::future::ready(None)),
+                })
+            }
             Behaviour::CleanClose => {
                 drop(theirs);
                 Ok(PortForwardConnection {
@@ -223,6 +236,32 @@ pub(super) async fn start(
     spec: &ForwardSpec,
 ) -> OxiResult<ForwardHandle> {
     crate::remote::portforward::session::start(connector.clone(), cluster.clone(), spec).await
+}
+
+/// Starts `spec` on the fakes serving at most `max_connections` at once.
+pub(super) async fn start_capped(
+    cluster: &Arc<FakeCluster>,
+    connector: &Arc<FakeConnector>,
+    spec: &ForwardSpec,
+    max_connections: usize,
+) -> OxiResult<ForwardHandle> {
+    use crate::remote::portforward::session::{Options, start_with};
+    let options = Options {
+        max_connections,
+        ..Options::default()
+    };
+    start_with(connector.clone(), cluster.clone(), spec, options).await
+}
+
+/// Waits until `cond` holds, yielding in between; panics after [`DEADLINE`].
+pub(super) async fn eventually(what: &str, cond: impl Fn() -> bool) {
+    tokio::time::timeout(DEADLINE, async {
+        while !cond() {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .unwrap_or_else(|_| panic!("timed out waiting for {what}"));
 }
 
 /// Waits until the handle's latest status satisfies `pred`.

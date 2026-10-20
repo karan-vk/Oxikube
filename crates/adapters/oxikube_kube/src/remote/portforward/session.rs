@@ -2,48 +2,65 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Duration;
 
-use futures::StreamExt;
-use futures::stream::BoxStream;
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::{ForwardSpec, OxiError, OxiResult};
 use oxikube_ports::{ForwardStats, PortForwardPort};
 use tokio::net::TcpListener;
 use tokio::sync::watch;
-use tokio::task::JoinSet;
+use tokio_util::sync::CancellationToken;
 
+use super::accept::{Accept, DEFAULT_MAX_CONNECTIONS};
 use super::bridge::Bridge;
 use super::cluster::Cluster;
 use super::error::bind_error;
 use super::handle::ForwardHandle;
 use super::hub::{StatusHub, StopGuard};
-use super::monitor::{Flow, Monitor};
-use super::plan::{Plan, PodInfo};
+use super::monitor::Monitor;
+use super::plan::Plan;
 
-/// Pause after a failed `accept` (out of file descriptors, ...) so a persistent failure
-/// cannot spin the task.
-const ACCEPT_BACKOFF: Duration = Duration::from_millis(100);
+/// Per-forward knobs that are not part of the [`ForwardSpec`].
+#[derive(Debug, Clone)]
+pub(super) struct Options {
+    /// Traffic counters to fill (shared with the port-level handle).
+    pub(super) stats: Arc<ForwardStats>,
+    /// Concurrent connections served before new ones are refused.
+    pub(super) max_connections: usize,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            stats: Arc::default(),
+            max_connections: DEFAULT_MAX_CONNECTIONS,
+        }
+    }
+}
 
 /// Resolves `spec`, binds its listener and spawns the forward.
 ///
 /// Everything that can be refused up front is refused here, before anything is spawned: an
 /// unsupported target, a missing pod or service, a pod that cannot serve, a busy local port.
+#[cfg(test)]
 pub(super) async fn start(
     connector: Arc<dyn PortForwardPort>,
     cluster: Arc<dyn Cluster>,
     spec: &ForwardSpec,
 ) -> OxiResult<ForwardHandle> {
-    start_with_stats(connector, cluster, spec, Arc::default()).await
+    start_with(connector, cluster, spec, Options::default()).await
 }
 
-/// [`start`] counting traffic into `stats`.
-pub(super) async fn start_with_stats(
+/// [`start`] with explicit [`Options`].
+pub(super) async fn start_with(
     connector: Arc<dyn PortForwardPort>,
     cluster: Arc<dyn Cluster>,
     spec: &ForwardSpec,
-    stats: Arc<ForwardStats>,
+    options: Options,
 ) -> OxiResult<ForwardHandle> {
+    let Options {
+        stats,
+        max_connections,
+    } = options;
     let (namespace, name) = target_of(spec)?;
     let plan = if spec.targets_service() {
         let service = cluster.service(namespace, name).await?;
@@ -70,6 +87,7 @@ pub(super) async fn start_with_stats(
     let (target_tx, target_rx) = watch::channel(None);
     // Publishes `Listening` and the first target before the task exists.
     let monitor = Monitor::start(plan, hub.clone(), target_tx, local_addr, initial);
+    let shutdown = CancellationToken::new();
     let bridge = Bridge {
         connector,
         namespace: namespace.into(),
@@ -77,10 +95,19 @@ pub(super) async fn start_with_stats(
         hub: hub.clone(),
         local_addr,
         stats: stats.clone(),
+        shutdown: shutdown.clone(),
     };
-    let pods = cluster.watch_pods(namespace, &selector);
-    let task = tokio::spawn(run(listener, pods, monitor, bridge, StopGuard(hub.clone())));
-    Ok(ForwardHandle::new(local_addr, hub, stats, task))
+    let accept = Accept {
+        listener,
+        pods: cluster.watch_pods(namespace, &selector),
+        monitor,
+        bridge,
+        stop: StopGuard(hub.clone()),
+        shutdown: shutdown.clone(),
+        max_connections,
+    };
+    let task = tokio::spawn(accept.run());
+    Ok(ForwardHandle::new(local_addr, hub, stats, shutdown, task))
 }
 
 /// The namespace and name of a Pod or Service target.
@@ -98,49 +125,4 @@ fn target_of(spec: &ForwardSpec) -> OxiResult<(&str, &str)> {
             "port-forward target {name} needs a namespace"
         ))),
     }
-}
-
-/// The forward's task. Owns the listener and every bridge: when it ends or is aborted they
-/// all go with it.
-async fn run(
-    listener: TcpListener,
-    mut pods: BoxStream<'static, Vec<PodInfo>>,
-    mut monitor: Monitor,
-    bridge: Bridge,
-    stop: StopGuard,
-) {
-    let mut bridges = JoinSet::new();
-    loop {
-        tokio::select! {
-            accepted = listener.accept() => match accepted {
-                Ok((local, _peer)) => {
-                    bridges.spawn(bridge.clone().serve(local));
-                }
-                Err(err) => {
-                    tracing::warn!(error = %err, "port-forward accept failed");
-                    stop.0.error(&OxiError::internal(format!(
-                        "accepting a local connection failed: {err}"
-                    )));
-                    tokio::time::sleep(ACCEPT_BACKOFF).await;
-                }
-            },
-            snapshot = pods.next() => match snapshot {
-                Some(pods) => {
-                    if monitor.on_snapshot(&pods) == Flow::Stop {
-                        break;
-                    }
-                }
-                None => {
-                    stop.0.error(&OxiError::internal("the pod watch ended unexpectedly"));
-                    break;
-                }
-            },
-            // Reap finished bridges so the set does not grow with every connection.
-            Some(_) = bridges.join_next(), if !bridges.is_empty() => {}
-        }
-    }
-    // `stop` publishes `Stopped` as it drops, after the listener and bridges are gone.
-    drop(listener);
-    bridges.shutdown().await;
-    drop(stop);
 }

@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use futures::channel::mpsc;
+use futures::future::BoxFuture;
 
 use super::PortForwardError;
 
@@ -103,7 +104,8 @@ impl Drop for ActiveConnection {
 /// A running forward: a local listener bridged to a pod.
 ///
 /// **Dropping the handle stops the forward** and frees the port; [`stop`](Self::stop) is the
-/// explicit spelling.
+/// explicit spelling. [`shutdown`](Self::shutdown) stops gracefully: no new connections,
+/// open ones get a short grace period to finish, then everything is torn down.
 pub struct ForwardHandle {
     /// The bound address, with the real port when `0` was requested.
     pub local_addr: SocketAddr,
@@ -114,6 +116,8 @@ pub struct ForwardHandle {
     pub errors: mpsc::UnboundedReceiver<PortForwardError>,
     // Dropping the owner stops the forward. Type-erased so the port stays runtime-neutral.
     owner: Box<dyn Send>,
+    // Optional graceful stop: resolves once the forward has drained (or its grace ran out).
+    graceful: Option<Box<dyn FnOnce() -> BoxFuture<'static, ()> + Send>>,
 }
 
 impl ForwardHandle {
@@ -130,11 +134,34 @@ impl ForwardHandle {
             stats,
             errors,
             owner: Box::new(owner),
+            graceful: None,
         }
     }
 
-    /// Stops the forward: the listener closes and every connection is torn down.
+    /// Adds a graceful stop for [`shutdown`](Self::shutdown): `stop` is called once and its
+    /// future should stop accepting, let open connections finish within a bounded grace
+    /// period, and resolve when the forward has ended.
+    #[must_use]
+    pub fn with_graceful_stop(
+        mut self,
+        stop: impl FnOnce() -> BoxFuture<'static, ()> + Send + 'static,
+    ) -> Self {
+        self.graceful = Some(Box::new(stop));
+        self
+    }
+
+    /// Stops the forward at once: the listener closes and every connection is torn down.
     pub fn stop(self) {
+        drop(self.owner);
+    }
+
+    /// Stops the forward gracefully and resolves once it has ended: the listener closes
+    /// first, open connections are closed cleanly within the adapter's grace period, then
+    /// anything left is aborted. Without a graceful stop this is [`stop`](Self::stop).
+    pub async fn shutdown(mut self) {
+        if let Some(graceful) = self.graceful.take() {
+            graceful().await;
+        }
         drop(self.owner);
     }
 }
@@ -190,5 +217,21 @@ mod tests {
         assert!(format!("{handle:?}").contains("127.0.0.1:1"));
         handle.stop();
         assert!(flag.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn shutdown_runs_the_graceful_stop_before_releasing_the_owner() {
+        let ran = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let (_tx, rx) = mpsc::unbounded();
+        let seen = ran.clone();
+        let handle = ForwardHandle::new(
+            SocketAddr::from(([127, 0, 0, 1], 1)),
+            Arc::default(),
+            rx,
+            (),
+        )
+        .with_graceful_stop(move || Box::pin(async move { seen.store(true, Ordering::SeqCst) }));
+        futures::executor::block_on(handle.shutdown());
+        assert!(ran.load(Ordering::SeqCst));
     }
 }
