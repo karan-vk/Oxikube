@@ -4,18 +4,20 @@
 //! Wakes on three things only (no polling): a watch snapshot, an error from the running
 //! forward, and the backoff timer of a pending attempt. A snapshot that makes the current pod
 //! unusable drops the forward and re-resolves at once; a snapshot that makes a waiting forward
-//! resolvable tries at once. The task ends when the forward fails (or is aborted by a stop).
+//! resolvable tries at once. A pending backoff is a deadline: snapshots neither cut it short nor
+//! push it back. The task ends when the forward fails (or is aborted by a stop).
 
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use futures::future::{Either, FutureExt as _};
 use futures::stream::{BoxStream, StreamExt as _};
+use jiff::Timestamp;
 use oxikube_domain::Resource;
 use oxikube_domain::portforward::ForwardSpec;
 use oxikube_domain::session::WatchScope;
 use oxikube_domain::view::SERVICE_NAME_LABEL;
-use oxikube_ports::{ForwardHandle, PodRef, PortForwardError, PortForwardPort};
+use oxikube_ports::{ClockPort, ForwardHandle, PodRef, PortForwardError, PortForwardPort};
 
 use super::backend::ForwardBackend;
 use super::model::ForwardId;
@@ -93,23 +95,26 @@ impl Supervisor {
         let service = self.spec.targets_service();
         let mut view = TargetView::default();
         let mut handle: Option<ForwardHandle> = None;
-        // When the next attempt is due; `Some(ZERO)` tries as soon as the view is ready.
-        let mut retry_in = Some(Duration::ZERO);
+        // When the next attempt is due (tried once the view is ready too); `None` waits on the
+        // watch for the target to become resolvable.
+        let Some(clock) = self.inner.upgrade().map(|inner| inner.clock.clone()) else {
+            return;
+        };
+        let mut retry_at = due(&*clock, Some(Duration::ZERO));
         loop {
-            let Some(inner) = self.inner.upgrade() else {
+            if self.inner.strong_count() == 0 {
                 return;
-            };
-            let clock = inner.clock.clone();
-            drop(inner);
+            }
             let wake = {
                 let watch_next = watch.0.next().map(Wake::Watch);
                 let forward_next = match handle.as_mut() {
                     Some(h) => Either::Left(h.errors.next().map(Wake::Forward)),
                     None => Either::Right(futures::future::pending()),
                 };
-                let timer = match retry_in.filter(|_| view.is_ready(service)) {
-                    Some(delay) => Either::Left(async move {
-                        clock.sleep(delay).await;
+                let clock: &dyn ClockPort = &*clock;
+                let timer = match retry_at.filter(|_| view.is_ready(service)) {
+                    Some(at) => Either::Left(async move {
+                        clock.sleep_until(at).await;
                         Wake::Timer
                     }),
                     None => Either::Right(futures::future::pending()),
@@ -135,14 +140,15 @@ impl Supervisor {
                             if !self.event(ForwardEvent::TargetChanged { reason }) {
                                 return;
                             }
-                            retry_in = Some(Duration::ZERO);
+                            retry_at = due(&*clock, Some(Duration::ZERO));
                         }
-                        (_, false) if self.resolvable(&view) => {
+                        // Only when waiting on the watch: a pending backoff keeps its deadline.
+                        (_, false) if retry_at.is_none() && self.resolvable(&view) => {
                             let reason = "a ready pod is available".to_owned();
                             if !self.event(ForwardEvent::TargetChanged { reason }) {
                                 return;
                             }
-                            retry_in = Some(Duration::ZERO);
+                            retry_at = due(&*clock, Some(Duration::ZERO));
                         }
                         _ => {}
                     }
@@ -166,7 +172,7 @@ impl Supervisor {
                     PortForwardError::PodGone(_) => {
                         handle = None;
                         self.set_handle(None);
-                        retry_in = self.after(ForwardEvent::Lost(error));
+                        retry_at = due(&*clock, self.after(ForwardEvent::Lost(error)));
                     }
                     PortForwardError::Forbidden(_) => {
                         self.event(ForwardEvent::Lost(error));
@@ -179,13 +185,17 @@ impl Supervisor {
                     handle = None;
                     self.set_handle(None);
                     let lost = PortForwardError::Disconnected("the forward ended".to_owned());
-                    retry_in = self.after(ForwardEvent::Lost(lost));
+                    retry_at = due(&*clock, self.after(ForwardEvent::Lost(lost)));
                 }
                 Wake::Timer => {
-                    retry_in = None;
+                    retry_at = None;
                     match self.connect(&view).await {
                         Ok(h) => handle = Some(h),
-                        Err(event) => retry_in = self.after(event),
+                        // No ready pod yet: wait on the watch, which retries once it resolves.
+                        Err(event @ ForwardEvent::Unresolvable { .. }) => {
+                            self.event(event);
+                        }
+                        Err(event) => retry_at = due(&*clock, self.after(event)),
                     }
                 }
             }
@@ -293,6 +303,12 @@ impl Supervisor {
         )
         .is_ok()
     }
+}
+
+/// The deadline `delay` from now on `clock`.
+fn due(clock: &dyn ClockPort, delay: Option<Duration>) -> Option<Timestamp> {
+    let now = clock.now();
+    delay.map(|delay| now.saturating_add(delay).unwrap_or(now))
 }
 
 fn view_apply(view: &mut TargetView, part: Part, mut objects: Vec<Resource>) {

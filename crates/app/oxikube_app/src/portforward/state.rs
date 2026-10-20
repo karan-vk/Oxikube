@@ -11,7 +11,9 @@
 //! ```
 //!
 //! The first reconnect after a drop is immediate (a pod replaced by a rollout is re-resolved the
-//! moment the watch says so); the backoff only spaces out repeated failures.
+//! moment the watch says so); the backoff only spaces out repeated failures. A target that is
+//! not resolvable yet (no ready pod) keeps the forward `Reconnecting` without spending attempts:
+//! it waits on the watch, however long a rollout or an image pull takes.
 
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -65,7 +67,8 @@ pub enum ForwardState {
         local_addr: SocketAddr,
     },
     /// The forward dropped; the next attempt is `attempt`, `delay` after the drop or the last
-    /// failure. The local port stays the same across attempts.
+    /// failure. The local port stays the same across attempts. While the target has no ready pod
+    /// the forward waits on the watch instead: `attempt` does not move and `delay` is zero.
     Reconnecting {
         /// 1 for the first attempt after the drop.
         attempt: u32,
@@ -119,7 +122,8 @@ pub enum ForwardEvent {
     },
     /// A start or the running forward failed with `error`.
     Lost(PortForwardError),
-    /// The target cannot be used: `permanent` failures (no such port) need the user.
+    /// The target cannot be used: `permanent` failures (no such port) need the user; the others
+    /// (no ready pod yet) wait on the watch without counting an attempt.
     Unresolvable {
         /// Why, in one line.
         reason: String,
@@ -237,7 +241,13 @@ pub fn step(
         (_, ForwardEvent::Unresolvable { reason, permanent }) if permanent => {
             S::Failed(ForwardFailure::message(reason))
         }
-        (_, ForwardEvent::Unresolvable { reason, .. }) => retry(next_attempt, reason),
+        // Waiting for the target (no ready pod yet) is not a failed attempt: the supervisor waits
+        // on the watch, which retries the moment the target resolves, so it never gives up.
+        (_, ForwardEvent::Unresolvable { reason, .. }) => S::Reconnecting {
+            attempt: next_attempt.saturating_sub(1).max(1),
+            delay: Duration::ZERO,
+            reason,
+        },
         // A watch event: try now, without counting an attempt.
         (S::Reconnecting { attempt, .. }, ForwardEvent::TargetChanged { reason }) => {
             S::Reconnecting {

@@ -160,6 +160,44 @@ fn unresolvable_targets_wait_unless_permanent() {
 }
 
 #[test]
+fn waiting_for_the_target_never_spends_the_attempt_budget() {
+    let backoff = Backoff::default();
+    let waiting = |state: &S| {
+        step(
+            state,
+            E::Unresolvable {
+                reason: "no ready pod".into(),
+                permanent: false,
+            },
+            &backoff,
+            0.5,
+        )
+    };
+    let mut state = waiting(&active());
+    for _ in 0..(backoff.max_attempts * 3) {
+        state = waiting(&state);
+    }
+    assert_eq!(
+        state,
+        S::Reconnecting {
+            attempt: 1,
+            delay: Duration::ZERO,
+            reason: "no ready pod".into(),
+        },
+        "waits on the watch however long it takes"
+    );
+    // A forward already backing off keeps its attempt number while it waits.
+    assert!(matches!(
+        waiting(&reconnecting(4)),
+        S::Reconnecting {
+            attempt: 4,
+            delay: Duration::ZERO,
+            ..
+        }
+    ));
+}
+
+#[test]
 fn jitter_stays_within_its_bounds_and_the_cap() {
     let backoff = Backoff::default();
     for attempt in 2..20 {

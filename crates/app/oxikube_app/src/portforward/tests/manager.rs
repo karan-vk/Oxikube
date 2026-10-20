@@ -248,7 +248,7 @@ async fn a_busy_local_port_fails_the_start() {
 }
 
 #[tokio::test]
-async fn no_ready_pod_waits_then_gives_up() {
+async fn no_ready_pod_waits_on_the_watch_without_giving_up() {
     let rig = Rig::new();
     rig.manager.set_config(ForwardConfig {
         backoff: crate::portforward::Backoff {
@@ -264,17 +264,63 @@ async fn no_ready_pod_waits_then_gives_up() {
         .until(id, |i| matches!(i.state, ForwardState::Reconnecting { .. }))
         .await;
     assert!(waiting.state.reason().unwrap().contains("no ready pod"));
-    rig.advance_until(
-        id,
-        Duration::from_millis(500),
-        Duration::from_secs(10),
-        |i| matches!(i.state, ForwardState::Failed(_)),
-    )
-    .await;
+    // Far past the attempt budget's backoff (a slow rollout or image pull), it still waits.
+    for _ in 0..40 {
+        rig.clock.advance(Duration::from_secs(15));
+        tokio::time::sleep(Duration::from_millis(2)).await;
+    }
+    let info = rig.manager.get(id).unwrap();
+    assert!(
+        matches!(info.state, ForwardState::Reconnecting { attempt: 1, .. }),
+        "still waiting: {info:?}"
+    );
     assert!(
         rig.port.recorded_calls().is_empty(),
         "never started without a pod"
     );
+    // The pod becomes ready: the watch connects it without a timer.
+    web_slices(&rig, &[("web-a", true)]);
+    let info = rig.until(id, is_active).await;
+    assert_eq!(active_pod(&info), Some("web-a"));
+}
+
+#[tokio::test]
+async fn watch_snapshots_neither_cut_short_nor_postpone_a_backoff() {
+    let rig = Rig::new();
+    rig.backend.push("Pod", vec![pod("api-0", "Running")]);
+    for _ in 0..2 {
+        rig.port
+            .fail_next_start(PortForwardError::PodNotReady(format!("{NS}/api-0")));
+    }
+    let id = rig.manager.start(pod_spec("api-0", 80)).expect("start");
+    let waiting = rig
+        .until(id, |i| {
+            matches!(i.state, ForwardState::Reconnecting { attempt: 2, .. })
+        })
+        .await;
+    let ForwardState::Reconnecting { delay, .. } = waiting.state else {
+        unreachable!()
+    };
+    assert_eq!(rig.port.recorded_calls().len(), 2);
+    // Status updates of the (resolvable) pod arrive while the backoff is pending.
+    let mut elapsed = Duration::ZERO;
+    let step = Duration::from_millis(50);
+    while elapsed + step < delay {
+        rig.backend.push("Pod", vec![pod("api-0", "Running")]);
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        assert_eq!(
+            rig.port.recorded_calls().len(),
+            2,
+            "no retry before the backoff ({elapsed:?} of {delay:?})"
+        );
+        rig.clock.advance(step);
+        elapsed += step;
+    }
+    // The deadline still holds although every snapshot woke the supervisor.
+    rig.backend.push("Pod", vec![pod("api-0", "Running")]);
+    rig.advance_until(id, step, Duration::from_millis(300), is_active)
+        .await;
+    assert_eq!(rig.port.recorded_calls().len(), 3);
 }
 
 #[tokio::test]
