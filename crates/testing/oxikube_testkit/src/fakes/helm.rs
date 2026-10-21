@@ -12,6 +12,8 @@ use oxikube_ports::{
     RollbackRequest, SearchQuery, ShowKind, UninstallRequest, UpgradeRequest, Values,
 };
 use parking_lot::Mutex;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use crate::script::{CallLog, Script};
 
@@ -130,6 +132,23 @@ pub struct FakeHelmPort {
     script: HelmScripts,
     calls: CallLog<HelmCall>,
     capabilities: Mutex<HelmCapabilities>,
+    streams: StreamState,
+}
+
+/// Whether install/upgrade streams stay open after their scripted lines, and how many are open.
+#[derive(Debug, Default)]
+struct StreamState {
+    hold: AtomicBool,
+    open: Arc<AtomicUsize>,
+}
+
+/// Counts an open output stream down when the stream is dropped (the `helm` process "killed").
+struct OpenStream(Arc<AtomicUsize>);
+
+impl Drop for OpenStream {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
 }
 
 fake_plumbing!(FakeHelmPort, HelmScripts, HelmCall);
@@ -157,7 +176,38 @@ impl FakeHelmPort {
             script: HelmScripts::default(),
             calls: CallLog::default(),
             capabilities: Mutex::new(capabilities),
+            streams: StreamState::default(),
         }
+    }
+
+    /// With `true`, the streams `install` and `upgrade` return stay open after their scripted
+    /// lines, like a `helm` still waiting for its resources, until they are dropped.
+    pub fn hold_streams(&self, hold: bool) {
+        self.streams.hold.store(hold, Ordering::SeqCst);
+    }
+
+    /// How many `install` / `upgrade` output streams exist and have not been dropped: a dropped
+    /// stream is a killed `helm` process.
+    pub fn open_streams(&self) -> usize {
+        self.streams.open.load(Ordering::SeqCst)
+    }
+
+    fn lines_stream(&self, lines: OxiResult<Vec<OutputLine>>) -> OxiResult<HelmOutput> {
+        let lines = lines?;
+        self.streams.open.fetch_add(1, Ordering::SeqCst);
+        let guard = OpenStream(self.streams.open.clone());
+        let tail = if self.streams.hold.load(Ordering::SeqCst) {
+            futures::stream::pending().boxed()
+        } else {
+            futures::stream::empty().boxed()
+        };
+        Ok(futures::stream::iter(lines.into_iter().map(Ok))
+            .chain(tail)
+            .map(move |line| {
+                let _open = &guard;
+                line
+            })
+            .boxed())
     }
 
     /// Changes the reported capabilities (a binary appearing or disappearing).
@@ -176,10 +226,6 @@ impl FakeHelmPort {
     fn can_read(&self) -> OxiResult<()> {
         self.check(|c| c.native_read || c.cli_available)
     }
-}
-
-fn lines_stream(lines: OxiResult<Vec<OutputLine>>) -> OxiResult<HelmOutput> {
-    lines.map(|lines| futures::stream::iter(lines.into_iter().map(Ok)).boxed())
 }
 
 #[async_trait]
@@ -279,7 +325,7 @@ impl HelmPort for FakeHelmPort {
     async fn install(&self, request: &InstallRequest) -> OxiResult<HelmOutput> {
         self.calls.record(HelmCall::Install(request.clone()));
         self.check(|c| c.can_install)?;
-        lines_stream(
+        self.lines_stream(
             self.script
                 .install
                 .next_or_unscripted("FakeHelmPort", "install"),
@@ -289,7 +335,7 @@ impl HelmPort for FakeHelmPort {
     async fn upgrade(&self, request: &UpgradeRequest) -> OxiResult<HelmOutput> {
         self.calls.record(HelmCall::Upgrade(request.clone()));
         self.check(|c| c.can_upgrade)?;
-        lines_stream(
+        self.lines_stream(
             self.script
                 .upgrade
                 .next_or_unscripted("FakeHelmPort", "upgrade"),

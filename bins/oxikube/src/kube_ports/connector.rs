@@ -77,6 +77,12 @@ impl SourcesConnector {
         }
     }
 
+    /// Which kubeconfig file defines each context, as of the last connect (for the `helm` CLI
+    /// adapter, which points `helm` at the user's own file).
+    pub fn origins(&self) -> KubeconfigOrigins {
+        KubeconfigOrigins(self.synced.clone())
+    }
+
     /// The kube connector behind this one (its watch budgets, `super::WatchBudgets`).
     pub fn kube(&self) -> &KubeConnector {
         &self.kube
@@ -98,6 +104,29 @@ impl SourcesConnector {
         }
         *synced = Some(loaded);
         Ok(())
+    }
+}
+
+/// Which kubeconfig file defines a context, from the catalog the connector's pools hold (filled
+/// by the first connect). Paths only, never credentials. Cheap to clone; empty by default.
+#[derive(Clone, Default)]
+pub struct KubeconfigOrigins(Arc<Mutex<Option<Arc<LoadedKubeconfig>>>>);
+
+impl std::fmt::Debug for KubeconfigOrigins {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("KubeconfigOrigins").finish_non_exhaustive()
+    }
+}
+
+impl KubeconfigOrigins {
+    /// The file that defines `context`; `None` before the first connect, for a context the
+    /// catalog does not know, and for the in-cluster context (it has no file).
+    pub fn file_of(&self, context: &oxikube_domain::ids::ContextName) -> Option<PathBuf> {
+        self.0
+            .lock()
+            .as_ref()
+            .filter(|loaded| !loaded.is_in_cluster(context))
+            .and_then(|loaded| loaded.origin(context).map(Path::to_path_buf))
     }
 }
 

@@ -144,6 +144,8 @@ impl CommandId {
     pub const HELM_SHOW_CHART: CommandId = CommandId::new("helm::ShowChart");
     /// `helm::InstallChart`: start an install from a catalog chart (E16-S08, opens E16-S09's tab).
     pub const HELM_INSTALL_CHART: CommandId = CommandId::new("helm::InstallChart");
+    /// `helm::Install`: install a chart as a new release, through the mutation guard (E16-S09).
+    pub const HELM_INSTALL: CommandId = CommandId::new("helm::Install");
     /// `helm::RepoAdd`: add a chart repository to Helm's own configuration (E16-S07).
     pub const HELM_REPO_ADD: CommandId = CommandId::new("helm::RepoAdd");
     /// `helm::RepoRemove`: remove a chart repository from Helm's own configuration (E16-S07).
@@ -898,6 +900,15 @@ pub static COMMANDS: &[CommandMeta] = &[
     // mutation, so no guard tier and runnable on a read-only cluster. No cluster capability is
     // needed: Capabilities::HELM is never granted to a session, and the page explains a missing
     // binary.
+    // Installing a release changes the cluster (E16-S09): risk low, one confirmation after the
+    // preview (the preview is the guard's dry run), blocked on a read-only cluster, audited.
+    CommandMeta::mutation(
+        CommandId::HELM_INSTALL,
+        "Helm: Install Release",
+        CommandScope::Cluster,
+        Risk::Low,
+        Capabilities::HELM,
+    ),
     CommandMeta::read(
         CommandId::HELM_INSTALL_CHART,
         "Helm: Install Chart",

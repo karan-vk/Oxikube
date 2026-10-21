@@ -109,6 +109,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::TableToggleWide { cluster, .. }
         | Command::TableSetFilter { cluster, .. }
         | Command::PodSanitize { cluster, .. }
+        | Command::HelmInstall { cluster, .. }
         | Command::ResourceApply { cluster, .. } => Some(cluster),
         Command::TerminalNew { cluster }
         | Command::EditorNewManifest { cluster }
@@ -289,6 +290,9 @@ pub fn audit_target(command: &Command, cluster: &ClusterId) -> ResourceRef {
     if let Some(object) = crate::apply::audit_target(command, cluster) {
         return object;
     }
+    if let Some(release) = crate::helm_install::audit_target(command, cluster) {
+        return release;
+    }
     // A create names the object it will make.
     if let Command::NamespaceCreate { name, .. } = command {
         return ResourceRef::cluster_scoped(cluster.clone(), Gvk::namespace(), &**name);
@@ -328,6 +332,9 @@ pub fn summary(meta: &CommandMeta, command: &Command, context: &str) -> String {
         return summary;
     }
     if let Some(summary) = super::selection_policy::summary(command, context) {
+        return summary;
+    }
+    if let Some(summary) = crate::helm_install::summary(command, context) {
         return summary;
     }
     if let Command::WorkloadScale { target, replicas } = command {
@@ -452,6 +459,9 @@ pub fn audit_detail(command: &Command) -> Option<String> {
         return Some(detail);
     }
     if let Some(detail) = super::selection_policy::detail(command) {
+        return Some(detail);
+    }
+    if let Some(detail) = crate::helm_install::audit_detail(command) {
         return Some(detail);
     }
     match command {

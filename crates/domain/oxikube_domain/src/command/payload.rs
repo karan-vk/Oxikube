@@ -195,6 +195,41 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         version: Option<String>,
     },
+    /// Install a chart as a new release (`helm install`, E16-S09). **Mutating** (risk low): blocked
+    /// on a read-only cluster, one confirmation after the preview, audited without the values. A
+    /// dry-run dispatch renders the chart (`helm template`) and has the server validate it
+    /// (`helm install --dry-run=server`, or `--dry-run` on Helm before 3.13) without installing:
+    /// that is the install tab's preview.
+    #[serde(rename = "helm::Install")]
+    HelmInstall {
+        /// The cluster to install into.
+        cluster: ClusterId,
+        /// The release name (a DNS-1123 label of at most 53 characters).
+        release: String,
+        /// The namespace.
+        namespace: String,
+        /// Create the namespace when it is missing (`--create-namespace`).
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        create_namespace: bool,
+        /// The repository alias; absent for a chart reference `helm` resolves itself.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        repo: Option<String>,
+        /// The chart name.
+        chart: String,
+        /// The chart version; the newest when absent.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        version: Option<String>,
+        /// The values overriding the chart's defaults, as YAML. May hold secrets: never logged,
+        /// audited or persisted.
+        #[serde(default, skip_serializing_if = "crate::helm::ValuesYaml::is_blank")]
+        values: crate::helm::ValuesYaml,
+        /// Wait for the release's resources to become ready (`--wait`).
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        wait: bool,
+        /// Helm's `--timeout` in seconds; Helm's default (300) when absent.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        timeout_secs: Option<u64>,
+    },
     /// Add a chart repository to Helm's own configuration (`helm repo add`, E16-S07). A password
     /// is never part of a command: the add dialog hands it to the app's repository service in
     /// memory, and an agent cannot supply one. An agent's call needs the user's permission
@@ -1643,6 +1678,7 @@ impl Command {
             Command::HelmSearchCharts { .. } => CommandId::HELM_SEARCH_CHARTS,
             Command::HelmShowChart { .. } => CommandId::HELM_SHOW_CHART,
             Command::HelmInstallChart { .. } => CommandId::HELM_INSTALL_CHART,
+            Command::HelmInstall { .. } => CommandId::HELM_INSTALL,
             Command::HelmRepoAdd { .. } => CommandId::HELM_REPO_ADD,
             Command::HelmRepoRemove { .. } => CommandId::HELM_REPO_REMOVE,
             Command::HelmRepoUpdate { .. } => CommandId::HELM_REPO_UPDATE,
@@ -2095,6 +2131,30 @@ mod tests {
                 repo: "bitnami".into(),
                 name: "nginx".into(),
                 version: None,
+            },
+            Command::HelmInstall {
+                cluster: cluster(),
+                release: "web".into(),
+                namespace: "demo".into(),
+                create_namespace: true,
+                repo: Some("bitnami".into()),
+                chart: "nginx".into(),
+                version: Some("15.4.0".into()),
+                values: crate::helm::ValuesYaml::new("replicaCount: 2\n"),
+                wait: true,
+                timeout_secs: Some(120),
+            },
+            Command::HelmInstall {
+                cluster: cluster(),
+                release: "web".into(),
+                namespace: "demo".into(),
+                create_namespace: false,
+                repo: None,
+                chart: "oci://example.com/nginx".into(),
+                version: None,
+                values: crate::helm::ValuesYaml::default(),
+                wait: false,
+                timeout_secs: None,
             },
             Command::HelmRepoAdd {
                 name: "bitnami".into(),

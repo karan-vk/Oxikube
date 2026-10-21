@@ -28,6 +28,8 @@ const RISKS: &[(CommandId, Risk)] = &[
     (CommandId::CRONJOB_RESUME, Risk::Low),
     (CommandId::CRONJOB_SUSPEND, Risk::Low),
     (CommandId::CRONJOB_TRIGGER, Risk::Low),
+    // Installing a Helm chart (E16-S09): the install tab's preview is its dry run; no row action.
+    (CommandId::HELM_INSTALL, Risk::Low),
     (CommandId::INGRESS_CLASS_SET_DEFAULT, Risk::Low),
     (CommandId::JOB_RESUME, Risk::Low),
     (CommandId::JOB_SUSPEND, Risk::Low),

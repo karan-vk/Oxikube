@@ -17,6 +17,7 @@ gpui.workspace = true
 jiff.workspace = true
 oxikube_app.workspace = true
 oxikube_domain.workspace = true
+oxikube_editor.workspace = true
 oxikube_ports.workspace = true
 oxikube_runtime.workspace = true
 oxikube_settings.workspace = true
@@ -37,15 +38,21 @@ tokio.workspace = true
 
 [features]
 default = []
-# Headless GPU screenshots (`tests/banner_screenshot.rs`, `tests/repos_screenshot.rs`, harness =
-# false so they run on the process main thread). Need Metal / Vulkan, so never part of the default
-# gate; the nightly workflow runs them: `cargo test -p oxikube_helm_ui --features screenshot --test
-# <name>`.
+# Headless GPU screenshots (`tests/banner_screenshot.rs`, `tests/repos_screenshot.rs`,
+# `tests/charts_screenshot.rs`, `tests/install_screenshot.rs`; harness = false so they run on the
+# process main thread). Need Metal / Vulkan, so never part of the default gate; the nightly
+# workflow runs them: `cargo test -p oxikube_helm_ui --features screenshot --test <name>`.
 screenshot = []
 
 [[test]]
 name = "banner_screenshot"
 path = "tests/banner_screenshot.rs"
+harness = false
+required-features = ["screenshot"]
+
+[[test]]
+name = "install_screenshot"
+path = "tests/install_screenshot.rs"
 harness = false
 required-features = ["screenshot"]
 

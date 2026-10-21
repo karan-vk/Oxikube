@@ -43,8 +43,13 @@ pub(super) fn start(cx: &mut TestAppContext, fake: &Arc<FakeHelmPort>) -> App {
         Arc::new(FakeClockPort::default()),
     );
     let charts = ChartsService::new(fake.clone(), repos.catalog_changes());
+    let helm: Arc<dyn oxikube_ports::HelmPort> = fake.clone();
     App::start_with(cx, TestPorts::seeded(), move |cx| {
-        cx.set_global(ServiceOverride(HelmServices { repos, charts }))
+        cx.set_global(ServiceOverride(HelmServices {
+            repos,
+            charts,
+            helm,
+        }))
     })
 }
 

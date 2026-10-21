@@ -41,6 +41,7 @@
 //! | `oxikube_settings_ui::helm_repos` | `helm::ShowRepos` (the Helm repositories page, a tab of the active cluster's tab; E16-S07) |
 //! | `oxikube_helm_ui::charts` | `helm::OpenCharts` (the Helm charts catalog, a tab of the active cluster's tab; E16-S08) |
 //! | `oxikube_app::helm_charts` | `helm::SearchCharts`, `helm::ShowChart` (search the configured repositories, print a chart's metadata, README or default values through the `helm` CLI; read-only) and `helm::InstallChart` (hands a chart to the install tab; opens a tab, installs nothing; E16-S08) |
+//! | `oxikube_app::helm_install` | `helm::Install` (install a chart as a release through the `helm` CLI; mutating, risk low: one confirmation after the preview, which is its dry run; blocked on read-only clusters; audited without the values; E16-S09) |
 //! | `oxikube_app::helm_repos` | `helm::RepoAdd`, `RepoRemove`, `RepoUpdate` (the chart repositories in Helm's own configuration through the `helm` CLI; local configuration, not a cluster mutation; an agent's add needs permission; E16-S07) |
 //! | `oxikube_overview_ui` | `cluster::ShowPulses` (the cluster's pulses page, `:pulses`; E13-S10) |
 //! | `oxikube_overview_ui` | `cluster::ShowOverview` (the cluster's overview, a tab of its tab; reads only; E13-S09) |
@@ -169,6 +170,10 @@ pub struct BusParts {
     pub helm_charts: oxikube_app::ChartsService,
     /// Where `helm::OpenCharts` sends its request (E16-S08).
     pub helm_charts_pages: oxikube_helm_ui::charts::HelmChartsRequestSink,
+    /// The `helm` adapter `helm::Install` runs (E16-S09).
+    pub helm: Arc<dyn oxikube_ports::HelmPort>,
+    /// Where `helm::Install` publishes its output, for the install tab that follows it.
+    pub helm_progress: oxikube_app::ReleaseProgress,
     /// Where `cluster::ShowPulses` sends the cluster whose pulses to open (applied on the UI
     /// thread; E13-S10).
     pub pulses_pages: oxikube_overview_ui::pulses::PulsesRequestSink,
@@ -323,6 +328,9 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     })?;
     registry.install("oxikube_app::helm_charts", |r| {
         oxikube_app::helm_charts::register_commands(r, parts.helm_charts)
+    })?;
+    registry.install("oxikube_app::helm_install", |r| {
+        oxikube_app::helm_install::register_commands(r, parts.helm, parts.helm_progress)
     })?;
     // An agent's `helm.repo_add` needs the user's permission (denied until the agent epic's prompt).
     registry.install("oxikube_app::helm_repos", |r| {
