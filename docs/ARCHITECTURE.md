@@ -741,6 +741,20 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `install` / `upgrade` return the port's `HelmOutput` stream (stdout and stderr lines as they arrive; dropping it kills
   `helm`). Mutations are reached only through `MutationGuard` in `oxikube_app`. `repo_add` / `repo_remove` /
   `repo_update` are inherent methods (local Helm config) until the repos story puts them on the port.
+- `oxikube_helm_ui` (E16-S11) — capability gating for the Helm views. `HelmGateState` (an entity, global to the app) holds
+  what the `helm` binary reported plus whether a native reader is mounted and exposes one `HelmGate` (`oxikube_domain::
+  helm`: `Full`, `NativeOnly { reason }`, `Unavailable { reason }`); views ask `HelmGateState::allows(HelmFeature)` or
+  `gated(&gate, feature, build)` instead of testing `cli_available`. `HelmBanner` is the guidance banner (why things are
+  hidden, "Locate helm" = `helm::LocateBinary`, "Recheck" = `helm::Recheck`, plus the `helm.server_side_apply` warning on
+  a Helm older than 3.13); `HelmPage` is the cluster tab's Helm page (the sidebar's Helm entry), which lists only the
+  features the gate allows. In native-only mode install, upgrade, rollback, uninstall, repositories and the charts
+  catalog are not drawn, and `HelmGate::capabilities()` drops `Capabilities::HELM` so the palette hides (and explains)
+  any command that needs it; tools get `HelmGate::unavailable(feature)`, a structured `{ status: "unavailable", feature,
+  reason, message }`. `bins/oxikube::mount::helm` owns the one `HelmCli`: it detects off the UI thread (`spawn_kube`) at
+  start-up, when `helm.path` changes (hot reload) and on `helm::Recheck`.
+- `oxikube_settings::helm` (E16-S11) — the `helm` setting: `path` (empty autodetects), `server_side_apply` (default
+  false; `server_side_warning` says when the binary is older than 3.13) and `default_repos` (`{ name, url }`, http(s)
+  without credentials; bitnami, ingress-nginx and prometheus-community by default). Global, hot reloaded.
 - `oxikube_notify_os` (E14-S06) — the `NotifierPort` adapter for desktop notifications. `OsNotifier` is off until the user opts in
   (`events.os_notifications`): `set_enabled(true)` is the only call that contacts the OS, on a thread of its own, and a system without a
   notification service answers `NotifierStatus::Unavailable`, never a panic. One `Backend` per platform behind a trait: macOS

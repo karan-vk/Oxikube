@@ -50,13 +50,15 @@ pub enum CommandCategory {
     Editor,
     /// Kubernetes events (`events::*`).
     Events,
+    /// Helm releases, charts and repositories (`helm::*`).
+    Helm,
     /// A namespace no category claims (an extension's command, until it declares one).
     Other,
 }
 
 impl CommandCategory {
     /// Every category, in display order.
-    pub const ALL: [CommandCategory; 17] = [
+    pub const ALL: [CommandCategory; 18] = [
         CommandCategory::App,
         CommandCategory::Window,
         CommandCategory::View,
@@ -73,12 +75,13 @@ impl CommandCategory {
         CommandCategory::Terminal,
         CommandCategory::Editor,
         CommandCategory::Events,
+        CommandCategory::Helm,
         CommandCategory::Other,
     ];
 
     /// The category of the command `id`, from its namespace.
     pub const fn of(id: CommandId) -> Self {
-        const NAMESPACES: [(&str, CommandCategory); 31] = [
+        const NAMESPACES: [(&str, CommandCategory); 32] = [
             ("app", CommandCategory::App),
             ("notifications", CommandCategory::App),
             ("window", CommandCategory::Window),
@@ -110,6 +113,7 @@ impl CommandCategory {
             ("terminal", CommandCategory::Terminal),
             ("editor", CommandCategory::Editor),
             ("events", CommandCategory::Events),
+            ("helm", CommandCategory::Helm),
         ];
         let mut i = 0;
         while i < NAMESPACES.len() {
@@ -140,6 +144,7 @@ impl CommandCategory {
             CommandCategory::Terminal => "Terminal",
             CommandCategory::Editor => "Editor",
             CommandCategory::Events => "Events",
+            CommandCategory::Helm => "Helm",
             CommandCategory::Other => "Other",
         }
     }

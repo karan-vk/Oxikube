@@ -17,6 +17,7 @@ mod events;
 mod events_agent;
 mod events_view;
 mod exec;
+mod helm;
 mod help;
 mod immediate;
 mod introspection;

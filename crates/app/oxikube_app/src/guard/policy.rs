@@ -212,6 +212,8 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::AppQuit
         | Command::AppSendTestNotification
         | Command::AppToggleOsNotifications { .. }
+        | Command::HelmRecheck
+        | Command::HelmLocateBinary
         | Command::NotificationsTogglePanel
         | Command::NotificationsMarkRead { .. }
         | Command::NotificationsMarkAllRead

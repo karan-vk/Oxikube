@@ -109,6 +109,8 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
     match command.as_str() {
         "app::Quit" => Command::AppQuit,
         "app::SendTestNotification" => Command::AppSendTestNotification,
+        "helm::Recheck" => Command::HelmRecheck,
+        "helm::LocateBinary" => Command::HelmLocateBinary,
         "app::ToggleOsNotifications" => Command::AppToggleOsNotifications { enabled: None },
         "notifications::MarkAllRead" => Command::NotificationsMarkAllRead,
         "portforward::Start" => Command::PortForwardStart {

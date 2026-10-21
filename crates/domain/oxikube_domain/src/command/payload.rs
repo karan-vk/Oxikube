@@ -388,6 +388,14 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         enabled: Option<bool>,
     },
+    /// Detect the `helm` binary again (after installing Helm or changing `helm.path`) and refresh
+    /// what the Helm views offer (E16-S11). Runs `helm version`; changes nothing in any cluster.
+    #[serde(rename = "helm::Recheck")]
+    HelmRecheck,
+    /// Open the `helm.path` setting so the user can point Oxikube at their `helm` binary
+    /// (E16-S11). Changes nothing in any cluster.
+    #[serde(rename = "helm::LocateBinary")]
+    HelmLocateBinary,
     /// Show and focus the notification centre, or hide it (E14-S05).
     #[serde(rename = "notifications::TogglePanel")]
     NotificationsTogglePanel,
@@ -1583,6 +1591,8 @@ impl Command {
             Command::AppQuit => CommandId::APP_QUIT,
             Command::AppSendTestNotification => CommandId::APP_SEND_TEST_NOTIFICATION,
             Command::AppToggleOsNotifications { .. } => CommandId::APP_TOGGLE_OS_NOTIFICATIONS,
+            Command::HelmRecheck => CommandId::HELM_RECHECK,
+            Command::HelmLocateBinary => CommandId::HELM_LOCATE_BINARY,
             Command::IngressClassSetDefault { .. } => CommandId::INGRESS_CLASS_SET_DEFAULT,
             Command::NotificationsTogglePanel => CommandId::NOTIFICATIONS_TOGGLE_PANEL,
             Command::NotificationsMarkRead { .. } => CommandId::NOTIFICATIONS_MARK_READ,
@@ -2073,6 +2083,8 @@ mod tests {
             Command::AppQuit,
             Command::AppSendTestNotification,
             Command::AppToggleOsNotifications { enabled: None },
+            Command::HelmRecheck,
+            Command::HelmLocateBinary,
             Command::NotificationsTogglePanel,
             Command::NotificationsMarkRead { id: 7 },
             Command::NotificationsMarkAllRead,
@@ -2588,6 +2600,8 @@ mod tests {
                     | Command::AppQuit
                     | Command::AppSendTestNotification
                     | Command::AppToggleOsNotifications { .. }
+                    | Command::HelmRecheck
+                    | Command::HelmLocateBinary
                     | Command::NotificationsTogglePanel
                     | Command::NotificationsMarkRead { .. }
                     | Command::NotificationsMarkAllRead

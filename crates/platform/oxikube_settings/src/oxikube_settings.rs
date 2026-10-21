@@ -19,6 +19,7 @@
 //! Module map:
 //! - [`aliases`]: the user's `aliases.json` (E11-S04): parse with line-numbered diagnostics, hot reload.
 //! - [`cluster`]: the per-cluster settings (`clusters.<id>`: name, colour, read-only, ...), E06-S08.
+//! - [`helm`]: the `helm` setting, binary path, server-side apply, default repositories (E16-S11).
 //! - [`kubeconfig`]: the `kubeconfig.sources` setting, the kubeconfig files and folders to read (E06-S05).
 //! - [`metrics`]: the `metrics` setting, which extended resources count as GPUs (E13-S02).
 //! - [`portforward`]: the `portforward` setting, default bind, read-only policy, port range (E15-S08).
@@ -38,6 +39,7 @@ pub mod aliases;
 pub mod cluster;
 pub mod diagnostics;
 pub mod global;
+pub mod helm;
 pub mod json_edit;
 pub mod jsonc;
 pub mod kubeconfig;
@@ -55,6 +57,7 @@ pub mod watcher;
 pub use cluster::{ClusterSettings, ClusterSettingsContent};
 pub use diagnostics::SettingsDiagnostic;
 pub use global::{init, init_with_dir, update_user_settings};
+pub use helm::{HelmRepoContent, HelmSettings, HelmSettingsContent};
 pub use kubeconfig::{KubeconfigSettings, KubeconfigSettingsContent};
 pub use metrics::{
     DEFAULT_HISTORY_REFRESH_SECS, MAX_HISTORY_REFRESH_SECS, MIN_HISTORY_REFRESH_SECS,
