@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  # `fail=true` renders an invalid name, so the upgrade fails at apply time and Helm records
+  # a `failed` revision.
+  name: {{ if .Values.fail }}Invalid_Name{{ else }}{{ .Release.Name }}-cfg{{ end }}
+data:
+  greeting: {{ .Values.greeting | quote }}

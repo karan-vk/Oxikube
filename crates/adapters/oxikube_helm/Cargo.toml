@@ -13,6 +13,8 @@ doctest = false
 
 [dependencies]
 async-trait.workspace = true
+base64.workspace = true
+flate2.workspace = true
 futures.workspace = true
 jiff.workspace = true
 oxikube_domain.workspace = true
@@ -21,21 +23,33 @@ parking_lot.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
+base64.workspace = true
+flate2.workspace = true
+jiff.workspace = true
+# The kind native test reads real release objects through the kube resource adapter.
+oxikube_kube.workspace = true
 oxikube_testkit.workspace = true
+serde_json.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 
 [features]
 default = []
-# Enables the tests that drive a real `helm` against a live kind cluster (`cargo xtask kind-up`;
-# OXIKUBE_TEST_CONTEXT). They skip when the variable is unset or no helm >= 3.10 is installed.
+# Enables the tests that need a live kind cluster (`cargo xtask kind-up`; OXIKUBE_TEST_CONTEXT).
+# The CLI tests also skip when no helm >= 3.10 is installed.
 integration = ["oxikube_testkit/integration"]
 
 [[test]]
 name = "kind_helm_cli"
 path = "tests/kind_helm_cli.rs"
+required-features = ["integration"]
+
+[[test]]
+name = "kind_native"
+path = "tests/kind_native.rs"
 required-features = ["integration"]
 
 [lints]

@@ -1,0 +1,21 @@
+{
+  "apiVersion": "v1",
+  "data": {
+    "release": "H4sIAAAAAAAC/5RVbW+bOhj9K5Hvx0sycELTIO1DYQ0lSbPbtA2Bm2kyxgGvfhuYJHTqf78yWV+mTZuuhIT9+O0cP+c5/gYE4gR44ECyAeZ9pBSwABU7CbxvYEerWn/OiWKyJTnwALThWd+x+9C5c8482/aG7gA6zmQy+dueeLYNLMDQ/16SkxpXVGkqBfBAJGqNGOthyRUjmgAL1BrppgYeqBtFqprkJAcWEFITE7wrkXioeztZ9ehpLRVF75XQYCvAkwVwiSptWHGiUY40Mu3v7HPCJbDAnlT1CYQzgIPhT9AueleE8V63U3fevMlIJYjBYQGk6Pplgz3sIuo1Agf2wLDVrTJHIqUYxajb+ckCTOIH4ImGMQtowhVDHbl/XyC+BN8tP95d3g70URt8HQ+wDssy4/oxCtM9pr7KxNJO4mONYldEV3ocBe5tGh9ZslmyxYNbZvF9sdvYTVC8fw8swGWuKSe/yhZ0B+e2O4bDM3v4PWFP1i9AYT5oEWevkJKNr9Z83WLI9tkXWeRfLucIsib9IIsbOGlSzsRdPD0E3GF5OH1INqvyYyGLKOzgnf0Gtk5gKgK+KvPw8iygF0U6nLF0s1IZx8/r4iQ+OunmunkzVuwC/5jHEzu99Se7G1mYuYtbX6X0olnzaZ3H68cFT0sUH8w58yjwx6T1eRKzOgpmJYaapYFvZ88x+sM+LOM33bo/Xul4MnJHw+cKePpkgT1ijUn4N7BDlAFvh1hNLFBUhGgqCuCBkjBmREo5KoiZWBEla6pl1QIPkCMy5fLuQDKjMVR0IjbJAkpW2kjp3LZGo+GnJwvUuCQcPcvt1HsFbNu20+++O9v2ui8FFthR9qMiByVhnBZCVuQ17VHr3ySblZ1uZg1uu6tSKXT3mN8XOSxZRn2ax6xOQ9akrX9I4mWVxDnD7Wgetf49CtljdLV08JW/x2Jl2jKNj3UU5nUGoyKLp3YCS5POOrqasSyc2miTsujKL/Ow+HE8nDbphfwShS5L4dRG8aSJgvKA+ZqjTWlSOUSblYyCS7Wg/j8ZP7pROGnSW//wzCG68hmmvqkktihks5oud/fDleFj8H7IoKMzOCrWD8u7KFwpLK7nC56rPDg//UMmMj5p0xvZJEK1i8Ppj+K8yYYzFlBXpq2ZW4o3scecj/YBvTalojODO5yVCdQODnyO4iPDB/l1IZZDfCG/LvisRF1/pU/9SYtiPJ+L7k7jZDNT2XD9GF2yy9Xmer4QfptBxZLhzXzB2UMaX+4DKps8dA6YT74G1IUYLvdpeL//rUO4njv23LPBOXTs8QiOz98I+g+eAt2xfe6en714CuBI0B2pNfBAv9/fir96t7KpMPF6xp3f/WQ1W/FquF5v72zFAxW51wuk2NHiGqmteHZ6byt6PaNa782z0Me7Yitehp8rzettT6W2BVuxFW9fBcfqpF8rhA0veaR9TWrdN3WAkXLgcOKeXJ+1nznRpTQPYF0j8PTfAJDyvI1oBwAA"
+  },
+  "kind": "ConfigMap",
+  "metadata": {
+    "creationTimestamp": "2026-10-21T07:00:35Z",
+    "labels": {
+      "modifiedAt": "1792566035",
+      "name": "web.cm-app",
+      "owner": "helm",
+      "status": "superseded",
+      "version": "1"
+    },
+    "name": "sh.helm.release.v1.web.cm-app.v1",
+    "namespace": "oxi-test-helmcap12395",
+    "resourceVersion": "2282656",
+    "uid": "4fdbb575-b8dd-4ac4-a59f-9ce42f540842"
+  }
+}
