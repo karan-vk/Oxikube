@@ -769,6 +769,16 @@ crate's `README.md` for its allowed dependencies. Highlights:
 - `oxikube_settings::helm` (E16-S11) — the `helm` setting: `path` (empty autodetects), `server_side_apply` (default
   false; `server_side_warning` says when the binary is older than 3.13) and `default_repos` (`{ name, url }`, http(s)
   without credentials; bitnami, ingress-nginx and prometheus-community by default). Global, hot reloaded.
+- `oxikube_app::helm_charts` (E16-S08) — `ChartsService`: the charts catalog over `HelmPort`. `search` runs `helm search repo
+  --versions` and groups hits per chart (`oxikube_domain::helm::group_hits`, semver-ordered versions, newest first), cached per
+  keyword; `detail` runs `helm show` (README, values, chart) cached per chart version; both caches drop on
+  `HelmReposService::catalog_changes()`. `ready()` says no helm / no repos / ready. Commands `helm::SearchCharts`, `helm::ShowChart`
+  (read-only) and `helm::InstallChart` (hands chart + version to E16-S09's install tab via `install_requests()`; opens a tab, installs nothing).
+- `oxikube_helm_ui::charts` (E16-S08) — the Helm Charts page (`HelmChartsView`, a tab of the active cluster's tab): debounced
+  search, virtualised chart cards (icon placeholder, name, repo, description, version, app version), detail with README
+  (`oxikube_ui::markdown`, sanitised off the UI thread: HTML stripped, images become links, only http/https/mailto links open),
+  versions list and default values (`CodeView`), Install, guidance without `helm`, default repos when none. Reached by
+  `helm::OpenCharts` (palette "Helm: Charts", sidebar Helm > Charts). No remote images are fetched.
 - `oxikube_notify_os` (E14-S06) — the `NotifierPort` adapter for desktop notifications. `OsNotifier` is off until the user opts in
   (`events.os_notifications`): `set_enabled(true)` is the only call that contacts the OS, on a thread of its own, and a system without a
   notification service answers `NotifierStatus::Unavailable`, never a panic. One `Backend` per platform behind a trait: macOS

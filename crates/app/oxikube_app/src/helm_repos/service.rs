@@ -39,6 +39,7 @@ pub struct HelmReposService {
 
 /// Wakes when the service's [`RepoSnapshot`] changed (or, from
 /// [`catalog_changes`](HelmReposService::catalog_changes), when cached searches went stale).
+#[derive(Clone)]
 pub struct RepoChanges(watch::Receiver<u64>);
 
 impl RepoChanges {
