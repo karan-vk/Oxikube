@@ -387,3 +387,26 @@ async fn several_namespaces_are_listed_together() {
     namespaces.sort_unstable();
     assert_eq!(namespaces, ["a", "b"]);
 }
+
+/// Fakes created and exec'd from many threads at once never hit `ETXTBSY`: a fork in one
+/// thread must not inherit a write fd to a script another thread is about to run.
+#[test]
+fn parallel_fakes_exec_without_text_file_busy() {
+    let threads: Vec<_> = (0..16)
+        .map(|_| {
+            std::thread::spawn(|| {
+                for _ in 0..8 {
+                    let fake = FakeHelm::new("v3.14.2+gabc", "exit 0");
+                    let out = std::process::Command::new(fake.path())
+                        .args(["version", "--short"])
+                        .output()
+                        .expect("the fake helm runs (ETXTBSY would fail here)");
+                    assert!(out.status.success());
+                }
+            })
+        })
+        .collect();
+    for thread in threads {
+        thread.join().unwrap();
+    }
+}

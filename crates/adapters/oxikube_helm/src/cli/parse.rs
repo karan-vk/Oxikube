@@ -49,15 +49,26 @@ pub(crate) fn timestamp(s: &str) -> Timestamp {
     Timestamp::from_str(&format!("{date}T{time}{offset}")).unwrap_or(Timestamp::UNIX_EPOCH)
 }
 
+/// `true` when `s` starts with an `x.y` version: digits, a `.`, then a digit, after an
+/// optional `v`.
+fn starts_with_version(s: &str) -> bool {
+    let s = s.strip_prefix('v').unwrap_or(s);
+    let major = s.bytes().take_while(u8::is_ascii_digit).count();
+    major > 0
+        && s[major..]
+            .strip_prefix('.')
+            .is_some_and(|rest| rest.starts_with(|c: char| c.is_ascii_digit()))
+}
+
 /// Splits Helm's chart column (`kube-prometheus-stack-51.2.0`, `cert-manager-v1.14.0`) at the
-/// first `-` followed by an `x.y` version (digit-led, or `v` and a digit). Without one the whole
+/// first `-` followed by an `x.y` version (digits `.` digits, optionally `v`-prefixed), so
+/// digit-led name segments (`web-3d-viewer-1.0.0`) stay in the name. Without one the whole
 /// text is the name.
 pub(crate) fn chart(column: &str) -> ChartRef {
-    let split = column.match_indices('-').map(|(i, _)| i).find(|&i| {
-        let rest = &column[i + 1..];
-        let digits = rest.strip_prefix('v').unwrap_or(rest);
-        digits.starts_with(|c: char| c.is_ascii_digit()) && rest.contains('.')
-    });
+    let split = column
+        .match_indices('-')
+        .map(|(i, _)| i)
+        .find(|&i| starts_with_version(&column[i + 1..]));
     match split {
         Some(i) => ChartRef::new(&column[..i], &column[i + 1..]),
         None => ChartRef::new(column, ""),

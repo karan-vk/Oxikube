@@ -1,7 +1,6 @@
 //! A fake `helm`: a shell script in a temp dir that answers `version --short` and runs a
 //! scripted body for everything else, recording its argv and stdin next to itself.
 
-use std::os::unix::fs::PermissionsExt as _;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -28,9 +27,7 @@ impl FakeHelm {
              case \" $* \" in *' --values=- '*) cat > \"$d/stdin\" ;; esac\n\
              {body}\n"
         );
-        let path = dir.path().join("helm");
-        std::fs::write(&path, script).unwrap();
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        install_script(&dir.path().join("helm"), &script);
         Self { dir }
     }
 
@@ -71,6 +68,29 @@ impl FakeHelm {
     pub(super) fn cli(&self) -> HelmCli {
         self.cli_with(Duration::from_secs(10))
     }
+}
+
+/// Puts `script` at `path` as an executable without this process ever holding a write fd to
+/// `path`. Writing it here directly races with parallel tests: a child forked by another test
+/// thread inherits the open write fd until its exec, and exec'ing the script in that window
+/// fails with `ETXTBSY` ("Text file busy") on Linux. So the text goes to a sibling `.src` file
+/// (never exec'd) and a short-lived `install` child creates the binary; only that child ever
+/// opens it for writing, and it has exited before anything runs the script.
+pub(super) fn install_script(path: &Path, script: &str) {
+    let src = path.with_extension("src");
+    std::fs::write(&src, script).unwrap();
+    let status = std::process::Command::new("install")
+        .arg("-m")
+        .arg("755")
+        .arg(&src)
+        .arg(path)
+        .status()
+        .unwrap();
+    assert!(
+        status.success(),
+        "install {} failed: {status}",
+        path.display()
+    );
 }
 
 pub(super) fn cluster() -> ClusterId {

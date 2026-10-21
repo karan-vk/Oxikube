@@ -159,6 +159,18 @@ fn chart_column_splits_at_the_version() {
         ChartRef::new("vault", "0.28.0")
     );
     assert_eq!(parse::chart("plain"), ChartRef::new("plain", ""));
+    assert_eq!(
+        parse::chart("web-3d-viewer-1.0.0"),
+        ChartRef::new("web-3d-viewer", "1.0.0")
+    );
+    assert_eq!(
+        parse::chart("auth-2fa-v2-v1.2.3"),
+        ChartRef::new("auth-2fa-v2", "v1.2.3")
+    );
+    assert_eq!(
+        parse::chart("app-2024.x-0.1.0"),
+        ChartRef::new("app-2024.x", "0.1.0")
+    );
 }
 
 #[test]
