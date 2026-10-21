@@ -174,7 +174,7 @@ impl fmt::Display for ChartRef {
 /// value trees are empty. `HelmPort::notes` / `values` / `manifest` fetch those on demand,
 /// so a 500-release list never decodes (or clones) the big payloads. Large strings are
 /// shared (`Arc`), so cloning a `Release` is cheap.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct Release {
     /// Which release this revision belongs to.
     pub release: ReleaseRef,
@@ -194,6 +194,29 @@ pub struct Release {
     pub values_user: Values,
     /// The chart defaults merged with the user's values, when loaded.
     pub values_computed: Values,
+}
+
+impl fmt::Debug for Release {
+    /// Redacts the rendered notes (charts often echo credentials there); values redact themselves.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Release")
+            .field("release", &self.release)
+            .field("chart", &self.chart)
+            .field("revision", &self.revision)
+            .field("status", &self.status)
+            .field("app_version", &self.app_version)
+            .field("updated", &self.updated)
+            .field(
+                "notes",
+                &self
+                    .notes
+                    .as_ref()
+                    .map(|n| format!("<{} bytes, redacted>", n.len())),
+            )
+            .field("values_user", &self.values_user)
+            .field("values_computed", &self.values_computed)
+            .finish()
+    }
 }
 
 impl Release {

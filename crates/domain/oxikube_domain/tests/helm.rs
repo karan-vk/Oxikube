@@ -4,7 +4,7 @@
 use oxikube_domain::ErrorKind;
 use oxikube_domain::OxiError;
 use oxikube_domain::helm::{
-    ChartRef, HelmCapabilities, HelmError, HelmVersion, ReleaseRef, ReleaseStatus, Values,
+    ChartRef, HelmCapabilities, HelmError, HelmVersion, Release, ReleaseRef, ReleaseStatus, Values,
 };
 use oxikube_domain::ids::{ClusterId, ContextName};
 
@@ -143,4 +143,24 @@ fn errors_map_onto_the_port_taxonomy() {
         ErrorKind::Internal
     );
     assert_eq!(kind(HelmError::Parse("x".into())), ErrorKind::Validation);
+}
+
+#[test]
+fn release_debug_redacts_notes() {
+    let r = ReleaseRef::new(
+        ClusterId::new("kubeconfig-a", &ContextName::new("kind-a")),
+        "demo",
+        "web",
+    );
+    let mut rel = Release::summary(
+        r,
+        ChartRef::new("nginx", "1.0.0"),
+        1,
+        ReleaseStatus::Deployed,
+        jiff::Timestamp::UNIX_EPOCH,
+    );
+    rel.notes = Some("Password: hunter2".into());
+    let dbg = format!("{rel:?}");
+    assert!(!dbg.contains("hunter2"), "{dbg}");
+    assert!(dbg.contains("redacted"));
 }
