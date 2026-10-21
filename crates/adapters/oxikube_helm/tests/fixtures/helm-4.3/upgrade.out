@@ -1,0 +1,13 @@
+Release "rec-a" has been upgraded. Happy Helming!
+NAME: rec-a
+LAST DEPLOYED: Wed Oct 21 15:58:07 2026
+NAMESPACE: helm-rec-1458
+STATUS: deployed
+REVISION: 2
+DESCRIPTION: Upgrade complete
+NOTES:
+1. Get the application URL by running these commands:
+  export POD_NAME=$(kubectl get pods --namespace helm-rec-1458 -l "app.kubernetes.io/name=demo,app.kubernetes.io/instance=rec-a" -o jsonpath="{.items[0].metadata.name}")
+  export CONTAINER_PORT=$(kubectl get pod --namespace helm-rec-1458 $POD_NAME -o jsonpath="{.spec.containers[0].ports[0].containerPort}")
+  echo "Visit http://127.0.0.1:8080 to use your application"
+  kubectl --namespace helm-rec-1458 port-forward $POD_NAME 8080:$CONTAINER_PORT

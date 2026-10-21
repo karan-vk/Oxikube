@@ -12,6 +12,31 @@ path = "src/oxikube_helm.rs"
 doctest = false
 
 [dependencies]
+async-trait.workspace = true
+futures.workspace = true
+jiff.workspace = true
+oxikube_domain.workspace = true
+oxikube_ports.workspace = true
+parking_lot.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+oxikube_testkit.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
+
+[features]
+default = []
+# Enables the tests that drive a real `helm` against a live kind cluster (`cargo xtask kind-up`;
+# OXIKUBE_TEST_CONTEXT). They skip when the variable is unset or no helm >= 3.10 is installed.
+integration = ["oxikube_testkit/integration"]
+
+[[test]]
+name = "kind_helm_cli"
+path = "tests/kind_helm_cli.rs"
+required-features = ["integration"]
 
 [lints]
 workspace = true

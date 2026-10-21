@@ -6067,6 +6067,19 @@ version = "0.0.1"
 [[package]]
 name = "oxikube_helm"
 version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "futures",
+ "jiff",
+ "oxikube_domain",
+ "oxikube_ports",
+ "oxikube_testkit",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
 
 [[package]]
 name = "oxikube_helm_ui"
