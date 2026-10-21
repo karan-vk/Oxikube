@@ -26,13 +26,9 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-base64.workspace = true
-flate2.workspace = true
-jiff.workspace = true
 # The kind native test reads real release objects through the kube resource adapter.
 oxikube_kube.workspace = true
 oxikube_testkit.workspace = true
-serde_json.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 
