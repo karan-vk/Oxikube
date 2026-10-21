@@ -727,6 +727,20 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `describe.kubectl_path` settings, hot reloaded by the binary). `oxikube_kube::KubeConnector::set_describe_factory` hands each
   connection's client and discovery to the factory the binary supplies (`bins/oxikube::kube_ports::SourcesConnector`), which
   fills `ClusterPorts::describe` and points `kubectl` at the file that defines the context.
+- `oxikube_helm` (E16) — the `HelmPort` adapters. Module `cli` (E16-S04): `HelmCli` drives the user's `helm` binary. It
+  finds it (`HelmCliConfig::path`, the `helm.path` setting, else `PATH`, `/opt/homebrew/bin`, `/usr/local/bin`), requires
+  `helm version --short` >= 3.10 (`BinaryMissing` / `VersionTooOld`, kind `Unsupported`) and caches the answer for the
+  synchronous `capabilities()`; `reconfigure` re-detects on a settings change. Each cluster command gets
+  `--kube-context` / `--kubeconfig` from a `TargetResolver` (context name and the file that defines it, no credentials) and
+  `--namespace`; the `HELM_*` overrides (`HELM_KUBECONTEXT`, `HELM_KUBETOKEN`, ...) are removed from the child's
+  environment. Every argv is `--flag=value` with positionals after `--`; reads parse `-o json` only (fixtures recorded from
+  Helm 3.10.3 and 4.3.1 under `tests/fixtures/`). Values go to stdin (`--values=-`), never the command line or a file;
+  output lines and stderr are redacted (the request's values plus `oxikube_domain::redact`). Children are
+  `kill_on_drop`, run under per-command deadlines (`HelmTimeouts`: 30 s reads, 120 s fetches, a mutation's own
+  `--timeout` + 60 s) and map failures by what Helm says (release / chart not found, name in use, unreachable, forbidden).
+  `install` / `upgrade` return the port's `HelmOutput` stream (stdout and stderr lines as they arrive; dropping it kills
+  `helm`). Mutations are reached only through `MutationGuard` in `oxikube_app`. `repo_add` / `repo_remove` /
+  `repo_update` are inherent methods (local Helm config) until the repos story puts them on the port.
 - `oxikube_notify_os` (E14-S06) — the `NotifierPort` adapter for desktop notifications. `OsNotifier` is off until the user opts in
   (`events.os_notifications`): `set_enabled(true)` is the only call that contacts the OS, on a thread of its own, and a system without a
   notification service answers `NotifierStatus::Unavailable`, never a panic. One `Backend` per platform behind a trait: macOS

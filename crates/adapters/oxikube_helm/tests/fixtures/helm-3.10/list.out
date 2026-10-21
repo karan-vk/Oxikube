@@ -1,0 +1,1 @@
+[{"name":"a1","namespace":"helm-rec2-24322","revision":"1","updated":"2026-10-21 15:58:50.124718 +0900 JST","status":"uninstalled","chart":"demo-0.1.0","app_version":"1.16.0"},{"name":"b2","namespace":"helm-rec2-24322","revision":"2","updated":"2026-10-21 15:58:52.421201 +0900 JST","status":"deployed","chart":"demo-0.1.0","app_version":"1.16.0"}]

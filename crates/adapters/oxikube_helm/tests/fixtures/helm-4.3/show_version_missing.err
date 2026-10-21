@@ -1,0 +1,1 @@
+Error: chart "podinfo" matching 0.0.1 not found in podinfo index. (try 'helm repo update'): no chart version found for podinfo-0.0.1

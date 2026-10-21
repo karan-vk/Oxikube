@@ -1,0 +1,1 @@
+Error: chart "nope" matching  not found in podinfo index. (try 'helm repo update'): no chart name found

@@ -1,0 +1,2 @@
+level=ERROR msg="release name check failed" error="cannot reuse a name that is still in use"
+Error: INSTALLATION FAILED: release name check failed: cannot reuse a name that is still in use
