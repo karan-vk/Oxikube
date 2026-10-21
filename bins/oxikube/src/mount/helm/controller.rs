@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use futures::StreamExt as _;
 use futures::channel::mpsc;
-use gpui::{App, AsyncApp, Entity, Global, Subscription, Task};
+use gpui::{App, AsyncApp, Global, Subscription, Task, WeakEntity};
 use oxikube_domain::helm::HelmCapabilities;
 use oxikube_helm::{HelmCli, HelmCliConfig, HelmTarget, TargetResolver};
 use oxikube_helm_ui::HelmGateState;
@@ -62,6 +62,9 @@ pub fn install(cx: &mut App) -> Sink {
         return running.sink.clone();
     }
     let gate = HelmGateState::install(cx);
+    // The task holds the gate weakly: a strong handle in a long-lived task is a leaked entity
+    // when the app exits.
+    let gate = gate.downgrade();
     let cli = Arc::new(HelmCli::new(HelmCliConfig::default(), Arc::new(NoTargets)));
     let (sink, mut requests) = mpsc::unbounded::<Request>();
     let _ = sink.unbounded_send(Request::Recheck);
@@ -107,12 +110,12 @@ pub fn install(cx: &mut App) -> Sink {
 /// Runs one detection off the UI thread and publishes the answer.
 async fn detect(
     cli: &Arc<HelmCli>,
-    gate: &Entity<HelmGateState>,
+    gate: &WeakEntity<HelmGateState>,
     last_path: &mut Option<PathBuf>,
     cx: &mut AsyncApp,
 ) {
     let config = cx.update(|cx| {
-        gate.update(cx, |gate, cx| gate.begin_check(cx));
+        gate.update(cx, |gate, cx| gate.begin_check(cx)).ok();
         cli_config(&HelmSettings::resolve(cx))
     });
     *last_path = config.path.clone();
@@ -130,7 +133,10 @@ async fn detect(
         }),
         None => HelmCapabilities::none(),
     };
-    cx.update(|cx| gate.update(cx, |gate, cx| gate.set_cli_capabilities(found, cx)));
+    cx.update(|cx| {
+        gate.update(cx, |gate, cx| gate.set_cli_capabilities(found, cx))
+            .ok();
+    });
 }
 
 fn open(file: &Path, cx: &mut App) {
