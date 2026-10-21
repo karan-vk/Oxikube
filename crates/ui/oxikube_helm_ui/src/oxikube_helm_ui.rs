@@ -16,9 +16,9 @@
 //! history, values, manifest and notes keep working through the native reader.
 
 pub mod banner;
+pub mod charts;
 pub mod gate;
 pub mod page;
-pub mod charts;
 pub mod repos;
 
 pub use banner::{HelmBanner, gated};
