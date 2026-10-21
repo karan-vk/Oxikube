@@ -59,38 +59,44 @@ pub fn register_commands(
     sink: Sink,
     settings_file: Option<PathBuf>,
 ) -> Result<(), RegisterError> {
-    let recheck = command::lookup(CommandId::HELM_RECHECK)
-        .copied()
-        .ok_or(RegisterError::Undeclared(CommandId::HELM_RECHECK))?;
     let tx = sink.clone();
-    registry.register(recheck, move |_: Command, _: HandlerContext| {
-        let tx = tx.clone();
-        async move {
-            send(&tx, Request::Recheck)?;
-            Ok(CommandOutput::message("Looking for Helm"))
-        }
-    })?;
-    let locate = command::lookup(CommandId::HELM_LOCATE_BINARY)
-        .copied()
-        .ok_or(RegisterError::Undeclared(CommandId::HELM_LOCATE_BINARY))?;
-    registry.register(locate, move |_: Command, _: HandlerContext| {
-        let (tx, file) = (sink.clone(), settings_file.clone());
-        async move {
-            let file = file.ok_or_else(|| {
+    registry.register(
+        declared(CommandId::HELM_RECHECK)?,
+        move |_: Command, _: HandlerContext| {
+            let tx = tx.clone();
+            async move {
+                send(&tx, Request::Recheck)?;
+                Ok(CommandOutput::message("Looking for Helm"))
+            }
+        },
+    )?;
+    registry.register(
+        declared(CommandId::HELM_LOCATE_BINARY)?,
+        move |_: Command, _: HandlerContext| {
+            let (tx, file) = (sink.clone(), settings_file.clone());
+            async move {
+                let file = file.ok_or_else(|| {
                 OxiError::not_found(
                     "this session has no config directory, so there is no settings.json to open",
                 )
             })?;
-            // One small file, on the bus's worker (never the UI thread).
-            ensure_settings_file(&file)?;
-            send(&tx, Request::Open(file.clone()))?;
-            Ok(CommandOutput::data(json!({
-                "path": file.display().to_string(),
-                "setting": "helm.path",
-            })))
-        }
-    })?;
+                // One small file, on the bus's worker (never the UI thread).
+                ensure_settings_file(&file)?;
+                send(&tx, Request::Open(file.clone()))?;
+                Ok(CommandOutput::data(json!({
+                    "path": file.display().to_string(),
+                    "setting": "helm.path",
+                })))
+            }
+        },
+    )?;
     Ok(())
+}
+
+fn declared(id: CommandId) -> Result<command::CommandMeta, RegisterError> {
+    command::lookup(id)
+        .copied()
+        .ok_or(RegisterError::Undeclared(id))
 }
 
 fn send(tx: &Sink, request: Request) -> OxiResult<()> {
