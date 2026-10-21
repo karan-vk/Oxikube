@@ -24,7 +24,7 @@ impl FakeHelm {
             "#!/bin/sh\nd=\"$(dirname \"$0\")\"\n\
              if [ \"$1\" = version ]; then echo '{version}'; exit 0; fi\n\
              printf '%s\\n' \"$@\" > \"$d/argv\"\n\
-             case \" $* \" in *' --values=- '*) cat > \"$d/stdin\" ;; esac\n\
+             case \" $* \" in *' --values=- '*|*' --password-stdin '*) cat > \"$d/stdin\" ;; esac\n\
              {body}\n"
         );
         install_script(&dir.path().join("helm"), &script);

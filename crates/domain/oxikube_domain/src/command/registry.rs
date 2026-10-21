@@ -134,6 +134,14 @@ impl CommandId {
     pub const HELP_SHOW: CommandId = CommandId::new("help::Show");
     /// `ingressclass::SetDefault`: make an IngressClass the cluster's default (annotation patch).
     pub const INGRESS_CLASS_SET_DEFAULT: CommandId = CommandId::new("ingressclass::SetDefault");
+    /// `helm::ShowRepos`: open the Helm repositories page (E16-S07).
+    pub const HELM_SHOW_REPOS: CommandId = CommandId::new("helm::ShowRepos");
+    /// `helm::RepoAdd`: add a chart repository to Helm's own configuration (E16-S07).
+    pub const HELM_REPO_ADD: CommandId = CommandId::new("helm::RepoAdd");
+    /// `helm::RepoRemove`: remove a chart repository from Helm's own configuration (E16-S07).
+    pub const HELM_REPO_REMOVE: CommandId = CommandId::new("helm::RepoRemove");
+    /// `helm::RepoUpdate`: refresh the index of one or every chart repository (E16-S07).
+    pub const HELM_REPO_UPDATE: CommandId = CommandId::new("helm::RepoUpdate");
     /// `jump::Back`: run the previous command of the `:` jump bar's history again.
     pub const JUMP_BACK: CommandId = CommandId::new("jump::Back");
     /// `jump::Forward`: run the next command of the `:` jump bar's history again.
@@ -889,6 +897,35 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::HELM_RECHECK,
         "Recheck Helm",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Helm repositories live in Helm's own config file on this machine (E16-S07): not a cluster
+    // mutation, so no guard tier and runnable on a read-only cluster. No cluster capability is
+    // needed: Capabilities::HELM is never granted to a session, and the page explains a missing
+    // binary.
+    CommandMeta::read(
+        CommandId::HELM_REPO_ADD,
+        "Helm: Add Repository",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::HELM_REPO_REMOVE,
+        "Helm: Remove Repository",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::HELM_REPO_UPDATE,
+        "Helm: Update Repositories",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Opens the page; the page itself explains a missing binary, so no capability is needed.
+    CommandMeta::read(
+        CommandId::HELM_SHOW_REPOS,
+        "Helm: Repositories",
         CommandScope::Global,
         NONE,
     ),
@@ -2120,6 +2157,21 @@ mod tests {
             );
             assert!(seen.insert(meta.id), "duplicate id {}", meta.id);
             assert!(!meta.title.trim().is_empty(), "{} has no title", meta.id);
+        }
+    }
+
+    #[test]
+    fn helm_repo_commands_need_no_cluster_capability() {
+        for id in [
+            CommandId::HELM_REPO_ADD,
+            CommandId::HELM_REPO_REMOVE,
+            CommandId::HELM_REPO_UPDATE,
+        ] {
+            let meta = COMMANDS.iter().find(|m| m.id == id).expect("registered");
+            assert!(
+                meta.needs.is_empty(),
+                "{id} is local Helm config, not a cluster capability"
+            );
         }
     }
 

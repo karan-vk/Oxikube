@@ -225,6 +225,10 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::PortForwardCopyUrl { .. }
         | Command::PortForwardOpenInBrowser { .. }
         | Command::PortForwardTogglePanel { .. }
+        | Command::HelmShowRepos
+        | Command::HelmRepoAdd { .. }
+        | Command::HelmRepoRemove { .. }
+        | Command::HelmRepoUpdate { .. }
         | Command::NotificationsOpenLink { .. }
         | Command::JumpBack
         | Command::JumpForward

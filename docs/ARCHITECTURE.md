@@ -739,8 +739,22 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `kill_on_drop`, run under per-command deadlines (`HelmTimeouts`: 30 s reads, 120 s fetches, a mutation's own
   `--timeout` + 60 s) and map failures by what Helm says (release / chart not found, name in use, unreachable, forbidden).
   `install` / `upgrade` return the port's `HelmOutput` stream (stdout and stderr lines as they arrive; dropping it kills
-  `helm`). Mutations are reached only through `MutationGuard` in `oxikube_app`. `repo_add` / `repo_remove` /
-  `repo_update` are inherent methods (local Helm config) until the repos story puts them on the port.
+  `helm`). Mutations are reached only through `MutationGuard` in `oxikube_app`. Module `repos` (E16-S07): `HelmCli` also
+  implements `HelmRepoPort` (`repo_add` / `repo_remove` / `repo_update`, local Helm configuration, not a cluster
+  mutation): a repository password goes to `helm repo add --password-stdin` on stdin (never argv or a file), a URL with
+  credentials is refused, and `repo update` reports an unreachable repository (Helm exits 0 for it) as an error.
+- `oxikube_app::helm_repos` (E16-S07) — `HelmReposService`: the chart repositories in Helm's own `repositories.yaml` (no
+  second copy; listed again after every change). One async queue runs every repository operation in order (our own
+  mutations never race for Helm's file lock); `update` goes repository by repository so each gets its status
+  (`RepoStatus`: unknown, updating, updated at, failed with a readable reason, `describe_error`); the `RepoSnapshot` is
+  read in memory by the page; `catalog_changes()` is the cue E16-S08's catalog uses to drop cached searches; passwords are
+  staged in memory for the matching `helm::RepoAdd` and never part of a `Command`. Commands `helm::RepoAdd` /
+  `RepoRemove` / `RepoUpdate` (tools `helm.repo_add` ...) are not `MutationGuard` mutations and run on a read-only
+  cluster; an agent's `helm::RepoAdd` needs `RepoPermission` (denied until the agent epic's prompt exists).
+- `oxikube_helm_ui::repos` + `oxikube_settings_ui::helm_repos` (E16-S07) — the Helm Repositories page (`HelmReposView`, a
+  tab of the active cluster's tab): list with status, add form (name, URL, user, masked password, CA file, skip-TLS with a
+  warning, quick-add suggestions), per-repository and all update, two-step remove, and guidance instead of everything
+  when `helm` is missing. Reached by `helm::ShowRepos` (palette "Helm: Repositories", sidebar Helm > Repositories).
 - `oxikube_helm_ui` (E16-S11) — capability gating for the Helm views. `HelmGateState` (an entity, global to the app) holds
   what the `helm` binary reported plus whether a native reader is mounted and exposes one `HelmGate` (`oxikube_domain::
   helm`: `Full`, `NativeOnly { reason }`, `Unavailable { reason }`); views ask `HelmGateState::allows(HelmFeature)` or

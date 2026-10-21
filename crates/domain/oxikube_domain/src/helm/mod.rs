@@ -8,7 +8,7 @@
 //! |---|---|
 //! | [`release`] | [`ReleaseRef`], [`ReleaseStatus`], [`ChartRef`], [`Release`], [`Revision`] |
 //! | [`values`] | [`Values`]: a YAML/JSON values tree with `get` and Helm-style `merge` |
-//! | [`repo`] | [`RepoEntry`], [`ChartHit`], [`SearchQuery`], [`ShowKind`] |
+//! | [`repo`] | [`RepoEntry`], [`RepoAddRequest`], [`RepoPassword`], [`ChartHit`], [`SearchQuery`], [`ShowKind`] |
 //! | [`request`] | [`InstallRequest`], [`UpgradeRequest`], [`RollbackRequest`], [`UninstallRequest`], [`OutputLine`] |
 //! | [`capabilities`] | [`HelmCapabilities`], [`HelmVersion`]: what this session can do |
 //! | [`gate`] | [`HelmGate`], [`HelmFeature`], [`GateReason`]: what the views, commands and tools may offer (E16-S11) |
@@ -31,7 +31,9 @@ pub use capabilities::{HelmCapabilities, HelmVersion};
 pub use error::HelmError;
 pub use gate::{FeatureUnavailable, GateReason, HelmFeature, HelmGate};
 pub use release::{ChartRef, Release, ReleaseRef, ReleaseStatus, Revision};
-pub use repo::{ChartHit, RepoEntry, SearchQuery, ShowKind};
+pub use repo::{
+    ChartHit, RepoAddRequest, RepoEntry, RepoPassword, SearchQuery, ShowKind, validate_repo,
+};
 pub use request::{
     InstallRequest, OutputKind, OutputLine, RollbackRequest, UninstallRequest, UpgradeRequest,
 };

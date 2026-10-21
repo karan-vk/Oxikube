@@ -173,9 +173,10 @@ pub use feed::{Delta, DeltaBatch, WatchFeed};
 pub use feed_stats::{FeedStat, FeedStats, FeedVariant};
 pub use fs::{DirEntry, EntryKind, FileChunks, FsEvent, FsEventKind, FsPort};
 pub use helm::{
-    ChartHit, ChartRef, HelmCapabilities, HelmError, HelmOutput, HelmPort, HelmVersion,
-    InstallRequest, OutputKind, OutputLine, Release, ReleaseRef, ReleaseStatus, RepoEntry,
-    Revision, RollbackRequest, SearchQuery, ShowKind, UninstallRequest, UpgradeRequest, Values,
+    ChartHit, ChartRef, HelmCapabilities, HelmError, HelmOutput, HelmPort, HelmRepoPort,
+    HelmVersion, InstallRequest, OutputKind, OutputLine, Release, ReleaseRef, ReleaseStatus,
+    RepoAddRequest, RepoEntry, RepoPassword, Revision, RollbackRequest, SearchQuery, ShowKind,
+    UninstallRequest, UpgradeRequest, Values,
 };
 pub use integration::{
     IntegrationPort, IntegrationSession, SidebarItem, SidebarModel, SidebarSection,
@@ -241,6 +242,7 @@ mod tests {
         service_proxy: Arc<dyn ServiceProxyPort>,
         describe: Arc<dyn DescribePort>,
         helm: Arc<dyn HelmPort>,
+        helm_repos: Arc<dyn HelmRepoPort>,
         state: Arc<dyn StatePort>,
         secrets: Arc<dyn SecretStorePort>,
         notifier: Arc<dyn NotifierPort>,
@@ -271,6 +273,7 @@ mod tests {
         assert_send_sync::<dyn ServiceProxyPort>();
         assert_send_sync::<dyn DescribePort>();
         assert_send_sync::<dyn HelmPort>();
+        assert_send_sync::<dyn HelmRepoPort>();
         assert_send_sync::<dyn StatePort>();
         assert_send_sync::<dyn SecretStorePort>();
         assert_send_sync::<dyn NotifierPort>();

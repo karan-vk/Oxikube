@@ -17,6 +17,7 @@ gpui.workspace = true
 jiff.workspace = true
 oxikube_app.workspace = true
 oxikube_domain.workspace = true
+oxikube_helm_ui.workspace = true
 oxikube_ports.workspace = true
 oxikube_ui.workspace = true
 oxikube_workspace.workspace = true
