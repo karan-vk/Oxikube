@@ -1,5 +1,5 @@
 //! Infrastructure fakes for scripted, mostly read-only ports: [`FakeMetricsPort`],
-//! [`FakePromqlPort`], [`FakeDescribePort`], [`FakeHelmPort`],
+//! [`FakePromqlPort`], [`FakeDescribePort`],
 //! [`FakeUpdaterPort`] and [`FakeCrashReporterPort`].
 
 use async_trait::async_trait;
@@ -9,8 +9,8 @@ use oxikube_domain::session::NamespaceSelection;
 use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::{
     CrashId, CrashReport, CrashReporterPort, DescribeOutput, DescribePort, DownloadedUpdate,
-    HelmPort, HelmRelease, HelmReleaseRef, MetricsOutcome, MetricsPort, PromqlPort, PromqlSeries,
-    TimeRange, UpdateChannel, UpdateInfo, UpdaterPort,
+    MetricsOutcome, MetricsPort, PromqlPort, PromqlSeries, TimeRange, UpdateChannel, UpdateInfo,
+    UpdaterPort,
 };
 use parking_lot::Mutex;
 
@@ -257,154 +257,6 @@ impl DescribePort for FakeDescribePort {
     }
 }
 
-// --- HelmPort ----------------------------------------------------------------------------
-
-/// Queued responses for each [`FakeHelmPort`] method.
-#[derive(Debug, Default)]
-pub struct HelmScripts {
-    /// `list_releases`.
-    pub list_releases: Script<Vec<HelmRelease>>,
-    /// `history`.
-    pub history: Script<Vec<HelmRelease>>,
-    /// `values`.
-    pub values: Script<String>,
-    /// `manifest`.
-    pub manifest: Script<String>,
-    /// `rollback` (mutating).
-    pub rollback: Script<()>,
-    /// `uninstall` (mutating).
-    pub uninstall: Script<()>,
-}
-
-/// One call made on a [`FakeHelmPort`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum HelmCall {
-    /// `list_releases`.
-    ListReleases(ClusterId, NamespaceSelection),
-    /// `history`.
-    History(HelmReleaseRef),
-    /// `values`.
-    Values {
-        /// Release.
-        release: HelmReleaseRef,
-        /// Revision, `None` for the latest.
-        revision: Option<u32>,
-        /// Computed values instead of user-supplied ones.
-        all: bool,
-    },
-    /// `manifest`.
-    Manifest {
-        /// Release.
-        release: HelmReleaseRef,
-        /// Revision, `None` for the latest.
-        revision: Option<u32>,
-    },
-    /// `rollback` (mutating).
-    Rollback {
-        /// Release.
-        release: HelmReleaseRef,
-        /// Target revision.
-        revision: u32,
-    },
-    /// `uninstall` (mutating).
-    Uninstall {
-        /// Release.
-        release: HelmReleaseRef,
-        /// `--keep-history`.
-        keep_history: bool,
-    },
-}
-
-impl HelmCall {
-    /// `true` for `rollback` and `uninstall`, the calls `MutationGuard` must gate.
-    pub fn is_mutating(&self) -> bool {
-        matches!(self, Self::Rollback { .. } | Self::Uninstall { .. })
-    }
-}
-
-/// Fake `HelmPort`. Fallback: `list_releases` is empty; everything else is scripted
-/// only.
-#[derive(Debug, Default)]
-pub struct FakeHelmPort {
-    script: HelmScripts,
-    calls: CallLog<HelmCall>,
-}
-
-fake_plumbing!(FakeHelmPort, HelmScripts, HelmCall);
-
-impl FakeHelmPort {
-    /// A fake with nothing scripted.
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-#[async_trait]
-impl HelmPort for FakeHelmPort {
-    async fn list_releases(
-        &self,
-        cluster: &ClusterId,
-        namespaces: &NamespaceSelection,
-    ) -> OxiResult<Vec<HelmRelease>> {
-        self.calls
-            .record(HelmCall::ListReleases(cluster.clone(), namespaces.clone()));
-        self.script.list_releases.next_or_else(|| Ok(Vec::new()))
-    }
-
-    async fn history(&self, release: &HelmReleaseRef) -> OxiResult<Vec<HelmRelease>> {
-        self.calls.record(HelmCall::History(release.clone()));
-        self.script
-            .history
-            .next_or_unscripted("FakeHelmPort", "history")
-    }
-
-    async fn values(
-        &self,
-        release: &HelmReleaseRef,
-        revision: Option<u32>,
-        all: bool,
-    ) -> OxiResult<String> {
-        self.calls.record(HelmCall::Values {
-            release: release.clone(),
-            revision,
-            all,
-        });
-        self.script
-            .values
-            .next_or_unscripted("FakeHelmPort", "values")
-    }
-
-    async fn manifest(&self, release: &HelmReleaseRef, revision: Option<u32>) -> OxiResult<String> {
-        self.calls.record(HelmCall::Manifest {
-            release: release.clone(),
-            revision,
-        });
-        self.script
-            .manifest
-            .next_or_unscripted("FakeHelmPort", "manifest")
-    }
-
-    async fn rollback(&self, release: &HelmReleaseRef, revision: u32) -> OxiResult<()> {
-        self.calls.record(HelmCall::Rollback {
-            release: release.clone(),
-            revision,
-        });
-        self.script
-            .rollback
-            .next_or_unscripted("FakeHelmPort", "rollback")
-    }
-
-    async fn uninstall(&self, release: &HelmReleaseRef, keep_history: bool) -> OxiResult<()> {
-        self.calls.record(HelmCall::Uninstall {
-            release: release.clone(),
-            keep_history,
-        });
-        self.script
-            .uninstall
-            .next_or_unscripted("FakeHelmPort", "uninstall")
-    }
-}
-
 // --- UpdaterPort -------------------------------------------------------------------------
 
 /// Queued responses for each [`FakeUpdaterPort`] method.
@@ -579,7 +431,7 @@ mod tests {
     use oxikube_domain::ErrorKind;
     use oxikube_domain::ids::{ContextName, Gvk};
     use oxikube_domain::metrics::MissingReason;
-    use oxikube_ports::{DescribeSource, HelmReleaseStatus};
+    use oxikube_ports::DescribeSource;
 
     fn cluster() -> ClusterId {
         ClusterId::new("/kubeconfig", &ContextName::new("kind-oxikube"))
@@ -716,48 +568,6 @@ mod tests {
                 DescribeCall::Describe(target)
             ]
         );
-    }
-
-    #[test]
-    fn helm_scripted_ok_err_and_mutations_recorded() {
-        let fake = FakeHelmPort::new();
-        let release = HelmReleaseRef {
-            cluster: cluster(),
-            namespace: "demo".into(),
-            name: "web".into(),
-        };
-        let rel = HelmRelease {
-            release: release.clone(),
-            revision: 2,
-            status: HelmReleaseStatus::Deployed,
-            chart: "web".into(),
-            chart_version: "1.2.3".into(),
-            app_version: Some("1.0".into()),
-            updated: t0(),
-        };
-        let all = NamespaceSelection::default();
-        assert!(
-            block_on(fake.list_releases(&cluster(), &all))
-                .unwrap()
-                .is_empty()
-        );
-        fake.script().history.push_ok(vec![rel.clone()]);
-        assert_eq!(block_on(fake.history(&release)).unwrap(), vec![rel]);
-        fake.script()
-            .rollback
-            .push_ok(())
-            .push_err(OxiError::conflict("in progress"));
-        block_on(fake.rollback(&release, 1)).unwrap();
-        assert_eq!(
-            block_on(fake.rollback(&release, 1)).unwrap_err().kind(),
-            ErrorKind::Conflict
-        );
-        assert!(block_on(fake.values(&release, None, true)).is_err());
-        assert!(block_on(fake.manifest(&release, Some(1))).is_err());
-        assert!(block_on(fake.uninstall(&release, false)).is_err());
-        let calls = fake.recorded_calls();
-        assert_eq!(calls.len(), 7);
-        assert_eq!(calls.iter().filter(|c| c.is_mutating()).count(), 3);
     }
 
     #[test]

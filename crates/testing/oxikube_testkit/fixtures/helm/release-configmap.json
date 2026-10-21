@@ -1,0 +1,21 @@
+{
+  "apiVersion": "v1",
+  "kind": "ConfigMap",
+  "metadata": {
+    "name": "sh.helm.release.v1.web.v1",
+    "namespace": "demo",
+    "uid": "7f0d2a52-5c1e-5e0b-9d3a-1c1b2f6c8a11",
+    "resourceVersion": "1201",
+    "creationTimestamp": "2026-01-01T00:00:00Z",
+    "labels": {
+      "name": "web",
+      "owner": "helm",
+      "status": "superseded",
+      "version": "1",
+      "modifiedAt": "1767225600"
+    }
+  },
+  "data": {
+    "release": "H4sIAAAAAAAC/3VRwW7bMAz9FUG7Jo7tAD3oVqz3HtbtsLoYGIt2hViUIMlpjSD/PkpJkw1FAR2kx8fHx6ejJLAolXzDnVyVR/TQZ0SjdQwdMETjSKpmJQ0NTqqjHEyI6Y9GP7kFNXPbur1b1w2fp7pW5fzm3gm+pjU3msYJUyGUR+yD8anMlD/9GECj6J31mcSEmCDNkWtx9uwNNXeyc5cwg0+vQHuxuFkMLghDzJ4mQ6PgBSt5Wsn+FULKS1hMoCFBvv8XwnVj2VRttWUEvP/1D1hXdQHNDTy0n6zfCz1bu4gysLh5fDf7eYeCnabI/LT4PJXVJ9NDaWODCXlVKNs8v7AbmOZ8P8qAhffdzZTO32FhxEvFRZNcWFgu4GhiCkuF75BD27B+Hgbj2bw8nXIMjgYzfpbdcs0CmYE9Mn+9Xnf0Tfxwc+hR5RA3V3+b889apFQtYKeObpEowVPj5tB0tDeklXi4cjv6SF51JESOvgh3FD32BbtYikpsO87kL4lpikilAgAA"
+  }
+}

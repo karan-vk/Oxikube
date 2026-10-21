@@ -242,6 +242,28 @@ fn helm_release_secret_decodes_base64_base64_gzip_json() {
 }
 
 #[test]
+fn helm_release_configmap_decodes_base64_gzip_json() {
+    let cm = fixtures::helm_release_configmap();
+    assert_eq!(cm.kind.kind.as_ref(), "ConfigMap");
+    assert_eq!(cm.meta.labels.get("owner").map(|v| &**v), Some("helm"));
+    assert_eq!(
+        cm.meta.labels.get("status").map(|v| &**v),
+        Some("superseded")
+    );
+    let gzipped = STANDARD
+        .decode(cm.get_str("/data/release").unwrap())
+        .unwrap();
+    let mut json = String::new();
+    flate2::read::GzDecoder::new(&gzipped[..])
+        .read_to_string(&mut json)
+        .unwrap();
+    let release: Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(release["name"], "web");
+    assert_eq!(release["version"], 1);
+    assert_eq!(release["info"]["status"], "superseded");
+}
+
+#[test]
 fn secret_fixtures_hold_only_dummy_values() {
     let secret = fixtures::secret();
     let data = secret.get("/data").and_then(JsonRef::as_object).unwrap();

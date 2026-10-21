@@ -145,6 +145,10 @@ fixtures! {
     /// Helm release Secret (`helm.sh/release.v1`) for release `web` revision 2:
     /// `data.release` is base64(base64(gzip(release JSON))), with dummy content.
     helm_release_secret => "helm/release-secret.json",
+    /// Helm release ConfigMap (`HELM_DRIVER=configmap`) for release `web` revision 1
+    /// (`superseded`): `data.release` is base64(gzip(release JSON)), one layer less than the
+    /// Secret because the ConfigMap holds Helm's own base64 as text.
+    helm_release_configmap => "helm/release-configmap.json",
     /// Namespace `demo`.
     namespace => "core/namespace.json",
     /// Service `web` (ClusterIP).
