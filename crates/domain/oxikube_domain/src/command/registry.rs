@@ -901,25 +901,26 @@ pub static COMMANDS: &[CommandMeta] = &[
         NONE,
     ),
     // Helm repositories live in Helm's own config file on this machine (E16-S07): not a cluster
-    // mutation, so no guard tier and runnable on a read-only cluster. They need the `helm`
-    // binary, hence the HELM capability.
+    // mutation, so no guard tier and runnable on a read-only cluster. No cluster capability is
+    // needed: Capabilities::HELM is never granted to a session, and the page explains a missing
+    // binary.
     CommandMeta::read(
         CommandId::HELM_REPO_ADD,
         "Helm: Add Repository",
         CommandScope::Global,
-        Capabilities::HELM,
+        NONE,
     ),
     CommandMeta::read(
         CommandId::HELM_REPO_REMOVE,
         "Helm: Remove Repository",
         CommandScope::Global,
-        Capabilities::HELM,
+        NONE,
     ),
     CommandMeta::read(
         CommandId::HELM_REPO_UPDATE,
         "Helm: Update Repositories",
         CommandScope::Global,
-        Capabilities::HELM,
+        NONE,
     ),
     // Opens the page; the page itself explains a missing binary, so no capability is needed.
     CommandMeta::read(
@@ -2156,6 +2157,21 @@ mod tests {
             );
             assert!(seen.insert(meta.id), "duplicate id {}", meta.id);
             assert!(!meta.title.trim().is_empty(), "{} has no title", meta.id);
+        }
+    }
+
+    #[test]
+    fn helm_repo_commands_need_no_cluster_capability() {
+        for id in [
+            CommandId::HELM_REPO_ADD,
+            CommandId::HELM_REPO_REMOVE,
+            CommandId::HELM_REPO_UPDATE,
+        ] {
+            let meta = COMMANDS.iter().find(|m| m.id == id).expect("registered");
+            assert!(
+                meta.needs.is_empty(),
+                "{id} is local Helm config, not a cluster capability"
+            );
         }
     }
 
