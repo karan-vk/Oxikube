@@ -9,8 +9,9 @@ use oxikube_domain::helm::{
     ChartRef, HelmVersion, InstallRequest, OutputLine, ReleaseRef, RollbackRequest, SearchQuery,
     UpgradeRequest, Values,
 };
+use oxikube_domain::helm::{RepoAddRequest, RepoPassword};
 use oxikube_domain::session::NamespaceSelection;
-use oxikube_ports::HelmPort;
+use oxikube_ports::{HelmPort, HelmRepoPort};
 
 use super::fake::{FakeHelm, cluster, gone, pid};
 use super::fixture;
@@ -337,22 +338,86 @@ fn helm_env_overrides_are_removed_and_values_are_not_in_it() {
 async fn repo_add_refuses_credentials_in_the_url() {
     let fake = FakeHelm::new("v3.14.2", "exit 0");
     let cli = fake.cli();
-    let secret = oxikube_domain::helm::RepoEntry {
-        name: "private".into(),
-        url: "https://bob:hunter22@charts.example.com/index".into(),
-    };
+    let secret = RepoAddRequest::new("private", "https://bob:hunter22@charts.example.com/index");
     let error = cli.repo_add(&secret).await.unwrap_err();
     assert_eq!(error.kind(), ErrorKind::Validation);
     assert!(fake.argv().is_none(), "nothing ran");
-    let public = oxikube_domain::helm::RepoEntry {
-        name: "podinfo".into(),
-        url: "https://stefanprodan.github.io/podinfo".into(),
-    };
+    let bad_name = RepoAddRequest::new("--evil", "https://charts.example.com");
+    assert_eq!(
+        cli.repo_add(&bad_name).await.unwrap_err().kind(),
+        ErrorKind::Validation
+    );
+    let public = RepoAddRequest::new("podinfo", "https://stefanprodan.github.io/podinfo");
     cli.repo_add(&public).await.unwrap();
     assert_eq!(fake.argv().unwrap()[..3], ["repo", "add", "--"]);
     cli.repo_remove("podinfo").await.unwrap();
+    assert_eq!(fake.argv().unwrap(), ["repo", "remove", "--", "podinfo"]);
     cli.repo_update(&[]).await.unwrap();
     assert_eq!(fake.argv().unwrap(), ["repo", "update"]);
+}
+
+#[tokio::test]
+async fn repo_add_sends_the_password_on_stdin_and_redacts_it_from_errors() {
+    let fake = FakeHelm::new(
+        "v3.14.2",
+        "echo 'Error: looks like \"hunter22-secret\" is not valid' >&2; exit 1",
+    );
+    let cli = fake.cli();
+    let mut request = RepoAddRequest::new("private", "https://charts.example.com");
+    request.username = Some("bob".into());
+    request.password = Some(RepoPassword::new("hunter22-secret"));
+    let error = cli.repo_add(&request).await.unwrap_err();
+    assert_eq!(fake.stdin().as_deref(), Some("hunter22-secret"));
+    let argv = fake.argv().unwrap().join(" ");
+    assert!(argv.contains("--password-stdin") && !argv.contains("hunter22"));
+    let text = format!("{error} {error:?}");
+    assert!(!text.contains("hunter22"), "{text}");
+    assert!(text.contains("not valid"), "{text}");
+}
+
+#[tokio::test]
+async fn repo_update_reports_an_unreachable_repository_even_when_helm_exits_zero() {
+    let fake = FakeHelm::new(
+        "v3.14.2",
+        "echo '...Unable to get an update from the \"bitnami\" chart repository (https://x.invalid):'; \
+         echo '\tGet \"https://x.invalid/index.yaml\": dial tcp: lookup x.invalid: no such host'; \
+         echo 'Update Complete. Happy Helming!'",
+    );
+    let error = fake
+        .cli()
+        .repo_update(&["bitnami".into()])
+        .await
+        .unwrap_err();
+    let text = error.to_string();
+    assert!(
+        text.contains("bitnami") && text.contains("no such host"),
+        "{text}"
+    );
+}
+
+#[tokio::test]
+async fn repo_update_names_every_repository_that_failed() {
+    let fake = FakeHelm::new(
+        "v3.14.2",
+        "echo 'Hang tight while we grab the latest from your chart repositories...'; \\
+         echo '...Unable to get an update from the \"b\" chart repository (https://b.invalid):'; \\
+         echo '\\tno such host b.invalid'; \\
+         echo '...Successfully got an update from the \"a\" chart repository'; \\
+         echo '...Unable to get an update from the \"c\" chart repository (https://c.invalid): 401 Unauthorized'; \\
+         echo 'Update Complete. Happy Helming!'",
+    );
+    let text = fake
+        .cli()
+        .repo_update(&["a".into(), "b".into(), "c".into()])
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(
+        text.contains("\"b\"") && text.contains("no such host"),
+        "{text}"
+    );
+    assert!(text.contains("\"c\"") && text.contains("401"), "{text}");
+    assert!(!text.contains("Update Complete"), "{text}");
 }
 
 #[tokio::test]

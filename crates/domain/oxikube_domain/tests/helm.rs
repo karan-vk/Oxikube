@@ -164,3 +164,24 @@ fn release_debug_redacts_notes() {
     assert!(!dbg.contains("hunter2"), "{dbg}");
     assert!(dbg.contains("redacted"));
 }
+
+#[test]
+fn repo_passwords_never_print() {
+    let password = oxikube_domain::helm::RepoPassword::new("hunter2-secret");
+    assert!(!format!("{password:?}").contains("hunter2"));
+    let mut request = oxikube_domain::helm::RepoAddRequest::new("bitnami", "https://example.com");
+    request.password = Some(password);
+    assert!(!format!("{request:?}").contains("hunter2"));
+}
+
+#[test]
+fn repo_names_and_urls_are_validated() {
+    use oxikube_domain::helm::validate_repo;
+    assert!(validate_repo("bitnami", "https://charts.bitnami.com/bitnami").is_ok());
+    assert!(validate_repo("my_repo.v2", "http://localhost:8080").is_ok());
+    assert!(validate_repo("", "https://x").is_err());
+    assert!(validate_repo("-evil", "https://x").is_err());
+    assert!(validate_repo("has space", "https://x").is_err());
+    assert!(validate_repo("a", "").is_err());
+    assert!(validate_repo("a", "ftp://x").is_err());
+}

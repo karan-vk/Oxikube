@@ -38,8 +38,8 @@ use futures::stream::BoxStream;
 use oxikube_domain::OxiResult;
 pub use oxikube_domain::helm::{
     ChartHit, ChartRef, HelmCapabilities, HelmError, HelmVersion, InstallRequest, OutputKind,
-    OutputLine, Release, ReleaseRef, ReleaseStatus, RepoEntry, Revision, RollbackRequest,
-    SearchQuery, ShowKind, UninstallRequest, UpgradeRequest, Values,
+    OutputLine, Release, ReleaseRef, ReleaseStatus, RepoAddRequest, RepoEntry, RepoPassword,
+    Revision, RollbackRequest, SearchQuery, ShowKind, UninstallRequest, UpgradeRequest, Values,
 };
 use oxikube_domain::ids::ClusterId;
 use oxikube_domain::session::NamespaceSelection;
@@ -138,4 +138,32 @@ pub trait HelmPort: Send + Sync {
     /// What this adapter can do right now. Synchronous and cheap: adapters detect the
     /// binary ahead of time and cache the answer. Views and tools gate on it.
     fn capabilities(&self) -> HelmCapabilities;
+}
+
+/// Management of the chart repositories in Helm's own configuration (`repositories.yaml`),
+/// implemented by `oxikube_helm` over the `helm` binary.
+///
+/// Listing is [`HelmPort::repos`]. These methods change only the local Helm configuration, not
+/// a cluster, so they are not `MutationGuard` mutations. They need the `helm` binary: without
+/// one they fail with [`HelmError::BinaryMissing`] (kind `Unsupported`). Repositories are never
+/// copied anywhere else, so the CLI, other tools and Oxikube always agree. A password is handed
+/// to `helm` on its stdin, never its command line, and never logged.
+///
+/// # Errors
+///
+/// [`CliFailed`](HelmError::CliFailed) when `helm` rejects the operation (unreachable URL, 401,
+/// bad index), with a redacted summary of what it said.
+#[async_trait]
+pub trait HelmRepoPort: Send + Sync {
+    /// **Changes local Helm configuration.** Adds (and fetches the index of) a repository
+    /// (`helm repo add`).
+    async fn repo_add(&self, request: &RepoAddRequest) -> OxiResult<()>;
+
+    /// **Changes local Helm configuration.** Removes the repository `name`
+    /// (`helm repo remove`).
+    async fn repo_remove(&self, name: &str) -> OxiResult<()>;
+
+    /// Refreshes the index of each repository in `names` (`helm repo update`); every
+    /// repository when `names` is empty.
+    async fn repo_update(&self, names: &[String]) -> OxiResult<()>;
 }

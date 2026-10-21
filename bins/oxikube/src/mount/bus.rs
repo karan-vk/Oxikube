@@ -38,6 +38,8 @@
 //! | `oxikube_portforward_ui` | `portforward::CopyUrl`, `OpenInBrowser` (the forward's local URL to the clipboard, to the system browser) and `TogglePanel` (the Port Forwards panel in the bottom dock: `:pf`, the table's `f`, the palette; no cluster is changed; E15-S05) |
 //! | `oxikube_workspace::notifications` | `notifications::TogglePanel` (the notification centre panel in the right dock; E14-S05) |
 //! | `oxikube_settings_ui` | `cluster::ShowMetricsSettings` (the cluster's metrics page, a tab of its tab; E13-S05) |
+//! | `oxikube_settings_ui::helm_repos` | `helm::ShowRepos` (the Helm repositories page, a tab of the active cluster's tab; E16-S07) |
+//! | `oxikube_app::helm_repos` | `helm::RepoAdd`, `RepoRemove`, `RepoUpdate` (the chart repositories in Helm's own configuration through the `helm` CLI; local configuration, not a cluster mutation; an agent's add needs permission; E16-S07) |
 //! | `oxikube_overview_ui` | `cluster::ShowPulses` (the cluster's pulses page, `:pulses`; E13-S10) |
 //! | `oxikube_overview_ui` | `cluster::ShowOverview` (the cluster's overview, a tab of its tab; reads only; E13-S09) |
 //! | `oxikube_events_ui` | `events::Open` (the cluster's events view, `:ev`, the sidebar's Events heading), `events::ToggleFaults`, `TogglePause`, `CopyRow`, `CopyRowJson`, `ExportJson` (the open view's; read the app's `EventService`, never the cluster; E14-S03) |
@@ -157,6 +159,10 @@ pub struct BusParts {
     /// Where `cluster::ShowMetricsSettings` sends the cluster whose page to open (applied on the UI
     /// thread).
     pub metrics_pages: oxikube_settings_ui::metrics::MetricsRequestSink,
+    /// The Helm repositories service (`helm::RepoAdd`, `RepoRemove`, `RepoUpdate`; E16-S07).
+    pub helm_repos: oxikube_app::HelmReposService,
+    /// Where `helm::ShowRepos` sends its request (E16-S07).
+    pub helm_repos_pages: oxikube_settings_ui::helm_repos::HelmReposRequestSink,
     /// Where `cluster::ShowPulses` sends the cluster whose pulses to open (applied on the UI
     /// thread; E13-S10).
     pub pulses_pages: oxikube_overview_ui::pulses::PulsesRequestSink,
@@ -302,6 +308,17 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     })?;
     registry.install("oxikube_settings_ui", |r| {
         oxikube_settings_ui::metrics::register_commands(r, parts.metrics_pages)
+    })?;
+    registry.install("oxikube_settings_ui::helm_repos", |r| {
+        oxikube_settings_ui::helm_repos::register_commands(r, parts.helm_repos_pages)
+    })?;
+    // An agent's `helm.repo_add` needs the user's permission (denied until the agent epic's prompt).
+    registry.install("oxikube_app::helm_repos", |r| {
+        oxikube_app::helm_repos::register_commands(
+            r,
+            parts.helm_repos,
+            Arc::new(oxikube_app::helm_repos::DenyAgentRepoAdd),
+        )
     })?;
     registry.install("oxikube_overview_ui", |r| {
         oxikube_overview_ui::pulses::register_commands(r, parts.pulses_pages)?;

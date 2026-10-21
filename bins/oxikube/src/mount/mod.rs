@@ -110,6 +110,7 @@ mod editor;
 mod events;
 mod gallery;
 mod helm;
+mod helm_repos;
 mod help;
 mod jump;
 mod keymap;
@@ -205,6 +206,8 @@ pub struct Wiring {
     _quit: Task<()>,
     /// Opens the cluster metrics pages for `cluster::ShowMetricsSettings` (E13-S05).
     _metrics_pages: Task<()>,
+    /// Opens the Helm repositories page for `helm::ShowRepos` (E16-S07).
+    _helm_repos_pages: Task<()>,
     /// Opens the cluster pulses pages for `cluster::ShowPulses` (E13-S10).
     _pulses_pages: Task<()>,
     /// Follows the sessions and the settings for the metrics provider service (E13-S05).
@@ -248,6 +251,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let dispatcher: Rc<dyn CommandDispatcher> = Rc::new(bus_dispatcher.clone());
     let dispatcher_for_keymap = dispatcher.clone();
     let dispatcher_for_metrics = dispatcher.clone();
+    let dispatcher_for_helm_repos = dispatcher.clone();
     let dispatcher_for_pulses = dispatcher.clone();
     let dispatcher_for_notifications = dispatcher.clone();
     let dispatcher_for_events = dispatcher.clone();
@@ -353,6 +357,11 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (help_sink, help_rx) = oxikube_palette::help::HelpSink::channel();
     let (editor_sink, editor_rx) = oxikube_editor::view::EditorViewSink::channel();
     let (metrics_sink, metrics_rx) = oxikube_settings_ui::metrics::MetricsRequestSink::channel();
+    let (helm_repos_sink, helm_repos_rx) =
+        oxikube_settings_ui::helm_repos::HelmReposRequestSink::channel();
+    // The chart repositories in Helm's own configuration (E16-S07): one service, the page and the
+    // `helm::Repo*` commands share it.
+    let helm_repos = helm_repos::service(ports.clusters.clock.clone(), cx);
     // `node::Drain` (E12-S10): the kube adapter's `kubectl drain` behind the app's node service,
     // shared by the bus's handler and the drain dialog of this window.
     let nodes = Arc::new(oxikube_app::nodes::NodeService::new(
@@ -401,6 +410,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         metrics: services.metrics.provider.clone(),
         metrics_settings: Arc::new(crate::metrics_provider::SettingsMetricsWriter::new(cx)),
         metrics_pages: metrics_sink,
+        helm_repos: helm_repos.clone(),
+        helm_repos_pages: helm_repos_sink,
         pulses_pages: pulses_sink,
         overview_pages: overview_sink,
         os_notifications: services.os_notifications.clone(),
@@ -633,6 +644,16 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         window,
         cx,
     );
+    // Helm repositories (E16-S07): `helm::ShowRepos` (the palette, the sidebar's Helm > Repositories)
+    // opens the page in the active cluster's tab.
+    let helm_repos_pages = helm_repos::start_views(
+        helm_repos,
+        dispatcher_for_helm_repos,
+        tabs.downgrade(),
+        helm_repos_rx,
+        window,
+        cx,
+    );
     // Pulses (E13-S10): `cluster::ShowPulses` (`:pulses`, the palette, the sidebar's Pulses entry)
     // opens the page in the cluster tab.
     let pulses_pages = pulses::start_views(
@@ -707,6 +728,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _quit: quit,
         _editor_views: editor_views,
         _metrics_pages: metrics_pages,
+        _helm_repos_pages: helm_repos_pages,
         _pulses_pages: pulses_pages,
         _follow_metrics: follow_metrics,
         _live_metrics: live_metrics,

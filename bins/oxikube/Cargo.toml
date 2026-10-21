@@ -43,6 +43,8 @@ oxikube_kube.workspace = true
 oxikube_helm.workspace = true
 oxikube_helm_ui.workspace = true
 oxikube_events_ui.workspace = true
+oxikube_helm.workspace = true
+oxikube_helm_ui.workspace = true
 oxikube_portforward_ui.workspace = true
 oxikube_logs_ui.workspace = true
 # The cluster overview (E13-S09): the cluster tab's landing page and `cluster::ShowOverview`.

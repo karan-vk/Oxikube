@@ -42,6 +42,17 @@ impl Redactor {
         Self { needles }
     }
 
+    /// The shared patterns plus the one `secret` (a repository password), whatever its length.
+    pub(crate) fn for_secret(secret: &str) -> Self {
+        Self {
+            needles: if secret.is_empty() {
+                Vec::new()
+            } else {
+                vec![secret.to_owned()]
+            },
+        }
+    }
+
     /// `text` with every supplied value and secret-looking substring replaced by the marker.
     pub(crate) fn apply(&self, text: &str) -> String {
         let mut out = text.to_owned();

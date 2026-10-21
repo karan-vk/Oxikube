@@ -9,7 +9,7 @@ use std::sync::Arc;
 use oxikube_ports::{
     AccessReviewPort, AgentClient, AgentPort, ClockPort, CloudDiscoveryPort, ClusterConnectorPort,
     ClusterSourcePort, ContextProviderPort, CrashReporterPort, DescribePort, DiscoveryPort,
-    DrainPort, EventsMonitor, EventsPort, ExecPort, ExecStreamPort, FsPort, HelmPort,
+    DrainPort, EventsMonitor, EventsPort, ExecPort, ExecStreamPort, FsPort, HelmPort, HelmRepoPort,
     IntegrationPort, LogPort, MetricsPort, NotificationSourcePort, NotifierPort, PortForwardPort,
     PromqlEndpointPort, PromqlPort, ProviderDetectorPort, QueryCataloguePort, ResourcePort,
     ResourceReader, ResourceWriter, SchemaPort, SecretStorePort, ServiceProxyPort, StatePort,
@@ -38,6 +38,7 @@ const FAKES: &[(&str, &str)] = &[
     ("ServiceProxyPort", "FakeServiceProxyPort"),
     ("DescribePort", "FakeDescribePort"),
     ("HelmPort", "FakeHelmPort"),
+    ("HelmRepoPort", "FakeHelmPort"),
     ("StatePort", "FakeStatePort"),
     ("SecretStorePort", "FakeSecretStorePort"),
     ("NotifierPort", "FakeNotifierPort"),
@@ -96,7 +97,9 @@ fn fakes_are_port_trait_objects() {
     let _: Arc<dyn QueryCataloguePort> = Arc::new(FakeQueryCataloguePort::new());
     let _: Arc<dyn ServiceProxyPort> = Arc::new(FakeServiceProxyPort::new());
     let _: Arc<dyn DescribePort> = Arc::new(FakeDescribePort::new());
-    let _: Arc<dyn HelmPort> = Arc::new(FakeHelmPort::new());
+    let helm = Arc::new(FakeHelmPort::new());
+    let _: Arc<dyn HelmPort> = helm.clone();
+    let _: Arc<dyn HelmRepoPort> = helm;
     let _: Arc<dyn StatePort> = Arc::new(FakeStatePort::new());
     let _: Arc<dyn SecretStorePort> = Arc::new(FakeSecretStorePort::new());
     let _: Arc<dyn NotifierPort> = Arc::new(FakeNotifierPort::new());

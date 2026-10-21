@@ -166,6 +166,18 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             colour: Some(RED),
         },
         "cluster::ShowMetricsSettings" => Command::ClusterShowMetricsSettings { cluster },
+        "helm::ShowRepos" => Command::HelmShowRepos,
+        "helm::RepoAdd" => Command::HelmRepoAdd {
+            name: "bitnami".to_owned(),
+            url: "https://charts.bitnami.com/bitnami".to_owned(),
+            username: None,
+            insecure_skip_tls_verify: false,
+            ca_file: None,
+        },
+        "helm::RepoRemove" => Command::HelmRepoRemove {
+            name: "bitnami".to_owned(),
+        },
+        "helm::RepoUpdate" => Command::HelmRepoUpdate { names: Vec::new() },
         "cluster::ShowPulses" => Command::ClusterShowPulses { cluster },
         "events::Open" => Command::EventsOpen {
             cluster,

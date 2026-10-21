@@ -151,6 +151,44 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         colour: Option<ClusterColour>,
     },
+    /// Open the Helm repositories page (E16-S07): the repositories in Helm's own configuration,
+    /// with add, remove and update. Reads only local state.
+    #[serde(rename = "helm::ShowRepos")]
+    HelmShowRepos,
+    /// Add a chart repository to Helm's own configuration (`helm repo add`, E16-S07). A password
+    /// is never part of a command: the add dialog hands it to the app's repository service in
+    /// memory, and an agent cannot supply one. An agent's call needs the user's permission
+    /// because it fetches from an arbitrary URL.
+    #[serde(rename = "helm::RepoAdd")]
+    HelmRepoAdd {
+        /// The alias.
+        name: String,
+        /// The index URL.
+        url: String,
+        /// Basic-auth user name.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        username: Option<String>,
+        /// Do not verify the server's TLS certificate.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        insecure_skip_tls_verify: bool,
+        /// A CA bundle to verify the server with.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        ca_file: Option<String>,
+    },
+    /// Remove a chart repository from Helm's own configuration (`helm repo remove`, E16-S07).
+    #[serde(rename = "helm::RepoRemove")]
+    HelmRepoRemove {
+        /// The alias.
+        name: String,
+    },
+    /// Refresh repository indexes (`helm repo update`, E16-S07): the named ones, or every one
+    /// when `names` is empty.
+    #[serde(rename = "helm::RepoUpdate")]
+    HelmRepoUpdate {
+        /// The aliases; empty means all.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        names: Vec<String>,
+    },
     /// Open the cluster's metrics settings (E13-S05): which Prometheus-compatible service its
     /// history graphs come from, what detection found and which services it probed, the
     /// `prometheus` settings in effect, and the buttons to run detection again and to switch
@@ -1560,6 +1598,10 @@ impl Command {
             Command::ClusterToggleReadOnly { .. } => CommandId::CLUSTER_TOGGLE_READ_ONLY,
             Command::ClusterSetColour { .. } => CommandId::CLUSTER_SET_COLOUR,
             Command::ClusterShowMetricsSettings { .. } => CommandId::CLUSTER_SHOW_METRICS_SETTINGS,
+            Command::HelmShowRepos => CommandId::HELM_SHOW_REPOS,
+            Command::HelmRepoAdd { .. } => CommandId::HELM_REPO_ADD,
+            Command::HelmRepoRemove { .. } => CommandId::HELM_REPO_REMOVE,
+            Command::HelmRepoUpdate { .. } => CommandId::HELM_REPO_UPDATE,
             Command::ClusterShowPulses { .. } => CommandId::CLUSTER_SHOW_PULSES,
             Command::EventsOpen { .. } => CommandId::EVENTS_OPEN,
             Command::EventsToggleFaults { .. } => CommandId::EVENTS_TOGGLE_FAULTS,
@@ -1988,6 +2030,28 @@ mod tests {
                 colour: None,
             },
             Command::ClusterShowMetricsSettings { cluster: cluster() },
+            Command::HelmShowRepos,
+            Command::HelmRepoAdd {
+                name: "bitnami".into(),
+                url: "https://charts.bitnami.com/bitnami".into(),
+                username: Some("me".into()),
+                insecure_skip_tls_verify: true,
+                ca_file: Some("/etc/ca.pem".into()),
+            },
+            Command::HelmRepoAdd {
+                name: "bitnami".into(),
+                url: "https://charts.bitnami.com/bitnami".into(),
+                username: None,
+                insecure_skip_tls_verify: false,
+                ca_file: None,
+            },
+            Command::HelmRepoRemove {
+                name: "bitnami".into(),
+            },
+            Command::HelmRepoUpdate { names: vec![] },
+            Command::HelmRepoUpdate {
+                names: vec!["bitnami".into()],
+            },
             Command::ClusterShowPulses { cluster: cluster() },
             Command::EventsOpen {
                 cluster: cluster(),
@@ -2723,6 +2787,10 @@ mod tests {
                     | Command::ClusterToggleReadOnly { .. }
                     | Command::ClusterSetColour { .. }
                     | Command::ClusterShowMetricsSettings { .. }
+                    | Command::HelmShowRepos
+                    | Command::HelmRepoAdd { .. }
+                    | Command::HelmRepoRemove { .. }
+                    | Command::HelmRepoUpdate { .. }
                     | Command::ClusterShowPulses { .. }
                     | Command::EventsOpen { .. }
                     | Command::EventsToggleFaults { .. }

@@ -10,7 +10,7 @@
 //! and 4.x both accept (Helm 4 dropped `list --all`, so the status filters are spelled out).
 
 use oxikube_domain::helm::{
-    ChartRef, HelmVersion, InstallRequest, RollbackRequest, SearchQuery, ShowKind,
+    ChartRef, HelmVersion, InstallRequest, RepoAddRequest, RollbackRequest, SearchQuery, ShowKind,
     UninstallRequest, UpgradeRequest,
 };
 use std::time::Duration;
@@ -170,9 +170,24 @@ pub(crate) fn repo_list() -> Vec<String> {
     Argv::new(&["repo", "list"]).json().build()
 }
 
-/// `helm repo add <name> <url>`.
-pub(crate) fn repo_add(name: &str, url: &str) -> Vec<String> {
-    Argv::new(&["repo", "add"]).arg(name).arg(url).build()
+/// `helm repo add <name> <url>`. A password is never an argument: with one, `--password-stdin`
+/// makes `helm` read it from stdin.
+pub(crate) fn repo_add(request: &RepoAddRequest) -> Vec<String> {
+    let mut argv = Argv::new(&["repo", "add"]);
+    if let Some(username) = request.username.as_deref().filter(|u| !u.is_empty()) {
+        argv = argv.opt("username", username);
+    }
+    let has_password = request.password.as_ref().is_some_and(|p| !p.is_empty());
+    argv = argv.flag_if(has_password, "--password-stdin").flag_if(
+        request.insecure_skip_tls_verify,
+        "--insecure-skip-tls-verify",
+    );
+    if let Some(ca) = request.ca_file.as_deref().filter(|c| !c.is_empty()) {
+        argv = argv.opt("ca-file", ca);
+    }
+    argv.arg(request.name.as_str())
+        .arg(request.url.as_str())
+        .build()
 }
 
 /// `helm repo remove <name>`.

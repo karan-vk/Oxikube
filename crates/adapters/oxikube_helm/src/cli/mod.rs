@@ -14,6 +14,7 @@
 //! | `parse` | the `-o json` parsers (`list`, `history`, `get values`, `repo list`, `search repo`) |
 //! | `errors` | redaction of output and stderr; mapping failures onto the error taxonomy |
 //! | `port` | the `HelmPort` implementation |
+//! | `repos` | the `HelmRepoPort` implementation: `repo add/remove/update` on the user's own Helm configuration |
 //!
 //! # Detection
 //!
@@ -59,9 +60,8 @@
 //!
 //! `install`, `upgrade`, `rollback` and `uninstall` change the cluster. This adapter stays
 //! dumb: it runs what it is asked. `oxikube_app` wraps each call in `MutationGuard`
-//! (E16-S06/S09/S10); nothing else may call them. [`repo_add`](HelmCli::repo_add),
-//! [`repo_remove`](HelmCli::repo_remove) and [`repo_update`](HelmCli::repo_update) change only
-//! the user's local Helm repository configuration.
+//! (E16-S06/S09/S10); nothing else may call them. The [`HelmRepoPort`](oxikube_ports::HelmRepoPort)
+//! methods change only the user's local Helm repository configuration (see `repos`).
 
 mod args;
 mod config;
@@ -69,6 +69,7 @@ mod detect;
 mod errors;
 mod parse;
 mod port;
+mod repos;
 mod run;
 mod target;
 #[cfg(test)]
@@ -77,7 +78,7 @@ mod tests;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use oxikube_domain::helm::{HelmCapabilities, HelmVersion, RepoEntry};
+use oxikube_domain::helm::{HelmCapabilities, HelmVersion};
 use oxikube_domain::ids::ClusterId;
 use oxikube_domain::{OxiError, OxiResult};
 use parking_lot::RwLock;
@@ -165,43 +166,4 @@ impl HelmCli {
         let (binary, _) = self.binary().await?;
         finish(run(&binary, Invocation::new(args, timeout)).await, release)
     }
-
-    /// **Changes local Helm configuration.** Adds a chart repository (`helm repo add`).
-    ///
-    /// A URL carrying credentials (`https://user:pass@host`) is refused: the command line is
-    /// visible to every process on the machine.
-    pub async fn repo_add(&self, repo: &RepoEntry) -> OxiResult<()> {
-        if has_userinfo(&repo.url) {
-            return Err(OxiError::validation(
-                "a repository URL must not contain credentials",
-            ));
-        }
-        let fetch = self.config().timeouts.fetch;
-        self.output(args::repo_add(&repo.name, &repo.url), fetch, None)
-            .await
-            .map(drop)
-    }
-
-    /// **Changes local Helm configuration.** Removes a chart repository (`helm repo remove`).
-    pub async fn repo_remove(&self, name: &str) -> OxiResult<()> {
-        let read = self.config().timeouts.read;
-        self.output(args::repo_remove(name), read, None)
-            .await
-            .map(drop)
-    }
-
-    /// Refreshes the indexes of `names` (all repositories when empty), `helm repo update`.
-    pub async fn repo_update(&self, names: &[String]) -> OxiResult<()> {
-        let fetch = self.config().timeouts.fetch;
-        self.output(args::repo_update(names), fetch, None)
-            .await
-            .map(drop)
-    }
-}
-
-/// `true` when `url` has a `user[:password]@` part before its host.
-fn has_userinfo(url: &str) -> bool {
-    let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
-    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
-    authority.contains('@')
 }

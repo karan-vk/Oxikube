@@ -4,8 +4,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use oxikube_domain::helm::{
-    ChartRef, HelmVersion, InstallRequest, ReleaseRef, RollbackRequest, SearchQuery, ShowKind,
-    UninstallRequest, UpgradeRequest,
+    ChartRef, HelmVersion, InstallRequest, ReleaseRef, RepoAddRequest, RepoPassword,
+    RollbackRequest, SearchQuery, ShowKind, UninstallRequest, UpgradeRequest,
 };
 use oxikube_domain::ids::{ClusterId, ContextName};
 
@@ -100,7 +100,10 @@ fn a_name_that_looks_like_a_flag_stays_a_positional() {
 fn repo_search_and_show() {
     assert_eq!(args::repo_list(), ["repo", "list", "--output=json"]);
     assert_eq!(
-        args::repo_add("podinfo", "https://stefanprodan.github.io/podinfo"),
+        args::repo_add(&RepoAddRequest::new(
+            "podinfo",
+            "https://stefanprodan.github.io/podinfo"
+        )),
         [
             "repo",
             "add",
@@ -233,4 +236,31 @@ fn upgrade_rollback_uninstall() {
     assert!(argv.contains(&"--keep-history".to_owned()));
     assert!(argv.contains(&"--namespace=web".to_owned()));
     assert!(argv.ends_with(&["--".into(), "shop".into()]));
+}
+
+#[test]
+fn repo_add_options_are_flags_and_the_password_is_never_an_argument() {
+    let mut request = RepoAddRequest::new("private", "https://charts.example.com");
+    request.username = Some("bob".into());
+    request.password = Some(RepoPassword::new("hunter22-secret"));
+    request.insecure_skip_tls_verify = true;
+    request.ca_file = Some("/etc/ca.pem".into());
+    let argv = args::repo_add(&request);
+    assert_eq!(
+        argv,
+        [
+            "repo",
+            "add",
+            "--username=bob",
+            "--password-stdin",
+            "--insecure-skip-tls-verify",
+            "--ca-file=/etc/ca.pem",
+            "--",
+            "private",
+            "https://charts.example.com"
+        ]
+    );
+    assert!(!argv.join(" ").contains("hunter22"));
+    request.password = Some(RepoPassword::new(""));
+    assert!(!args::repo_add(&request).contains(&"--password-stdin".to_owned()));
 }

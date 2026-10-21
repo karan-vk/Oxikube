@@ -7,9 +7,9 @@ use oxikube_domain::ids::ClusterId;
 use oxikube_domain::session::NamespaceSelection;
 use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::{
-    ChartHit, ChartRef, HelmCapabilities, HelmOutput, HelmPort, HelmVersion, InstallRequest,
-    OutputLine, Release, ReleaseRef, RepoEntry, Revision, RollbackRequest, SearchQuery, ShowKind,
-    UninstallRequest, UpgradeRequest, Values,
+    ChartHit, ChartRef, HelmCapabilities, HelmOutput, HelmPort, HelmRepoPort, HelmVersion,
+    InstallRequest, OutputLine, Release, ReleaseRef, RepoAddRequest, RepoEntry, Revision,
+    RollbackRequest, SearchQuery, ShowKind, UninstallRequest, UpgradeRequest, Values,
 };
 use parking_lot::Mutex;
 
@@ -45,6 +45,12 @@ pub struct HelmScripts {
     pub rollback: Script<()>,
     /// `uninstall` (mutating).
     pub uninstall: Script<()>,
+    /// `repo_add` (changes local Helm configuration).
+    pub repo_add: Script<()>,
+    /// `repo_remove` (changes local Helm configuration).
+    pub repo_remove: Script<()>,
+    /// `repo_update`.
+    pub repo_update: Script<()>,
 }
 
 /// One call made on a [`FakeHelmPort`]. Calls refused for missing capabilities are
@@ -94,11 +100,17 @@ pub enum HelmCall {
     Rollback(RollbackRequest),
     /// `uninstall` (mutating).
     Uninstall(UninstallRequest),
+    /// `repo_add` (local configuration, not a cluster mutation).
+    RepoAdd(RepoAddRequest),
+    /// `repo_remove`.
+    RepoRemove(String),
+    /// `repo_update`: the names, empty for all.
+    RepoUpdate(Vec<String>),
 }
 
 impl HelmCall {
     /// `true` for `install`, `upgrade`, `rollback` and `uninstall`, the calls
-    /// `MutationGuard` must gate.
+    /// `MutationGuard` must gate. The `Repo*` calls change only local Helm configuration.
     pub fn is_mutating(&self) -> bool {
         matches!(
             self,
@@ -305,6 +317,27 @@ impl HelmPort for FakeHelmPort {
     }
 }
 
+#[async_trait]
+impl HelmRepoPort for FakeHelmPort {
+    async fn repo_add(&self, request: &RepoAddRequest) -> OxiResult<()> {
+        self.calls.record(HelmCall::RepoAdd(request.clone()));
+        self.check(|c| c.cli_available)?;
+        self.script.repo_add.next_or_else(|| Ok(()))
+    }
+
+    async fn repo_remove(&self, name: &str) -> OxiResult<()> {
+        self.calls.record(HelmCall::RepoRemove(name.to_owned()));
+        self.check(|c| c.cli_available)?;
+        self.script.repo_remove.next_or_else(|| Ok(()))
+    }
+
+    async fn repo_update(&self, names: &[String]) -> OxiResult<()> {
+        self.calls.record(HelmCall::RepoUpdate(names.to_vec()));
+        self.check(|c| c.cli_available)?;
+        self.script.repo_update.next_or_else(|| Ok(()))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use futures::TryStreamExt as _;
@@ -465,5 +498,19 @@ mod tests {
     fn port_is_object_safe() {
         let boxed: Box<dyn HelmPort> = Box::new(FakeHelmPort::new());
         assert!(boxed.capabilities().can_install);
+    }
+
+    #[test]
+    fn repo_calls_are_recorded_and_need_the_binary() {
+        let fake = FakeHelmPort::new();
+        block_on(fake.repo_add(&RepoAddRequest::new("a", "https://x"))).unwrap();
+        block_on(fake.repo_remove("a")).unwrap();
+        fake.script.repo_update.push_err(OxiError::internal("boom"));
+        assert!(block_on(fake.repo_update(&["a".into()])).is_err());
+        assert_eq!(fake.recorded_calls().len(), 3);
+        let native = FakeHelmPort::native_only();
+        let error = block_on(native.repo_add(&RepoAddRequest::new("a", "https://x"))).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::Unsupported);
+        assert!(!HelmCall::RepoAdd(RepoAddRequest::new("a", "u")).is_mutating());
     }
 }
