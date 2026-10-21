@@ -155,6 +155,46 @@ pub enum Command {
     /// with add, remove and update. Reads only local state.
     #[serde(rename = "helm::ShowRepos")]
     HelmShowRepos,
+    /// Open the Helm charts catalog (E16-S08): search across the configured repositories, chart
+    /// cards, and a detail with README, versions and default values. Reads only.
+    #[serde(rename = "helm::OpenCharts")]
+    HelmOpenCharts,
+    /// Search the configured chart repositories (`helm search repo --versions`, E16-S08). Returns
+    /// the charts, each with its versions newest first. Reads only.
+    #[serde(rename = "helm::SearchCharts")]
+    HelmSearchCharts {
+        /// What to look for; empty lists every chart.
+        #[serde(default)]
+        keyword: String,
+    },
+    /// Print part of a chart (`helm show`, E16-S08): its metadata, README or default values.
+    /// Reads only.
+    #[serde(rename = "helm::ShowChart")]
+    HelmShowChart {
+        /// The repository alias.
+        repo: String,
+        /// The chart name.
+        name: String,
+        /// The chart version; the newest when absent.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        version: Option<String>,
+        /// Which part (default: the README).
+        #[serde(default)]
+        part: crate::helm::ChartPart,
+    },
+    /// Start installing a chart (E16-S08): hands the chart and version to the install tab
+    /// (E16-S09) prefilled. It only opens the tab; nothing is installed until the install itself
+    /// goes through the mutation guard.
+    #[serde(rename = "helm::InstallChart")]
+    HelmInstallChart {
+        /// The repository alias.
+        repo: String,
+        /// The chart name.
+        name: String,
+        /// The chart version; the newest when absent.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        version: Option<String>,
+    },
     /// Add a chart repository to Helm's own configuration (`helm repo add`, E16-S07). A password
     /// is never part of a command: the add dialog hands it to the app's repository service in
     /// memory, and an agent cannot supply one. An agent's call needs the user's permission
@@ -1599,6 +1639,10 @@ impl Command {
             Command::ClusterSetColour { .. } => CommandId::CLUSTER_SET_COLOUR,
             Command::ClusterShowMetricsSettings { .. } => CommandId::CLUSTER_SHOW_METRICS_SETTINGS,
             Command::HelmShowRepos => CommandId::HELM_SHOW_REPOS,
+            Command::HelmOpenCharts => CommandId::HELM_OPEN_CHARTS,
+            Command::HelmSearchCharts { .. } => CommandId::HELM_SEARCH_CHARTS,
+            Command::HelmShowChart { .. } => CommandId::HELM_SHOW_CHART,
+            Command::HelmInstallChart { .. } => CommandId::HELM_INSTALL_CHART,
             Command::HelmRepoAdd { .. } => CommandId::HELM_REPO_ADD,
             Command::HelmRepoRemove { .. } => CommandId::HELM_REPO_REMOVE,
             Command::HelmRepoUpdate { .. } => CommandId::HELM_REPO_UPDATE,
@@ -2031,6 +2075,27 @@ mod tests {
             },
             Command::ClusterShowMetricsSettings { cluster: cluster() },
             Command::HelmShowRepos,
+            Command::HelmOpenCharts,
+            Command::HelmSearchCharts {
+                keyword: "nginx".into(),
+            },
+            Command::HelmShowChart {
+                repo: "bitnami".into(),
+                name: "nginx".into(),
+                version: Some("15.4.0".into()),
+                part: crate::helm::ChartPart::Values,
+            },
+            Command::HelmShowChart {
+                repo: "bitnami".into(),
+                name: "nginx".into(),
+                version: None,
+                part: crate::helm::ChartPart::Readme,
+            },
+            Command::HelmInstallChart {
+                repo: "bitnami".into(),
+                name: "nginx".into(),
+                version: None,
+            },
             Command::HelmRepoAdd {
                 name: "bitnami".into(),
                 url: "https://charts.bitnami.com/bitnami".into(),
@@ -2788,6 +2853,10 @@ mod tests {
                     | Command::ClusterSetColour { .. }
                     | Command::ClusterShowMetricsSettings { .. }
                     | Command::HelmShowRepos
+                    | Command::HelmOpenCharts
+                    | Command::HelmSearchCharts { .. }
+                    | Command::HelmShowChart { .. }
+                    | Command::HelmInstallChart { .. }
                     | Command::HelmRepoAdd { .. }
                     | Command::HelmRepoRemove { .. }
                     | Command::HelmRepoUpdate { .. }

@@ -6,8 +6,8 @@ use std::sync::Arc;
 
 use futures::executor::block_on;
 use gpui::TestAppContext;
-use oxikube_app::HelmReposService;
 use oxikube_app::command_bus::DispatchContext;
+use oxikube_app::{ChartsService, HelmReposService};
 use oxikube_domain::audit::Initiator;
 use oxikube_domain::command::{Command, CommandId};
 use oxikube_domain::helm::RepoEntry;
@@ -16,9 +16,9 @@ use oxikube_testkit::{FakeClockPort, FakeHelmPort, HelmCall, TestPorts};
 
 use super::App;
 use crate::app_state::AppState;
-use crate::mount::helm_repos::ServiceOverride;
+use crate::mount::helm_repos::{HelmServices, ServiceOverride};
 
-fn fake_with(repos: &[&str]) -> Arc<FakeHelmPort> {
+pub(super) fn fake_with(repos: &[&str]) -> Arc<FakeHelmPort> {
     let fake = Arc::new(FakeHelmPort::new());
     let entries = |names: &[&str]| -> Vec<RepoEntry> {
         names
@@ -36,18 +36,19 @@ fn fake_with(repos: &[&str]) -> Arc<FakeHelmPort> {
     fake
 }
 
-fn start(cx: &mut TestAppContext, fake: &Arc<FakeHelmPort>) -> App {
-    let service = HelmReposService::new(
+pub(super) fn start(cx: &mut TestAppContext, fake: &Arc<FakeHelmPort>) -> App {
+    let repos = HelmReposService::new(
         fake.clone(),
         fake.clone(),
         Arc::new(FakeClockPort::default()),
     );
+    let charts = ChartsService::new(fake.clone(), repos.catalog_changes());
     App::start_with(cx, TestPorts::seeded(), move |cx| {
-        cx.set_global(ServiceOverride(service))
+        cx.set_global(ServiceOverride(HelmServices { repos, charts }))
     })
 }
 
-fn run(app: &mut App, command: Command) -> bool {
+pub(super) fn run(app: &mut App, command: Command) -> bool {
     let state = app.vcx.update(|_, cx| AppState::global(cx));
     let bus = state.command_bus().expect("the bus").clone();
     let outcome = block_on(bus.dispatch(command, DispatchContext::new(Initiator::Ui, "me")));

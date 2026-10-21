@@ -110,6 +110,7 @@ mod editor;
 mod events;
 mod gallery;
 mod helm;
+mod helm_charts;
 mod helm_repos;
 mod help;
 mod jump;
@@ -208,6 +209,8 @@ pub struct Wiring {
     _metrics_pages: Task<()>,
     /// Opens the Helm repositories page for `helm::ShowRepos` (E16-S07).
     _helm_repos_pages: Task<()>,
+    /// Opens the Helm charts catalog for `helm::OpenCharts` (E16-S08).
+    _helm_charts_pages: Task<()>,
     /// Opens the cluster pulses pages for `cluster::ShowPulses` (E13-S10).
     _pulses_pages: Task<()>,
     /// Follows the sessions and the settings for the metrics provider service (E13-S05).
@@ -252,6 +255,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let dispatcher_for_keymap = dispatcher.clone();
     let dispatcher_for_metrics = dispatcher.clone();
     let dispatcher_for_helm_repos = dispatcher.clone();
+    let dispatcher_for_helm_charts = dispatcher.clone();
     let dispatcher_for_pulses = dispatcher.clone();
     let dispatcher_for_notifications = dispatcher.clone();
     let dispatcher_for_events = dispatcher.clone();
@@ -361,7 +365,11 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         oxikube_settings_ui::helm_repos::HelmReposRequestSink::channel();
     // The chart repositories in Helm's own configuration (E16-S07): one service, the page and the
     // `helm::Repo*` commands share it.
-    let helm_repos = helm_repos::service(ports.clusters.clock.clone(), cx);
+    let helm_services = helm_repos::services(ports.clusters.clock.clone(), cx);
+    let helm_repos = helm_services.repos.clone();
+    // The charts catalog (E16-S08) shares the adapter with the repositories.
+    let (helm_charts_sink, helm_charts_rx) =
+        oxikube_helm_ui::charts::HelmChartsRequestSink::channel();
     // `node::Drain` (E12-S10): the kube adapter's `kubectl drain` behind the app's node service,
     // shared by the bus's handler and the drain dialog of this window.
     let nodes = Arc::new(oxikube_app::nodes::NodeService::new(
@@ -412,6 +420,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         metrics_pages: metrics_sink,
         helm_repos: helm_repos.clone(),
         helm_repos_pages: helm_repos_sink,
+        helm_charts: helm_services.charts.clone(),
+        helm_charts_pages: helm_charts_sink,
         pulses_pages: pulses_sink,
         overview_pages: overview_sink,
         os_notifications: services.os_notifications.clone(),
@@ -646,6 +656,14 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     );
     // Helm repositories (E16-S07): `helm::ShowRepos` (the palette, the sidebar's Helm > Repositories)
     // opens the page in the active cluster's tab.
+    let helm_charts_pages = helm_charts::start_views(
+        helm_services.charts,
+        dispatcher_for_helm_charts,
+        tabs.downgrade(),
+        helm_charts_rx,
+        window,
+        cx,
+    );
     let helm_repos_pages = helm_repos::start_views(
         helm_repos,
         dispatcher_for_helm_repos,
@@ -729,6 +747,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _editor_views: editor_views,
         _metrics_pages: metrics_pages,
         _helm_repos_pages: helm_repos_pages,
+        _helm_charts_pages: helm_charts_pages,
         _pulses_pages: pulses_pages,
         _follow_metrics: follow_metrics,
         _live_metrics: live_metrics,

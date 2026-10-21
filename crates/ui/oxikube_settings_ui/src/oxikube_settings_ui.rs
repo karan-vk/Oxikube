@@ -14,9 +14,11 @@ pub mod helm_repos;
 pub mod metrics;
 
 /// Registers what the settings pages add to the app: the sidebar's Metrics section and the Helm
-/// section's Repositories entry. Call once at
+/// section's Charts and Repositories entries. Call once at
 /// start-up, after `oxikube_workspace`'s own registrations.
 pub fn init(cx: &mut gpui::App) {
     metrics::register_sidebar(cx);
+    // Charts before Repositories: the catalog is what people open most.
+    oxikube_helm_ui::charts::register_sidebar(cx);
     helm_repos::register_sidebar(cx);
 }

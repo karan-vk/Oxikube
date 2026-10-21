@@ -55,5 +55,11 @@ path = "tests/repos_screenshot.rs"
 harness = false
 required-features = ["screenshot"]
 
+[[test]]
+name = "charts_screenshot"
+path = "tests/charts_screenshot.rs"
+harness = false
+required-features = ["screenshot"]
+
 [lints]
 workspace = true

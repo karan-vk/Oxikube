@@ -18,7 +18,7 @@ use oxikube_ui::{
     dock::{DockLayout, DockSkin, PanelBehavior, PanelEvent, panel_handle},
     input::{Input, InputState},
     layout::v_flex,
-    markdown::MarkdownView,
+    markdown::{MarkdownState, MarkdownView, sanitize},
     menu::PopupMenu,
     root::Root,
     sidebar::{Sidebar, SidebarMenu, SidebarMenuItem},
@@ -195,6 +195,39 @@ fn markdown_renders(cx: &mut TestAppContext) {
         }
     });
     assert_laid_out(cx, "markdown");
+}
+
+/// A README with every construct charts use: headings, nested lists, a table, fenced code, links,
+/// an image, a badge and raw HTML. It is sanitised, parsed off the UI thread and laid out.
+#[gpui::test]
+fn markdown_renders_a_readme_with_html_and_images_sanitised(cx: &mut TestAppContext) {
+    let readme = "<h1 align=\"center\">Chart</h1>\n\n# Title\n\n## Install\n\n- one\n  - nested\n    - deeper\n\n\
+        | key | value |\n|-----|-------|\n| a | 1 |\n\n```yaml\nreplicas: 1\n```\n\n\
+        [docs](https://example.com) ![logo](https://example.com/logo.png)\n\n\
+        [![Build](https://ci/badge.svg)](https://ci/run)\n\n<script>alert(1)</script>\n";
+    let clean = sanitize(readme);
+    assert!(!clean.contains("<script") && !clean.contains("<h1") && !clean.contains("!["));
+    let cx = mount(cx, move |_, cx| {
+        let state = cx.new(|cx| MarkdownState::markdown(&clean, cx));
+        move |_, _| MarkdownView::new(&state).into_any_element()
+    });
+    cx.run_until_parked();
+    assert_laid_out(cx, "readme");
+}
+
+/// A 300 KB document parses off the UI thread: mounting it and parking the executor finishes.
+#[gpui::test]
+fn markdown_renders_a_very_large_document(cx: &mut TestAppContext) {
+    let big = sanitize(
+        &"## Section\n\nSome **bold** text, `code` and [a link](https://x.io).\n\n".repeat(5_000),
+    );
+    assert!(big.len() > 250_000);
+    let cx = mount(cx, move |_, cx| {
+        let state = cx.new(|cx| MarkdownState::markdown(&big, cx));
+        move |_, _| MarkdownView::new(&state).into_any_element()
+    });
+    cx.run_until_parked();
+    assert_laid_out(cx, "large markdown");
 }
 
 #[gpui::test]

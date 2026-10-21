@@ -6,6 +6,7 @@
 //!
 //! | Module | Holds |
 //! |---|---|
+//! | [`catalog`] | [`ChartSummary`], [`ChartVersion`], [`group_hits`], [`compare_versions`]: search hits grouped per chart, newest version first |
 //! | [`release`] | [`ReleaseRef`], [`ReleaseStatus`], [`ChartRef`], [`Release`], [`Revision`] |
 //! | [`values`] | [`Values`]: a YAML/JSON values tree with `get` and Helm-style `merge` |
 //! | [`repo`] | [`RepoEntry`], [`RepoAddRequest`], [`RepoPassword`], [`ChartHit`], [`SearchQuery`], [`ShowKind`] |
@@ -20,6 +21,7 @@
 //! `Debug` output; callers show the data but never persist it (non-negotiable 5).
 
 pub mod capabilities;
+pub mod catalog;
 pub mod error;
 pub mod gate;
 pub mod release;
@@ -28,6 +30,7 @@ pub mod request;
 pub mod values;
 
 pub use capabilities::{HelmCapabilities, HelmVersion};
+pub use catalog::{ChartPart, ChartSummary, ChartVersion, compare_versions, group_hits};
 pub use error::HelmError;
 pub use gate::{FeatureUnavailable, GateReason, HelmFeature, HelmGate};
 pub use release::{ChartRef, Release, ReleaseRef, ReleaseStatus, Revision};

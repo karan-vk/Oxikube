@@ -136,6 +136,14 @@ impl CommandId {
     pub const INGRESS_CLASS_SET_DEFAULT: CommandId = CommandId::new("ingressclass::SetDefault");
     /// `helm::ShowRepos`: open the Helm repositories page (E16-S07).
     pub const HELM_SHOW_REPOS: CommandId = CommandId::new("helm::ShowRepos");
+    /// `helm::OpenCharts`: open the Helm charts catalog (E16-S08).
+    pub const HELM_OPEN_CHARTS: CommandId = CommandId::new("helm::OpenCharts");
+    /// `helm::SearchCharts`: search the configured chart repositories (E16-S08).
+    pub const HELM_SEARCH_CHARTS: CommandId = CommandId::new("helm::SearchCharts");
+    /// `helm::ShowChart`: print a chart's metadata, README or default values (E16-S08).
+    pub const HELM_SHOW_CHART: CommandId = CommandId::new("helm::ShowChart");
+    /// `helm::InstallChart`: start an install from a catalog chart (E16-S08, opens E16-S09's tab).
+    pub const HELM_INSTALL_CHART: CommandId = CommandId::new("helm::InstallChart");
     /// `helm::RepoAdd`: add a chart repository to Helm's own configuration (E16-S07).
     pub const HELM_REPO_ADD: CommandId = CommandId::new("helm::RepoAdd");
     /// `helm::RepoRemove`: remove a chart repository from Helm's own configuration (E16-S07).
@@ -905,6 +913,18 @@ pub static COMMANDS: &[CommandMeta] = &[
     // needed: Capabilities::HELM is never granted to a session, and the page explains a missing
     // binary.
     CommandMeta::read(
+        CommandId::HELM_INSTALL_CHART,
+        "Helm: Install Chart",
+        CommandScope::Global,
+        Capabilities::HELM,
+    ),
+    CommandMeta::read(
+        CommandId::HELM_OPEN_CHARTS,
+        "Helm: Charts",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
         CommandId::HELM_REPO_ADD,
         "Helm: Add Repository",
         CommandScope::Global,
@@ -921,6 +941,18 @@ pub static COMMANDS: &[CommandMeta] = &[
         "Helm: Update Repositories",
         CommandScope::Global,
         NONE,
+    ),
+    CommandMeta::read(
+        CommandId::HELM_SEARCH_CHARTS,
+        "Helm: Search Charts",
+        CommandScope::Global,
+        Capabilities::HELM,
+    ),
+    CommandMeta::read(
+        CommandId::HELM_SHOW_CHART,
+        "Helm: Show Chart",
+        CommandScope::Global,
+        Capabilities::HELM,
     ),
     // Opens the page; the page itself explains a missing binary, so no capability is needed.
     CommandMeta::read(

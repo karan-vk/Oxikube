@@ -167,6 +167,21 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         },
         "cluster::ShowMetricsSettings" => Command::ClusterShowMetricsSettings { cluster },
         "helm::ShowRepos" => Command::HelmShowRepos,
+        "helm::OpenCharts" => Command::HelmOpenCharts,
+        "helm::SearchCharts" => Command::HelmSearchCharts {
+            keyword: "nginx".to_owned(),
+        },
+        "helm::ShowChart" => Command::HelmShowChart {
+            repo: "bitnami".to_owned(),
+            name: "nginx".to_owned(),
+            version: None,
+            part: oxikube_domain::helm::ChartPart::Readme,
+        },
+        "helm::InstallChart" => Command::HelmInstallChart {
+            repo: "bitnami".to_owned(),
+            name: "nginx".to_owned(),
+            version: None,
+        },
         "helm::RepoAdd" => Command::HelmRepoAdd {
             name: "bitnami".to_owned(),
             url: "https://charts.bitnami.com/bitnami".to_owned(),
