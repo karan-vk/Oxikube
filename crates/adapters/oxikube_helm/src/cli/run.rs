@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use futures::StreamExt as _;
 use futures::stream::{self, BoxStream};
-use oxikube_domain::helm::{HelmError, OutputLine};
+use oxikube_domain::helm::{HelmError, OutputKind, OutputLine};
 use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::HelmOutput;
 use tokio::io::{AsyncBufReadExt as _, AsyncRead, AsyncWriteExt as _, BufReader};
@@ -243,7 +243,7 @@ async fn next(running: &mut Running) -> Result<Option<OutputLine>, CliFailure> {
         Ok(Some(Err(error))) => Err(pipe_error(error)),
         Ok(Some(Ok(mut line))) => {
             line.text = running.invocation.redactor.apply(&line.text);
-            if line.kind == oxikube_domain::helm::OutputKind::Stderr {
+            if line.kind == OutputKind::Stderr {
                 if running.stderr_tail.len() == TAIL_LINES {
                     running.stderr_tail.pop_front();
                 }
