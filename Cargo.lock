@@ -6088,14 +6088,23 @@ name = "oxikube_helm_ui"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "futures",
  "gpui-pre",
  "gpui-pre-platform",
+ "jiff",
+ "oxikube_app",
  "oxikube_assets",
  "oxikube_domain",
+ "oxikube_keymap",
+ "oxikube_ports",
+ "oxikube_runtime",
  "oxikube_settings",
  "oxikube_testkit",
  "oxikube_ui",
  "oxikube_workspace",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -6436,6 +6445,7 @@ dependencies = [
  "jiff",
  "oxikube_app",
  "oxikube_domain",
+ "oxikube_helm_ui",
  "oxikube_keymap",
  "oxikube_ports",
  "oxikube_runtime",

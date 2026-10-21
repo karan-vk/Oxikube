@@ -52,34 +52,6 @@ required-features = ["screenshot"]
 [[test]]
 name = "repos_screenshot"
 path = "tests/repos_screenshot.rs"
-harness = false so
-# it runs on the process main thread). Needs Metal / Vulkan, so never part of the default gate;
-# the nightly workflow runs it: `cargo test -p oxikube_helm_ui --features screenshot --test
-# banner_screenshot`.
-screenshot = []
-
-[[test]]
-name = "banner_screenshot"
-path = "tests/banner_screenshot.rs"
-=======
-oxikube_keymap.workspace = true
-oxikube_testkit = { workspace = true, features = ["gpui-test", "gpui-screenshot"] }
-oxikube_workspace = { workspace = true, features = ["test-support"] }
-serde_json.workspace = true
-tokio.workspace = true
-
-[features]
-default = []
-# Headless GPU screenshots of the repositories page (`tests/repos_screenshot.rs`, harness = false so
-# it runs on the process main thread). Needs Metal / Vulkan, so never part of the default gate; the
-# nightly workflow runs it: `cargo test -p oxikube_helm_ui --features screenshot --test
-# repos_screenshot`.
-screenshot = []
-
-[[test]]
-name = "repos_screenshot"
-path = "tests/repos_screenshot.rs"
->>>>>>> 813dfd04 (feat(helm_ui): E16-S07 Repos management)
 harness = false
 required-features = ["screenshot"]
 
