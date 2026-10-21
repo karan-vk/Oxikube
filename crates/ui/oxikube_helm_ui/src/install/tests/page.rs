@@ -65,6 +65,21 @@ fn the_values_editor_documents_keys_from_the_charts_comments(cx: &mut TestAppCon
 }
 
 #[gpui::test]
+fn late_defaults_never_replace_what_the_user_typed(cx: &mut TestAppContext) {
+    let mut h = Harness::open(cx);
+    // The version when a (slow) defaults read starts; the user then types before it lands.
+    let baseline = h.read(|v, cx| v.values_version(cx));
+    h.set_values("replicaCount: 3\n");
+    h.update(|view, window, cx| view.apply_defaults(super::DEFAULTS, baseline, window, cx));
+    assert_eq!(h.read(|v, cx| v.values(cx)).expose(), "replicaCount: 3\n");
+
+    // Untouched since the read started: the defaults go in.
+    let baseline = h.read(|v, cx| v.values_version(cx));
+    h.update(|view, window, cx| view.apply_defaults(super::DEFAULTS, baseline, window, cx));
+    assert_eq!(h.read(|v, cx| v.values(cx)).expose(), super::DEFAULTS);
+}
+
+#[gpui::test]
 fn an_invalid_release_name_blocks_the_preview(cx: &mut TestAppContext) {
     let mut h = Harness::open(cx);
     h.set_release("Not_Valid");

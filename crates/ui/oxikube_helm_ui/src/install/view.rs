@@ -195,6 +195,8 @@ impl HelmInstallView {
     fn load_form(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let defaults = self.deps.backend.defaults(self.chart_at_version());
         let assist = self.assist.clone();
+        // The editor is usable while the defaults load: what the user types meanwhile wins.
+        let baseline = self.values_version(cx);
         self.load_tasks
             .push(cx.spawn_in(
                 window,
@@ -206,8 +208,10 @@ impl HelmInstallView {
                             .spawn(async move { ValuesDocs::from_values_yaml(&parse_text) })
                             .await;
                         assist.set_docs(Arc::new(docs));
-                        this.update_in(cx, |this, window, cx| this.set_values(&text, window, cx))
-                            .ok();
+                        this.update_in(cx, |this, window, cx| {
+                            this.apply_defaults(&text, baseline, window, cx);
+                        })
+                        .ok();
                     }
                     failed => {
                         let why = match failed {
@@ -243,6 +247,20 @@ impl HelmInstallView {
                 .ok();
             }
         }));
+    }
+
+    /// Puts the chart's default values in the editor, unless it was edited since `baseline` (its
+    /// version when the read started): a late read never replaces what the user typed.
+    pub(super) fn apply_defaults(
+        &mut self,
+        text: &str,
+        baseline: u64,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.values_version(cx) == baseline {
+            self.set_values(text, window, cx);
+        }
     }
 
     /// Puts `text` in the values editor (the chart's defaults, or a test's values).

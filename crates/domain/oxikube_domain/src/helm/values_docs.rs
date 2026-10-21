@@ -61,16 +61,17 @@ impl ValuesDocs {
         // (indent, key) of the maps the current line is inside.
         let mut stack: Vec<(usize, String)> = Vec::new();
         let mut pending = Pending::default();
-        // The indent of a key whose value is a block scalar (`key: |`): deeper lines are text.
-        let mut block: Option<usize> = None;
+        // The indent of a key whose value is a block scalar (`key: |`), or of a list item's `-`:
+        // deeper lines are its text or the item's own keys, not keys of the values' tree.
+        let mut skip_deeper: Option<usize> = None;
         for line in text.lines() {
             let indent = line.len() - line.trim_start().len();
             let body = line.trim();
-            if let Some(level) = block {
+            if let Some(level) = skip_deeper {
                 if body.is_empty() || indent > level {
                     continue;
                 }
-                block = None;
+                skip_deeper = None;
             }
             if body.is_empty() {
                 pending = Pending::default();
@@ -80,9 +81,11 @@ impl ValuesDocs {
                 docs.comment(comment, &mut pending);
                 continue;
             }
-            // A list item: its keys belong to an element, not to the values' own tree.
+            // A list item: its keys (on this line and the deeper ones that continue it) belong to
+            // an element, not to the values' own tree.
             if body.starts_with('-') {
                 pending = Pending::default();
+                skip_deeper = Some(indent);
                 continue;
             }
             let Some((key, value)) = split_key(body) else {
@@ -101,7 +104,7 @@ impl ValuesDocs {
             docs.record(&path, value, pending.take());
             match value {
                 "" => stack.push((indent, key)),
-                v if is_block_scalar(v) => block = Some(indent),
+                v if is_block_scalar(v) => skip_deeper = Some(indent),
                 _ => {}
             }
         }

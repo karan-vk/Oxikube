@@ -185,6 +185,29 @@ fn block_scalars_and_list_items_are_not_keys() {
 }
 
 #[test]
+fn keys_continuing_a_list_item_are_not_keys_of_the_enclosing_map() {
+    let docs = ValuesDocs::from_values_yaml(
+        "env:\n  - name: A\n    value: b\n    # -- not a key\n    nested:\n      deep: 1\n  - name: B\n    value: c\ntolerations:\n- key: a\n  operator: Exists\nafter:\n  inner: 2\n",
+    );
+    for bogus in [
+        "env.name",
+        "env.value",
+        "env.nested",
+        "env.nested.deep",
+        "tolerations.key",
+        "tolerations.operator",
+        "value",
+        "operator",
+    ] {
+        assert!(docs.get(bogus).is_none(), "{bogus}");
+    }
+    for key in ["env", "tolerations", "after", "after.inner"] {
+        assert!(docs.get(key).is_some(), "{key}");
+    }
+    assert_eq!(docs.children("env").count(), 0);
+}
+
+#[test]
 fn children_are_the_direct_keys_of_a_map() {
     let docs = ValuesDocs::from_values_yaml(VALUES);
     let top: Vec<_> = docs.children("").map(|(k, _)| k).collect();
