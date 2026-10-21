@@ -87,6 +87,7 @@ mod data;
 mod drain;
 mod events;
 mod forward_start;
+mod helm;
 mod infra;
 mod integration;
 mod merge;
@@ -120,11 +121,11 @@ pub use events::{
     EventBuilder, EventsCall, EventsScripts, FakeEventFeed, FakeEventsMonitor, FakeEventsPort,
     event,
 };
+pub use helm::{FakeHelmPort, HelmCall, HelmScripts};
 pub use infra::{
     CrashCall, CrashScripts, DescribeCall, DescribeScripts, FakeCrashReporterPort,
-    FakeDescribePort, FakeHelmPort, FakeMetricsPort, FakePromqlPort, FakeUpdaterPort, HelmCall,
-    HelmScripts, MetricsCall, MetricsScripts, PromqlCall, PromqlScripts, UpdaterCall,
-    UpdaterScripts,
+    FakeDescribePort, FakeMetricsPort, FakePromqlPort, FakeUpdaterPort, MetricsCall,
+    MetricsScripts, PromqlCall, PromqlScripts, UpdaterCall, UpdaterScripts,
 };
 pub use integration::{
     ContextProviderCall, ContextProviderScripts, FakeContextProviderPort, FakeIntegrationPort,

@@ -1,127 +1,141 @@
-//! [`HelmPort`]: Helm releases of a cluster, read natively with CLI fallback.
+//! [`HelmPort`]: Helm releases of a cluster, read natively with the `helm` CLI for the rest.
 //!
-//! # Adapter
+//! The vocabulary ([`Release`], [`Revision`], [`ChartRef`], [`RepoEntry`], [`Values`], ...)
+//! lives in [`oxikube_domain::helm`] and is re-exported here.
 //!
-//! Implemented by `oxikube_helm`: a native reader of the release `Secret`s
-//! (`sh.helm.release.v1.*`) for listing and inspection, plus the `helm` CLI for the
-//! operations that need it (research 2.5).
+//! # Adapters
+//!
+//! One trait, two implementations that each cover a subset (research 2.5):
+//!
+//! * the **native reader** (`oxikube_helm`) decodes the release Secrets/ConfigMaps
+//!   (`sh.helm.release.v1.*`): `list_releases`, `history`, `values`, `manifest`, `notes`;
+//! * the **CLI adapter** (`oxikube_helm`) drives the user's `helm` binary: everything,
+//!   and the only source of `repos`, `search`, `show`, `template`, `install`, `upgrade`,
+//!   `rollback` and `uninstall`.
+//!
+//! An adapter that lacks an operation returns [`HelmError::Unsupported`] (as
+//! [`OxiError`](oxikube_domain::OxiError), kind `Unsupported`). That is how native-only
+//! mode works when no binary is installed. [`capabilities`](HelmPort::capabilities) tells
+//! the UI and tools up front which operations will work, so they are hidden rather than
+//! tried.
 //!
 //! # Mutating methods
 //!
+//! [`install`](HelmPort::install), [`upgrade`](HelmPort::upgrade),
 //! [`rollback`](HelmPort::rollback) and [`uninstall`](HelmPort::uninstall) are
 //! **mutating**. They are reachable only through `MutationGuard` (read-only mode,
 //! confirmation tier, dry-run where Helm supports it, audit); the UI never calls them
-//! directly. All other methods are read-only.
+//! directly. [`template`](HelmPort::template) renders locally and does not mutate. All
+//! other methods are read-only.
 //!
 //! # Sensitivity
 //!
-//! Values and manifests can embed credentials. Callers show them but never persist
-//! them (non-negotiable 5).
+//! Values, manifests and command output can embed credentials. Callers show them but
+//! never persist them (non-negotiable 5); adapters redact output lines and error text.
 
 use async_trait::async_trait;
-use jiff::Timestamp;
+use futures::stream::BoxStream;
 use oxikube_domain::OxiResult;
+pub use oxikube_domain::helm::{
+    ChartHit, ChartRef, HelmCapabilities, HelmError, HelmVersion, InstallRequest, OutputKind,
+    OutputLine, Release, ReleaseRef, ReleaseStatus, RepoEntry, Revision, RollbackRequest,
+    SearchQuery, ShowKind, UninstallRequest, UpgradeRequest, Values,
+};
 use oxikube_domain::ids::ClusterId;
 use oxikube_domain::session::NamespaceSelection;
 
-/// Identifies a release: Helm release names are unique per namespace.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct HelmReleaseRef {
-    /// The cluster holding the release.
-    pub cluster: ClusterId,
-    /// The release's namespace.
-    pub namespace: String,
-    /// The release name.
-    pub name: String,
-}
-
-/// A release's lifecycle state, as Helm reports it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum HelmReleaseStatus {
-    /// Helm does not know the state.
-    Unknown,
-    /// Installed and live.
-    Deployed,
-    /// Removed but history kept.
-    Uninstalled,
-    /// Replaced by a newer revision.
-    Superseded,
-    /// The last operation failed.
-    Failed,
-    /// An uninstall is in progress.
-    Uninstalling,
-    /// An install is in progress.
-    PendingInstall,
-    /// An upgrade is in progress.
-    PendingUpgrade,
-    /// A rollback is in progress.
-    PendingRollback,
-}
-
-/// One revision of a release.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HelmRelease {
-    /// Which release this revision belongs to.
-    pub release: HelmReleaseRef,
-    /// Revision number, starting at 1.
-    pub revision: u32,
-    /// State of this revision.
-    pub status: HelmReleaseStatus,
-    /// Chart name.
-    pub chart: String,
-    /// Chart version.
-    pub chart_version: String,
-    /// Version of the packaged application, if the chart declares one.
-    pub app_version: Option<String>,
-    /// When this revision was last updated.
-    pub updated: Timestamp,
-}
+/// The progress of an install or upgrade: [`OutputLine`]s in order, then the end of the
+/// stream when Helm succeeded, or a single `Err` that ends it when Helm failed.
+///
+/// Nothing happens until the stream is polled; dropping it kills the `helm` process.
+pub type HelmOutput = BoxStream<'static, OxiResult<OutputLine>>;
 
 /// Helm access for a cluster.
 ///
 /// # Effects
 ///
-/// Read-only except [`rollback`](Self::rollback) and [`uninstall`](Self::uninstall), which are
+/// Read-only except [`install`](Self::install), [`upgrade`](Self::upgrade),
+/// [`rollback`](Self::rollback) and [`uninstall`](Self::uninstall), which are
 /// **mutating** (see the module docs).
 ///
 /// # Errors
 ///
-/// Adapters map native failures with the table in `docs/ARCHITECTURE.md`. Expected kinds:
-/// [`NotFound`](oxikube_domain::ErrorKind::NotFound) for an unknown release or revision,
-/// [`Auth`](oxikube_domain::ErrorKind::Auth) /
-/// [`Forbidden`](oxikube_domain::ErrorKind::Forbidden) when RBAC denies reading release
-/// Secrets, [`Unsupported`](oxikube_domain::ErrorKind::Unsupported) when the `helm` CLI is
-/// needed and missing, [`Network`](oxikube_domain::ErrorKind::Network) /
+/// Adapters map failures with [`HelmError`] and the table in `docs/ARCHITECTURE.md`.
+/// Expected kinds: [`NotFound`](oxikube_domain::ErrorKind::NotFound) for an unknown
+/// release or revision, [`Forbidden`](oxikube_domain::ErrorKind::Forbidden) when RBAC
+/// denies reading release Secrets, [`Unsupported`](oxikube_domain::ErrorKind::Unsupported)
+/// when the operation needs a `helm` binary that is missing or too old (or the adapter
+/// lacks it), [`Network`](oxikube_domain::ErrorKind::Network) /
 /// [`Timeout`](oxikube_domain::ErrorKind::Timeout) (retryable) for connection failures.
 #[async_trait]
 pub trait HelmPort: Send + Sync {
-    /// The latest revision of every release in the selected namespaces.
+    // --- read-only, native-capable ---------------------------------------------------
+
+    /// The latest revision of every release in the selected namespaces. List-shaped:
+    /// `notes` is `None` and both value trees are empty; use [`notes`](Self::notes) and
+    /// [`values`](Self::values) for those.
     async fn list_releases(
         &self,
         cluster: &ClusterId,
         namespaces: &NamespaceSelection,
-    ) -> OxiResult<Vec<HelmRelease>>;
+    ) -> OxiResult<Vec<Release>>;
 
     /// Every revision of `release`, newest first.
-    async fn history(&self, release: &HelmReleaseRef) -> OxiResult<Vec<HelmRelease>>;
+    async fn history(&self, release: &ReleaseRef) -> OxiResult<Vec<Revision>>;
 
-    /// User-supplied values of a revision as YAML (latest revision when `None`).
-    /// With `all`, includes chart defaults. May contain secrets; do not persist.
+    /// The values of a revision (latest when `None`): the user-supplied ones, or with `all`
+    /// the chart defaults merged in. May contain secrets; do not persist.
     async fn values(
         &self,
-        release: &HelmReleaseRef,
+        release: &ReleaseRef,
         revision: Option<u32>,
         all: bool,
-    ) -> OxiResult<String>;
+    ) -> OxiResult<Values>;
 
-    /// The rendered manifest of a revision (latest when `None`). May contain
-    /// secrets; do not persist.
-    async fn manifest(&self, release: &HelmReleaseRef, revision: Option<u32>) -> OxiResult<String>;
+    /// The rendered manifest of a revision (latest when `None`). May contain secrets; do
+    /// not persist.
+    async fn manifest(&self, release: &ReleaseRef, revision: Option<u32>) -> OxiResult<String>;
 
-    /// **Mutating.** Rolls `release` back to `revision`. Only via `MutationGuard`.
-    async fn rollback(&self, release: &HelmReleaseRef, revision: u32) -> OxiResult<()>;
+    /// The rendered `NOTES.txt` of a revision (latest when `None`), `None` if the chart
+    /// has none.
+    async fn notes(&self, release: &ReleaseRef, revision: Option<u32>)
+    -> OxiResult<Option<String>>;
 
-    /// **Mutating.** Uninstalls `release`, keeping its history when `keep_history`.
-    /// Only via `MutationGuard`.
-    async fn uninstall(&self, release: &HelmReleaseRef, keep_history: bool) -> OxiResult<()>;
+    // --- CLI-only, read-only ---------------------------------------------------------
+
+    /// The configured chart repositories (`helm repo list`).
+    async fn repos(&self) -> OxiResult<Vec<RepoEntry>>;
+
+    /// Searches the configured repositories for charts (`helm search repo`).
+    async fn search(&self, query: &SearchQuery) -> OxiResult<Vec<ChartHit>>;
+
+    /// Prints part of a chart (`helm show`): its metadata, README, default values or CRDs.
+    /// `chart.repo` names the repository.
+    async fn show(&self, chart: &ChartRef, kind: ShowKind) -> OxiResult<String>;
+
+    /// Renders the manifest `request` would install (`helm template`), changing nothing.
+    async fn template(&self, request: &InstallRequest) -> OxiResult<String>;
+
+    // --- CLI-only, mutating ----------------------------------------------------------
+
+    /// **Mutating.** Installs a chart as a new release. Only via `MutationGuard`.
+    /// The stream is the install's progress; see [`HelmOutput`].
+    async fn install(&self, request: &InstallRequest) -> OxiResult<HelmOutput>;
+
+    /// **Mutating.** Upgrades a release. Only via `MutationGuard`. The stream is the
+    /// upgrade's progress; see [`HelmOutput`].
+    async fn upgrade(&self, request: &UpgradeRequest) -> OxiResult<HelmOutput>;
+
+    /// **Mutating.** Rolls a release back to an earlier revision. Only via `MutationGuard`.
+    async fn rollback(&self, request: &RollbackRequest) -> OxiResult<()>;
+
+    /// **Mutating.** Uninstalls a release, keeping its history when asked. Only via
+    /// `MutationGuard`.
+    async fn uninstall(&self, request: &UninstallRequest) -> OxiResult<()>;
+
+    // --- capabilities ----------------------------------------------------------------
+
+    /// What this adapter can do right now. Synchronous and cheap: adapters detect the
+    /// binary ahead of time and cache the answer. Views and tools gate on it.
+    fn capabilities(&self) -> HelmCapabilities;
 }

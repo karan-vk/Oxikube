@@ -13,6 +13,7 @@
 //! | [`json`] | [`JsonDoc`]: compact immutable JSON read in place through [`JsonRef`] |
 //! | [`drain`] | node drain as data (E12-S10): [`drain::DrainOptions`], [`drain::plan_drain`] (kubectl's filters), [`drain::DrainProgress`], [`drain::DrainFlags`] (the `node::Drain` payload), [`drain::DrainBoard`] (per-pod progress) |
 //! | [`build`] | manifest builders for kubectl-equivalent actions ([`build::job_from_cronjob`], [`build::suspend_patch`]) |
+//! | [`helm`] | Helm vocabulary: [`helm::Release`], [`helm::ReleaseRef`], [`helm::Revision`], [`helm::ChartRef`], [`helm::RepoEntry`], [`helm::Values`], [`helm::HelmCapabilities`], [`helm::HelmError`] (E16) |
 //! | [`rollout`] | rollout history and rollback of Deployments, StatefulSets and DaemonSets: [`rollout::Revision`], [`rollout::RollbackPlan`] (E12-S06) |
 //! | [`view`] | typed view-models for core kinds ([`PodSummary`], [`NodeSummary`], ...) |
 //! | [`quantity`], [`age`] | [`Quantity`] parsing/formatting and [`Age`] formatting |
@@ -58,6 +59,7 @@ pub mod drain;
 pub mod error;
 pub mod error_details;
 pub mod event;
+pub mod helm;
 pub mod human_error;
 pub mod ids;
 pub(crate) mod intern;
