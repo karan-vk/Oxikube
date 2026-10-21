@@ -27,10 +27,16 @@ impl PaletteEnv for MountEnv {
         self.tabs.upgrade()?.read(cx).active().cloned()
     }
 
-    fn session(&self, cluster: &ClusterId, _: &App) -> Option<ActionContext> {
-        self.sessions
-            .get(cluster)
-            .map(|session| ActionContext::of(&session))
+    fn session(&self, cluster: &ClusterId, cx: &App) -> Option<ActionContext> {
+        self.sessions.get(cluster).map(|session| {
+            let mut context = ActionContext::of(&session);
+            // Commands that need Helm follow the gate (E16-S11), not the cluster's RBAC.
+            context.capabilities = super::helm::palette_capabilities(
+                &oxikube_helm_ui::HelmGateState::current(cx),
+                context.capabilities,
+            );
+            context
+        })
     }
 }
 

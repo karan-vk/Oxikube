@@ -11,6 +11,7 @@ Helm releases, charts catalog, install/upgrade/rollback UI, repos.
 - `oxikube_app`
 - `oxikube_ui`
 - `oxikube_workspace`
+- `oxikube_settings`
 - `oxikube_editor`
 
 See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps` fails CI when this crate depends on anything outside its layer rules.

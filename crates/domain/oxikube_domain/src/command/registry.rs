@@ -16,6 +16,10 @@ use crate::safety::Risk;
 impl CommandId {
     /// `app::Quit`: quit the application (confirms first while operations run).
     pub const APP_QUIT: CommandId = CommandId::new("app::Quit");
+    /// `helm::Recheck`: detect the `helm` binary again and refresh what the Helm views offer.
+    pub const HELM_RECHECK: CommandId = CommandId::new("helm::Recheck");
+    /// `helm::LocateBinary`: open the `helm.path` setting.
+    pub const HELM_LOCATE_BINARY: CommandId = CommandId::new("helm::LocateBinary");
     /// `app::SendTestNotification`: show one OS notification, to check that they reach the desktop.
     pub const APP_SEND_TEST_NOTIFICATION: CommandId = CommandId::new("app::SendTestNotification");
     /// `app::ToggleOsNotifications`: turn desktop (OS) notifications on or off (the opt-in).
@@ -874,6 +878,20 @@ pub static COMMANDS: &[CommandMeta] = &[
         NONE,
     )
     .in_views(EVENTS_VIEW),
+    // Opens the user's `helm.path` setting; changes nothing in any cluster.
+    CommandMeta::read(
+        CommandId::HELM_LOCATE_BINARY,
+        "Locate Helm Binary",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Runs `helm version` to find the binary again; reads and changes nothing in any cluster.
+    CommandMeta::read(
+        CommandId::HELM_RECHECK,
+        "Recheck Helm",
+        CommandScope::Global,
+        NONE,
+    ),
     // Lists the bindings of the focused view; reads nothing from a cluster.
     CommandMeta::read(
         CommandId::HELP_SHOW,
@@ -2111,7 +2129,7 @@ mod tests {
         for meta in COMMANDS {
             let tool = meta.id.tool_name();
             assert!(
-                tool.starts_with("k8s.") || tool.starts_with("app."),
+                tool.starts_with("k8s.") || tool.starts_with("app.") || tool.starts_with("helm."),
                 "{tool}"
             );
             assert!(seen.insert(tool.clone()), "duplicate tool name {tool}");

@@ -109,6 +109,7 @@ mod describe;
 mod editor;
 mod events;
 mod gallery;
+mod helm;
 mod help;
 mod jump;
 mod keymap;
@@ -366,6 +367,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (port_forward_sink, port_forward_rx) = oxikube_portforward_ui::PortForwardUiSink::channel();
     let (port_forwards, port_forward_favourites) =
         port_forwards::manager(&state, &services, stores.clone(), cx);
+    // Helm (E16-S11): the app's one capability controller; its sink serves `helm::*`.
+    let helm_sink = helm::install(cx);
     let registry = bus::build_registry(bus::BusParts {
         events_agent,
         agent_pending: agent.pending.clone(),
@@ -379,6 +382,10 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         views: views_tx,
         keymap_file: oxikube_keymap::user_keymap_file(cx),
         keymap_open: keymap_sink,
+        helm: helm_sink,
+        settings_file: cx
+            .try_global::<oxikube_settings::SettingsStore>()
+            .and_then(|store| store.user_settings_path().map(std::path::Path::to_path_buf)),
         kinds: kinds_tx,
         resources: resources_sink,
         logs: logs_sink,

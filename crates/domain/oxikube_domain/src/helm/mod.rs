@@ -11,6 +11,7 @@
 //! | [`repo`] | [`RepoEntry`], [`ChartHit`], [`SearchQuery`], [`ShowKind`] |
 //! | [`request`] | [`InstallRequest`], [`UpgradeRequest`], [`RollbackRequest`], [`UninstallRequest`], [`OutputLine`] |
 //! | [`capabilities`] | [`HelmCapabilities`], [`HelmVersion`]: what this session can do |
+//! | [`gate`] | [`HelmGate`], [`HelmFeature`], [`GateReason`]: what the views, commands and tools may offer (E16-S11) |
 //! | [`error`] | [`HelmError`] and its mapping onto [`OxiError`](crate::OxiError) |
 //!
 //! # Sensitivity
@@ -20,6 +21,7 @@
 
 pub mod capabilities;
 pub mod error;
+pub mod gate;
 pub mod release;
 pub mod repo;
 pub mod request;
@@ -27,6 +29,7 @@ pub mod values;
 
 pub use capabilities::{HelmCapabilities, HelmVersion};
 pub use error::HelmError;
+pub use gate::{FeatureUnavailable, GateReason, HelmFeature, HelmGate};
 pub use release::{ChartRef, Release, ReleaseRef, ReleaseStatus, Revision};
 pub use repo::{ChartHit, RepoEntry, SearchQuery, ShowKind};
 pub use request::{

@@ -141,6 +141,9 @@
             "null"
           ]
         },
+        "helm": {
+          "$ref": "#/$defs/HelmSettingsContent"
+        },
         "kubeconfig": {
           "$ref": "#/$defs/KubeconfigSettingsContent"
         },
@@ -572,6 +575,54 @@
           "maxItems": 64,
           "type": [
             "array",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "HelmRepoContent": {
+      "additionalProperties": false,
+      "description": "One `{ name, url }` of `helm.default_repos` as written in `settings.json`.",
+      "properties": {
+        "name": {
+          "default": "",
+          "description": "The repository alias (`bitnami`): letters, digits, `-`, `_` and `.`.",
+          "type": "string"
+        },
+        "url": {
+          "default": "",
+          "description": "The repository index URL (`https://charts.bitnami.com/bitnami`). `http(s)` only, and\nwithout credentials.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "HelmSettingsContent": {
+      "additionalProperties": false,
+      "description": "What one settings layer says about Helm.",
+      "properties": {
+        "default_repos": {
+          "description": "The chart repositories the Repositories section offers to add. Default: bitnami,\ningress-nginx and prometheus-community.",
+          "items": {
+            "$ref": "#/$defs/HelmRepoContent"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "path": {
+          "description": "The `helm` binary. Empty autodetects (`PATH`, then the usual install directories).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "server_side_apply": {
+          "description": "Pass `--server-side` to install and upgrade (Helm 3.13 or newer). Default `false`.",
+          "type": [
+            "boolean",
             "null"
           ]
         }
@@ -1712,6 +1763,9 @@
         "string",
         "null"
       ]
+    },
+    "helm": {
+      "$ref": "#/$defs/HelmSettingsContent"
     },
     "kubeconfig": {
       "$ref": "#/$defs/KubeconfigSettingsContent"

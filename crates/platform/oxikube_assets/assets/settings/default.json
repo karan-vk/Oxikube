@@ -89,6 +89,25 @@
     "allowed_in_readonly": false,
     "annotations": false
   },
+  // Helm (E16-S11). Global: the binary and the repositories belong to this machine. Edits apply
+  // at once; changing `path` runs Helm detection again, no restart needed.
+  //   path          the `helm` binary. Empty autodetects (PATH, then the usual install
+  //                 directories). Without Helm 3.10 or newer, releases, history, values, manifests
+  //                 and notes still work; install, upgrade, rollback, uninstall and the charts
+  //                 catalog are hidden until a binary is found.
+  //   server_side_apply  pass `--server-side` on install and upgrade (needs Helm 3.13 or newer;
+  //                 a warning shows when the binary is older).
+  //   default_repos the chart repositories offered in Helm > Repositories, each `{ name, url }`
+  //                 with an http(s) URL and no credentials in it.
+  "helm": {
+    "path": "",
+    "server_side_apply": false,
+    "default_repos": [
+      { "name": "bitnami", "url": "https://charts.bitnami.com/bitnami" },
+      { "name": "ingress-nginx", "url": "https://kubernetes.github.io/ingress-nginx" },
+      { "name": "prometheus-community", "url": "https://prometheus-community.github.io/helm-charts" }
+    ]
+  },
   // Session restore: reopen the clusters, tabs and namespaces of your last session at launch.
   // Off by default. Restoring starts after the window is drawn, so it never delays start-up, and a
   // cluster that fails or cannot be reached only shows an error in its own tab.

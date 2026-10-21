@@ -25,6 +25,7 @@
 //! | `oxikube_logs_ui` | `pod::ViewLogs` (open a pod's log view), `workload::ViewLogs` (a workload's or Service's pods merged, E08-S04) and the log view's `logs::SetRange`, `SelectContainer`, `TogglePrevious`, `ToggleWrap`, `ToggleTimestamps`, `ToggleAutoscroll`, `ToggleFullscreen`, `ToggleSource` (E08-S02, S04; reads only), and its search's `logs::Find`, `NextMatch`, `PreviousMatch`, `ToggleCase`, `ToggleInverse`, `ToggleFilterMode`, `CloseSearch` (E08-S03; reads only) |
 //! | `oxikube_app::tools::events` | `events::SendToAgent` (the selected events, an object's events or the newest warnings, queued as agent context from the `EventService`'s buffer; reads only; E14-S08) |
 //! | `oxikube_app::exec` | `node::Shell` (guarded: blocked read-only, a confirmation naming the node and the image, a server dry run of the pod, audit; E09-S09) |
+//! | `oxikube` | `helm::Recheck` (detect the `helm` binary again and refresh the Helm gate), `helm::LocateBinary` (create and show `settings.json` to set `helm.path`); neither changes a cluster (E16-S11) |
 //! | `oxikube_palette` | `palette::Toggle` (the palette: opens or closes it, E11-S03), `palette::ToggleShowAll` (lists the commands that cannot run here too) |
 //! | `oxikube_palette` | `palette::OpenJump` (the `:` jump bar, E11-S05), `jump::Back`, `jump::Forward`, `jump::Last` (its history: `[`, `]`, `-`) |
 //! | `oxikube_workspace` (quit) | `app::Quit`: asks first while operations run, like `cmd-q` (E11-S05, for `:q`, the palette and agents) |
@@ -113,6 +114,11 @@ pub struct BusParts {
     pub keymap_file: Option<std::path::PathBuf>,
     /// Where `keymap::OpenUser` sends the file to open (applied on the UI thread).
     pub keymap_open: super::keymap::OpenSink,
+    /// Where `helm::Recheck` and `helm::LocateBinary` send their requests (E16-S11).
+    pub helm: super::helm::Sink,
+    /// The user's `settings.json`, which `helm::LocateBinary` opens; `None` without a config
+    /// directory.
+    pub settings_file: Option<std::path::PathBuf>,
     /// Where `resource::OpenList` sends the list to open (applied on the UI thread).
     pub kinds: mpsc::UnboundedSender<OpenKind>,
     /// The resource views' queue (the table commands, applied on the UI thread).
@@ -230,7 +236,8 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     })?;
     registry.install("oxikube", |r| {
         register_view_commands(r, parts.views)?;
-        super::keymap::register_commands(r, parts.keymap_file, parts.keymap_open)
+        super::keymap::register_commands(r, parts.keymap_file, parts.keymap_open)?;
+        super::helm::register_commands(r, parts.helm, parts.settings_file)
     })?;
     registry.install(
         "oxikube_app::actions",
