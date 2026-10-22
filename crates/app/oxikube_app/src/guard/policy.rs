@@ -302,6 +302,8 @@ pub fn audit_target(command: &Command, cluster: &ClusterId) -> ResourceRef {
         return release;
     }
     if let Some(release) = crate::helm_upgrade::audit_target(command, cluster) {
+        return release;
+    }
     if let Some(release) = crate::helm_ops::audit_target(command, cluster) {
         return release;
     }
@@ -350,6 +352,8 @@ pub fn summary(meta: &CommandMeta, command: &Command, context: &str) -> String {
         return summary;
     }
     if let Some(summary) = crate::helm_upgrade::summary(command, context) {
+        return summary;
+    }
     if let Some(summary) = crate::helm_ops::summary(command, context) {
         return summary;
     }
@@ -481,6 +485,8 @@ pub fn audit_detail(command: &Command) -> Option<String> {
         return Some(detail);
     }
     if let Some(detail) = crate::helm_upgrade::audit_detail(command) {
+        return Some(detail);
+    }
     if let Some(detail) = crate::helm_ops::audit_detail(command) {
         return Some(detail);
     }

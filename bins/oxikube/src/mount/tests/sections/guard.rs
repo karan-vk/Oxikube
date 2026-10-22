@@ -30,11 +30,11 @@ const RISKS: &[(CommandId, Risk)] = &[
     (CommandId::CRONJOB_TRIGGER, Risk::Low),
     // Installing a Helm chart (E16-S09): the install tab's preview is its dry run; no row action.
     (CommandId::HELM_INSTALL, Risk::Low),
-    // Upgrading a Helm release (E16-S10): the upgrade tab's preview is its dry run; no row action.
-    (CommandId::HELM_UPGRADE, Risk::Medium),
     // Rolling back and uninstalling (E16-S06): the Releases detail's history row and header.
     (CommandId::HELM_ROLLBACK, Risk::Medium),
     (CommandId::HELM_UNINSTALL, Risk::High),
+    // Upgrading a Helm release (E16-S10): the upgrade tab's preview is its dry run; no row action.
+    (CommandId::HELM_UPGRADE, Risk::Medium),
     (CommandId::INGRESS_CLASS_SET_DEFAULT, Risk::Low),
     (CommandId::JOB_RESUME, Risk::Low),
     (CommandId::JOB_SUSPEND, Risk::Low),

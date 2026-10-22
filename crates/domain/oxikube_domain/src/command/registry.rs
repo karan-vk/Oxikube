@@ -1020,6 +1020,21 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Global,
         NONE,
     ),
+    CommandMeta::read(
+        CommandId::HELM_SHOW_VALUES,
+        "Helm: Show Release Values",
+        CommandScope::Cluster,
+        NONE,
+    ),
+    // Uninstalling removes the release's workloads (E16-S06): risk high, so the user types the
+    // release name; blocked on a read-only cluster, audited.
+    CommandMeta::mutation(
+        CommandId::HELM_UNINSTALL,
+        "Helm: Uninstall Release",
+        CommandScope::Cluster,
+        Risk::High,
+        Capabilities::HELM,
+    ),
     // Upgrading a release changes the cluster (E16-S10): risk medium, one confirmation after the
     // preview (the preview is the guard's dry run), blocked on a read-only cluster, audited.
     CommandMeta::mutation(
@@ -1034,21 +1049,6 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandId::HELM_UPGRADE_RELEASE,
         "Helm: Upgrade Release...",
         CommandScope::Global,
-        Capabilities::HELM,
-    ),
-    CommandMeta::read(
-        CommandId::HELM_SHOW_VALUES,
-        "Helm: Show Release Values",
-        CommandScope::Cluster,
-        NONE,
-    ),
-    // Uninstalling removes the release's workloads (E16-S06): risk high, so the user types the
-    // release name; blocked on a read-only cluster, audited.
-    CommandMeta::mutation(
-        CommandId::HELM_UNINSTALL,
-        "Helm: Uninstall Release",
-        CommandScope::Cluster,
-        Risk::High,
         Capabilities::HELM,
     ),
     // Lists the bindings of the focused view; reads nothing from a cluster.

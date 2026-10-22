@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 6debc2812e6ce389004f25bd622be694e87f9a051a6e77e734561bbc7ed78b9e # shrinks to ctx = CommandContext { view: Workspace, cluster_active: false, capabilities: Capabilities(0x0), read_only: false, exec_in_read_only: false, selection: Selection { count: 0, kind: None, kinds: [] } }
