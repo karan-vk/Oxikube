@@ -20,6 +20,7 @@ mod exec;
 mod helm;
 mod helm_charts;
 mod helm_install;
+mod helm_releases;
 mod helm_repos;
 mod helm_upgrade;
 mod help;

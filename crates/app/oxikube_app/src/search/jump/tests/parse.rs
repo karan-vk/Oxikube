@@ -137,6 +137,15 @@ fn pulses_has_k9s_short_forms_and_takes_no_arguments() {
 }
 
 #[test]
+fn helm_opens_the_releases_and_takes_no_arguments() {
+    for line in ["helm", "releases", ":Helm"] {
+        assert_eq!(parse(line), Ok(JumpCommand::Helm), "{line}");
+    }
+    assert!(parse("helm kube-system").is_err());
+    assert!(parse("helm @prod").is_err());
+}
+
+#[test]
 fn pf_takes_no_arguments() {
     for line in ["pf", "portforward", "portforwards", ":PF"] {
         assert_eq!(parse(line), Ok(JumpCommand::PortForwards), "{line}");

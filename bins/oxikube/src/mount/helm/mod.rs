@@ -6,10 +6,9 @@
 //!   (hot reload, no restart) and whenever `helm::Recheck` runs, and publishes what it found.
 //! * [`register_commands`] puts `helm::Recheck` and `helm::LocateBinary` on the bus (palette,
 //!   the banner's buttons, MCP tools).
-//! * [`install_tab`] makes the sidebar's Helm entry open the [`HelmPage`] in a cluster tab.
 //!
-//! A user reaches it from the sidebar's Helm entry in a cluster tab (banner and what is
-//! available), the palette ("Recheck Helm", "Locate Helm Binary") and the `helm` block of
+//! The Helm page itself (banner and releases) is opened by `mount::helm_releases`. A user reaches
+//! it from the sidebar's Helm > Releases entry in a cluster tab, `:helm`, the palette ("Recheck Helm", "Locate Helm Binary") and the `helm` block of
 //! `settings.json`. The palette also hides the commands that need the `helm` capability while
 //! the gate is not full ([`palette_capabilities`]).
 
@@ -31,7 +30,7 @@ use serde_json::json;
 #[cfg(test)]
 pub use controller::FileOpener;
 pub use controller::install;
-pub use tab::install_tab;
+pub use tab::HELM_PAGE;
 
 /// What the bus handlers ask the controller (it runs on the UI thread).
 #[derive(Debug, Clone, PartialEq, Eq)]

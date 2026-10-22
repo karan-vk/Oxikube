@@ -167,6 +167,26 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         },
         "cluster::ShowMetricsSettings" => Command::ClusterShowMetricsSettings { cluster },
         "helm::ShowRepos" => Command::HelmShowRepos,
+        "helm::OpenReleases" => Command::HelmOpenReleases { cluster },
+        "helm::ShowValues" => Command::HelmShowValues {
+            cluster,
+            namespace: "apps".to_owned(),
+            name: "web".to_owned(),
+            revision: None,
+            all: false,
+        },
+        "helm::ShowManifest" => Command::HelmShowManifest {
+            cluster,
+            namespace: "apps".to_owned(),
+            name: "web".to_owned(),
+            revision: None,
+        },
+        "helm::RevealValues" => Command::HelmRevealValues {
+            cluster,
+            namespace: "apps".to_owned(),
+            name: "web".to_owned(),
+            reveal: true,
+        },
         "helm::OpenCharts" => Command::HelmOpenCharts,
         "helm::SearchCharts" => Command::HelmSearchCharts {
             keyword: "nginx".to_owned(),

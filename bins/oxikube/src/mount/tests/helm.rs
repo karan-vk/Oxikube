@@ -54,10 +54,11 @@ fn the_helm_commands_are_on_the_bus_with_tool_stubs(cx: &mut TestAppContext) {
 fn start_up_detects_in_the_background_and_a_recheck_runs_again(cx: &mut TestAppContext) {
     let mut app = App::start(cx, TestPorts::seeded());
     // Detection has reported (the deterministic runtime finds no binary): no longer "looking".
+    // The releases page reads natively, so the gate is native-only, not unavailable.
     let gate = app.vcx.update(|_, cx| HelmGateState::current(cx));
     assert_eq!(
         gate,
-        HelmGate::Unavailable {
+        HelmGate::NativeOnly {
             reason: GateReason::BinaryMissing
         }
     );
@@ -117,10 +118,14 @@ fn the_sidebar_entry_opens_the_helm_page_and_the_banner_follows_the_gate(cx: &mu
         .update(|_, cx| workspace.read(cx).items_of_type::<HelmPage>());
     assert_eq!(pages.len(), 1, "the Helm entry opened the page");
     assert!(app.drawn("helm-page"));
+    assert!(
+        app.drawn("helm-releases"),
+        "with the releases under the banner"
+    );
     assert!(app.drawn("helm-banner"), "no helm binary: guidance shows");
     assert!(app.drawn("helm-locate"));
 
-    // A binary appears (a recheck found it): the banner goes and the page lists everything.
+    // A binary appears (a recheck found it): the banner goes; the releases stay.
     app.vcx.update(|_, cx| {
         let state = HelmGateState::global(cx).expect("the gate");
         state.update(cx, |state, cx| {
@@ -129,7 +134,7 @@ fn the_sidebar_entry_opens_the_helm_page_and_the_banner_follows_the_gate(cx: &mu
     });
     app.vcx.run_until_parked();
     assert!(!app.drawn("helm-banner"));
-    assert!(app.drawn("helm-feature-install"));
+    assert!(app.drawn("helm-releases"));
 }
 
 #[gpui::test]

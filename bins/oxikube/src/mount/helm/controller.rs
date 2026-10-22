@@ -62,6 +62,8 @@ pub fn install(cx: &mut App) -> Sink {
         return running.sink.clone();
     }
     let gate = HelmGateState::install(cx);
+    // The releases page (E16-S05) reads the release records natively, with or without a binary.
+    gate.update(cx, |gate, cx| gate.set_native_read(true, cx));
     // The task holds the gate weakly: a strong handle in a long-lived task is a leaked entity
     // when the app exits.
     let gate = gate.downgrade();

@@ -155,6 +155,63 @@ pub enum Command {
     /// with add, remove and update. Reads only local state.
     #[serde(rename = "helm::ShowRepos")]
     HelmShowRepos,
+    /// Open the cluster's Helm releases (E16-S05, `:helm`): the table of releases with name,
+    /// namespace, chart, revision, version, app version, status and age, and a detail with the
+    /// release's resources, values, manifest, notes and history. Reads the release Secrets and
+    /// ConfigMaps natively, so it needs no `helm` binary.
+    #[serde(rename = "helm::OpenReleases")]
+    HelmOpenReleases {
+        /// The cluster whose releases open.
+        cluster: ClusterId,
+    },
+    /// Print a release's values (E16-S05), the user-supplied ones or with `all` the chart defaults
+    /// merged in. Credential-looking values are masked (`********`) unless the user revealed
+    /// them with `helm::RevealValues`. Reads only.
+    #[serde(rename = "helm::ShowValues")]
+    HelmShowValues {
+        /// The release's cluster.
+        cluster: ClusterId,
+        /// The release's namespace.
+        namespace: String,
+        /// The release name.
+        name: String,
+        /// The revision; the latest when absent.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        revision: Option<u32>,
+        /// Computed values (chart defaults merged with the user's) instead of the user's only.
+        #[serde(default)]
+        all: bool,
+    },
+    /// Print a release's rendered manifest (E16-S05). Secret documents are masked unless the user
+    /// revealed the release's values with `helm::RevealValues`. Reads only.
+    #[serde(rename = "helm::ShowManifest")]
+    HelmShowManifest {
+        /// The release's cluster.
+        cluster: ClusterId,
+        /// The release's namespace.
+        namespace: String,
+        /// The release name.
+        name: String,
+        /// The revision; the latest when absent.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        revision: Option<u32>,
+    },
+    /// Show a release's masked values and manifest Secrets in clear in the release detail
+    /// (E16-S05). The user's explicit action: the grant lasts while the detail is open and
+    /// `reveal: false` hides the values again. The reply says how many values the view now shows
+    /// and never carries them.
+    #[serde(rename = "helm::RevealValues")]
+    HelmRevealValues {
+        /// The release's cluster.
+        cluster: ClusterId,
+        /// The release's namespace.
+        namespace: String,
+        /// The release name.
+        name: String,
+        /// `false` hides the values again (default: reveal).
+        #[serde(default = "default_follow")]
+        reveal: bool,
+    },
     /// Open the Helm charts catalog (E16-S08): search across the configured repositories, chart
     /// cards, and a detail with README, versions and default values. Reads only.
     #[serde(rename = "helm::OpenCharts")]
@@ -1721,6 +1778,10 @@ impl Command {
             Command::ClusterSetColour { .. } => CommandId::CLUSTER_SET_COLOUR,
             Command::ClusterShowMetricsSettings { .. } => CommandId::CLUSTER_SHOW_METRICS_SETTINGS,
             Command::HelmShowRepos => CommandId::HELM_SHOW_REPOS,
+            Command::HelmOpenReleases { .. } => CommandId::HELM_OPEN_RELEASES,
+            Command::HelmShowValues { .. } => CommandId::HELM_SHOW_VALUES,
+            Command::HelmShowManifest { .. } => CommandId::HELM_SHOW_MANIFEST,
+            Command::HelmRevealValues { .. } => CommandId::HELM_REVEAL_VALUES,
             Command::HelmOpenCharts => CommandId::HELM_OPEN_CHARTS,
             Command::HelmSearchCharts { .. } => CommandId::HELM_SEARCH_CHARTS,
             Command::HelmShowChart { .. } => CommandId::HELM_SHOW_CHART,
@@ -2160,6 +2221,26 @@ mod tests {
             },
             Command::ClusterShowMetricsSettings { cluster: cluster() },
             Command::HelmShowRepos,
+            Command::HelmOpenReleases { cluster: cluster() },
+            Command::HelmShowValues {
+                cluster: cluster(),
+                namespace: "apps".into(),
+                name: "web".into(),
+                revision: Some(3),
+                all: true,
+            },
+            Command::HelmShowManifest {
+                cluster: cluster(),
+                namespace: "apps".into(),
+                name: "web".into(),
+                revision: None,
+            },
+            Command::HelmRevealValues {
+                cluster: cluster(),
+                namespace: "apps".into(),
+                name: "web".into(),
+                reveal: true,
+            },
             Command::HelmOpenCharts,
             Command::HelmSearchCharts {
                 keyword: "nginx".into(),
@@ -2982,6 +3063,10 @@ mod tests {
                     | Command::ClusterSetColour { .. }
                     | Command::ClusterShowMetricsSettings { .. }
                     | Command::HelmShowRepos
+                    | Command::HelmOpenReleases { .. }
+                    | Command::HelmShowValues { .. }
+                    | Command::HelmShowManifest { .. }
+                    | Command::HelmRevealValues { .. }
                     | Command::HelmOpenCharts
                     | Command::HelmSearchCharts { .. }
                     | Command::HelmShowChart { .. }

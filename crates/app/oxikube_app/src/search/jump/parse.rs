@@ -7,6 +7,7 @@
 //! resource = alias { ns | "/" filter | selector | "@" context }     (each at most once)
 //! ctx      = "ctx" [ name ]        ns   = "ns" [ name ]        quit = "q" | "quit"
 //! pulses   = "pulses" | "pulse" | "pu"
+//! helm     = "helm" | "releases"
 //! pf       = "pf" | "portforward" | "portforwards" | "port-forwards"
 //! history  = "-" | "[" | "]"
 //! ```
@@ -53,6 +54,10 @@ pub fn parse(line: &str) -> Result<JumpCommand, ParseError> {
         "pulses" | "pulse" | "pu" => {
             no_more(rest, "`pulses` takes no arguments")?;
             Ok(JumpCommand::Pulses)
+        }
+        "helm" | "releases" => {
+            no_more(rest, "`helm` takes no arguments")?;
+            Ok(JumpCommand::Helm)
         }
         "pf" | "portforward" | "portforwards" | "port-forwards" => {
             no_more(rest, "`pf` takes no arguments")?;

@@ -8,6 +8,8 @@
 //! |---|---|
 //! | [`catalog`] | [`ChartSummary`], [`ChartVersion`], [`group_hits`], [`compare_versions`]: search hits grouped per chart, newest version first |
 //! | [`manifest`] | [`parse_manifest`]: a rendered manifest split into [`ManifestObject`]s, hooks apart, per-document errors (E16-S03) |
+//! | [`mask`] | [`mask_values`], [`mask_notes`], [`is_sensitive_key`], [`MASK`]: credential-looking values hidden until revealed (E16-S05) |
+//! | [`rows`] | [`ReleaseColumn`], [`sort_releases`]: the Releases table's columns and order (E16-S05) |
 //! | [`release`] | [`ReleaseRef`], [`ReleaseStatus`], [`ChartRef`], [`Release`], [`Revision`] |
 //! | [`values`] | [`Values`]: a YAML/JSON values tree with `get` and Helm-style `merge` |
 //! | [`repo`] | [`RepoEntry`], [`RepoAddRequest`], [`RepoPassword`], [`ChartHit`], [`SearchQuery`], [`ShowKind`] |
@@ -30,9 +32,11 @@ pub mod error;
 pub mod gate;
 pub mod install;
 pub mod manifest;
+pub mod mask;
 pub mod release;
 pub mod repo;
 pub mod request;
+pub mod rows;
 pub mod upgrade;
 pub mod values;
 pub mod values_docs;
@@ -46,6 +50,7 @@ pub use install::{
     validate_release_name,
 };
 pub use manifest::{ManifestError, ManifestObject, ParsedManifest, parse_manifest};
+pub use mask::{MASK, is_sensitive_key, mask_notes, mask_values};
 pub use release::{ChartRef, Release, ReleaseRef, ReleaseStatus, Revision};
 pub use repo::{
     ChartHit, RepoAddRequest, RepoEntry, RepoPassword, SearchQuery, ShowKind, validate_repo,
@@ -53,6 +58,7 @@ pub use repo::{
 pub use request::{
     InstallRequest, OutputKind, OutputLine, RollbackRequest, UninstallRequest, UpgradeRequest,
 };
+pub use rows::{ReleaseColumn, sort_releases};
 pub use upgrade::{ObjectKey, ResourceChanges, mask_values_for_diff};
 pub use values::Values;
 pub use values_docs::{KeyDoc, ValuesDocs};

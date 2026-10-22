@@ -329,6 +329,20 @@ fn pulses_opens_the_shown_clusters_pulses() {
 }
 
 #[test]
+fn helm_opens_the_shown_clusters_releases() {
+    for line in ["helm", "releases"] {
+        assert_eq!(
+            planned(line).commands,
+            [Command::HelmOpenReleases {
+                cluster: cluster("dev")
+            }],
+            "{line}"
+        );
+    }
+    assert_eq!(planned("helm").record.as_deref(), Some("helm"));
+}
+
+#[test]
 fn pf_shows_the_port_forwards_panel_without_a_history_entry() {
     for line in ["pf", "portforward", "portforwards"] {
         assert_eq!(
