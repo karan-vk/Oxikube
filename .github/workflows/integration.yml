@@ -17,7 +17,8 @@ name: integration
 # own kind tests (`oxikube_helm/tests/kind_native`, `kind_helm_cli`) and the app-level scenarios
 # (`oxikube_app/tests/kind_smoke/helm`: releases made by the real CLI read natively with both
 # storage drivers; install, upgrade, rollback and uninstall through the flows and the guard; the
-# read-only block; no-binary mode; 500 releases listed natively, its time a `perf-jsonl` line). The
+# read-only block; no-binary mode; 500 releases listed natively, its time a `perf-jsonl` line, held to 1 s by a release-build
+# rerun). The
 # nightly `helm-minimum` job reruns the CLI scenarios with Helm 3.10, the oldest supported, to
 # catch output-format drift. Charts are local; nothing is pulled from a chart repository.
 #
@@ -86,7 +87,7 @@ env:
 jobs:
   kind:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 55
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-rust
@@ -117,6 +118,13 @@ jobs:
           set -o pipefail
           mkdir -p diagnostics
           $SUITE -- --nocapture 2>&1 | tee diagnostics/suite.log
+      # The epic's "500 releases listed in under 1 s" bar (E16-S12) is a release-build budget; the
+      # debug SUITE above only holds the scenario to 3 s, so it runs again optimised to enforce 1 s.
+      - name: Helm 500-release listing budget (release build)
+        run: |
+          set -o pipefail
+          cargo test --release -p oxikube_app --features oxikube_app/integration --test kind_smoke \
+            -- helm::scale --nocapture 2>&1 | tee -a diagnostics/suite.log
       - name: Integration tests (flake check, second run)
         if: ${{ github.event_name == 'schedule' }}
         run: |

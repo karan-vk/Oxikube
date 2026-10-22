@@ -64,6 +64,7 @@ async fn five_hundred_releases_list_natively_within_the_budget() {
         })
     );
     // The budget (1 s) is for release builds; an unoptimised build gets three times the room.
+    // CI enforces the 1 s bound: the `kind` job reruns this test with `--release`.
     let budget_ms = if cfg!(debug_assertions) { 3000 } else { 1000 };
     assert!(
         cold.as_millis() < budget_ms,
