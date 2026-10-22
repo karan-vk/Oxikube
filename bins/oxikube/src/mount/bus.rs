@@ -171,7 +171,7 @@ pub struct BusParts {
     /// Where `helm::OpenCharts` sends its request (E16-S08).
     pub helm_charts_pages: oxikube_helm_ui::charts::HelmChartsRequestSink,
     /// The `helm` adapter `helm::Install` runs (E16-S09).
-    pub helm: Arc<dyn oxikube_ports::HelmPort>,
+    pub helm_port: Arc<dyn oxikube_ports::HelmPort>,
     /// Where `helm::Install` publishes its output, for the install tab that follows it.
     pub helm_progress: oxikube_app::ReleaseProgress,
     /// Where `cluster::ShowPulses` sends the cluster whose pulses to open (applied on the UI
@@ -330,7 +330,7 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
         oxikube_app::helm_charts::register_commands(r, parts.helm_charts)
     })?;
     registry.install("oxikube_app::helm_install", |r| {
-        oxikube_app::helm_install::register_commands(r, parts.helm, parts.helm_progress)
+        oxikube_app::helm_install::register_commands(r, parts.helm_port, parts.helm_progress)
     })?;
     // An agent's `helm.repo_add` needs the user's permission (denied until the agent epic's prompt).
     registry.install("oxikube_app::helm_repos", |r| {

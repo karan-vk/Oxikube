@@ -431,7 +431,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         helm_repos_pages: helm_repos_sink,
         helm_charts: helm_services.charts.clone(),
         helm_charts_pages: helm_charts_sink,
-        helm: helm_services.helm.clone(),
+        helm_port: helm_services.helm.clone(),
         helm_progress: helm_progress.clone(),
         pulses_pages: pulses_sink,
         overview_pages: overview_sink,
