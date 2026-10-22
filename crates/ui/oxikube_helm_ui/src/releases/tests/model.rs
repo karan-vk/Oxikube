@@ -63,3 +63,22 @@ fn notes_links_are_web_links_only_without_repeats() {
     assert_eq!(links(notes, 1).len(), 1);
     assert!(links("no links here", 8).is_empty());
 }
+
+#[test]
+fn row_ages_move_with_the_clock() {
+    use crate::releases::ReleasesDelegate;
+    use oxikube_domain::helm::ReleaseColumn;
+    let release = super::release("apps", "web", ReleaseStatus::Deployed, 1);
+    let listed = release.updated;
+    let mut delegate = ReleasesDelegate::new();
+    delegate.set_releases(vec![release], listed);
+    let cell = |d: &ReleasesDelegate| d.text(0, ReleaseColumn::Updated).map(|t| t.to_string());
+    assert_eq!(cell(&delegate).as_deref(), Some("0s"));
+    let later = super::at(listed.as_second() + 600);
+    assert!(delegate.refresh_ages(later));
+    assert_eq!(cell(&delegate).as_deref(), Some("10m"));
+    assert!(
+        !delegate.refresh_ages(later),
+        "nothing moved, nothing to redraw"
+    );
+}

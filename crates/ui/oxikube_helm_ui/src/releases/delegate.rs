@@ -124,6 +124,19 @@ impl ReleasesDelegate {
         self.reshape();
     }
 
+    /// Measures the ages again at `now`; whether any cell changed.
+    pub(super) fn refresh_ages(&mut self, now: Timestamp) -> bool {
+        let fresh: Vec<RowText> = self.all.iter().map(|r| RowText::new(r, now)).collect();
+        let changed = fresh
+            .iter()
+            .zip(&self.texts)
+            .any(|(new, old)| new.cell(ReleaseColumn::Updated) != old.cell(ReleaseColumn::Updated));
+        if changed {
+            self.texts = fresh;
+        }
+        changed
+    }
+
     pub(super) fn set_filter(&mut self, filter: ReleaseFilter) {
         self.filter = filter;
         self.reshape();
@@ -147,7 +160,7 @@ impl ReleasesDelegate {
         }
     }
 
-    fn text(&self, row_ix: usize, column: ReleaseColumn) -> Option<&SharedString> {
+    pub(super) fn text(&self, row_ix: usize, column: ReleaseColumn) -> Option<&SharedString> {
         let ix = *self.shown.get(row_ix)?;
         Some(self.texts.get(ix)?.cell(column))
     }

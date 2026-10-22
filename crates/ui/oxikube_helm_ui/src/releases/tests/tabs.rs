@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use gpui::TestAppContext;
+use gpui::{AppContext as _, TestAppContext};
 use oxikube_domain::command::Command;
 use oxikube_domain::helm::{ChartRef, ReleaseStatus, Revision, Values};
 use serde_json::json;
@@ -343,4 +343,60 @@ fn a_failing_tab_says_why_and_the_others_still_work(cx: &mut TestAppContext) {
     assert!(h.is_laid_out("helm-release-values-failed"));
     h.click("helm-release-tab:history");
     assert!(h.is_laid_out("helm-release-history"));
+}
+
+#[gpui::test]
+fn a_read_in_flight_is_not_left_waiting_when_the_values_mode_changes(cx: &mut TestAppContext) {
+    let mut h = Harness::open(cx, web(), full());
+    let view = h.view.clone();
+    // Resources has been asked for and has not landed when the user flips the mode.
+    h.vcx.update(|_, cx| {
+        view.update(cx, |v, cx| {
+            let release = v.table().read(cx, |d| d.release(0).cloned()).expect("row");
+            v.open_detail(release, cx);
+            v.set_tab(crate::releases::Tab::Values, cx);
+            v.toggle_values_mode(cx);
+            let detail = v.detail.as_ref().expect("detail");
+            assert!(
+                !matches!(detail.load(crate::releases::Tab::Resources), Load::Loading),
+                "a read the generation would discard must not stay Loading"
+            );
+        });
+    });
+    h.settle();
+    h.click("helm-release-tab:resources");
+    h.settle();
+    assert!(matches!(
+        h.detail(|d| d.load(crate::releases::Tab::Resources).clone()),
+        Load::Ready
+    ));
+}
+
+#[gpui::test]
+fn closing_the_page_hides_what_was_revealed(cx: &mut TestAppContext) {
+    let mut h = open(cx);
+    h.backend.grant(&release_ref("web"), true);
+    h.settle();
+    assert!(h.backend.data.lock().revealed.contains(&release_ref("web")));
+    // The page entity goes away with its tab; the reveal must go with it.
+    let (backend, gate, bus) = (h.backend.clone(), h.gate.clone(), h.bus.clone());
+    let view = h.vcx.update(|window, cx| {
+        let deps = crate::releases::ReleasesDeps {
+            backend,
+            dispatcher: std::rc::Rc::new(bus),
+            gate,
+        };
+        cx.new(|cx| crate::releases::HelmReleasesView::new(deps, window, cx))
+    });
+    h.settle();
+    h.vcx.update(|_, cx| {
+        view.update(cx, |v, cx| {
+            let release = v.table().read(cx, |d| d.release(0).cloned()).expect("row");
+            v.open_detail(release, cx);
+        });
+    });
+    h.backend.grant(&release_ref("web"), true);
+    drop(view);
+    h.settle();
+    assert!(!h.backend.data.lock().revealed.contains(&release_ref("web")));
 }

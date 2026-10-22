@@ -141,6 +141,21 @@ impl ReleaseDetail {
         self.history.load = Load::Idle;
     }
 
+    /// Drops what `tabs` read and every read still in flight, so no tab is left waiting for a
+    /// result the new generation would discard. The caller starts the shown tab again.
+    pub(super) fn restart(&mut self, tabs: &[Tab]) {
+        self.generation += 1;
+        for tab in Tab::ALL {
+            if tabs.contains(&tab) || matches!(self.load(tab), Load::Loading) {
+                self.tasks.remove(&tab);
+                if tab == Tab::Resources {
+                    self.resources.tick = None;
+                }
+                *self.load_mut(tab) = Load::Idle;
+            }
+        }
+    }
+
     /// The load state of `tab`.
     pub fn load(&self, tab: Tab) -> &Load {
         match tab {

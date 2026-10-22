@@ -20,12 +20,15 @@ use oxikube_workspace::CommandDispatcher;
 use super::backend::ReleasesBackend;
 use super::delegate::ReleasesDelegate;
 use super::detail::ReleaseDetail;
-use super::model::{Load, Phase, Tab};
+use super::model::{Phase, Tab};
 use crate::gate::HelmGateState;
 
 /// How long the page waits after a change before listing again, so a burst of revision records
 /// (an upgrade writes several) costs one list.
 pub const SETTLE: Duration = Duration::from_millis(300);
+
+/// How often the Updated column's ages are measured again.
+pub const AGE_TICK: Duration = Duration::from_secs(30);
 
 /// What the page needs from outside. All of it is handed in, so a test builds the view over fakes
 /// and the app builds it over its service and bus.
@@ -59,6 +62,13 @@ pub struct HelmReleasesView {
 }
 
 impl EventEmitter<()> for HelmReleasesView {}
+
+impl Drop for HelmReleasesView {
+    /// Closing the page ends the detail: what was revealed in it is hidden again.
+    fn drop(&mut self) {
+        self.conceal_shown();
+    }
+}
 
 impl Focusable for HelmReleasesView {
     fn focus_handle(&self, _: &App) -> FocusHandle {
@@ -144,6 +154,7 @@ impl HelmReleasesView {
 
         self.follow_records(cx);
         self.follow_reveals(cx);
+        self.follow_ages(cx);
         self.refresh(cx);
     }
 
@@ -181,6 +192,31 @@ impl HelmReleasesView {
             }
         });
         self._tasks.push(task);
+    }
+
+    /// Keeps the Updated column current while the page sits open: one pass per tick, and a redraw
+    /// only when an age moved.
+    fn follow_ages(&mut self, cx: &mut Context<Self>) {
+        let task = cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor().timer(AGE_TICK).await;
+                let alive = this.update(cx, |this, cx| this.refresh_ages(cx));
+                if alive.is_err() {
+                    break;
+                }
+            }
+        });
+        self._tasks.push(task);
+    }
+
+    /// Measures the rows' ages again.
+    pub(super) fn refresh_ages(&mut self, cx: &mut Context<Self>) {
+        let now = Timestamp::now();
+        if self.table.update_quiet(cx, |d| d.refresh_ages(now)) {
+            // `update` redraws the table without resetting the columns the user resized.
+            self.table.update(cx, |_| ());
+            notify_coalesced(cx);
+        }
     }
 
     fn set_editing(&mut self, editing: bool, cx: &mut Context<Self>) {
@@ -270,11 +306,7 @@ impl HelmReleasesView {
         let Some(detail) = &mut self.detail else {
             return;
         };
-        detail.generation += 1;
-        for tab in [Tab::Values, Tab::Manifest] {
-            detail.tasks.remove(&tab);
-            *detail.load_mut(tab) = Load::Idle;
-        }
+        detail.restart(&[Tab::Values, Tab::Manifest]);
         self.load_shown(cx);
         cx.notify();
     }
@@ -403,9 +435,7 @@ impl HelmReleasesView {
             return;
         };
         detail.mode = detail.mode.toggled();
-        detail.generation += 1;
-        detail.tasks.remove(&Tab::Values);
-        detail.values.load = Load::Idle;
+        detail.restart(&[Tab::Values]);
         self.load_shown(cx);
         cx.notify();
     }
