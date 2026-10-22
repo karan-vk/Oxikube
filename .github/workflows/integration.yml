@@ -13,6 +13,14 @@ name: integration
 # forwards. Its timings print as `perf-jsonl {...}` lines, kept in `suite.log` with the rest of
 # the output and uploaded with the diagnostics when the job fails.
 #
+# The Helm suite (E16-S12) runs in the `kind` job with a pinned `helm` (HELM_VERSION): the adapter's
+# own kind tests (`oxikube_helm/tests/kind_native`, `kind_helm_cli`) and the app-level scenarios
+# (`oxikube_app/tests/kind_smoke/helm`: releases made by the real CLI read natively with both
+# storage drivers; install, upgrade, rollback and uninstall through the flows and the guard; the
+# read-only block; no-binary mode; 500 releases listed natively, its time a `perf-jsonl` line). The
+# nightly `helm-minimum` job reruns the CLI scenarios with Helm 3.10, the oldest supported, to
+# catch output-format drift. Charts are local; nothing is pulled from a chart repository.
+#
 # The data plane suite (E04-S14) is `crates/adapters/oxikube_kube/tests/`; its README maps every
 # port method and epic acceptance item to the test that exercises it. The nightly run executes the
 # whole suite twice on the same cluster as a flake check: a test that passes once and fails once is
@@ -69,9 +77,11 @@ env:
   OXIKUBE_TEST_DIAGNOSTICS_DIR: ${{ github.workspace }}/diagnostics/namespaces
   # kube, app and testkit integration tests; `--no-fail-fast` reports every failing file.
   SUITE: >-
-    cargo test -p oxikube_kube -p oxikube_app -p oxikube_testkit -p oxikube_prometheus
-    --features oxikube_kube/integration,oxikube_app/integration,oxikube_testkit/integration,oxikube_prometheus/integration
+    cargo test -p oxikube_kube -p oxikube_app -p oxikube_testkit -p oxikube_prometheus -p oxikube_helm
+    --features oxikube_kube/integration,oxikube_app/integration,oxikube_testkit/integration,oxikube_prometheus/integration,oxikube_helm/integration
     --no-fail-fast
+  # The `helm` the Helm scenarios run (E16-S12); bumped on purpose, never "latest".
+  HELM_VERSION: v4.3.1
 
 jobs:
   kind:
@@ -90,6 +100,10 @@ jobs:
         with:
           cluster_name: oxikube
           wait: 120s
+      # After kind-action, so this pinned binary is the `helm` on PATH the Helm suite finds.
+      - uses: azure/setup-helm@v4
+        with:
+          version: ${{ env.HELM_VERSION }}
       # Idempotent: the cluster already exists, so this pulls every test image into the node
       # (fixtures/test-images.txt: no test waits on a registry), installs metrics-server (with
       # --kubelet-insecure-tls) and the fixtures (Widget CRD with printer columns, workloads).
@@ -122,6 +136,8 @@ jobs:
             --sort-by=.metadata.creationTimestamp > diagnostics/events.txt || true
           kubectl --context kind-oxikube get pods -A -o wide > diagnostics/pods.txt || true
           kubectl --context kind-oxikube get nodes -o wide > diagnostics/nodes.txt || true
+          # Helm release records (names and labels only; their payloads are not printed).
+          kubectl --context kind-oxikube get secrets,configmaps -A -l owner=helm > diagnostics/helm-records.txt || true
           kind export logs diagnostics/kind --name oxikube || true
           sed -n 's/^perf-jsonl //p' diagnostics/suite.log > diagnostics/perf.jsonl || true
       - name: Upload cluster diagnostics
@@ -129,6 +145,62 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: integration-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: diagnostics/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Teardown
+        if: always()
+        run: cargo run -q -p xtask -- kind-down --name oxikube || true
+
+  # The Helm CLI scenarios against the oldest supported Helm (E16-S12), nightly and on demand: the
+  # adapter's parsers and flags must still work with 3.10's output. Only the tests that run `helm`
+  # (the `helm` filter); the native-only ones do not depend on the binary's version.
+  helm-minimum:
+    if: ${{ github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      HELM_SUITE: >-
+        cargo test -p oxikube_helm -p oxikube_app
+        --features oxikube_helm/integration,oxikube_app/integration
+        --test kind_helm_cli --test kind_native --test kind_smoke
+        --no-fail-fast
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-rust
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: integration
+          save-if: false
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: oxikube
+          wait: 120s
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.10.3
+      - name: Test images and cluster fixtures
+        run: cargo run -q -p xtask -- kind-up --name oxikube
+      - name: Build the suite
+        run: $HELM_SUITE --no-run
+      - name: Helm scenarios (Helm 3.10)
+        run: |
+          set -o pipefail
+          mkdir -p diagnostics
+          helm version | tee diagnostics/helm-version.txt
+          $HELM_SUITE -- helm --nocapture 2>&1 | tee diagnostics/helm-suite.log
+      - name: Collect cluster diagnostics
+        if: ${{ failure() }}
+        run: |
+          mkdir -p diagnostics
+          kubectl --context kind-oxikube get events -A -o wide \
+            --sort-by=.metadata.creationTimestamp > diagnostics/events.txt || true
+          kubectl --context kind-oxikube get secrets,configmaps -A -l owner=helm > diagnostics/helm-records.txt || true
+      - name: Upload diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: helm-minimum-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: diagnostics/
           if-no-files-found: ignore
           retention-days: 7

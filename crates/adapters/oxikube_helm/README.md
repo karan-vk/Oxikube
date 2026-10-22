@@ -18,7 +18,13 @@ cargo test -p oxikube_helm     # CLI parsers/argv/errors/fake `helm` script; nat
 OXIKUBE_TEST_CONTEXT=kind-oxikube cargo test -p oxikube_helm --features integration --test kind_helm_cli
 # OXIKUBE_TEST_HELM=/path/to/helm picks another binary; skipped without a context or helm >= 3.10
 OXIKUBE_TEST_CONTEXT=kind-oxikube cargo test -p oxikube_helm --features integration --test kind_native
+# The feature end to end (E16-S12): CLI-made releases read natively (both drivers), install / upgrade /
+# rollback / uninstall through the app's flows and the guard, read-only, no-binary mode, 500 releases
+OXIKUBE_TEST_CONTEXT=kind-oxikube cargo test -p oxikube_app --features integration --test kind_smoke helm::
 ```
+
+CI runs all of these in `integration.yml` with a pinned `helm` (`HELM_VERSION`); its nightly
+`helm-minimum` job reruns the CLI scenarios with Helm 3.10.3.
 
 ## Allowed internal dependencies
 

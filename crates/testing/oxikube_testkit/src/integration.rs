@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 pub mod events;
+pub mod helm;
 pub mod metrics;
 pub mod nginx;
 pub mod pods;

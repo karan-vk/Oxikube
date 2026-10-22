@@ -53,6 +53,8 @@ jiff.workspace = true
 k8s-openapi.workspace = true
 kube.workspace = true
 oxikube_kube.workspace = true
+# The Helm suite (`tests/kind_smoke/helm`, E16-S12): the real `helm` CLI adapter and the native reader.
+oxikube_helm.workspace = true
 # `kind_smoke::metrics_absent` (E13-S13): a client layer that hides `metrics.k8s.io` from the adapter.
 http.workspace = true
 tower.workspace = true

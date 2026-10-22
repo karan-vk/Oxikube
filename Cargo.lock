@@ -5880,6 +5880,7 @@ dependencies = [
  "kube",
  "nucleo-matcher",
  "oxikube_domain",
+ "oxikube_helm",
  "oxikube_kube",
  "oxikube_ports",
  "oxikube_state_sqlite",
