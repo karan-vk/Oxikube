@@ -10,14 +10,14 @@ use oxikube_domain::ErrorKind;
 use oxikube_domain::helm::{ChartRef, ReleaseRef, ReleaseStatus, ValuesYaml};
 use oxikube_domain::safety::{ConfirmTier, Risk};
 use oxikube_domain::session::NamespaceSelection;
-use oxikube_helm::{HelmCliConfig, NativeHelmReader};
+use oxikube_helm::NativeHelmReader;
 use oxikube_ports::HelmPort as _;
 use oxikube_testkit::integration::TestNamespace;
 use oxikube_testkit::integration::helm::{CHART_NAME, Driver, HelmBin, write_chart};
 use serde_json::json;
 use std::sync::Arc;
 
-use super::{WHO, World, rollback, suffix, uninstall};
+use super::{WHO, World, cli_config, rollback, suffix, uninstall};
 
 const TOKEN: &str = "s3cr3t-token-for-the-audit-check";
 
@@ -41,11 +41,7 @@ async fn helm_releases_from_the_cli_and_through_the_guard() {
     let Some(helm) = HelmBin::find() else {
         return;
     };
-    let config = HelmCliConfig {
-        path: Some(helm.path().to_path_buf()),
-        ..HelmCliConfig::default()
-    };
-    let Some(w) = World::connect(config).await else {
+    let Some(w) = World::connect(cli_config(&helm)).await else {
         return;
     };
     let ns = TestNamespace::create(w.context()).expect("namespace");

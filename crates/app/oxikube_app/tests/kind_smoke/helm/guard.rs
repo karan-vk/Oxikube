@@ -8,23 +8,18 @@ use oxikube_app::{InstallError, InstallFlow, InstallSpec};
 use oxikube_domain::audit::{AuditOutcome, Initiator};
 use oxikube_domain::command::Command;
 use oxikube_domain::helm::{ChartRef, ReleaseRef, ReleaseStatus};
-use oxikube_helm::HelmCliConfig;
 use oxikube_ports::HelmPort as _;
 use oxikube_testkit::integration::TestNamespace;
 use oxikube_testkit::integration::helm::{Driver, HelmBin, write_chart};
 
-use super::{WHO, World, rollback, suffix, uninstall};
+use super::{WHO, World, cli_config, rollback, suffix, uninstall};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn read_only_blocks_every_helm_mutation_and_uninstall_needs_the_name() {
     let Some(helm) = HelmBin::find() else {
         return;
     };
-    let config = HelmCliConfig {
-        path: Some(helm.path().to_path_buf()),
-        ..HelmCliConfig::default()
-    };
-    let Some(w) = World::connect(config).await else {
+    let Some(w) = World::connect(cli_config(&helm)).await else {
         return;
     };
     let ns = TestNamespace::create(w.context()).expect("namespace");

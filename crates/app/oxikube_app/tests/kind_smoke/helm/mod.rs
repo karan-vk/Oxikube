@@ -34,6 +34,7 @@ use oxikube_domain::ids::ClusterId;
 use oxikube_helm::{HelmCli, HelmCliConfig, HelmTarget, NativeHelmReader};
 use oxikube_kube::{ConnectorConfig, KubeConnector, PoolConfig};
 use oxikube_ports::HelmPort;
+use oxikube_testkit::integration::helm::HelmBin;
 use oxikube_testkit::{FakeClusterSourcePort, FakeStatePort};
 
 use crate::clock::TokioClock;
@@ -183,6 +184,14 @@ impl World {
             .await
             .expect("get config map")
             .map(|cm| cm.data.unwrap_or_default())
+    }
+}
+
+/// A `HelmCliConfig` that runs the binary under test.
+pub fn cli_config(helm: &HelmBin) -> HelmCliConfig {
+    HelmCliConfig {
+        path: Some(helm.path().to_path_buf()),
+        ..HelmCliConfig::default()
     }
 }
 
