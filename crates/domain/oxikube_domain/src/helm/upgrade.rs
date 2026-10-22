@@ -90,13 +90,21 @@ impl ResourceChanges {
     }
 }
 
-/// The objects of `manifest` with their parsed bodies.
+/// The objects of `manifest` with their parsed bodies (chart hooks excluded).
 fn objects(manifest: &str) -> BTreeMap<ObjectKey, Value> {
     let mut found = BTreeMap::new();
     for (position, document) in documents(manifest).into_iter().enumerate() {
         let body = Values::from_yaml(document)
             .map(|values| values.as_json().clone())
             .unwrap_or_else(|_| Value::String(document.to_owned()));
+        // `helm get manifest` leaves hooks out, `helm template` renders them: ignore them on both
+        // sides so a no-op upgrade reads as no change.
+        if body
+            .pointer("/metadata/annotations/helm.sh~1hook")
+            .is_some()
+        {
+            continue;
+        }
         let field = |path: &[&str]| {
             let mut at = &body;
             for key in path {
@@ -146,14 +154,75 @@ fn documents(manifest: &str) -> Vec<&str> {
 /// `values` with the value of every secret-looking key (`password`, `token`, `apiKey`, ...)
 /// replaced by `(hidden #xxxxxxxx)`, where the digits are a fingerprint: equal values show equal
 /// fingerprints, so a diff of two texts still shows that a secret changed but never what it is.
-/// Line based (block scalars and flow maps are left as they are); other lines are untouched.
+/// Line based. A secret's block scalar (`key: |`) is replaced as a whole, and secret keys inside
+/// a one-line flow map (`auth: {password: x}`) are masked; other lines are untouched.
 pub fn mask_values_for_diff(values: &str) -> String {
     let mut out = String::with_capacity(values.len());
-    for line in values.lines() {
+    let mut lines = values.lines().peekable();
+    while let Some(line) = lines.next() {
+        let indent = line.len() - line.trim_start().len();
+        let body = line[indent..].trim_start_matches("- ");
+        let block = body.split_once(':').is_some_and(|(key, value)| {
+            let value = value.trim();
+            is_sensitive_field(key.trim().trim_matches(['"', '\'']))
+                && value.starts_with(['|', '>'])
+        });
+        if block {
+            let mut text = String::new();
+            while let Some(next) = lines.peek() {
+                let deeper = next.len() - next.trim_start().len() > indent;
+                if next.trim().is_empty() || deeper {
+                    text.push_str(next);
+                    text.push('\n');
+                    lines.next();
+                } else {
+                    break;
+                }
+            }
+            let key = body.split_once(':').map_or("", |(key, _)| key);
+            let secret = is_sensitive_field(key.trim().trim_matches(['"', '\'']))
+                || text.contains("PRIVATE KEY-----");
+            if !secret {
+                out.push_str(line);
+                out.push('\n');
+                out.push_str(&text);
+                continue;
+            }
+            let key_end = line.len() - body.len() + body.find(':').unwrap_or(0);
+            out.push_str(&format!(
+                "{}: (hidden #{:08x})\n",
+                &line[..key_end],
+                fingerprint(&text)
+            ));
+            continue;
+        }
         out.push_str(&mask_line(line));
         out.push('\n');
     }
     out
+}
+
+fn fingerprint(text: &str) -> u32 {
+    let mut hasher = DefaultHasher::new();
+    text.hash(&mut hasher);
+    hasher.finish() as u32
+}
+
+/// Masks the secret entries of a one-line flow map `{a: 1, password: x}`.
+fn mask_flow(value: &str) -> Option<String> {
+    let inner = value.strip_prefix('{')?.strip_suffix('}')?;
+    let mut changed = false;
+    let parts: Vec<String> = inner
+        .split(',')
+        .map(|pair| match pair.split_once(':') {
+            Some((key, v)) if is_sensitive_field(key.trim().trim_matches(['"', '\''])) => {
+                changed = true;
+                format!("{key}: (hidden #{:08x})", fingerprint(v.trim()))
+            }
+            _ => pair.to_owned(),
+        })
+        .collect();
+    changed.then(|| format!("{{{}}}", parts.join(",")))
 }
 
 fn mask_line(line: &str) -> String {
@@ -164,6 +233,12 @@ fn mask_line(line: &str) -> String {
     };
     let key = key.trim().trim_matches(['"', '\'']);
     let value = value.trim();
+    if value.starts_with('{') {
+        if let Some(masked) = mask_flow(value) {
+            let prefix_len = line.len() - body.len();
+            return format!("{}{key}: {masked}", &line[..prefix_len]);
+        }
+    }
     let plain = !value.is_empty()
         && !value.starts_with(['|', '>', '[', '{', '#', '&', '*'])
         && !value.eq_ignore_ascii_case("null")
@@ -171,9 +246,7 @@ fn mask_line(line: &str) -> String {
     if !plain || !is_sensitive_field(key) {
         return line.to_owned();
     }
-    let mut hasher = DefaultHasher::new();
-    value.hash(&mut hasher);
     let prefix_len = line.len() - body.len();
     let key_part = &line[..prefix_len + body.find(':').unwrap_or(0)];
-    format!("{key_part}: (hidden #{:08x})", hasher.finish() as u32)
+    format!("{key_part}: (hidden #{:08x})", fingerprint(value))
 }

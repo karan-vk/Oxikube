@@ -1,5 +1,5 @@
 //! The Helm upgrade tab of the main window (E16-S10): every `helm::UpgradeRelease` (the sidebar's
-//! Helm > Upgrade entry, the palette's "Helm: Upgrade Release...", a release's Upgrade button)
+//! Helm > Upgrade entry, the palette's "Helm: Upgrade Release..."; a release-specific entry arrives with the release detail, E16-S05/S06),
 //! opens it in the active cluster's tab; its preview and upgrade are `helm::Upgrade` dispatches
 //! through the guard.
 //!

@@ -124,3 +124,25 @@ fn opening_the_upgrade_tab_is_a_read_that_may_name_no_release() {
     );
     assert!(!open.is_mutating());
 }
+
+#[test]
+fn hooks_are_not_reported_as_added() {
+    let current = "kind: Service\nmetadata:\n  name: web\n";
+    let rendered = "kind: Service\nmetadata:\n  name: web\n---\nkind: Pod\nmetadata:\n  name: web-test\n  annotations:\n    helm.sh/hook: test\n";
+    let changes = ResourceChanges::between(current, rendered);
+    assert!(changes.is_empty(), "{changes:?}");
+}
+
+#[test]
+fn block_scalar_and_flow_map_secrets_are_masked() {
+    let text = "tls:\n  key: |\n    -----BEGIN PRIVATE KEY-----\n    MIIEabc\n  other: 1\nauth: {user: bob, password: hunter2}\n";
+    let masked = mask_values_for_diff(text);
+    assert!(
+        !masked.contains("MIIEabc") && !masked.contains("BEGIN") && !masked.contains("hunter2"),
+        "{masked}"
+    );
+    assert!(
+        masked.contains("other: 1") && masked.contains("user: bob"),
+        "{masked}"
+    );
+}
