@@ -769,6 +769,16 @@ crate's `README.md` for its allowed dependencies. Highlights:
 - `oxikube_settings::helm` (E16-S11) — the `helm` setting: `path` (empty autodetects), `server_side_apply` (default
   false; `server_side_warning` says when the binary is older than 3.13) and `default_repos` (`{ name, url }`, http(s)
   without credentials; bitnami, ingress-nginx and prometheus-community by default). Global, hot reloaded.
+- `oxikube_app::helm` (E16-S03) — manifest -> resources. `oxikube_domain::helm::parse_manifest` (pure, `serde-saphyr`) splits a
+  rendered manifest into `ManifestObject`s (empty and comment-only documents skipped, `kind: List` expanded, `helm.sh/hook`
+  objects apart, a broken document reported as a `ManifestError` with a position only, never a snippet). `HelmService` reads the
+  manifest through `HelmPort`, parses it on a blocking thread and caches the result per (release, revision). `ResourcePlan::build`
+  maps objects to `ResourceRef`s with `KindScopes` (from discovery: served version, namespaced or not; an unserved kind is
+  `Unknown`, a namespaced kind without `metadata.namespace` gets the release namespace). `ReleaseResourcesLease` holds the
+  ref-counted store feeds (per kind, per namespace; cluster-wide for cluster-scoped kinds) while the Resources tab is open and
+  `resources()` joins the plan with `ResourceStore::lookup` (`NotLoaded` / `Absent` / `Found`): `ResourceState::Present { health }`
+  (`oxikube_domain::view::health_of`, `None` for kinds without a rule), `Missing` (listed feed, object absent) or `Unknown`. The
+  Resources tab of the release detail (E16-S05) consumes it; no command of its own.
 - `oxikube_app::helm_charts` (E16-S08) — `ChartsService`: the charts catalog over `HelmPort`. `search` runs `helm search repo
   --versions` and groups hits per chart (`oxikube_domain::helm::group_hits`, semver-ordered versions, newest first), cached per
   keyword; `detail` runs `helm show` (README, values, chart) cached per chart version; both caches drop on

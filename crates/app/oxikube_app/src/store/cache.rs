@@ -118,6 +118,12 @@ impl ObjectCache {
             .collect()
     }
 
+    /// The cached object `name` in `namespace` (`None` for a cluster-scoped kind), if any: one
+    /// hash lookup.
+    pub fn get(&self, namespace: Option<&str>, name: &str) -> Option<&Arc<StoreObject>> {
+        self.objects.get(&ObjectKey::new(namespace, name))
+    }
+
     /// The cached object named `name` in no namespace (a cluster-scoped kind), if any.
     pub fn cluster_object(&self, name: &str) -> Option<&Arc<StoreObject>> {
         self.objects.get(&ObjectKey::new(None, name))

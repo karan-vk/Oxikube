@@ -24,7 +24,7 @@
 //! | which feed serves a kind | [`FeedPolicy`] (`policy`) |
 //! | pods by node (the node table's Pods column, the node detail's allocation) | [`ResourceStore::lease_node_loads`], [`NodeLoadsLease`] (`nodes`, E12-S09) |
 //! | counts and health for sidebar badges and overview tiles | [`ResourceStore::counts`], [`CountsLease`], [`CountState`] (`counts`, E07-S11) |
-//! | reading a namespace's object count or a cluster-scoped kind's objects off an open feed | [`ResourceStore::count_in_namespace`], [`ResourceStore::cluster_objects`] (`peek`, E12-S16) |
+//! | reading a namespace's object count or a cluster-scoped kind's objects off an open feed | [`ResourceStore::count_in_namespace`], [`ResourceStore::cluster_objects`] (`peek`, E12-S16); one object by identity, `NotLoaded` / `Absent` / `Found`: [`ResourceStore::lookup`] (E16-S03) |
 //! | the watch-budget hook and admission | [`FeedBudget`] (`budget`, `admission`) |
 //! | the cached objects | [`StoreObject`], [`ObjectKey`], [`FeedKey`] (`object`), `cache`, `index` |
 //! | the feed task and its spawner | `driver`, [`Spawner`] (`spawn`) |
@@ -115,6 +115,7 @@ pub use filter::{
 };
 pub use nodes::NodeLoadsLease;
 pub use object::{FeedKey, FeedScope, ObjectKey, StoreObject, TableObject};
+pub use peek::Lookup;
 #[cfg(test)]
 pub(crate) use policy::core_kinds;
 pub use policy::{FALLBACK, FeedKind, FeedPlan, FeedPolicy, FeedPriority};

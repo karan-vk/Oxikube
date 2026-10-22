@@ -7,6 +7,7 @@
 //! | Module | Holds |
 //! |---|---|
 //! | [`catalog`] | [`ChartSummary`], [`ChartVersion`], [`group_hits`], [`compare_versions`]: search hits grouped per chart, newest version first |
+//! | [`manifest`] | [`parse_manifest`]: a rendered manifest split into [`ManifestObject`]s, hooks apart, per-document errors (E16-S03) |
 //! | [`release`] | [`ReleaseRef`], [`ReleaseStatus`], [`ChartRef`], [`Release`], [`Revision`] |
 //! | [`values`] | [`Values`]: a YAML/JSON values tree with `get` and Helm-style `merge` |
 //! | [`repo`] | [`RepoEntry`], [`RepoAddRequest`], [`RepoPassword`], [`ChartHit`], [`SearchQuery`], [`ShowKind`] |
@@ -27,6 +28,7 @@ pub mod catalog;
 pub mod error;
 pub mod gate;
 pub mod install;
+pub mod manifest;
 pub mod release;
 pub mod repo;
 pub mod request;
@@ -41,6 +43,7 @@ pub use install::{
     MAX_NAMESPACE_NAME, MAX_RELEASE_NAME, ManifestSummary, ValuesYaml, validate_namespace_name,
     validate_release_name,
 };
+pub use manifest::{ManifestError, ManifestObject, ParsedManifest, parse_manifest};
 pub use release::{ChartRef, Release, ReleaseRef, ReleaseStatus, Revision};
 pub use repo::{
     ChartHit, RepoAddRequest, RepoEntry, RepoPassword, SearchQuery, ShowKind, validate_repo,

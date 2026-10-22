@@ -37,6 +37,7 @@
 //! | [`tools`] | E08-S09 | [`ToolRegistry`]: read-only tools by name, listed, hidden without their capabilities and invoked after a schema check; `tools::k8s::get_logs` (`k8s.get_logs`: a pod's or a selector's newest lines, bounded and redacted); `tools::metrics` (E13-S12: `k8s.top_pods`, `k8s.top_nodes`, `k8s.query_promql`, bounded, with absence as a visible `unavailable` result); `tools::events` (E14-S08: `k8s.get_events`, the `@events` mention and `events::SendToAgent`, read from the [`EventService`], bounded and redacted, the feed started on demand) |
 //! | [`rollout`] | E12-S06 | [`RolloutService`]: a Deployment's, StatefulSet's or DaemonSet's revision history (ReplicaSets or ControllerRevisions, read on demand through the pure algorithm of `oxikube_domain::rollout`) and `kubectl rollout undo` as the guarded `workload::Rollback` (medium risk, a server dry run first, audit with `from=` and `to=`); [`RollbackRunner`] runs it from a dialog |
 //! | [`workloads`] | E12-S08, E12-S04, E12-S03 | [`WorkloadService`]: trigger a CronJob (a Job from its template, `kubectl create job --from`), suspend and resume CronJobs and Jobs, and scale the replica controllers (`workload::Scale`, low risk, medium for zero: [`WorkloadService::plan_scale`] reads the `scale` subresource and any autoscaler, [`WorkloadService::scale`] patches `spec.replicas` through it, [`ScaleRunner`] runs it from a dialog); the `cronjob::*`, `job::*` and `workload::Scale` handlers (guarded, audited with the Job's name or the replica counts); evict, delete, force delete and sweep pods (`pod::Evict`, `pod::Delete`, `pod::ForceDelete`, `pod::Sanitize`: medium, high for the force delete, one audit record per pod under a batch id); the pod panel's reads (owner chain, node, environment sources) |
+//! | [`helm`] | E16-S03 | [`HelmService`](helm::HelmService): a release revision's manifest parsed once (off the UI thread, cached) into [`ResourcePlan`](helm::ResourcePlan)s of `ResourceRef`s; [`ReleaseResourcesLease`](helm::ReleaseResourcesLease) holds the store feeds while the Resources tab is open; [`ReleaseResource`](helm::ReleaseResource) is `Present { health }`, `Missing` or `Unknown` |
 //! | [`helm_charts`] | E16-S08 | [`ChartsService`](helm_charts::ChartsService): the charts catalog over `HelmPort` (search grouped per chart with semver-ordered versions, cached per keyword; chart README / values / metadata cached per version; both dropped when a repository changes; readiness: no helm / no repos / ready; the hand-off to the install tab), `helm::SearchCharts` / `ShowChart` / `InstallChart` commands |
 //! | [`helm_install`] | E16-S09 | [`InstallFlow`](helm_install::InstallFlow): the install tab's guarded `helm::Install` (preview = the guard's dry run: `helm template` plus the server's dry run, Secret data masked; ask = the low-risk confirmation; start = the install with its output followed line by line through [`ReleaseProgress`](helm_install::ReleaseProgress); Cancel kills `helm`); audited without the values |
 //! | [`helm_repos`] | E16-S07 | [`HelmReposService`](helm_repos::HelmReposService): the chart repositories in Helm's own configuration (list, add, remove, update one at a time through one queue, per-repository refresh status, a cue for the charts catalog to drop cached searches, memory-only staged passwords, readable errors, quick-add suggestions), `helm::RepoAdd` / `RepoRemove` / `RepoUpdate` commands; an agent's add needs permission |
@@ -65,6 +66,7 @@ pub mod context;
 pub mod events;
 pub mod exec;
 pub mod guard;
+pub mod helm;
 pub mod helm_charts;
 pub mod helm_install;
 pub mod helm_repos;
@@ -139,6 +141,10 @@ pub use exec::{
 pub use guard::{
     Confirmation, ConfirmationRequest, ConfirmationToken, Mutation, MutationGuard, PrefsPatch,
     PrefsWriter,
+};
+pub use helm::{
+    HelmService, KindScopes, PlannedResource, ReleaseResource, ReleaseResourcesLease, ResourcePlan,
+    ResourceState,
 };
 pub use helm_charts::{ChartsService, Readiness as ChartsReadiness};
 pub use helm_install::{

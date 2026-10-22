@@ -101,6 +101,15 @@ pub struct StoreFilter {
 }
 
 impl StoreFilter {
+    /// A filter no object passes (names are never empty): for a subscription that wants a feed
+    /// kept open, not a row list.
+    pub(crate) fn nothing() -> Self {
+        Self {
+            name: Some(String::new()),
+            ..Self::default()
+        }
+    }
+
     /// A filter on a name substring.
     pub fn text(text: impl Into<String>) -> Self {
         Self {
