@@ -11,7 +11,7 @@
 //! |---|---|
 //! | `form` | [`InstallForm`], [`FormErrors`]: the fields as plain data, Helm's name rules, the spec they make |
 //! | `assist` | [`ValuesAssist`]: hover docs and key / value completion from the chart's `values.yaml` comments (helm-docs) over the spanned YAML model of `oxikube_editor` |
-//! | `model` | [`Stage`], [`Shown`] (a preview and what it was made from), [`OutputLog`] (bounded) |
+//! | `model` | [`Stage`], [`Shown`] (a preview and what it was made from), [`OutputLog`] (bounded), [`HelmInstallEvent`] |
 //! | `backend` | [`InstallBackend`]; [`FlowBackend`] over the app's flow and charts service |
 //! | `view` | [`HelmInstallView`]: the entity, its inputs, the values editor, loading |
 //! | `actions` | preview, install (the guard's confirmation, then the streamed install), decline, cancel |
@@ -24,7 +24,9 @@
 //! objects per kind and Secret data masked; the server's dry run for its verdict, shown inline).
 //! Install is enabled only while that preview matches the form and the values; it asks the guard,
 //! whose low-risk confirmation the tab shows. Confirming runs `helm install`; its lines stream into
-//! the log, one redraw per frame at most. Cancel drops the dispatch, which kills `helm`.
+//! the log, one redraw per frame at most. Cancel drops the dispatch, which kills `helm`. A successful
+//! install emits [`HelmInstallEvent::Installed`] with the new release, and the tab keeps it
+//! ([`HelmInstallView::installed`]) for the releases view (E16-S05) to open.
 //!
 //! # Performance
 //!
@@ -54,6 +56,6 @@ mod tests;
 pub use assist::{Site, ValuesAssist, dotted, site_at};
 pub use backend::{FlowBackend, InstallBackend};
 pub use form::{FormErrors, InstallForm};
-pub use model::{MAX_LOG_LINES, OutputLog, Shown, Stage};
+pub use model::{HelmInstallEvent, MAX_LOG_LINES, OutputLog, Shown, Stage};
 pub use open::{HelmInstallViews, HelmInstallViewsDeps};
 pub use view::{HelmInstallView, ITEM_KEY_PREFIX, InstallDeps, item_key};

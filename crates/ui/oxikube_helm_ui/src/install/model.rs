@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 
 use oxikube_app::InstallPreview;
 use oxikube_app::guard::ConfirmationRequest;
-use oxikube_domain::helm::{OutputKind, OutputLine};
+use oxikube_domain::helm::{OutputKind, OutputLine, ReleaseRef};
 
 use super::form::InstallForm;
 
@@ -32,6 +32,14 @@ pub enum Stage {
     Installed(String),
     /// The install failed or was refused; why.
     Failed(String),
+}
+
+/// What the install tab tells its owner (it is an [`EventEmitter`](gpui::EventEmitter) of it).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HelmInstallEvent {
+    /// `helm install` succeeded: the new release. The releases view (E16-S05) subscribes to open
+    /// it once its release Secret appears.
+    Installed(ReleaseRef),
 }
 
 impl Stage {

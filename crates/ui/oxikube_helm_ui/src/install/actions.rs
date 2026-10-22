@@ -4,7 +4,9 @@ use futures::StreamExt as _;
 use gpui::{Context, Window};
 use oxikube_runtime::{NotifyCoalescedExt as _, spawn_kube};
 
-use super::model::{Shown, Stage};
+use oxikube_domain::helm::ReleaseRef;
+
+use super::model::{HelmInstallEvent, Shown, Stage};
 use super::view::HelmInstallView;
 
 /// Output lines taken off the channel per redraw at most.
@@ -119,13 +121,17 @@ impl HelmInstallView {
     }
 
     /// Confirms the guard's request: the install runs, its output streams into the log (batched,
-    /// one redraw per frame at most).
+    /// one redraw per frame at most). On success the tab emits [`HelmInstallEvent::Installed`]
+    /// with the new release.
     pub fn confirm(&mut self, cx: &mut Context<Self>) {
         let (Stage::Confirming(request), Some(shown)) = (&self.stage, &self.shown) else {
             return;
         };
+        let spec = &shown.preview.spec;
+        let release = ReleaseRef::new(spec.cluster.clone(), &spec.namespace, &spec.release);
         let start = self.deps.backend.start(&shown.preview, request);
         self.stage = Stage::Installing;
+        self.installed = None;
         self.log.clear();
         let mut lines = start.lines.ready_chunks(LINES_PER_BATCH);
         self.lines_task = Some(cx.spawn(async move |this, cx| {
@@ -152,7 +158,11 @@ impl HelmInstallView {
                     .map_err(|e| e.to_string())
                     .and_then(|r| r.map_err(|e| e.to_string()))
                 {
-                    Ok(message) => Stage::Installed(message),
+                    Ok(message) => {
+                        this.installed = Some(release.clone());
+                        cx.emit(HelmInstallEvent::Installed(release));
+                        Stage::Installed(message)
+                    }
                     Err(why) => Stage::Failed(why),
                 };
                 cx.notify();

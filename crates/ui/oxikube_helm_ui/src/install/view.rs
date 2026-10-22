@@ -8,7 +8,7 @@ use gpui::{
     Subscription, Task, UniformListScrollHandle, Window,
 };
 use oxikube_app::ChartsReadiness;
-use oxikube_domain::helm::{ChartRef, ValuesDocs, ValuesYaml};
+use oxikube_domain::helm::{ChartRef, ReleaseRef, ValuesDocs, ValuesYaml};
 use oxikube_domain::ids::ClusterId;
 use oxikube_runtime::spawn_kube;
 use oxikube_ui::IconName;
@@ -19,7 +19,7 @@ use oxikube_workspace::{Item, ItemEvent, TabContent};
 use super::assist::ValuesAssist;
 use super::backend::InstallBackend;
 use super::form::InstallForm;
-use super::model::{OutputLog, Shown, Stage};
+use super::model::{HelmInstallEvent, OutputLog, Shown, Stage};
 
 /// The start of the tab's deduplication key: `helm-install:<repo/chart>`, so installing a chart
 /// twice shows its open tab.
@@ -72,10 +72,14 @@ pub struct HelmInstallView {
     /// task cancels it (Cancel).
     pub(super) install_task: Option<Task<()>>,
     pub(super) lines_task: Option<Task<()>>,
+    /// The release the last successful install created.
+    pub(super) installed: Option<ReleaseRef>,
     _subscriptions: Vec<Subscription>,
 }
 
 impl EventEmitter<ItemEvent> for HelmInstallView {}
+
+impl EventEmitter<HelmInstallEvent> for HelmInstallView {}
 
 impl Focusable for HelmInstallView {
     fn focus_handle(&self, _: &App) -> FocusHandle {
@@ -150,6 +154,7 @@ impl HelmInstallView {
             preview_task: None,
             install_task: None,
             lines_task: None,
+            installed: None,
             _subscriptions: subscriptions,
         };
         view.load(window, cx);
@@ -319,6 +324,12 @@ impl HelmInstallView {
     /// The cluster's namespaces, once read.
     pub fn namespaces(&self) -> Option<&[String]> {
         self.namespaces.as_deref()
+    }
+
+    /// The release the last successful install created (also sent as
+    /// [`HelmInstallEvent::Installed`]).
+    pub fn installed(&self) -> Option<&ReleaseRef> {
+        self.installed.as_ref()
     }
 
     /// The output log of the install.

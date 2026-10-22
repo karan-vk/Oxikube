@@ -2,12 +2,12 @@
 
 use gpui::TestAppContext;
 use oxikube_domain::audit::AuditOutcome;
-use oxikube_domain::helm::OutputLine;
+use oxikube_domain::helm::{OutputLine, ReleaseRef};
 use oxikube_testkit::HelmCall;
 use oxikube_ui::editor::EditorAssist as _;
 
 use super::{Harness, Options};
-use crate::install::Stage;
+use crate::install::{HelmInstallEvent, Stage};
 
 #[gpui::test]
 fn the_form_opens_with_the_charts_defaults_versions_and_namespaces(cx: &mut TestAppContext) {
@@ -141,11 +141,24 @@ fn preview_shows_the_masked_manifest_then_install_asks_and_streams(cx: &mut Test
         OutputLine::stderr("coalesce.go: warning"),
         OutputLine::stdout("STATUS: deployed"),
     ]);
+    let events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let sink = events.clone();
+    let view = h.view.clone();
+    let _subscription = h.vcx.update(|_, cx| {
+        cx.subscribe(&view, move |_, event: &HelmInstallEvent, _| {
+            sink.borrow_mut().push(event.clone());
+        })
+    });
+    assert!(h.read(|v, _| v.installed().is_none()));
     h.click("helm-install-confirm-yes");
     assert_eq!(
         h.read(|v, _| v.stage().clone()),
         Stage::Installed("Installed release web in namespace default".into())
     );
+    // The new release is announced for the releases view to open.
+    let web = ReleaseRef::new(super::cluster(), "default", "web");
+    assert_eq!(*events.borrow(), [HelmInstallEvent::Installed(web.clone())]);
+    assert_eq!(h.read(|v, _| v.installed().cloned()), Some(web));
     assert_eq!(
         h.read(|v, _| v.log().text()),
         "NAME: web\n! coalesce.go: warning\nSTATUS: deployed\n"
@@ -232,6 +245,10 @@ fn cancel_stops_helm(cx: &mut TestAppContext) {
     assert_eq!(h.fake.open_streams(), 0, "the helm process is killed");
     assert!(
         matches!(h.read(|v, _| v.stage().clone()), Stage::Failed(why) if why.starts_with("Cancelled"))
+    );
+    assert!(
+        h.read(|v, _| v.installed().is_none()),
+        "a cancelled install names no release"
     );
 }
 
