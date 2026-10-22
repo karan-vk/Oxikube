@@ -30,7 +30,7 @@ use tokio::runtime::Handle;
 
 pub use budget::{WatchBudgets, report_line};
 pub use clock::SystemClock;
-pub use connector::SourcesConnector;
+pub use connector::{KubeconfigOrigins, SourcesConnector};
 pub use secrets::MemorySecrets;
 pub use sources::LazyKubeSources;
 
@@ -55,6 +55,7 @@ pub fn kube_adapters(
     let describe = DescribePreference::default();
     let connector = SourcesConnector::new(sources.clone(), describe.clone());
     let budgets = WatchBudgets::new(connector.kube());
+    let kubeconfig_origins = connector.origins();
     let fs = Arc::new(StdFs);
     if let Some(dir) = schema_cache_dir {
         connector.kube().set_schema_cache(fs.clone(), dir);
@@ -63,6 +64,7 @@ pub fn kube_adapters(
         connector: Arc::new(connector),
         budgets,
         describe,
+        kubeconfig_origins,
         source: sources,
         clock: Arc::new(SystemClock::new(runtime)),
         fs,

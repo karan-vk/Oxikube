@@ -6099,6 +6099,7 @@ dependencies = [
  "oxikube_app",
  "oxikube_assets",
  "oxikube_domain",
+ "oxikube_editor",
  "oxikube_keymap",
  "oxikube_ports",
  "oxikube_runtime",

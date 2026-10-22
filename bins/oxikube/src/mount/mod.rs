@@ -111,6 +111,7 @@ mod events;
 mod gallery;
 mod helm;
 mod helm_charts;
+mod helm_install;
 mod helm_repos;
 mod help;
 mod jump;
@@ -211,6 +212,8 @@ pub struct Wiring {
     _helm_repos_pages: Task<()>,
     /// Opens the Helm charts catalog for `helm::OpenCharts` (E16-S08).
     _helm_charts_pages: Task<()>,
+    /// Opens an install tab for each `helm::InstallChart` (E16-S09).
+    _helm_install_pages: Task<()>,
     /// Opens the cluster pulses pages for `cluster::ShowPulses` (E13-S10).
     _pulses_pages: Task<()>,
     /// Follows the sessions and the settings for the metrics provider service (E13-S05).
@@ -365,7 +368,13 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         oxikube_settings_ui::helm_repos::HelmReposRequestSink::channel();
     // The chart repositories in Helm's own configuration (E16-S07): one service, the page and the
     // `helm::Repo*` commands share it.
-    let helm_services = helm_repos::services(ports.clusters.clock.clone(), cx);
+    // Installs (E16-S09) run against each session's own kubeconfig context and file.
+    let helm_targets = helm_install::targets(
+        services.sessions.clone(),
+        ports.clusters.kubeconfig_origins.clone(),
+    );
+    let helm_services = helm_repos::services(ports.clusters.clock.clone(), helm_targets, cx);
+    let helm_progress = oxikube_app::ReleaseProgress::new();
     let helm_repos = helm_services.repos.clone();
     // The charts catalog (E16-S08) shares the adapter with the repositories.
     let (helm_charts_sink, helm_charts_rx) =
@@ -422,6 +431,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         helm_repos_pages: helm_repos_sink,
         helm_charts: helm_services.charts.clone(),
         helm_charts_pages: helm_charts_sink,
+        helm_port: helm_services.helm.clone(),
+        helm_progress: helm_progress.clone(),
         pulses_pages: pulses_sink,
         overview_pages: overview_sink,
         os_notifications: services.os_notifications.clone(),
@@ -656,6 +667,20 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     );
     // Helm repositories (E16-S07): `helm::ShowRepos` (the palette, the sidebar's Helm > Repositories)
     // opens the page in the active cluster's tab.
+    // The install tab (E16-S09): the catalog's Install opens it; it previews and installs through
+    // the guard.
+    let helm_install_pages = helm_install::start_views(
+        oxikube_app::InstallFlow::new(
+            bus.clone(),
+            services.sessions.clone(),
+            helm_progress,
+            local_user(),
+        ),
+        helm_services.charts.clone(),
+        tabs.downgrade(),
+        window,
+        cx,
+    );
     let helm_charts_pages = helm_charts::start_views(
         helm_services.charts,
         dispatcher_for_helm_charts,
@@ -748,6 +773,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _metrics_pages: metrics_pages,
         _helm_repos_pages: helm_repos_pages,
         _helm_charts_pages: helm_charts_pages,
+        _helm_install_pages: helm_install_pages,
         _pulses_pages: pulses_pages,
         _follow_metrics: follow_metrics,
         _live_metrics: live_metrics,

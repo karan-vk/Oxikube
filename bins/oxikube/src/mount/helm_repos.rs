@@ -16,8 +16,7 @@ use futures::channel::mpsc::UnboundedReceiver;
 use gpui::{App, Entity, Task, WeakEntity, Window};
 use oxikube_app::{ChartsService, HelmReposService};
 use oxikube_domain::command::{Command, CommandId};
-use oxikube_domain::ids::ClusterId;
-use oxikube_helm::{HelmCli, HelmCliConfig};
+use oxikube_helm::{HelmCli, HelmCliConfig, TargetResolver};
 use oxikube_helm_ui::repos::ServiceBackend;
 use oxikube_ports::ClockPort;
 use oxikube_settings_ui::helm_repos::{HelmReposViews, HelmReposViewsDeps};
@@ -34,6 +33,8 @@ pub struct HelmServices {
     pub repos: HelmReposService,
     /// The charts catalog, dropping its caches when `repos` changes something.
     pub charts: ChartsService,
+    /// The adapter itself, for the `helm::Install` handler (E16-S09).
+    pub helm: Arc<dyn oxikube_ports::HelmPort>,
 }
 
 /// Services the tests install in place of the ones over the real `helm` binary.
@@ -44,20 +45,26 @@ pub struct ServiceOverride(pub HelmServices);
 impl gpui::Global for ServiceOverride {}
 
 /// The Helm services over the `helm` binary (found on first use). Repository commands and the
-/// catalog do not touch a cluster, so no kubeconfig context is resolved.
-pub fn services(clock: Arc<dyn ClockPort>, cx: &App) -> HelmServices {
+/// catalog touch no cluster; an install (E16-S09) runs against the kubeconfig context `targets`
+/// finds for its cluster.
+pub fn services(
+    clock: Arc<dyn ClockPort>,
+    targets: Arc<dyn TargetResolver>,
+    cx: &App,
+) -> HelmServices {
     #[cfg(test)]
     if let Some(service) = cx.try_global::<ServiceOverride>() {
         return service.0.clone();
     }
     let _ = cx;
-    let cli = Arc::new(HelmCli::new(
-        HelmCliConfig::default(),
-        Arc::new(|_: &ClusterId| None),
-    ));
+    let cli = Arc::new(HelmCli::new(HelmCliConfig::default(), targets));
     let repos = HelmReposService::new(cli.clone(), cli.clone(), clock);
-    let charts = ChartsService::new(cli, repos.catalog_changes());
-    HelmServices { repos, charts }
+    let charts = ChartsService::new(cli.clone(), repos.catalog_changes());
+    HelmServices {
+        repos,
+        charts,
+        helm: cli,
+    }
 }
 
 /// Starts the window's repositories page over `requests` (the bus's `helm::ShowRepos` handler).

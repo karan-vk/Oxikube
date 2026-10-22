@@ -52,6 +52,9 @@ pub struct ClusterAdapters {
     /// Which describe backend the Describe tab uses (`describe.backend`, E07-S06): shared with
     /// every connection's describer, and set from the settings by the mount.
     pub describe: DescribePreference,
+    /// Which kubeconfig file defines each context (the connector's catalog), for the `helm` CLI
+    /// adapter's `--kubeconfig` (E16-S09). Empty over fakes.
+    pub kubeconfig_origins: crate::kube_ports::KubeconfigOrigins,
 }
 
 impl AppPorts {
@@ -94,6 +97,7 @@ impl ClusterAdapters {
             fs: ports.fs.clone(),
             kubeconfigs_dir: Self::TEST_KUBECONFIGS_DIR.into(),
             describe: DescribePreference::default(),
+            kubeconfig_origins: Default::default(),
         }
     }
 }

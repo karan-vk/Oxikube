@@ -11,6 +11,8 @@
 //! | [`values`] | [`Values`]: a YAML/JSON values tree with `get` and Helm-style `merge` |
 //! | [`repo`] | [`RepoEntry`], [`RepoAddRequest`], [`RepoPassword`], [`ChartHit`], [`SearchQuery`], [`ShowKind`] |
 //! | [`request`] | [`InstallRequest`], [`UpgradeRequest`], [`RollbackRequest`], [`UninstallRequest`], [`OutputLine`] |
+//! | [`install`] | [`validate_release_name`], [`validate_namespace_name`], [`ValuesYaml`] (the values text of `helm::Install`, redacted `Debug`), [`ManifestSummary`] (objects per kind of a rendered manifest) |
+//! | [`values_docs`] | [`ValuesDocs`], [`KeyDoc`]: the values' documentation from `values.yaml` comments (helm-docs `# --`) and `values.schema.json`, for the values editor |
 //! | [`capabilities`] | [`HelmCapabilities`], [`HelmVersion`]: what this session can do |
 //! | [`gate`] | [`HelmGate`], [`HelmFeature`], [`GateReason`]: what the views, commands and tools may offer (E16-S11) |
 //! | [`error`] | [`HelmError`] and its mapping onto [`OxiError`](crate::OxiError) |
@@ -24,15 +26,21 @@ pub mod capabilities;
 pub mod catalog;
 pub mod error;
 pub mod gate;
+pub mod install;
 pub mod release;
 pub mod repo;
 pub mod request;
 pub mod values;
+pub mod values_docs;
 
 pub use capabilities::{HelmCapabilities, HelmVersion};
 pub use catalog::{ChartPart, ChartSummary, ChartVersion, compare_versions, group_hits};
 pub use error::HelmError;
 pub use gate::{FeatureUnavailable, GateReason, HelmFeature, HelmGate};
+pub use install::{
+    MAX_NAMESPACE_NAME, MAX_RELEASE_NAME, ManifestSummary, ValuesYaml, validate_namespace_name,
+    validate_release_name,
+};
 pub use release::{ChartRef, Release, ReleaseRef, ReleaseStatus, Revision};
 pub use repo::{
     ChartHit, RepoAddRequest, RepoEntry, RepoPassword, SearchQuery, ShowKind, validate_repo,
@@ -41,3 +49,4 @@ pub use request::{
     InstallRequest, OutputKind, OutputLine, RollbackRequest, UninstallRequest, UpgradeRequest,
 };
 pub use values::Values;
+pub use values_docs::{KeyDoc, ValuesDocs};

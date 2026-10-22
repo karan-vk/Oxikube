@@ -225,6 +225,7 @@ pub fn ports_with(
         fs: Arc::new(FakeFsPort::new()),
         kubeconfigs_dir: ClusterAdapters::TEST_KUBECONFIGS_DIR.into(),
         describe: DescribePreference::default(),
+        kubeconfig_origins: Default::default(),
     };
     AppPorts::new(Arc::new(FakeStatePort::new()), adapters)
         .with_secrets(Arc::new(FakeSecretStorePort::new()))

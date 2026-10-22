@@ -182,6 +182,18 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             name: "nginx".to_owned(),
             version: None,
         },
+        "helm::Install" => Command::HelmInstall {
+            cluster,
+            release: "web".to_owned(),
+            namespace: "default".to_owned(),
+            create_namespace: false,
+            repo: Some("bitnami".to_owned()),
+            chart: "nginx".to_owned(),
+            version: None,
+            values: oxikube_domain::helm::ValuesYaml::default(),
+            wait: false,
+            timeout_secs: None,
+        },
         "helm::RepoAdd" => Command::HelmRepoAdd {
             name: "bitnami".to_owned(),
             url: "https://charts.bitnami.com/bitnami".to_owned(),

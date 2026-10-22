@@ -779,6 +779,17 @@ crate's `README.md` for its allowed dependencies. Highlights:
   (`oxikube_ui::markdown`, sanitised off the UI thread: HTML stripped, images become links, only http/https/mailto links open),
   versions list and default values (`CodeView`), Install, guidance without `helm`, default repos when none. Reached by
   `helm::OpenCharts` (palette "Helm: Charts", sidebar Helm > Charts). No remote images are fetched.
+- `oxikube_app::helm_install` (E16-S09) — `helm::Install` (mutating, risk low, tool `helm.install`) and `InstallFlow`: preview is
+  the guard's dry run (`helm template` for the manifest, Secret data masked; `helm install --dry-run[=server]` for the server's
+  verdict), `ask` returns the guard's confirmation for a preview's spec only, `start` follows the release (`ReleaseProgress`)
+  then dispatches with the answer and streams `helm`'s output; dropping the dispatch kills `helm` (audited cancelled). Values travel
+  as `ValuesYaml` (redacted `Debug`) to `helm`'s stdin; the audit names `helm.sh/v3 Release ns/name`, chart, version and flags only.
+- `oxikube_helm_ui::install` (E16-S09) — the install tab (`HelmInstallView`, keyed `helm-install:<repo/chart>`, opened in the
+  active cluster's tab by every `helm::InstallChart`): release name (DNS-1123, 53), namespace with existing ones offered and
+  "Create namespace", version picker, wait/timeout, values in `oxikube_ui::editor::CodeEditor` with `ValuesAssist` (hover and
+  completion from `oxikube_domain::helm::ValuesDocs`: helm-docs `# --` comments, plain comments, `values.schema.json`), preview
+  pane (read-only manifest, objects per kind, errors inline), the guard's confirmation, virtualised output log, Cancel. The binary
+  points `helm` at each session's own context and kubeconfig file (`mount/helm_install.rs`, `KubeconfigOrigins`).
 - `oxikube_notify_os` (E14-S06) — the `NotifierPort` adapter for desktop notifications. `OsNotifier` is off until the user opts in
   (`events.os_notifications`): `set_enabled(true)` is the only call that contacts the OS, on a thread of its own, and a system without a
   notification service answers `NotifierStatus::Unavailable`, never a panic. One `Backend` per platform behind a trait: macOS

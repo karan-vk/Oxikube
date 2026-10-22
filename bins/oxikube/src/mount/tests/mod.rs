@@ -19,6 +19,7 @@ mod events_view;
 mod exec;
 mod helm;
 mod helm_charts;
+mod helm_install;
 mod helm_repos;
 mod help;
 mod immediate;
