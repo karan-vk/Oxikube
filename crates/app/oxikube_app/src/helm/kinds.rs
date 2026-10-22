@@ -15,11 +15,8 @@ pub struct ServedKind {
     pub scope: Scope,
 }
 
-#[derive(Debug, Default)]
-struct Versions {
-    /// `(version, namespaced, preferred)`.
-    served: Vec<(Arc<str>, bool, bool)>,
-}
+/// `(version, namespaced, preferred)` per served version.
+type Versions = Vec<(Arc<str>, bool, bool)>;
 
 /// What discovery (E04) says about the kinds a manifest may use. A kind it does not list (a CRD
 /// that is not installed) is unknown: there is no hard-coded table of namespaced kinds.
@@ -37,7 +34,6 @@ impl KindScopes {
                 .kinds
                 .entry((kind.gvk.group.clone(), kind.gvk.kind.clone()))
                 .or_default()
-                .served
                 .push((kind.gvk.version.clone(), kind.namespaced, kind.preferred));
         }
         scopes
@@ -48,11 +44,10 @@ impl KindScopes {
     pub fn resolve(&self, group: &str, version: &str, kind: &str) -> Option<ServedKind> {
         let versions = self.kinds.get(&(Arc::from(group), Arc::from(kind)))?;
         let (v, namespaced, _) = versions
-            .served
             .iter()
             .find(|(v, ..)| &**v == version)
-            .or_else(|| versions.served.iter().find(|(.., preferred)| *preferred))
-            .or_else(|| versions.served.first())?;
+            .or_else(|| versions.iter().find(|(.., preferred)| *preferred))
+            .or_else(|| versions.first())?;
         Some(ServedKind {
             gvk: Gvk::new(group, v.clone(), kind),
             scope: Scope::from_namespaced(*namespaced),

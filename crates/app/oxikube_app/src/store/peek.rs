@@ -119,9 +119,7 @@ impl ResourceStore {
             })
             .flatten()
     }
-}
 
-impl ResourceStore {
     /// One object by identity, read from a feed that is already open and listed (the kind's
     /// cluster-wide feed, else, for a namespaced object, the namespace's own). O(1) and
     /// allocation-free on the cluster-wide path, so a caller can ask for every object of a
