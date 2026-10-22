@@ -22,14 +22,6 @@ fn pod_feed() -> FeedKey {
     FeedKey::new(pod_gvk(), FeedScope::Cluster)
 }
 
-/// A filter no object passes (names are never empty): the lease wants the feed, not a row list.
-fn nothing() -> StoreFilter {
-    StoreFilter {
-        name: Some(String::new()),
-        ..StoreFilter::default()
-    }
-}
-
 /// A claim on the pods-by-node index of a [`ResourceStore`]. See the `store::nodes` module docs.
 ///
 /// Taking one subscribes to the cluster-wide Pod feed through the normal path (the watch budget
@@ -53,7 +45,8 @@ impl ResourceStore {
     /// so does the index's first build over pods the feed already holds (the lease answers `None`
     /// until it is done).
     pub fn lease_node_loads(&self) -> NodeLoadsLease {
-        let query = StoreQuery::new(pod_gvk(), WatchScope::Cluster).with_filter(nothing());
+        let query =
+            StoreQuery::new(pod_gvk(), WatchScope::Cluster).with_filter(StoreFilter::nothing());
         let subscription = self.subscribe(query);
         let snapshot = self
             .inner()

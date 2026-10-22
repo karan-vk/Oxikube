@@ -23,6 +23,17 @@ fn listed(state: &EntryState) -> bool {
     )
 }
 
+/// What [`ResourceStore::lookup`] found.
+#[derive(Debug, Clone)]
+pub enum Lookup {
+    /// No open, listed feed covers the object: nothing can be said about it yet.
+    NotLoaded,
+    /// A listed feed covers it and does not hold it.
+    Absent,
+    /// The cached object.
+    Found(Arc<StoreObject>),
+}
+
 impl ResourceStore {
     /// How many objects of `gvk` are in `namespace`, read from a feed that is already open and
     /// listed: the kind's cluster-wide feed, else the namespace's own. `None` when no open
@@ -107,5 +118,32 @@ impl ResourceStore {
                 listed(st).then(|| st.cache.values().cloned().collect())
             })
             .flatten()
+    }
+}
+
+impl ResourceStore {
+    /// One object by identity, read from a feed that is already open and listed (the kind's
+    /// cluster-wide feed, else, for a namespaced object, the namespace's own). O(1) and
+    /// allocation-free on the cluster-wide path, so a caller can ask for every object of a
+    /// release (E16-S03) on each refresh. Distinguishes "not loaded yet" from "not there" so a
+    /// missing object is only flagged once the feed has actually listed.
+    pub fn lookup(&self, gvk: &Gvk, namespace: Option<&str>, name: &str) -> Lookup {
+        let read = |key: &FeedKey| {
+            self.inner()
+                .with_entry(key, |st| {
+                    listed(st).then(|| match st.cache.get(namespace, name) {
+                        Some(object) => Lookup::Found(object.clone()),
+                        None => Lookup::Absent,
+                    })
+                })
+                .flatten()
+        };
+        let cluster = read(&FeedKey::new(gvk.clone(), FeedScope::Cluster));
+        match (cluster, namespace) {
+            (Some(found), _) => found,
+            (None, Some(ns)) => read(&FeedKey::new(gvk.clone(), FeedScope::Namespace(ns.into())))
+                .unwrap_or(Lookup::NotLoaded),
+            (None, None) => Lookup::NotLoaded,
+        }
     }
 }
