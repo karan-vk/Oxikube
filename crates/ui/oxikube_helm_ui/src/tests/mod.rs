@@ -32,6 +32,21 @@ impl CommandDispatcher for Recorder {
     }
 }
 
+/// Installs a settings store with the shipped defaults (`helm.default_repos` among them) and
+/// `user` as the user's `settings.json`; call it again to hot-reload a new `user`.
+pub(crate) fn set_settings(cx: &mut gpui::App, user: &str) {
+    use gpui::BorrowAppContext as _;
+    use oxikube_settings::SettingsStore;
+    if cx.has_global::<SettingsStore>() {
+        cx.update_global::<SettingsStore, _>(|store, _| store.set_user_settings(user).unwrap());
+        return;
+    }
+    let mut store = SettingsStore::without_registered(oxikube_assets::default_settings()).unwrap();
+    store.register_setting::<oxikube_settings::HelmSettings>();
+    store.set_user_settings(user).unwrap();
+    cx.set_global(store);
+}
+
 pub(crate) fn full() -> HelmCapabilities {
     HelmCapabilities::full(HelmVersion::new(3, 14, 2))
 }

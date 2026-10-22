@@ -70,6 +70,40 @@ fn a_suggestion_fills_the_form_and_adds_nothing(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn the_suggestions_follow_the_default_repos_setting(cx: &mut TestAppContext) {
+    let mut h = Harness::open(cx, &[]);
+    h.vcx.update(|_, cx| {
+        crate::tests::set_settings(
+            cx,
+            r#"{ "helm": { "default_repos": [{ "name": "internal", "url": "https://charts.corp.example" }] } }"#,
+        );
+    });
+    h.settle();
+    let names = h.read(|v| {
+        v.model()
+            .suggestions
+            .iter()
+            .map(|s| s.name.clone())
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(
+        names,
+        ["internal"],
+        "the setting, hot-reloaded; nothing hard-coded"
+    );
+    h.click("helm-repos-suggestion:0");
+    assert_eq!(h.form().url, "https://charts.corp.example");
+    h.vcx.update(|_, cx| {
+        crate::tests::set_settings(cx, r#"{ "helm": { "default_repos": [] } }"#);
+    });
+    h.settle();
+    assert!(
+        !h.is_laid_out("helm-repos-suggestion:0"),
+        "emptied: nothing offered"
+    );
+}
+
+#[gpui::test]
 fn the_add_form_validates_before_it_sends_anything(cx: &mut TestAppContext) {
     let mut h = Harness::open(cx, &["bitnami"]);
     h.click("helm-repos-add-toggle");

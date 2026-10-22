@@ -143,6 +143,19 @@ impl HelmReposService {
         result.map(drop)
     }
 
+    /// The `helm` binary was found (or lost) by a recheck or a new `helm.path`: reads the list
+    /// again and tells the charts catalog to start over, so pages that said "no helm" catch up
+    /// without a restart.
+    ///
+    /// # Errors
+    ///
+    /// As [`refresh`](Self::refresh); the catalog is told either way.
+    pub async fn binary_changed(&self) -> OxiResult<()> {
+        let result = self.refresh().await;
+        self.invalidate_catalog_if(true);
+        result
+    }
+
     /// Adds a repository (`helm repo add`) and lists again. A password staged for the name is
     /// used and forgotten.
     ///

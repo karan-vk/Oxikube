@@ -2,6 +2,7 @@
 
 use jiff::Timestamp;
 use oxikube_app::{RepoActivity, RepoSnapshot, RepoStatus, helm_repos::RepoSuggestion};
+use oxikube_domain::helm::RepoEntry;
 
 /// How a line is coloured.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,13 +53,14 @@ pub struct ReposModel {
     pub problem: Option<String>,
     /// The last success.
     pub notice: Option<String>,
-    /// One-click additions.
+    /// One-click additions (from `helm.default_repos`).
     pub suggestions: Vec<RepoSuggestion>,
 }
 
 impl ReposModel {
-    /// The model of `snapshot` at time `now`.
-    pub fn build(snapshot: &RepoSnapshot, now: Timestamp) -> Self {
+    /// The model of `snapshot` at time `now`, suggesting the entries of `defaults` (the
+    /// `helm.default_repos` setting) that are not configured.
+    pub fn build(snapshot: &RepoSnapshot, now: Timestamp, defaults: &[RepoEntry]) -> Self {
         let entries: Vec<_> = snapshot.rows.iter().map(|r| r.entry.clone()).collect();
         Self {
             cli_available: snapshot.cli_available,
@@ -82,9 +84,15 @@ impl ReposModel {
             progress: progress_line(&snapshot.activity),
             problem: snapshot.problem.clone(),
             notice: snapshot.notice.clone(),
-            suggestions: oxikube_app::helm_repos::default_suggestions(&entries),
+            suggestions: oxikube_app::helm_repos::default_suggestions(defaults, &entries),
         }
     }
+}
+
+/// The repositories the user's `helm.default_repos` setting offers (none without a settings
+/// store).
+pub fn default_repos(cx: &gpui::App) -> Vec<RepoEntry> {
+    oxikube_settings::HelmSettings::resolve(cx).default_repos
 }
 
 fn progress_line(activity: &RepoActivity) -> Option<String> {

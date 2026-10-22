@@ -10,13 +10,14 @@ use gpui::{
 use oxikube_app::RepoSnapshot;
 use oxikube_domain::command::Command;
 use oxikube_runtime::spawn_kube;
+use oxikube_settings::{HelmSettings, Settings as _};
 use oxikube_ui::IconName;
 use oxikube_ui::input::{InputEvent, InputState};
 use oxikube_workspace::{CommandDispatcher, Item, ItemEvent, TabContent};
 
 use super::backend::ReposBackend;
 use super::form::AddForm;
-use super::model::ReposModel;
+use super::model::{ReposModel, default_repos};
 
 /// The deduplication key of the tab: opening the page twice shows the open one.
 pub const ITEM_KEY: &str = "helm-repositories";
@@ -79,7 +80,7 @@ impl HelmReposView {
     /// list, off the UI thread.
     pub fn new(deps: ReposDeps, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let snapshot = deps.backend.snapshot();
-        let model = ReposModel::build(&snapshot, deps.backend.now());
+        let model = ReposModel::build(&snapshot, deps.backend.now(), &default_repos(cx));
         let input = |cx: &mut Context<Self>, window: &mut Window, masked: bool| {
             cx.new(|cx| InputState::new(window, cx).masked(masked))
         };
@@ -90,9 +91,15 @@ impl HelmReposView {
             input(cx, window, false),
         );
         let password = input(cx, window, true);
-        let subscriptions = [&name, &url, &username, &password, &ca_file]
+        let mut subscriptions: Vec<Subscription> = [&name, &url, &username, &password, &ca_file]
             .map(|input| cx.subscribe_in(input, window, Self::on_input))
             .into();
+        // `helm.default_repos` hot-reloads into the quick-add row.
+        subscriptions.push(HelmSettings::observe_in(cx, |this: &mut Self, cx| {
+            this.model =
+                ReposModel::build(&this.snapshot, this.deps.backend.now(), &default_repos(cx));
+            cx.notify();
+        }));
         let mut changes = deps.backend.changes();
         let watch = cx.spawn_in(window, async move |this, cx| {
             while changes.next().await.is_some() {
@@ -160,7 +167,7 @@ impl HelmReposView {
     /// the person can fix it.
     pub(super) fn sync(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.snapshot = self.deps.backend.snapshot();
-        let model = ReposModel::build(&self.snapshot, self.deps.backend.now());
+        let model = ReposModel::build(&self.snapshot, self.deps.backend.now(), &default_repos(cx));
         let mut changed = model != self.model;
         self.model = model;
         // An add is done when Helm lists the repository and the service says it was added; until
@@ -229,12 +236,12 @@ impl HelmReposView {
 
     /// Fills the form with the `index`th quick-add suggestion.
     pub fn use_suggestion(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(suggestion) = self.model.suggestions.get(index).copied() else {
+        let Some(suggestion) = self.model.suggestions.get(index).cloned() else {
             return;
         };
         self.form_open = true;
-        self.set_input(&self.name.clone(), suggestion.name, window, cx);
-        self.set_input(&self.url.clone(), suggestion.url, window, cx);
+        self.set_input(&self.name.clone(), &suggestion.name, window, cx);
+        self.set_input(&self.url.clone(), &suggestion.url, window, cx);
         cx.notify();
     }
 

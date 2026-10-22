@@ -369,4 +369,11 @@ fn nightly_runs_the_metrics_stack_tiers_and_prs_run_the_metrics_server_tier() {
         integration.contains("--test kind_metrics_server"),
         "integration.yml no longer runs the metrics-server tier of the app"
     );
+    // The `helm` adapter against the real binary and kind (E16-S12's helm job): built and run.
+    let tokens: Vec<&str> = integration.split_whitespace().collect();
+    assert!(
+        tokens.windows(2).any(|w| w == ["-p", "oxikube_helm"])
+            && integration.contains("oxikube_helm/integration"),
+        "integration.yml no longer runs oxikube_helm's kind suite"
+    );
 }

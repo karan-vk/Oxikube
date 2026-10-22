@@ -8,7 +8,7 @@
 //!   `owner=helm` (both storage drivers, since a cluster may use either). Objects are grouped
 //!   by `(namespace, release)` and the highest `version` label wins. Only the latest
 //!   revision of each release is fetched and decoded, and only for its chart, app version,
-//!   status and time; [`FETCH_CONCURRENCY`](reader::FETCH_CONCURRENCY) at a time.
+//!   status and time; `FETCH_CONCURRENCY` at a time.
 //! * **Detail.** `history`, `values`, `manifest` and `notes` list the one release's objects
 //!   and decode what they need on demand.
 //! * **Decode.** base64 (twice for Secrets), gzip (detected by its magic bytes), JSON;

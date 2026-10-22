@@ -173,6 +173,8 @@ pub struct Wiring {
     pub bus: CommandBus,
     _sources_list: SettingsSourceListHandle,
     _follow_sources: Subscription,
+    /// Re-reads the Helm repositories and charts when the Helm gate changes (E16).
+    _follow_helm_gate: Option<Subscription>,
     _follow_active: Subscription,
     /// Opens the views `view::Open` asks for. Lives as long as the window.
     _open_views: Task<()>,
@@ -373,14 +375,20 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (metrics_sink, metrics_rx) = oxikube_settings_ui::metrics::MetricsRequestSink::channel();
     let (helm_repos_sink, helm_repos_rx) =
         oxikube_settings_ui::helm_repos::HelmReposRequestSink::channel();
-    // The chart repositories in Helm's own configuration (E16-S07): one service, the page and the
-    // `helm::Repo*` commands share it.
     // Installs (E16-S09) run against each session's own kubeconfig context and file.
     let helm_targets = helm_install::targets(
         services.sessions.clone(),
         ports.clusters.kubeconfig_origins.clone(),
     );
-    let helm_services = helm_repos::services(ports.clusters.clock.clone(), helm_targets, cx);
+    // Helm (E16-S11): the app's one capability controller; its sink serves `helm::*` and its
+    // adapter backs the repositories, the charts and installs below, so `helm.path` reaches
+    // them too.
+    let helm = helm::install(cx, helm_targets);
+    // The chart repositories in Helm's own configuration (E16-S07): one service, the page and the
+    // `helm::Repo*` commands share it.
+    let helm_services = helm_repos::services(helm.cli.clone(), ports.clusters.clock.clone(), cx);
+    // A recheck or a new `helm.path` that changes the gate also re-reads both pages.
+    let follow_helm_gate = helm_repos::follow_gate(helm_services.repos.clone(), cx);
     let helm_progress = oxikube_app::ReleaseProgress::new();
     let helm_upgrade_requests = oxikube_app::UpgradeRequests::new();
     let helm_repos = helm_services.repos.clone();
@@ -401,8 +409,6 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (port_forward_sink, port_forward_rx) = oxikube_portforward_ui::PortForwardUiSink::channel();
     let (port_forwards, port_forward_favourites) =
         port_forwards::manager(&state, &services, stores.clone(), cx);
-    // Helm (E16-S11): the app's one capability controller; its sink serves `helm::*`.
-    let helm_sink = helm::install(cx);
     // The releases page (E16-S05): read natively from the release records, no binary needed.
     let helm_releases = helm_releases::service(services.sessions.clone(), stores.clone());
     let (helm_releases_sink, helm_releases_rx) =
@@ -420,7 +426,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         views: views_tx,
         keymap_file: oxikube_keymap::user_keymap_file(cx),
         keymap_open: keymap_sink,
-        helm: helm_sink,
+        helm: helm.sink,
         settings_file: cx
             .try_global::<oxikube_settings::SettingsStore>()
             .and_then(|store| store.user_settings_path().map(std::path::Path::to_path_buf)),
@@ -790,6 +796,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         bus,
         _sources_list: sources_list,
         _follow_sources: follow_sources,
+        _follow_helm_gate: follow_helm_gate,
         _follow_active: follow_active,
         _open_views: open_views,
         _open_kinds: open_kinds,

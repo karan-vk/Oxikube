@@ -13,6 +13,7 @@ use oxikube_app::ChartsReadiness;
 use oxikube_domain::command::Command;
 use oxikube_domain::helm::ChartSummary;
 use oxikube_runtime::spawn_kube;
+use oxikube_settings::{HelmSettings, Settings as _};
 use oxikube_ui::IconName;
 use oxikube_ui::input::{InputEvent, InputState};
 use oxikube_workspace::{CommandDispatcher, Item, ItemEvent, TabContent};
@@ -85,6 +86,8 @@ impl HelmChartsView {
     pub fn new(deps: ChartsDeps, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let query = cx.new(|cx| InputState::new(window, cx).placeholder("Search charts"));
         let subscription = cx.subscribe_in(&query, window, Self::on_query);
+        // The "no repositories" card offers `helm.default_repos`: redraw when it changes.
+        let on_settings = HelmSettings::observe_in(cx, |_, cx| cx.notify());
         let mut changes = deps.backend.changes();
         let watch = cx.spawn(async move |this, cx| {
             while changes.next().await.is_some() {
@@ -108,7 +111,7 @@ impl HelmChartsView {
             ready_task: None,
             search_task: None,
             _watch: watch,
-            _subscriptions: vec![subscription],
+            _subscriptions: vec![subscription, on_settings],
         };
         view.reload(cx);
         view

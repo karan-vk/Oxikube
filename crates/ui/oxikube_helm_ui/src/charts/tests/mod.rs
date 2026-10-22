@@ -74,7 +74,10 @@ impl Harness {
 
     pub fn open_with(cx: &mut TestAppContext, fake: Arc<FakeHelmPort>) -> Self {
         let (workspace, mut vcx) = open_workspace(cx);
-        vcx.update(|_, cx| oxikube_runtime::init_deterministic(cx));
+        vcx.update(|_, cx| {
+            oxikube_runtime::init_deterministic(cx);
+            crate::tests::set_settings(cx, "{}");
+        });
         let repos = HelmReposService::new(
             fake.clone(),
             fake.clone(),

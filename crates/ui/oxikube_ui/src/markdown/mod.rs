@@ -11,6 +11,7 @@
 //! [`MarkdownState`] (`cx.new(|cx| MarkdownState::markdown(&text, cx))`) and render it with
 //! [`MarkdownView::new`].
 
+mod links;
 mod sanitize;
 
 #[cfg(test)]

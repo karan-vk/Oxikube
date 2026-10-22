@@ -1,46 +1,28 @@
 //! Quick-add suggestions: well-known repositories offered, never added on their own.
 //!
-//! E16-S11 defines the `helm.default_repos` setting; until it lands this is its default value.
+//! The list is the user's `helm.default_repos` setting (E16-S11; validated by
+//! `oxikube_settings::HelmSettings`), read by the pages at render time so an edit applies without
+//! a restart. An empty setting offers nothing.
 
 use oxikube_domain::helm::RepoEntry;
 
 /// A repository the add form can fill in with one click.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct RepoSuggestion {
-    /// The alias.
-    pub name: &'static str,
-    /// The index URL.
-    pub url: &'static str,
-}
+pub type RepoSuggestion = RepoEntry;
 
-const DEFAULTS: &[RepoSuggestion] = &[
-    RepoSuggestion {
-        name: "bitnami",
-        url: "https://charts.bitnami.com/bitnami",
-    },
-    RepoSuggestion {
-        name: "ingress-nginx",
-        url: "https://kubernetes.github.io/ingress-nginx",
-    },
-    RepoSuggestion {
-        name: "prometheus-community",
-        url: "https://prometheus-community.github.io/helm-charts",
-    },
-    RepoSuggestion {
-        name: "jetstack",
-        url: "https://charts.jetstack.io",
-    },
-];
-
-/// The suggestions that are not configured yet (same alias or same URL).
-pub fn default_suggestions(configured: &[RepoEntry]) -> Vec<RepoSuggestion> {
-    DEFAULTS
+/// The entries of `defaults` (the `helm.default_repos` setting) that are not configured yet
+/// (same alias or same URL), in the setting's order.
+pub fn default_suggestions(
+    defaults: &[RepoEntry],
+    configured: &[RepoEntry],
+) -> Vec<RepoSuggestion> {
+    let same_url = |a: &str, b: &str| a.trim_end_matches('/') == b.trim_end_matches('/');
+    defaults
         .iter()
         .filter(|s| {
             !configured
                 .iter()
-                .any(|e| e.name == s.name || e.url.trim_end_matches('/') == s.url)
+                .any(|e| e.name == s.name || same_url(&e.url, &s.url))
         })
-        .copied()
+        .cloned()
         .collect()
 }

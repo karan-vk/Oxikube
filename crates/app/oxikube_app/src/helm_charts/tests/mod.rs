@@ -1,5 +1,7 @@
 //! Tests of the charts catalog over the testkit's `FakeHelmPort`.
 
+mod gated;
+
 use std::sync::Arc;
 
 use oxikube_domain::ErrorKind;
@@ -41,8 +43,15 @@ fn searches(fake: &FakeHelmPort) -> usize {
         .count()
 }
 
+fn bitnami() -> RepoEntry {
+    RepoEntry {
+        name: "bitnami".into(),
+        url: "https://x".into(),
+    }
+}
+
 #[tokio::test]
-async fn search_groups_versions_newest_first_and_caches_per_keyword() {
+async fn search_reads_the_catalog_once_and_filters_every_keyword_in_memory() {
     let (fake, _, charts) = setup();
     fake.script().search.push_ok(vec![
         hit("nginx", "9.0.0"),
@@ -50,16 +59,47 @@ async fn search_groups_versions_newest_first_and_caches_per_keyword() {
         hit("redis", "1.0.0"),
     ]);
     let found = charts.search("Nginx ").await.unwrap();
-    assert_eq!(found.len(), 2);
+    assert_eq!(found.len(), 1);
     assert_eq!(found[0].latest().version, "15.0.0");
-    // The same keyword (any case) is served from the cache: nothing else is scripted.
-    let again = charts.search("nginx").await.unwrap();
-    assert!(Arc::ptr_eq(&found, &again));
+    assert_eq!(found[0].versions.len(), 2);
+    // Every keyword after that (any case, by name, repository or description) is filtered from
+    // the cached catalog: nothing else is scripted, and `helm` ran once.
+    assert_eq!(charts.search("redis").await.unwrap().len(), 1);
+    assert_eq!(charts.search("BITNAMI/").await.unwrap().len(), 2);
+    assert_eq!(charts.search("redis chart").await.unwrap()[0].name, "redis");
+    assert!(charts.search("zzz").await.unwrap().is_empty());
+    let all = charts.search("").await.unwrap();
+    assert!(Arc::ptr_eq(&all, &charts.search("  ").await.unwrap()));
     assert_eq!(searches(&fake), 1);
     let HelmCall::Search(query) = &fake.recorded_calls()[0] else {
         panic!("search");
     };
     assert!(query.all_versions, "the detail picker needs every version");
+    assert!(query.keyword.is_empty(), "the whole catalog is read once");
+}
+
+/// The audit measured each keystroke's `helm search repo <kw> --versions` at 0.9-1.2 s and
+/// ~200 MB of child RSS (8 repos, 7,002 chart versions). Filtering the same catalog in memory
+/// takes well under a millisecond in release; the bound here is loose for debug runners.
+#[tokio::test]
+async fn filtering_a_large_catalog_is_fast() {
+    let (fake, _, charts) = setup();
+    let hits = (0..7_000)
+        .map(|i| hit(&format!("chart-{}", i / 5), &format!("1.{}.0", i % 5)))
+        .collect();
+    fake.script().search.push_ok(hits);
+    assert_eq!(charts.search("").await.unwrap().len(), 1_400);
+    let started = std::time::Instant::now();
+    for keyword in ["c", "ch", "cha", "chart-1", "chart-13", "chart-139"] {
+        charts.search(keyword).await.unwrap();
+    }
+    let took = started.elapsed();
+    assert!(
+        took < std::time::Duration::from_millis(500),
+        "six keywords took {took:?}"
+    );
+    assert_eq!(charts.search("chart-139").await.unwrap().len(), 11);
+    assert_eq!(searches(&fake), 1);
 }
 
 #[tokio::test]
@@ -96,6 +136,7 @@ async fn a_repository_change_drops_the_cache() {
 #[tokio::test]
 async fn detail_is_cached_per_chart_version_and_part() {
     let (fake, _, charts) = setup();
+    fake.script().repos.push_ok(vec![bitnami()]);
     fake.script().show.push_ok("# README one".to_owned());
     fake.script().show.push_ok("replicas: 1".to_owned());
     let chart = ChartRef::new("nginx", "1.0.0").in_repo("bitnami");
@@ -156,6 +197,7 @@ async fn the_commands_search_show_and_hand_over_the_install() {
     assert_eq!(data["charts"][0]["latest"], "2.0.0");
     assert_eq!(data["charts"][0]["versions"].as_array().unwrap().len(), 2);
 
+    fake.script().repos.push_ok(vec![bitnami()]);
     fake.script().show.push_ok("readme".to_owned());
     let out = run(
         &charts,
@@ -195,4 +237,103 @@ async fn without_helm_search_is_unsupported() {
     fake.set_capabilities(HelmCapabilities::native_only());
     let error = charts.search("x").await.unwrap_err();
     assert_eq!(error.kind(), ErrorKind::Unsupported);
+}
+
+#[tokio::test]
+async fn show_refuses_urls_paths_and_unconfigured_repositories() {
+    let (fake, _, charts) = setup();
+    fake.script().repos.push_ok(vec![bitnami()]);
+    let show = |repo: &str, name: &str| Command::HelmShowChart {
+        repo: repo.into(),
+        name: name.into(),
+        version: None,
+        part: ChartPart::Values,
+    };
+    for (repo, name) in [
+        // `https://attacker.example/x.tgz` once joined.
+        ("https:", "/attacker.example/x.tgz"),
+        // A local chart directory.
+        ("/home/user", "some-chart-dir"),
+        ("bitnami", "../../etc"),
+        ("bitnami", "x/y"),
+        ("bitnami", ".hidden"),
+        ("bitnami", ""),
+        // Not a configured repository (even after reading Helm's list again).
+        ("charts", "nginx"),
+    ] {
+        fake.script().repos.push_ok(vec![bitnami()]);
+        let error = run(&charts, show(repo, name)).await.unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::Validation, "{repo}/{name}");
+    }
+    assert!(
+        !fake
+            .recorded_calls()
+            .iter()
+            .any(|c| matches!(c, HelmCall::Show(..))),
+        "helm show never ran"
+    );
+    fake.script().show.push_ok("replicas: 1".to_owned());
+    assert!(run(&charts, show("bitnami", "nginx")).await.is_ok());
+}
+
+/// A search dropped while the catalog loads (the user typed again) leaves the load running for
+/// the next search, and searches waiting together share it: `helm` runs once.
+#[tokio::test]
+async fn searches_share_one_catalog_load_even_when_one_is_dropped() {
+    use std::sync::atomic::Ordering;
+    let (fake, repos, _) = setup();
+    let gated = gated::Gated::new(fake.clone());
+    let charts = ChartsService::new(gated.clone(), repos.catalog_changes());
+    fake.script()
+        .search
+        .push_ok(vec![hit("nginx", "1.0.0"), hit("redis", "1.0.0")]);
+    {
+        let mut typed = Box::pin(charts.search("ng"));
+        assert!(futures::poll!(typed.as_mut()).is_pending());
+    }
+    let (a, b) = {
+        let a = charts.search("redis");
+        let b = charts.search("");
+        gated.release();
+        futures::join!(a, b)
+    };
+    assert_eq!(a.unwrap().len(), 1);
+    assert_eq!(b.unwrap().len(), 2);
+    assert_eq!(
+        gated.started.load(Ordering::SeqCst),
+        1,
+        "one load for all three"
+    );
+}
+
+/// A repository list read before a repository change is not cached for the new catalog.
+#[tokio::test]
+async fn a_repository_list_from_before_a_change_is_not_kept() {
+    let (fake, repos, _) = setup();
+    let gated = gated::Gated::holding_repos(fake.clone());
+    let charts = ChartsService::new(gated.clone(), repos.catalog_changes());
+    let mut ready = Box::pin(charts.ready());
+    assert!(
+        futures::poll!(ready.as_mut()).is_pending(),
+        "reading the list"
+    );
+    // `bitnami` is removed while the list is read (the service talks to Helm directly, and
+    // lists again after removing it)...
+    fake.script().repos.push_ok(Vec::new());
+    repos.remove("bitnami").await.ok();
+    // ...and the read that started before it still answers with `bitnami`.
+    fake.script().repos.push_ok(vec![bitnami()]);
+    gated.release_repos();
+    assert!(matches!(ready.await.unwrap(), Readiness::Ready(_)));
+    // The old answer was not kept: a show reads the list again and refuses `bitnami`.
+    fake.script().repos.push_ok(Vec::new());
+    gated.release_repos();
+    let error = charts
+        .detail(
+            &ChartRef::new("nginx", "").in_repo("bitnami"),
+            ChartPart::Readme,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::Validation);
 }

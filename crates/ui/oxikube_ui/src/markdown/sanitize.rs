@@ -1,5 +1,7 @@
 //! [`sanitize`]: makes untrusted Markdown safe to show.
 
+use super::links::{Pairs, badge_or_image};
+
 /// The longest source [`sanitize`] keeps; the rest is cut at a line break.
 pub const MAX_SOURCE_BYTES: usize = 2 * 1024 * 1024;
 
@@ -27,7 +29,9 @@ pub fn is_safe_link(url: &str) -> bool {
 ///   fetches a remote image;
 /// * size: a source over [`MAX_SOURCE_BYTES`] is cut at a line break and [`TRUNCATED_NOTE`] added.
 ///
-/// Pure and linear in the input, but run it off the UI thread for big documents.
+/// Pure and linear in the input (every scan of a line is bounded by what it consumes, so an
+/// untrusted document of unclosed `![` or repeated `<script></script>` costs no more than plain
+/// text), but run it off the UI thread for big documents.
 pub fn sanitize(source: &str) -> String {
     let (source, cut) = if source.len() > MAX_SOURCE_BYTES {
         let mut end = MAX_SOURCE_BYTES;
@@ -132,6 +136,8 @@ impl State {
 
     fn inline(&mut self, line: &str, out: &mut String) {
         let chars: Vec<char> = line.chars().collect();
+        // Built the first time an image or badge may start: most lines have neither.
+        let mut pairs: Option<Pairs> = None;
         let mut i = 0;
         let mut code: Option<usize> = None;
         while i < chars.len() {
@@ -164,8 +170,9 @@ impl State {
                 }
                 continue;
             }
-            if c == '[' || c == '!' {
-                if let Some((text, consumed)) = badge_or_image(&chars[i..]) {
+            if (c == '[' || c == '!') && chars.get(i + 1).is_some_and(|n| matches!(n, '[' | '!')) {
+                let pairs = pairs.get_or_insert_with(|| Pairs::of(&chars));
+                if let Some((text, consumed)) = badge_or_image(&chars, i, pairs) {
                     out.push_str(&text);
                     i += consumed;
                     continue;
@@ -233,13 +240,17 @@ impl State {
             } else {
                 "</style"
             };
-            let tail: String = rest[end..].iter().collect::<String>().to_ascii_lowercase();
-            return Some(match tail.find(close) {
+            // Scans only up to the closing tag (never copies the rest of the line), so many
+            // elements on one line stay linear.
+            let tail = &rest[end..];
+            return Some(match find_ignore_case(tail, close) {
                 Some(at) => {
-                    let after = &tail[at + close.len()..];
-                    let gt = after.find('>').map_or(after.len(), |g| g + 1);
-                    let skipped = tail[..at + close.len() + gt].chars().count();
-                    end + skipped
+                    let after = at + close.len();
+                    let gt = tail[after..]
+                        .iter()
+                        .position(|&c| c == '>')
+                        .map_or(tail.len() - after, |g| g + 1);
+                    end + after + gt
                 }
                 None => {
                     self.raw_until = Some(close);
@@ -249,6 +260,17 @@ impl State {
         }
         Some(end)
     }
+}
+
+/// The first index of ASCII `needle` in `hay`, ignoring ASCII case.
+fn find_ignore_case(hay: &[char], needle: &str) -> Option<usize> {
+    let needle: Vec<char> = needle.chars().collect();
+    (0..hay.len().saturating_sub(needle.len() - 1)).find(|&i| {
+        hay[i..i + needle.len()]
+            .iter()
+            .zip(&needle)
+            .all(|(a, b)| a.eq_ignore_ascii_case(b))
+    })
 }
 
 fn find(hay: &[char], needle: &str, from: usize) -> Option<usize> {
@@ -272,87 +294,4 @@ fn closes_fence(line: &str, ch: char, len: usize) -> bool {
     let trimmed = line.trim_start_matches(' ');
     let run = trimmed.chars().take_while(|&c| c == ch).count();
     run >= len && trimmed[run..].trim().is_empty()
-}
-
-/// `![alt](url)` or `[![alt](img)](target)` at the start of `rest`, as the link it becomes and how
-/// many chars it covers.
-fn badge_or_image(rest: &[char]) -> Option<(String, usize)> {
-    if rest.first() == Some(&'!') {
-        let (alt, url, used) = bracket_link(&rest[1..])?;
-        return Some((link(&alt, &url), used + 1));
-    }
-    // `[` + image + `](target)`.
-    if rest.get(1) == Some(&'!') {
-        let (alt, _img, used) = bracket_link(&rest[2..])?;
-        let tail = &rest[2 + used..];
-        if tail.first() == Some(&']') && tail.get(1) == Some(&'(') {
-            let (target, len) = destination(&tail[1..])?;
-            return Some((link(&alt, &target), 2 + used + 1 + len));
-        }
-    }
-    None
-}
-
-fn link(alt: &str, url: &str) -> String {
-    let alt = alt.trim();
-    format!("[{}]({url})", if alt.is_empty() { "image" } else { alt })
-}
-
-/// `[text](dest ...)` at the start of `rest`: the text, the destination and the chars used.
-fn bracket_link(rest: &[char]) -> Option<(String, String, usize)> {
-    if rest.first() != Some(&'[') {
-        return None;
-    }
-    let mut depth = 0usize;
-    let mut close = None;
-    for (i, &c) in rest.iter().enumerate() {
-        match c {
-            '\\' => continue,
-            '[' => depth += 1,
-            ']' => {
-                depth -= 1;
-                if depth == 0 {
-                    close = Some(i);
-                    break;
-                }
-            }
-            _ => {}
-        }
-    }
-    let close = close?;
-    if rest.get(close + 1) != Some(&'(') {
-        return None;
-    }
-    let (url, len) = destination(&rest[close + 1..])?;
-    let alt: String = rest[1..close].iter().collect();
-    Some((alt, url, close + 1 + len))
-}
-
-/// `(url "title")` at the start of `rest`: the url and the chars used (both parens included).
-fn destination(rest: &[char]) -> Option<(String, usize)> {
-    if rest.first() != Some(&'(') {
-        return None;
-    }
-    let mut depth = 0usize;
-    for (i, &c) in rest.iter().enumerate() {
-        match c {
-            '\n' => return None,
-            '(' => depth += 1,
-            ')' => {
-                depth -= 1;
-                if depth == 0 {
-                    let inner: String = rest[1..i].iter().collect();
-                    // Drop an optional title.
-                    let url = inner
-                        .split_whitespace()
-                        .next()
-                        .unwrap_or_default()
-                        .to_owned();
-                    return Some((url, i + 1));
-                }
-            }
-            _ => {}
-        }
-    }
-    None
 }
