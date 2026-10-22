@@ -76,8 +76,7 @@ env:
   # A failing test's `TestNamespace` writes its events and its pods' descriptions here before
   # deleting the namespace (which deletes both); the diagnostics uploads below carry them.
   OXIKUBE_TEST_DIAGNOSTICS_DIR: ${{ github.workspace }}/diagnostics/namespaces
-  # kube, app, testkit, prometheus and helm integration tests; `--no-fail-fast` reports every
-  # failing file. The helm suite drives the runner's preinstalled `helm` (it skips without one).
+  # kube, app and testkit integration tests; `--no-fail-fast` reports every failing file.
   SUITE: >-
     cargo test -p oxikube_kube -p oxikube_app -p oxikube_testkit -p oxikube_prometheus -p oxikube_helm
     --features oxikube_kube/integration,oxikube_app/integration,oxikube_testkit/integration,oxikube_prometheus/integration,oxikube_helm/integration
