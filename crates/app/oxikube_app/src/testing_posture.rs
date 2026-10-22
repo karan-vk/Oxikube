@@ -230,6 +230,18 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             wait: false,
             timeout_secs: None,
         },
+        "helm::Rollback" => Command::HelmRollback {
+            cluster,
+            namespace: "default".to_owned(),
+            release: "web".to_owned(),
+            revision: 1,
+        },
+        "helm::Uninstall" => Command::HelmUninstall {
+            cluster,
+            namespace: "default".to_owned(),
+            release: "web".to_owned(),
+            keep_history: false,
+        },
         "helm::RepoAdd" => Command::HelmRepoAdd {
             name: "bitnami".to_owned(),
             url: "https://charts.bitnami.com/bitnami".to_owned(),

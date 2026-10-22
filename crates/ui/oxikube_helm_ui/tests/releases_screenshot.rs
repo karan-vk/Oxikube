@@ -4,6 +4,8 @@
 //!   a release selected, its Resources tab open (health, a missing object flagged).
 //! - `releases_values_masked`: the Values tab with credential-looking values masked.
 //! - `releases_history`: the History tab.
+//! - `releases_rollback_preview`: a revision picked for rollback (E16-S06): its chart and the
+//!   values it would restore, with the rollback button.
 //! - `releases_empty`: no releases in the namespaces being watched.
 //!
 //! `harness = false` and `--features screenshot`, like the other screenshot tests. Checks the
@@ -21,7 +23,7 @@ use std::sync::Arc;
 use gpui::{AppContext as _, HeadlessAppContext, px, size};
 use jiff::Timestamp;
 use oxikube_domain::command::Command;
-use oxikube_domain::helm::{ChartRef, ReleaseStatus, Revision};
+use oxikube_domain::helm::{ChartRef, HelmCapabilities, HelmVersion, ReleaseStatus, Revision};
 use oxikube_domain::ids::{Gvk, ResourceRef};
 use oxikube_helm_ui::HelmGateState;
 use oxikube_helm_ui::releases::test_support::{StaticBackend, cluster};
@@ -41,6 +43,7 @@ enum Scene {
     TableLight,
     ValuesMasked,
     History,
+    Rollback,
     Empty,
 }
 
@@ -122,10 +125,18 @@ fn render(scene: Scene) -> anyhow::Result<RgbaImage> {
         oxikube_ui::set_tokens(cx, tokens);
         cx.set_reduce_motion(true);
         oxikube_runtime::init_deterministic(cx);
+        let gate = HelmGateState::install(cx);
+        if matches!(scene, Scene::Rollback) {
+            // A `helm` binary: the History tab offers rollback.
+            gate.update(cx, |gate, cx| {
+                gate.set_native_read(true, cx);
+                gate.set_cli_capabilities(HelmCapabilities::full(HelmVersion::new(3, 14, 2)), cx);
+            });
+        }
         let deps = ReleasesDeps {
             backend: Rc::new(backend(scene)),
             dispatcher: Rc::new(Ignore),
-            gate: HelmGateState::install(cx),
+            gate,
         };
         let view = cx.new(|cx| HelmReleasesView::new(deps, window, cx));
         *hold.borrow_mut() = Some(view.clone());
@@ -136,15 +147,29 @@ fn render(scene: Scene) -> anyhow::Result<RgbaImage> {
         let view = held.borrow().clone().expect("the releases view");
         cx.update_window(window.into(), |_, _, cx| {
             view.update(cx, |view, cx| {
-                view.select_row(0, cx);
+                // The Rollback scene picks a release whose latest revision is 4, as its history.
+                view.select_row(
+                    if matches!(scene, Scene::Rollback) {
+                        3
+                    } else {
+                        0
+                    },
+                    cx,
+                );
                 match scene {
                     Scene::ValuesMasked => view.set_tab(Tab::Values, cx),
-                    Scene::History => view.set_tab(Tab::History, cx),
+                    Scene::History | Scene::Rollback => view.set_tab(Tab::History, cx),
                     _ => {}
                 }
             });
         })?;
         cx.run_until_parked();
+        if matches!(scene, Scene::Rollback) {
+            cx.update_window(window.into(), |_, _, cx| {
+                view.update(cx, |view, cx| view.select_revision(2, cx));
+            })?;
+            cx.run_until_parked();
+        }
         cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))?;
         cx.run_until_parked();
     }
@@ -189,6 +214,7 @@ fn main() -> ExitCode {
         ("releases_table_light", Scene::TableLight),
         ("releases_values_masked", Scene::ValuesMasked),
         ("releases_history", Scene::History),
+        ("releases_rollback_preview", Scene::Rollback),
         ("releases_empty", Scene::Empty),
     ] {
         if let Err(err) = render(scene).and_then(|image| check(name, image)) {

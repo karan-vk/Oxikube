@@ -97,9 +97,7 @@ impl HelmReleasesView {
                                 .text_color(colour)
                                 .child(release.status.as_str()),
                         )
-                        .when(can_mutate, |row| {
-                            row.child(div().debug_selector(|| "helm-release-actions".into()))
-                        })
+                        .when(can_mutate, |row| row.child(self.header_actions(cx)))
                         .when(!can_mutate, |row| {
                             row.child(
                                 div()

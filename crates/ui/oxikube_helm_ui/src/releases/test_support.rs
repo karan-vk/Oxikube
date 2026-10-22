@@ -157,8 +157,20 @@ impl ReleasesBackend for StaticBackend {
         Box::pin(async move { Ok(history) })
     }
 
-    fn values(&self, _: &ReleaseRef, _: u32, _: bool) -> BoxFuture<'static, OxiResult<ValuesView>> {
+    /// The same values for every revision, except that the oldest ones (up to revision 2) ran
+    /// one replica (so the rollback preview has something to show).
+    fn values(
+        &self,
+        _: &ReleaseRef,
+        revision: u32,
+        _: bool,
+    ) -> BoxFuture<'static, OxiResult<ValuesView>> {
         let (text, sensitive) = (self.values.clone(), self.sensitive);
+        let text: Arc<str> = if revision <= 2 {
+            Arc::from(text.replace("replicaCount: 2", "replicaCount: 1"))
+        } else {
+            text
+        };
         Box::pin(async move {
             Ok(ValuesView {
                 text,

@@ -2,6 +2,7 @@
 //! data, and a dispatcher that records commands. (The service's own behaviour is tested in
 //! `oxikube_app::helm_releases` over `FakeHelmPort`.)
 
+mod change;
 mod live;
 mod model;
 mod page;
@@ -79,6 +80,8 @@ pub(super) struct Data {
     pub history: HashMap<String, Vec<Revision>>,
     pub user_values: HashMap<String, Values>,
     pub all_values: HashMap<String, Values>,
+    /// User values of one revision, when they differ from `user_values`.
+    pub values_at: HashMap<(String, u32), Values>,
     pub manifest: HashMap<String, String>,
     pub notes: HashMap<String, Option<String>>,
     pub objects: Vec<ObjectRow>,
@@ -179,7 +182,9 @@ impl ReleasesBackend for FakeBackend {
         let found = if all {
             data.all_values.get(&release.name)
         } else {
-            data.user_values.get(&release.name)
+            data.values_at
+                .get(&(release.name.clone(), revision))
+                .or_else(|| data.user_values.get(&release.name))
         }
         .cloned();
         drop(data);

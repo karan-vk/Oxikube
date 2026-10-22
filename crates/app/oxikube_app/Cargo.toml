@@ -28,6 +28,8 @@ regex.workspace = true
 serde.workspace = true
 # Tool stub input schemas (`ToolDef::input_schema`) and command output data.
 serde_json.workspace = true
+# `helm::Rollback`'s preview: the line diff of two revisions' values (E16-S06).
+similar.workspace = true
 # A TLS Secret's certificate (E12-S11): subject, validity, names.
 x509-parser.workspace = true
 # `resource::Apply` (E10-S08) reads a manifest written in YAML (or JSON) as one object.

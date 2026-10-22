@@ -12,6 +12,7 @@ use oxikube_domain::helm::{Release, Revision};
 use oxikube_ui::code_view::{CodeView, Look};
 
 use super::backend::{ObjectRow, ObjectsLease};
+use super::change::Preview;
 use super::model::{Load, Tab, ValuesMode};
 use super::view::HelmReleasesView;
 
@@ -66,6 +67,11 @@ pub struct HistoryPane {
     pub revisions: Vec<Revision>,
     /// The list's scroll position.
     pub scroll: UniformListScrollHandle,
+    /// The revision picked for rollback (E16-S06).
+    pub selected: Option<u32>,
+    /// What rolling back to it would change.
+    pub preview: Preview,
+    pub(super) preview_task: Option<Task<()>>,
 }
 
 /// The detail of the selected release. See the [module docs](self).
@@ -92,6 +98,8 @@ pub struct ReleaseDetail {
     pub links: Vec<String>,
     /// The History tab.
     pub history: HistoryPane,
+    /// The uninstall in the header keeps the release history (`--keep-history`).
+    pub keep_history: bool,
     /// Counts the changes that make a read in flight stale (a new revision, a new mode, a reveal).
     pub(super) generation: u64,
     /// The reads in flight, one per tab. Dropped with the detail.
@@ -121,7 +129,11 @@ impl ReleaseDetail {
                 load: Load::Idle,
                 revisions: Vec::new(),
                 scroll: UniformListScrollHandle::new(),
+                selected: None,
+                preview: Preview::None,
+                preview_task: None,
             },
+            keep_history: false,
             generation: 0,
             tasks: HashMap::new(),
         }
@@ -139,6 +151,9 @@ impl ReleaseDetail {
         self.manifest.load = Load::Idle;
         self.notes.load = Load::Idle;
         self.history.load = Load::Idle;
+        self.history.selected = None;
+        self.history.preview = Preview::None;
+        self.history.preview_task = None;
     }
 
     /// Drops what `tabs` read and every read still in flight, so no tab is left waiting for a

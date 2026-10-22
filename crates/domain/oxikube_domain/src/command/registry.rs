@@ -158,6 +158,12 @@ impl CommandId {
     pub const HELM_UPGRADE_RELEASE: CommandId = CommandId::new("helm::UpgradeRelease");
     /// `helm::Upgrade`: upgrade a release to a chart version, through the mutation guard (E16-S10).
     pub const HELM_UPGRADE: CommandId = CommandId::new("helm::Upgrade");
+    /// `helm::Rollback`: roll a release back to an earlier revision, through the mutation guard
+    /// (E16-S06).
+    pub const HELM_ROLLBACK: CommandId = CommandId::new("helm::Rollback");
+    /// `helm::Uninstall`: remove a release, optionally keeping its history, through the mutation
+    /// guard (E16-S06).
+    pub const HELM_UNINSTALL: CommandId = CommandId::new("helm::Uninstall");
     /// `helm::RepoAdd`: add a chart repository to Helm's own configuration (E16-S07).
     pub const HELM_REPO_ADD: CommandId = CommandId::new("helm::RepoAdd");
     /// `helm::RepoRemove`: remove a chart repository from Helm's own configuration (E16-S07).
@@ -980,6 +986,15 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Cluster,
         NONE,
     ),
+    // Rolling back changes the running workloads (E16-S06): risk medium, one confirmation, blocked
+    // on a read-only cluster, audited.
+    CommandMeta::mutation(
+        CommandId::HELM_ROLLBACK,
+        "Helm: Roll Back Release",
+        CommandScope::Cluster,
+        Risk::Medium,
+        Capabilities::HELM,
+    ),
     CommandMeta::read(
         CommandId::HELM_SEARCH_CHARTS,
         "Helm: Search Charts",
@@ -1026,6 +1041,15 @@ pub static COMMANDS: &[CommandMeta] = &[
         "Helm: Show Release Values",
         CommandScope::Cluster,
         NONE,
+    ),
+    // Uninstalling removes the release's workloads (E16-S06): risk high, so the user types the
+    // release name; blocked on a read-only cluster, audited.
+    CommandMeta::mutation(
+        CommandId::HELM_UNINSTALL,
+        "Helm: Uninstall Release",
+        CommandScope::Cluster,
+        Risk::High,
+        Capabilities::HELM,
     ),
     // Lists the bindings of the focused view; reads nothing from a cluster.
     CommandMeta::read(
