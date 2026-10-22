@@ -1,0 +1,6 @@
+greeting: hello
+fail: false
+image:
+  repository: example/web
+  tag: "1.0"
+ports: [80, 443]

@@ -1,0 +1,201 @@
+//! Helm's release JSON (private serde shapes) and its mapping onto the domain types.
+//!
+//! Two shapes are read from the same JSON: a [`Header`] for list and history rows (chart,
+//! status, times, description) and a full [`Record`] (plus values, manifest, notes) for the
+//! detail methods. Unknown fields are ignored, so newer Helm versions keep decoding.
+
+use std::sync::Arc;
+
+use jiff::Timestamp;
+use oxikube_domain::helm::{ChartRef, Release, ReleaseRef, ReleaseStatus, Revision, Values};
+use serde::Deserialize;
+use serde_json::Value;
+
+use super::storage::StoredRevision;
+
+/// The cheap part of a release record: what a list or history row shows.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Header {
+    /// `chart.metadata.name` and `.version`.
+    pub chart: ChartRef,
+    /// `chart.metadata.appVersion`, when set.
+    pub app_version: Option<String>,
+    /// `info.status`, when present.
+    pub status: Option<ReleaseStatus>,
+    /// `info.last_deployed`, when it parses.
+    pub updated: Option<Timestamp>,
+    /// `info.description`.
+    pub description: String,
+}
+
+/// A fully decoded revision. Holds values and a manifest that may embed credentials: kept
+/// in memory only, never logged (`Values` redacts its `Debug`).
+#[derive(Clone)]
+pub(crate) struct Record {
+    /// The list fields.
+    pub header: Header,
+    /// `info.notes` (`NOTES.txt` as rendered), `None` when empty.
+    pub notes: Option<Arc<str>>,
+    /// `config`: the values the user supplied.
+    pub user_values: Values,
+    /// `chart.values`: the chart's defaults, when the record kept them.
+    pub chart_values: Option<Values>,
+    /// `manifest`: the rendered YAML.
+    pub manifest: Arc<str>,
+}
+
+impl Record {
+    /// The chart defaults merged with the user's values (Helm coalescing: maps merge, lists
+    /// replace, `null` deletes). Best effort: without chart defaults in the record this is
+    /// just the user's values.
+    pub fn computed_values(&self) -> Values {
+        match &self.chart_values {
+            Some(defaults) => Values::merge(defaults, &self.user_values),
+            None => Values::merge(&Values::default(), &self.user_values),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub(crate) struct RawHeader {
+    #[serde(default)]
+    info: RawInfo,
+    #[serde(default)]
+    chart: Option<RawChart>,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct RawRecord {
+    #[serde(default)]
+    info: RawInfo,
+    #[serde(default)]
+    chart: Option<RawChart>,
+    #[serde(default)]
+    config: Option<Value>,
+    #[serde(default)]
+    manifest: Option<String>,
+}
+
+#[derive(Deserialize, Default)]
+struct RawInfo {
+    #[serde(default)]
+    status: Option<String>,
+    #[serde(default)]
+    last_deployed: Option<String>,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    notes: Option<String>,
+}
+
+#[derive(Deserialize, Default)]
+struct RawChart {
+    #[serde(default)]
+    metadata: Option<RawMetadata>,
+    #[serde(default)]
+    values: Option<Value>,
+}
+
+#[derive(Deserialize, Default)]
+struct RawMetadata {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    version: Option<String>,
+    #[serde(default, rename = "appVersion")]
+    app_version: Option<String>,
+}
+
+impl RawHeader {
+    pub fn into_header(self) -> Header {
+        header(self.info, self.chart.as_ref())
+    }
+}
+
+impl RawRecord {
+    pub fn into_record(self) -> Record {
+        let chart_values = self
+            .chart
+            .as_ref()
+            .and_then(|c| c.values.clone())
+            .map(Values::from_json);
+        let notes = self
+            .info
+            .notes
+            .as_deref()
+            .filter(|n| !n.trim().is_empty())
+            .map(Arc::from);
+        Record {
+            notes,
+            user_values: self.config.map(Values::from_json).unwrap_or_default(),
+            chart_values,
+            manifest: Arc::from(self.manifest.unwrap_or_default()),
+            header: header(self.info, self.chart.as_ref()),
+        }
+    }
+}
+
+fn header(info: RawInfo, chart: Option<&RawChart>) -> Header {
+    let metadata = chart.and_then(|c| c.metadata.as_ref());
+    let field = |f: fn(&RawMetadata) -> &Option<String>| {
+        metadata.and_then(|m| f(m).clone()).unwrap_or_default()
+    };
+    Header {
+        chart: ChartRef::new(field(|m| &m.name), field(|m| &m.version)),
+        app_version: metadata
+            .and_then(|m| m.app_version.clone())
+            .filter(|v| !v.is_empty()),
+        status: info.status.as_deref().map(ReleaseStatus::parse),
+        updated: info
+            .last_deployed
+            .as_deref()
+            .and_then(|t| t.parse::<Timestamp>().ok()),
+        description: info.description.unwrap_or_default(),
+    }
+}
+
+/// The list row of `stored`, from its decoded header, or from labels alone when the header
+/// could not be read (`None`): then the chart is blank but the release still shows.
+pub(crate) fn release_row(
+    reference: ReleaseRef,
+    stored: &StoredRevision,
+    header: Option<&Header>,
+) -> Release {
+    let chart = header.map_or_else(|| ChartRef::new("", ""), |h| h.chart.clone());
+    let mut release = Release::summary(
+        reference,
+        chart,
+        stored.revision,
+        status(stored, header),
+        updated(stored, header),
+    );
+    release.app_version = header.and_then(|h| h.app_version.clone());
+    release
+}
+
+/// The history entry of `stored`.
+pub(crate) fn revision_row(stored: &StoredRevision, header: Option<&Header>) -> Revision {
+    Revision {
+        revision: stored.revision,
+        status: status(stored, header),
+        chart: header.map_or_else(|| ChartRef::new("", ""), |h| h.chart.clone()),
+        app_version: header.and_then(|h| h.app_version.clone()),
+        updated: updated(stored, header),
+        description: header.map(|h| h.description.clone()).unwrap_or_default(),
+    }
+}
+
+/// The payload's status is authoritative; the label is the fallback.
+fn status(stored: &StoredRevision, header: Option<&Header>) -> ReleaseStatus {
+    header
+        .and_then(|h| h.status)
+        .filter(|s| *s != ReleaseStatus::Unknown)
+        .unwrap_or(stored.status)
+}
+
+fn updated(stored: &StoredRevision, header: Option<&Header>) -> Timestamp {
+    header
+        .and_then(|h| h.updated)
+        .or(stored.modified)
+        .unwrap_or(Timestamp::UNIX_EPOCH)
+}

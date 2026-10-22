@@ -793,6 +793,21 @@ crate's `README.md` for its allowed dependencies. Highlights:
   commands `app::ToggleOsNotifications` / `app::SendTestNotification`; `bins/oxikube::os_notifications` follows the setting and
   `mount::notifications` brings the window to the front and dispatches the click's commands. Tests: `FakeNotifierPort`
   (off until enabled, `shown()`, `click_last()`), `TestPorts::notifier`.
+- `oxikube_helm::native` (E16-S02) — `NativeHelmReader`, the read half of `HelmPort` (`list_releases`, `history`, `values`,
+  `manifest`, `notes`) decoded from Helm's own `sh.helm.release.v1.*` records, so releases work without a `helm` binary. It
+  holds a `ResourceReader` (never a writer) and no `kube` dependency: `oxikube_kube` is a dev-dependency for the kind test only.
+  List: per namespace, a metadata-only, paged list of Secrets and ConfigMaps labelled `owner=helm` (both storage drivers; one
+  the caller may not list is skipped while the other answers), grouped by `(namespace, release)`, the highest `version` label
+  winning and the Secret winning when both drivers hold the same revision. Only the latest revision of each release is fetched
+  and only its header (chart, app version, status, time) decoded, 16 at a time, so 500 releases list within the 1 s budget.
+  Detail calls list one release's objects and decode on demand. Decode: base64 (twice for Secrets), gzip by magic bytes, JSON,
+  inflated output capped at 50 MiB, on tokio's blocking pool, never an async worker or the UI thread. `DecodeCache` keeps
+  headers (up to 8192) and a few full records (8, LRU) by `(uid, resourceVersion)` in memory only, so a re-list decodes only
+  what changed. Values and manifests may hold credentials: returned, never logged; errors name the object and the failed step.
+  Repos, charts, `template` and every mutation answer `HelmError::Unsupported` and `capabilities()` is
+  `HelmCapabilities::native_only()`; the `helm` CLI adapter (E16-S04) supplies them. Modules: `storage` (labels, drivers),
+  `codec`, `record`, `cache`, `reader`. Tests: recorded helm 4.3.1 objects in `tests/fixtures/`, the 500-release budget, and
+  `kind_native` (`--features integration`).
 - `oxikube_prometheus` (E13-S04) — the PromQL HTTP adapter. `PromqlClient` implements `PromqlEndpointPort` (instant and range
   queries against one explicit `PromEndpoint`: base URL, path prefix such as Mimir's `/prometheus`, none/bearer/basic auth
   whose secret is in memory or a keychain reference read per request, a custom CA or an insecure toggle, a request deadline

@@ -1,0 +1,21 @@
+{
+  "apiVersion": "v1",
+  "data": {
+    "release": "H4sIAAAAAAAC/4RVb2+bvhb+KpHvy0syMKEJSL8XhTWUJM1u0zYEbqbJGAe8+g8Dk4RO/e4/ma5pp02bhIR9bB8/j89zzvkOBOIEeOBIshHmQ1RVwABU7CXwvoM9rRv1JScVkx3JgQegCS+GljmE1r114ZmmZzsjaFmu6/7XdD3TBAZg6O9H7OnUncLzkZw0uKaVolIADzxURY1yMsCSV4woAgzQKKTaBnjg7NcAQiqiTfclEo/NYC/rARWNQoxRUQze6Ix2AjwbAJeoVpoTJwrlSCE9/sE9J1wCAxxI3bxAsEZwZP8C7HJwTRgf9J76+xZtRmpBNA4DoIpuzg4OsLdUbxY4Mkeaq+oqfSWqKkYx6j0/G4BJ/Ag80TJmAEV4xVBP7v9niGfjh9Wn+6u7kTopja/nATZhWWZcPUVhesDUrzKxMpP41KDYEdG1mkSBc5fGJ5ZsV2z56JRZ/FDst2YbFP/8AwzAZa4oJ7+LFXRGU9OZQPvCtH+E69n4DSjMRx3i7A1SsvWrDd90GLJD9lUW+derBYKsTT/K4ha6bcqZuI9nx4BbLA9nj8l2XX4qZBGFPbyLP8BWCUxFwNdlHl5dBPSySO05S7frKuP49VycxCcr3d6079aKfeCf8tg10zvf3d/KQu9d3vlVSi/bDZ81ebx5WvK0RPFR37OIAn9COp8nMWuiYF5iqFga+Gb2aqM/+WEZv+3P/fVJJ+7YGduvKfP82QAHxFod8O9gjygD3h6xhhigqAlRVBTAAyVhTIuUclQQvbEmlWyoknUHPEBOSCfLhyPJtMZQ0YtYBwtUslZaSlPTGI/tz88GaHBJOHqV28vsDbBpmtaw/+5N0+u/FBhgT9nPihyVhHFaCFmTt7BHnX+bbNdmup23uOufqkqhc8D8ochhyTLq0zxmTRqyNu38YxKv6iTOGe7Gi6jzH1DInqLrlYWv/QMWaz2WaXxqojBvMhgVWTwzE1jqcDbR9Zxl4cxE25RF136Zh8XP6+GsTS/l1yh0WApnJordNgrKI+YbjralDqWNtmsZBVfVkvr/y/jJiUK3Te/84yuH6NpnmPo6k9iykO16tto/2GvNR+P9mEFLZXBcbB5X91G4rrC4WSx5XuXB9OUfMpFxt0tvZZuIqlseX/4oztvMnrOAOjLt9N5SvLM95Xx8COiNThWVadzhvEygsnDgcxSfGD7Kb0uxsvGl/Lbk8xL187V6mbsdivFiIfo3jZPtvMrszVN0xa7W25vFUvhdBiuW2LeLJWePaXx1CKhs89A6Yu5+C6gDMVwd0vDh8McK4XjOxHMuRlNomZMxnEzfCfovNQU6E3PqTC/ONQVgKfa00MJ+J/pO6iWOBN2TRgEPDIfDnfjP4E62NSbeQBfuD79UoZ14q8Xe4GDtxCMVuTcI+ituULUTr03A24nBQAvae9cxhnhf7MR5+RWPN9iBTu7ATuzE+24BjT4lmgphzVee6FCRRg11fmBUWdB2nZduwLovnKhS6rbYNAg8/zsAf6vFKn4HAAA="
+  },
+  "kind": "ConfigMap",
+  "metadata": {
+    "creationTimestamp": "2026-10-21T07:00:35Z",
+    "labels": {
+      "modifiedAt": "1792566035",
+      "name": "web.cm-app",
+      "owner": "helm",
+      "status": "deployed",
+      "version": "2"
+    },
+    "name": "sh.helm.release.v1.web.cm-app.v2",
+    "namespace": "oxi-test-helmcap12395",
+    "resourceVersion": "2282657",
+    "uid": "9a5f5254-68c9-436a-8fc5-1a5d01f49095"
+  }
+}
