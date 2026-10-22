@@ -3,6 +3,10 @@
 //! Two shapes are read from the same JSON: a [`Header`] for list and history rows (chart,
 //! status, times, description) and a full [`Record`] (plus values, manifest, notes) for the
 //! detail methods. Unknown fields are ignored, so newer Helm versions keep decoding.
+//!
+//! The header shape names only the fields a row shows: `chart.values` (the chart's defaults,
+//! thousands of keys for the large charts) and `info.notes` are skipped by the parser without
+//! being built, so a list pays for the metadata, not for the record's bulk.
 
 use std::sync::Arc;
 
@@ -59,9 +63,27 @@ impl Record {
 #[derive(Deserialize)]
 pub(crate) struct RawHeader {
     #[serde(default)]
-    info: RawInfo,
+    info: RawHeaderInfo,
     #[serde(default)]
-    chart: Option<RawChart>,
+    chart: Option<RawHeaderChart>,
+}
+
+/// `info` without `notes`.
+#[derive(Deserialize, Default)]
+struct RawHeaderInfo {
+    #[serde(default)]
+    status: Option<String>,
+    #[serde(default)]
+    last_deployed: Option<String>,
+    #[serde(default)]
+    description: Option<String>,
+}
+
+/// `chart` without `values` (or templates, files, schema).
+#[derive(Deserialize, Default)]
+struct RawHeaderChart {
+    #[serde(default)]
+    metadata: Option<RawMetadata>,
 }
 
 #[derive(Deserialize)]
@@ -76,14 +98,11 @@ pub(crate) struct RawRecord {
     manifest: Option<String>,
 }
 
+/// `info`: the header's fields plus `notes`.
 #[derive(Deserialize, Default)]
 struct RawInfo {
-    #[serde(default)]
-    status: Option<String>,
-    #[serde(default)]
-    last_deployed: Option<String>,
-    #[serde(default)]
-    description: Option<String>,
+    #[serde(flatten)]
+    header: RawHeaderInfo,
     #[serde(default)]
     notes: Option<String>,
 }
@@ -108,17 +127,16 @@ struct RawMetadata {
 
 impl RawHeader {
     pub fn into_header(self) -> Header {
-        header(self.info, self.chart.as_ref())
+        let metadata = self.chart.and_then(|c| c.metadata);
+        header(self.info, metadata.as_ref())
     }
 }
 
 impl RawRecord {
     pub fn into_record(self) -> Record {
-        let chart_values = self
+        let (metadata, chart_values) = self
             .chart
-            .as_ref()
-            .and_then(|c| c.values.clone())
-            .map(Values::from_json);
+            .map_or((None, None), |chart| (chart.metadata, chart.values));
         let notes = self
             .info
             .notes
@@ -128,15 +146,15 @@ impl RawRecord {
         Record {
             notes,
             user_values: self.config.map(Values::from_json).unwrap_or_default(),
-            chart_values,
+            // Moved, not copied: the chart's defaults can be thousands of keys.
+            chart_values: chart_values.map(Values::from_json),
             manifest: Arc::from(self.manifest.unwrap_or_default()),
-            header: header(self.info, self.chart.as_ref()),
+            header: header(self.info.header, metadata.as_ref()),
         }
     }
 }
 
-fn header(info: RawInfo, chart: Option<&RawChart>) -> Header {
-    let metadata = chart.and_then(|c| c.metadata.as_ref());
+fn header(info: RawHeaderInfo, metadata: Option<&RawMetadata>) -> Header {
     let field = |f: fn(&RawMetadata) -> &Option<String>| {
         metadata.and_then(|m| f(m).clone()).unwrap_or_default()
     };
@@ -198,4 +216,48 @@ fn updated(stored: &StoredRevision, header: Option<&Header>) -> Timestamp {
         .and_then(|h| h.updated)
         .or(stored.modified)
         .unwrap_or(Timestamp::UNIX_EPOCH)
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn the_header_never_builds_the_chart_values_or_the_notes() {
+        // `1e400` overflows an f64: building a JSON tree of it fails, skipping it does not. So the
+        // header decoding below only succeeds when `chart.values` and `info.notes` are skipped.
+        let text = r#"{
+            "info": {"status": "deployed", "description": "Upgrade complete",
+                     "notes": {"not": "a string", "n": 1e400}},
+            "chart": {"metadata": {"name": "web", "version": "1.2.3", "appVersion": "2.0"},
+                      "values": {"replicas": 1e400, "deep": [{"a": 1e400}]}}
+        }"#;
+        assert!(serde_json::from_str::<RawRecord>(text).is_err());
+        let header = serde_json::from_str::<RawHeader>(text)
+            .expect("header")
+            .into_header();
+        assert_eq!(header.chart, ChartRef::new("web", "1.2.3"));
+        assert_eq!(header.app_version.as_deref(), Some("2.0"));
+        assert_eq!(header.status, Some(ReleaseStatus::Deployed));
+        assert_eq!(header.description, "Upgrade complete");
+    }
+
+    #[test]
+    fn the_record_keeps_the_header_fields() {
+        let record = serde_json::from_value::<RawRecord>(json!({
+            "info": {"status": "failed", "description": "boom", "notes": "hi"},
+            "chart": {"metadata": {"name": "web", "version": "1"}, "values": {"a": 1}},
+            "config": {"b": 2},
+            "manifest": "---",
+        }))
+        .unwrap()
+        .into_record();
+        assert_eq!(record.header.chart, ChartRef::new("web", "1"));
+        assert_eq!(record.header.status, Some(ReleaseStatus::Failed));
+        assert_eq!(record.header.description, "boom");
+        assert_eq!(record.notes.as_deref(), Some("hi"));
+        assert!(record.chart_values.is_some());
+    }
 }

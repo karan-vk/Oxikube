@@ -19,6 +19,7 @@ use crate::CommandBus;
 use crate::command_bus::{DispatchContext, Outcome};
 use crate::guard::{Confirmation, ConfirmationRequest};
 use crate::helm_install::{ReleaseProgress, classify, rehearse};
+use crate::helm_releases::ReleaseSource;
 
 /// A release as the upgrade tab starts from it: what it runs now and the values it was given.
 ///
@@ -58,6 +59,9 @@ impl std::fmt::Debug for CurrentRelease {
 pub struct UpgradeFlow {
     bus: CommandBus,
     helm: Arc<dyn HelmPort>,
+    /// The sessions' native readers, when set: the picker and the current release read through
+    /// them (metadata-first, cached per connection) instead of `helm`.
+    native: Option<Arc<dyn ReleaseSource>>,
     progress: ReleaseProgress,
     who: Arc<str>,
 }
@@ -70,8 +74,9 @@ impl std::fmt::Debug for UpgradeFlow {
 
 impl UpgradeFlow {
     /// A flow dispatching on `bus` as `who` (the local user, for the audit log), reading through
-    /// `helm` (the native reader needs no binary) and following upgrades on `progress` (the
-    /// handler's, see [`register_commands`](super::register_commands)).
+    /// `helm` until [`with_release_source`](Self::with_release_source) gives it the sessions'
+    /// native readers, and following upgrades on `progress` (the handler's, see
+    /// [`register_commands`](super::register_commands)).
     pub fn new(
         bus: CommandBus,
         helm: Arc<dyn HelmPort>,
@@ -81,21 +86,50 @@ impl UpgradeFlow {
         Self {
             bus,
             helm,
+            native: None,
             progress,
             who: who.into(),
         }
     }
 
+    /// Reads releases through `source`'s native reader of each connection (the one the Releases
+    /// page uses, with its decode cache), listing the namespaces the cluster's tab watches,
+    /// instead of `helm list -A`, `helm history` and `helm get values`. `helm` then only renders
+    /// and upgrades (through the guard).
+    #[must_use]
+    pub fn with_release_source(mut self, source: Arc<dyn ReleaseSource>) -> Self {
+        self.native = Some(source);
+        self
+    }
+
+    /// The reader for `cluster`'s releases.
+    fn reader(&self, cluster: &ClusterId) -> OxiResult<Arc<dyn HelmPort>> {
+        match &self.native {
+            Some(source) => source
+                .helm(cluster)
+                .ok_or_else(|| OxiError::network(format!("cluster {cluster} is not connected"))),
+            None => Ok(self.helm.clone()),
+        }
+    }
+
+    /// The namespaces the picker lists: the tab's with native reads, every one through `helm`.
+    fn picker_scope(&self, cluster: &ClusterId) -> NamespaceSelection {
+        self.native
+            .as_ref()
+            .map_or(NamespaceSelection::All, |source| source.namespaces(cluster))
+    }
+
     /// The cluster's releases (latest revision each), by namespace then name, for the picker.
+    /// With a [release source](Self::with_release_source), the namespaces the cluster's tab
+    /// watches; otherwise all of them.
     ///
     /// # Errors
     ///
     /// The read's error (forbidden, not connected).
     pub async fn releases(&self, cluster: &ClusterId) -> OxiResult<Vec<Release>> {
-        let mut found = self
-            .helm
-            .list_releases(cluster, &NamespaceSelection::All)
-            .await?;
+        let reader = self.reader(cluster)?;
+        let scope = self.picker_scope(cluster);
+        let mut found = reader.list_releases(cluster, &scope).await?;
         found.sort_by(|a, b| {
             (&a.release.namespace, &a.release.name).cmp(&(&b.release.namespace, &b.release.name))
         });
@@ -108,11 +142,12 @@ impl UpgradeFlow {
     ///
     /// `NotFound` for an unknown release, the read's error otherwise.
     pub async fn current(&self, release: &ReleaseRef) -> OxiResult<CurrentRelease> {
-        let history = self.helm.history(release).await?;
+        let reader = self.reader(&release.cluster)?;
+        let history = reader.history(release).await?;
         let latest = history
             .first()
             .ok_or_else(|| OxiError::not_found(format!("release {release} has no revisions")))?;
-        let values = self.helm.values(release, None, false).await?;
+        let values = reader.values(release, None, false).await?;
         let text = if values.is_empty() {
             String::new()
         } else {

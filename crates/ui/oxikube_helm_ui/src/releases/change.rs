@@ -1,7 +1,10 @@
-//! Rolling back and uninstalling from the detail (E16-S06): the history row's rollback with its
-//! preview, and the header's uninstall with its keep-history option.
+//! Changing the release from the detail: the header's upgrade (E16-S10), the history row's
+//! rollback with its preview, and the header's uninstall with its keep-history option (E16-S06).
 //!
-//! Both only *ask*: they send `helm::Rollback` / `helm::Uninstall` on the bus, whose guard
+//! The upgrade opens the Upgrade tab prefilled for the open release (`helm::UpgradeRelease`); the
+//! preview and the upgrade itself run there, through the guard.
+//!
+//! Rollback and uninstall only *ask*: they send `helm::Rollback` / `helm::Uninstall` on the bus, whose guard
 //! blocks a read-only cluster, shows the confirmation (a simple one for the rollback; the release
 //! name typed for the uninstall), runs `helm` and audits it. The view never calls `helm`, and it
 //! does not assume the command worked: the release records change, the page lists again
@@ -141,6 +144,23 @@ impl HelmReleasesView {
                 namespace: release.namespace.clone(),
                 release: release.name.clone(),
                 revision,
+            },
+            cx,
+        );
+    }
+
+    /// Opens the Upgrade tab for the open release: `helm::UpgradeRelease` with its namespace and
+    /// name, so the tab starts from this release's chart and values instead of a picker.
+    pub fn upgrade(&mut self, cx: &mut Context<Self>) {
+        if !self.offers(HelmFeature::Upgrade, cx) {
+            return;
+        }
+        let Some(detail) = &self.detail else { return };
+        let release = &detail.release.release;
+        self.deps.dispatcher.dispatch(
+            Command::HelmUpgradeRelease {
+                namespace: Some(release.namespace.clone()),
+                release: Some(release.name.clone()),
             },
             cx,
         );

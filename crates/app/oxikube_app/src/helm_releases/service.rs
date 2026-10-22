@@ -103,9 +103,10 @@ impl ReleasesService {
     }
 
     /// A stream of `()`, one per change to the cluster's release records or scope (list again);
-    /// `None` while the cluster is not connected. See [`ReleaseWatch`].
-    pub fn watch(&self, cluster: &ClusterId) -> Option<ReleaseWatch> {
-        ReleaseWatch::open(&*self.inner.source, cluster)
+    /// opened while the cluster is not connected it waits, and follows the store a (re)connect
+    /// builds. See [`ReleaseWatch`].
+    pub fn watch(&self, cluster: &ClusterId) -> ReleaseWatch {
+        ReleaseWatch::open(self.inner.source.clone(), cluster)
     }
 
     /// Every revision of `release`, newest first.

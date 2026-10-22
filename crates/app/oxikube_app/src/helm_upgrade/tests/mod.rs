@@ -2,6 +2,7 @@
 //! read-only, audit.
 
 mod flow;
+mod native;
 mod parts;
 
 use std::sync::Arc;

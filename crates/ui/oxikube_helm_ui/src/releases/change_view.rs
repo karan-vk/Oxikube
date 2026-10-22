@@ -1,4 +1,5 @@
-//! The drawing of rollback and uninstall: the header's actions and the History tab's preview.
+//! The drawing of upgrade, rollback and uninstall: the header's actions and the History tab's
+//! preview.
 
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
@@ -20,16 +21,29 @@ use super::view::HelmReleasesView;
 const MAX_DIFF_LINES: usize = 14;
 
 impl HelmReleasesView {
-    /// The header's actions: uninstall with its keep-history option. Drawn only when the gate
-    /// allows uninstall (a rollback is on the History tab).
+    /// The header's actions: upgrade, and uninstall with its keep-history option, each drawn only
+    /// when the gate allows it (a rollback is on the History tab).
     pub(super) fn header_actions(&self, cx: &mut Context<Self>) -> AnyElement {
         let tokens = cx.tokens();
+        let upgrade = self.offers(HelmFeature::Upgrade, cx);
         let uninstall = self.offers(HelmFeature::Uninstall, cx);
         let keep = self.keeps_history();
         h_flex()
             .debug_selector(|| "helm-release-actions".into())
             .gap(u(tokens.spacing.md))
             .items_center()
+            .when(upgrade, |row| {
+                row.child(
+                    div()
+                        .debug_selector(|| "helm-release-upgrade".into())
+                        .child(
+                            Button::new("helm-release-upgrade-button")
+                                .small()
+                                .label("Upgrade")
+                                .on_click(cx.listener(|this, _, _, cx| this.upgrade(cx))),
+                        ),
+                )
+            })
             .when(uninstall, |row| {
                 row.child(
                     div()

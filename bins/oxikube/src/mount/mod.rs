@@ -410,7 +410,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (port_forwards, port_forward_favourites) =
         port_forwards::manager(&state, &services, stores.clone(), cx);
     // The releases page (E16-S05): read natively from the release records, no binary needed.
-    let helm_releases = helm_releases::service(services.sessions.clone(), stores.clone());
+    let helm_release_source = helm_releases::source(services.sessions.clone(), stores.clone());
+    let helm_releases = helm_releases::service(helm_release_source.clone());
     let (helm_releases_sink, helm_releases_rx) =
         oxikube_helm_ui::releases::HelmReleasesRequestSink::channel();
     let registry = bus::build_registry(bus::BusParts {
@@ -696,7 +697,9 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
             helm_services.helm.clone(),
             helm_progress.clone(),
             local_user(),
-        ),
+        )
+        // The picker and the current release read natively, like the Releases page.
+        .with_release_source(helm_release_source),
         helm_services.charts.clone(),
         &helm_upgrade_requests,
         tabs.downgrade(),

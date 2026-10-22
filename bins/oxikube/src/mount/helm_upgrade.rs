@@ -1,6 +1,6 @@
 //! The Helm upgrade tab of the main window (E16-S10): every `helm::UpgradeRelease` (the sidebar's
-//! Helm > Upgrade entry, the palette's "Helm: Upgrade Release..."; a release-specific entry arrives with the release detail, E16-S05/S06),
-//! opens it in the active cluster's tab; its preview and upgrade are `helm::Upgrade` dispatches
+//! Helm > Upgrade entry, the palette's "Helm: Upgrade Release...", and the release detail's
+//! Upgrade button, which names the release) opens it in the active cluster's tab; its preview and upgrade are `helm::Upgrade` dispatches
 //! through the guard.
 //!
 //! * [`start_views`] opens a tab per request (`oxikube_helm_ui::upgrade::HelmUpgradeViews`).
@@ -47,7 +47,7 @@ pub fn start_views(
 }
 
 /// Routes a click on the sidebar's Upgrade entry to `helm::UpgradeRelease` (the tab then lists the
-/// cluster's releases to pick from).
+/// releases in the namespaces the cluster's tab watches to pick from).
 pub fn install_tab(tab: &Entity<ClusterTab>, deps: &TabDeps, window: &mut Window, cx: &mut App) {
     let workspace = tab.read(cx).workspace().clone();
     let Some(panel) = workspace.read(cx).panel::<SidebarPanel>() else {

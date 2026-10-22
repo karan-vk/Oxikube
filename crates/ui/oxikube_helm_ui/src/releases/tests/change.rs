@@ -1,5 +1,5 @@
-//! Rollback and uninstall from the detail: the history row, its values preview, the header's
-//! uninstall with keep-history, and what the gate hides. The view only sends commands; the
+//! Upgrade, rollback and uninstall from the detail: the header's upgrade, the history row, its
+//! values preview, the header's uninstall with keep-history, and what the gate hides. The view only sends commands; the
 //! guard's behaviour is tested in `oxikube_app::helm_ops`.
 
 use gpui::TestAppContext;
@@ -116,6 +116,20 @@ fn the_header_uninstalls_and_keep_history_is_part_of_the_command(cx: &mut TestAp
 }
 
 #[gpui::test]
+fn the_header_opens_the_upgrade_tab_for_the_open_release(cx: &mut TestAppContext) {
+    let mut h = open(cx);
+    assert!(h.is_laid_out("helm-release-upgrade"));
+    h.click("helm-release-upgrade");
+    assert_eq!(
+        h.bus.sent(),
+        [Command::HelmUpgradeRelease {
+            namespace: Some("apps".into()),
+            release: Some("web".into()),
+        }]
+    );
+}
+
+#[gpui::test]
 fn without_helm_there_is_nothing_to_roll_back_or_uninstall_with(cx: &mut TestAppContext) {
     let mut h = Harness::open(cx, web(), HelmCapabilities::none());
     h.select(0);
@@ -123,6 +137,7 @@ fn without_helm_there_is_nothing_to_roll_back_or_uninstall_with(cx: &mut TestApp
     assert!(h.is_laid_out("helm-release-revision:2"));
     assert!(!h.is_laid_out("helm-release-rollback-row:2"));
     assert!(!h.is_laid_out("helm-release-uninstall"));
+    assert!(!h.is_laid_out("helm-release-upgrade"));
     assert!(h.is_laid_out("helm-release-read-only"));
     // Even a stray call selects nothing and sends nothing.
     let view = h.view.clone();
@@ -131,6 +146,7 @@ fn without_helm_there_is_nothing_to_roll_back_or_uninstall_with(cx: &mut TestApp
             v.select_revision(2, cx);
             v.rollback_selected(cx);
             v.uninstall(cx);
+            v.upgrade(cx);
         })
     });
     assert!(h.bus.sent().is_empty());

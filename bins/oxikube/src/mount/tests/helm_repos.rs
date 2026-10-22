@@ -37,6 +37,11 @@ pub(super) fn fake_with(repos: &[&str]) -> Arc<FakeHelmPort> {
 }
 
 pub(super) fn start(cx: &mut TestAppContext, fake: &Arc<FakeHelmPort>) -> App {
+    start_on(cx, fake, TestPorts::seeded())
+}
+
+/// [`start`] over `ports` (seeded with release records, say).
+pub(super) fn start_on(cx: &mut TestAppContext, fake: &Arc<FakeHelmPort>, ports: TestPorts) -> App {
     let repos = HelmReposService::new(
         fake.clone(),
         fake.clone(),
@@ -44,7 +49,7 @@ pub(super) fn start(cx: &mut TestAppContext, fake: &Arc<FakeHelmPort>) -> App {
     );
     let charts = ChartsService::new(fake.clone(), repos.catalog_changes());
     let helm: Arc<dyn oxikube_ports::HelmPort> = fake.clone();
-    App::start_with(cx, TestPorts::seeded(), move |cx| {
+    App::start_with(cx, ports, move |cx| {
         cx.set_global(ServiceOverride(HelmServices {
             repos,
             charts,
