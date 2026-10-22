@@ -113,6 +113,7 @@ mod helm;
 mod helm_charts;
 mod helm_install;
 mod helm_repos;
+mod helm_upgrade;
 mod help;
 mod jump;
 mod keymap;
@@ -214,6 +215,8 @@ pub struct Wiring {
     _helm_charts_pages: Task<()>,
     /// Opens an install tab for each `helm::InstallChart` (E16-S09).
     _helm_install_pages: Task<()>,
+    /// Opens an upgrade tab for each `helm::UpgradeRelease` (E16-S10).
+    _helm_upgrade_pages: Task<()>,
     /// Opens the cluster pulses pages for `cluster::ShowPulses` (E13-S10).
     _pulses_pages: Task<()>,
     /// Follows the sessions and the settings for the metrics provider service (E13-S05).
@@ -375,6 +378,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     );
     let helm_services = helm_repos::services(ports.clusters.clock.clone(), helm_targets, cx);
     let helm_progress = oxikube_app::ReleaseProgress::new();
+    let helm_upgrade_requests = oxikube_app::UpgradeRequests::new();
     let helm_repos = helm_services.repos.clone();
     // The charts catalog (E16-S08) shares the adapter with the repositories.
     let (helm_charts_sink, helm_charts_rx) =
@@ -433,6 +437,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         helm_charts_pages: helm_charts_sink,
         helm_port: helm_services.helm.clone(),
         helm_progress: helm_progress.clone(),
+        helm_upgrade_requests: helm_upgrade_requests.clone(),
         pulses_pages: pulses_sink,
         overview_pages: overview_sink,
         os_notifications: services.os_notifications.clone(),
@@ -669,6 +674,19 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     // opens the page in the active cluster's tab.
     // The install tab (E16-S09): the catalog's Install opens it; it previews and installs through
     // the guard.
+    let helm_upgrade_pages = helm_upgrade::start_views(
+        oxikube_app::UpgradeFlow::new(
+            bus.clone(),
+            helm_services.helm.clone(),
+            helm_progress.clone(),
+            local_user(),
+        ),
+        helm_services.charts.clone(),
+        &helm_upgrade_requests,
+        tabs.downgrade(),
+        window,
+        cx,
+    );
     let helm_install_pages = helm_install::start_views(
         oxikube_app::InstallFlow::new(
             bus.clone(),
@@ -774,6 +792,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _helm_repos_pages: helm_repos_pages,
         _helm_charts_pages: helm_charts_pages,
         _helm_install_pages: helm_install_pages,
+        _helm_upgrade_pages: helm_upgrade_pages,
         _pulses_pages: pulses_pages,
         _follow_metrics: follow_metrics,
         _live_metrics: live_metrics,

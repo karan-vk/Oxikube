@@ -44,4 +44,6 @@ pub use handler::register_commands;
 pub use progress::ReleaseProgress;
 pub use spec::{InstallError, InstallPreview, InstallSpec, release_gvk};
 
+pub(crate) use flow::{classify, rehearse};
+pub(crate) use handler::mask_secrets;
 pub(crate) use spec::{audit_detail, audit_target, summary};

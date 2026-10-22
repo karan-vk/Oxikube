@@ -40,6 +40,7 @@
 //! | [`helm`] | E16-S03 | [`HelmService`](helm::HelmService): a release revision's manifest parsed once (off the UI thread, cached) into [`ResourcePlan`](helm::ResourcePlan)s of `ResourceRef`s; [`ReleaseResourcesLease`](helm::ReleaseResourcesLease) holds the store feeds while the Resources tab is open; [`ReleaseResource`](helm::ReleaseResource) is `Present { health }`, `Missing` or `Unknown` |
 //! | [`helm_charts`] | E16-S08 | [`ChartsService`](helm_charts::ChartsService): the charts catalog over `HelmPort` (search grouped per chart with semver-ordered versions, cached per keyword; chart README / values / metadata cached per version; both dropped when a repository changes; readiness: no helm / no repos / ready; the hand-off to the install tab), `helm::SearchCharts` / `ShowChart` / `InstallChart` commands |
 //! | [`helm_install`] | E16-S09 | [`InstallFlow`](helm_install::InstallFlow): the install tab's guarded `helm::Install` (preview = the guard's dry run: `helm template` plus the server's dry run, Secret data masked; ask = the low-risk confirmation; start = the install with its output followed line by line through [`ReleaseProgress`](helm_install::ReleaseProgress); Cancel kills `helm`); audited without the values |
+//! | [`helm_upgrade`] | E16-S10 | [`UpgradeFlow`](helm_upgrade::UpgradeFlow): the upgrade tab's guarded `helm::Upgrade` (a release's current chart and values read natively; preview = the guard's dry run: `helm template` with the values, the server's dry run, the objects added / removed / changed against the current manifest; ask = the medium-risk confirmation; start = the upgrade with its output followed line by line; Cancel kills `helm`); `helm::UpgradeRelease` hands a release to the tab; audited with the chart versions and `reuse_values`, never the values |
 //! | [`helm_repos`] | E16-S07 | [`HelmReposService`](helm_repos::HelmReposService): the chart repositories in Helm's own configuration (list, add, remove, update one at a time through one queue, per-repository refresh status, a cue for the charts catalog to drop cached searches, memory-only staged passwords, readable errors, quick-add suggestions), `helm::RepoAdd` / `RepoRemove` / `RepoUpdate` commands; an agent's add needs permission |
 //! | [`portforward`] | E15-S03 | [`PortForwardManager`]: port-forwards to pods and Services across clusters (a registry keyed by [`ForwardId`], Service to ready pod through EndpointSlices preferring the previous pod, the target watched through the store, a pure restart state machine with backoff, the same local port across reconnects), drops / recoveries / failures to the notification centre, the read-only policy, a coalesced change subscription, `portforward::*` commands and the `service::OpenInBrowser` opener; E15-S06 `portforward::favourites`: [`PortForwardFavourites`](portforward::PortForwardFavourites), saved forwards in the state db's `port_forward_favourites` table, restored (4 at a time, failures to the notification centre) when a session becomes `Ready` |
 //! | [`overview`] | E12-S07 | the Workloads overview's inputs outside the store: [`RecentWarnings`], the hook the Events feed (E14) implements for the warnings panel, with [`NoRecentWarnings`] until then; the counters themselves are [`WorkloadCounters`] and the status buckets of `store::counts` |
@@ -70,6 +71,7 @@ pub mod helm;
 pub mod helm_charts;
 pub mod helm_install;
 pub mod helm_repos;
+pub mod helm_upgrade;
 pub mod ingress_class;
 pub mod integrations;
 pub mod kinds;
@@ -152,6 +154,10 @@ pub use helm_install::{
 };
 pub use helm_repos::{
     HelmReposService, RepoActivity, RepoRow, RepoSnapshot, RepoStatus, UpdateReport,
+};
+pub use helm_upgrade::{
+    CurrentRelease, UpgradeError, UpgradeFlow, UpgradePreview, UpgradeRequests, UpgradeSpec,
+    UpgradeStart, UpgradeTarget,
 };
 pub use integrations::{IntegrationRegistry, IntegrationSection, RegisterIntegrationError};
 pub use kinds::{

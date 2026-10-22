@@ -40,7 +40,7 @@ use oxikube_ports::ResourceReader;
 
 use crate::diff::{LiveSync, ManifestDiff, Renderer, default_renderer};
 
-pub(super) use panel::{ROW_HEIGHT, inline_rows, summary};
+pub use panel::{ROW_HEIGHT, inline_rows, summary};
 pub(super) use watch::Watched;
 
 /// How long the buffer must rest before the open diff is computed again.

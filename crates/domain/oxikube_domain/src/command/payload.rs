@@ -230,6 +230,53 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         timeout_secs: Option<u64>,
     },
+    /// Open the upgrade tab of a release (E16-S10): the release's current values, a chart version
+    /// picker, the values diff, the preview. Reads and changes nothing; the upgrade itself is
+    /// `helm::Upgrade`. Without a release the tab lists the cluster's releases to pick from.
+    #[serde(rename = "helm::UpgradeRelease")]
+    HelmUpgradeRelease {
+        /// The release's namespace; absent to pick.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        namespace: Option<String>,
+        /// The release's name; absent to pick.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        release: Option<String>,
+    },
+    /// Upgrade a release to a chart version with values (`helm upgrade`, E16-S10). **Mutating**
+    /// (risk medium): blocked on a read-only cluster, one confirmation after the preview, audited
+    /// with the chart versions and the `--reuse-values` flag, never the values. A dry-run dispatch
+    /// renders the new chart (`helm template`), has the server validate it (`helm upgrade
+    /// --dry-run`) and compares its objects with the release's current manifest: the upgrade
+    /// tab's preview.
+    #[serde(rename = "helm::Upgrade")]
+    HelmUpgrade {
+        /// The cluster the release is in.
+        cluster: ClusterId,
+        /// The release's namespace.
+        namespace: String,
+        /// The release name.
+        release: String,
+        /// The repository alias; absent for a chart reference `helm` resolves itself.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        repo: Option<String>,
+        /// The chart name.
+        chart: String,
+        /// The chart version; the newest when absent.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        version: Option<String>,
+        /// The values to apply, as YAML. May hold secrets: never logged, audited or persisted.
+        #[serde(default, skip_serializing_if = "crate::helm::ValuesYaml::is_blank")]
+        values: crate::helm::ValuesYaml,
+        /// Keep the previous revision's values under these ones (`--reuse-values`).
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        reuse_values: bool,
+        /// Wait for the release's resources to become ready (`--wait`).
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        wait: bool,
+        /// Helm's `--timeout` in seconds; Helm's default (300) when absent.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        timeout_secs: Option<u64>,
+    },
     /// Add a chart repository to Helm's own configuration (`helm repo add`, E16-S07). A password
     /// is never part of a command: the add dialog hands it to the app's repository service in
     /// memory, and an agent cannot supply one. An agent's call needs the user's permission
@@ -1679,6 +1726,8 @@ impl Command {
             Command::HelmShowChart { .. } => CommandId::HELM_SHOW_CHART,
             Command::HelmInstallChart { .. } => CommandId::HELM_INSTALL_CHART,
             Command::HelmInstall { .. } => CommandId::HELM_INSTALL,
+            Command::HelmUpgrade { .. } => CommandId::HELM_UPGRADE,
+            Command::HelmUpgradeRelease { .. } => CommandId::HELM_UPGRADE_RELEASE,
             Command::HelmRepoAdd { .. } => CommandId::HELM_REPO_ADD,
             Command::HelmRepoRemove { .. } => CommandId::HELM_REPO_REMOVE,
             Command::HelmRepoUpdate { .. } => CommandId::HELM_REPO_UPDATE,
@@ -2131,6 +2180,26 @@ mod tests {
                 repo: "bitnami".into(),
                 name: "nginx".into(),
                 version: None,
+            },
+            Command::HelmUpgradeRelease {
+                namespace: Some("demo".into()),
+                release: Some("web".into()),
+            },
+            Command::HelmUpgradeRelease {
+                namespace: None,
+                release: None,
+            },
+            Command::HelmUpgrade {
+                cluster: cluster(),
+                namespace: "demo".into(),
+                release: "web".into(),
+                repo: Some("bitnami".into()),
+                chart: "nginx".into(),
+                version: Some("15.5.0".into()),
+                values: crate::helm::ValuesYaml::new("replicaCount: 3\n"),
+                reuse_values: true,
+                wait: true,
+                timeout_secs: Some(120),
             },
             Command::HelmInstall {
                 cluster: cluster(),
@@ -2917,6 +2986,7 @@ mod tests {
                     | Command::HelmSearchCharts { .. }
                     | Command::HelmShowChart { .. }
                     | Command::HelmInstallChart { .. }
+                    | Command::HelmUpgradeRelease { .. }
                     | Command::HelmRepoAdd { .. }
                     | Command::HelmRepoRemove { .. }
                     | Command::HelmRepoUpdate { .. }

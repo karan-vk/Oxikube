@@ -5,19 +5,19 @@ use std::ops::Range;
 
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
-    AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _, SharedString,
-    Styled as _, div, px, uniform_list,
+    AnyElement, App, Context, InteractiveElement as _, IntoElement, ParentElement as _,
+    SharedString, Styled as _, div, px, uniform_list,
 };
 use oxikube_domain::helm::OutputKind;
 use oxikube_ui::button::{Button, ButtonVariants as _};
 use oxikube_ui::layout::{Scrollbar, h_flex, v_flex};
 use oxikube_ui::{ActiveTokens as _, u};
 
-use super::model::Stage;
+use super::model::{OutputLog, Stage};
 use super::view::HelmInstallView;
 
 /// A log line's height at 100 % zoom (uniform, so the list is virtual).
-const LOG_ROW_HEIGHT: f32 = 18.0;
+pub(crate) const LOG_ROW_HEIGHT: f32 = 18.0;
 
 impl HelmInstallView {
     pub(super) fn side_column(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -235,22 +235,28 @@ impl HelmInstallView {
     }
 
     fn log_rows(&mut self, range: Range<usize>, cx: &mut Context<Self>) -> Vec<AnyElement> {
-        let tokens = cx.tokens();
-        range
-            .filter_map(|i| self.log.get(i))
-            .map(|line| {
-                let colour = match line.kind {
-                    OutputKind::Stdout => tokens.colors.text,
-                    OutputKind::Stderr => tokens.colors.warning,
-                };
-                div()
-                    .h(u(px(LOG_ROW_HEIGHT)))
-                    .px(u(tokens.spacing.lg))
-                    .truncate()
-                    .text_color(colour)
-                    .child(SharedString::from(line.text.clone()))
-                    .into_any_element()
-            })
-            .collect()
+        log_rows(&self.log, range, cx)
     }
+}
+
+/// The rows `range` of `log`, one fixed-height line each (the upgrade tab draws its output the
+/// same way).
+pub(crate) fn log_rows(log: &OutputLog, range: Range<usize>, cx: &App) -> Vec<AnyElement> {
+    let tokens = cx.tokens();
+    range
+        .filter_map(|i| log.get(i))
+        .map(|line| {
+            let colour = match line.kind {
+                OutputKind::Stdout => tokens.colors.text,
+                OutputKind::Stderr => tokens.colors.warning,
+            };
+            div()
+                .h(u(px(LOG_ROW_HEIGHT)))
+                .px(u(tokens.spacing.lg))
+                .truncate()
+                .text_color(colour)
+                .child(SharedString::from(line.text.clone()))
+                .into_any_element()
+        })
+        .collect()
 }

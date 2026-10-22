@@ -182,6 +182,22 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             name: "nginx".to_owned(),
             version: None,
         },
+        "helm::UpgradeRelease" => Command::HelmUpgradeRelease {
+            namespace: Some("default".to_owned()),
+            release: Some("web".to_owned()),
+        },
+        "helm::Upgrade" => Command::HelmUpgrade {
+            cluster,
+            namespace: "default".to_owned(),
+            release: "web".to_owned(),
+            repo: Some("bitnami".to_owned()),
+            chart: "nginx".to_owned(),
+            version: None,
+            values: oxikube_domain::helm::ValuesYaml::default(),
+            reuse_values: false,
+            wait: false,
+            timeout_secs: None,
+        },
         "helm::Install" => Command::HelmInstall {
             cluster,
             release: "web".to_owned(),
