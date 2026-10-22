@@ -74,7 +74,7 @@ pub struct HistoryPane {
     pub(super) preview_task: Option<Task<()>>,
 }
 
-/// The detail of the selected release. See the [module docs](self).
+/// The detail of the selected release. See the module docs.
 pub struct ReleaseDetail {
     /// The row it was opened from: the latest revision's summary.
     pub release: Release,

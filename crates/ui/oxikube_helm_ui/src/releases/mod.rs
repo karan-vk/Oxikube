@@ -27,7 +27,7 @@
 //! cells are text built once per refresh, the filter and the sort work on indices, and a refresh
 //! is the native reader's metadata list (a release's record is decoded once, by the reader's
 //! cache). The list is refreshed when the release records change (the store's feeds, no timer),
-//! at most once per [`SETTLE`](view::SETTLE) burst. Selecting a row draws the detail's header and
+//! at most once per [`SETTLE`] burst. Selecting a row draws the detail's header and
 //! a skeleton in the same frame; the shown tab's data is read off the UI thread, the other tabs
 //! not at all until opened, and the text tabs are [`CodeView`](oxikube_ui::code_view::CodeView)s
 //! that lay out and highlight on the background executor. Redraws from the background go through
