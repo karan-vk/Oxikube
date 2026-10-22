@@ -19,6 +19,7 @@
 //!
 //! All of it is async and runs on the Tokio bridge (`spawn_kube`), never on the UI thread.
 
+mod catalog;
 mod commands;
 mod service;
 

@@ -70,8 +70,30 @@ pub(super) fn badge_or_image(chars: &[char], at: usize, pairs: &Pairs) -> Option
 }
 
 fn link(alt: &str, url: &str) -> String {
-    let alt = alt.trim();
-    format!("[{}]({url})", if alt.is_empty() { "image" } else { alt })
+    let alt = plain_text(alt.trim());
+    format!(
+        "[{}]({url})",
+        if alt.is_empty() {
+            "image"
+        } else {
+            alt.as_str()
+        }
+    )
+}
+
+/// `text` (an image's alt, now a link's text) without anything that could render as an image or
+/// HTML: a nested `![...](...)` becomes `[...](...)` and `<`/`>` are dropped. Linear in `text`.
+fn plain_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '!' if chars.peek() == Some(&'[') => {}
+            '<' | '>' => {}
+            c => out.push(c),
+        }
+    }
+    out
 }
 
 /// `[text](dest ...)` at index `at`: the text, the destination and the chars used.

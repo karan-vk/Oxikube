@@ -1,5 +1,7 @@
 //! Tests of the charts catalog over the testkit's `FakeHelmPort`.
 
+mod gated;
+
 use std::sync::Arc;
 
 use oxikube_domain::ErrorKind;
@@ -272,4 +274,66 @@ async fn show_refuses_urls_paths_and_unconfigured_repositories() {
     );
     fake.script().show.push_ok("replicas: 1".to_owned());
     assert!(run(&charts, show("bitnami", "nginx")).await.is_ok());
+}
+
+/// A search dropped while the catalog loads (the user typed again) leaves the load running for
+/// the next search, and searches waiting together share it: `helm` runs once.
+#[tokio::test]
+async fn searches_share_one_catalog_load_even_when_one_is_dropped() {
+    use std::sync::atomic::Ordering;
+    let (fake, repos, _) = setup();
+    let gated = gated::Gated::new(fake.clone());
+    let charts = ChartsService::new(gated.clone(), repos.catalog_changes());
+    fake.script()
+        .search
+        .push_ok(vec![hit("nginx", "1.0.0"), hit("redis", "1.0.0")]);
+    {
+        let mut typed = Box::pin(charts.search("ng"));
+        assert!(futures::poll!(typed.as_mut()).is_pending());
+    }
+    let (a, b) = {
+        let a = charts.search("redis");
+        let b = charts.search("");
+        gated.release();
+        futures::join!(a, b)
+    };
+    assert_eq!(a.unwrap().len(), 1);
+    assert_eq!(b.unwrap().len(), 2);
+    assert_eq!(
+        gated.started.load(Ordering::SeqCst),
+        1,
+        "one load for all three"
+    );
+}
+
+/// A repository list read before a repository change is not cached for the new catalog.
+#[tokio::test]
+async fn a_repository_list_from_before_a_change_is_not_kept() {
+    let (fake, repos, _) = setup();
+    let gated = gated::Gated::holding_repos(fake.clone());
+    let charts = ChartsService::new(gated.clone(), repos.catalog_changes());
+    let mut ready = Box::pin(charts.ready());
+    assert!(
+        futures::poll!(ready.as_mut()).is_pending(),
+        "reading the list"
+    );
+    // `bitnami` is removed while the list is read (the service talks to Helm directly, and
+    // lists again after removing it)...
+    fake.script().repos.push_ok(Vec::new());
+    repos.remove("bitnami").await.ok();
+    // ...and the read that started before it still answers with `bitnami`.
+    fake.script().repos.push_ok(vec![bitnami()]);
+    gated.release_repos();
+    assert!(matches!(ready.await.unwrap(), Readiness::Ready(_)));
+    // The old answer was not kept: a show reads the list again and refuses `bitnami`.
+    fake.script().repos.push_ok(Vec::new());
+    gated.release_repos();
+    let error = charts
+        .detail(
+            &ChartRef::new("nginx", "").in_repo("bitnami"),
+            ChartPart::Readme,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::Validation);
 }

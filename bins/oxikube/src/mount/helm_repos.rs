@@ -105,20 +105,28 @@ pub fn install_tab(tab: &Entity<ClusterTab>, deps: &TabDeps, window: &mut Window
 }
 
 /// Re-reads the repositories (and so the charts catalog, which follows them) whenever the app's
-/// Helm gate changes: `helm::Recheck` or a new `helm.path` found (or lost) the binary. The read
-/// runs on the Tokio bridge; a newer change replaces (and so aborts) one still running. `None`
-/// before the gate exists.
+/// Helm gate changes after its first detection: `helm::Recheck` or a new `helm.path` found (or
+/// lost) the binary. The first detection at start-up is skipped (nothing has been read yet, and
+/// a page reads on its own when it opens). The read runs on the Tokio bridge; a newer change
+/// replaces (and so aborts) one still running. `None` before the gate exists.
 pub fn follow_gate(repos: HelmReposService, cx: &mut App) -> Option<Subscription> {
     let gate = HelmGateState::global(cx)?;
-    let running = std::cell::RefCell::new(None::<oxikube_runtime::KubeTask<()>>);
-    Some(
-        cx.subscribe(&gate, move |_, _: &oxikube_helm_ui::HelmGateChanged, cx| {
+    let mut last = gate.read(cx).gate().clone();
+    let mut running: Option<oxikube_runtime::KubeTask<()>> = None;
+    Some(cx.subscribe(
+        &gate,
+        move |gate, _: &oxikube_helm_ui::HelmGateChanged, cx| {
+            let now = gate.read(cx).gate().clone();
+            // `HelmGate::default()` is "not detected yet": leaving it is the first detection.
+            if std::mem::replace(&mut last, now) == oxikube_domain::helm::HelmGate::default() {
+                return;
+            }
             let repos = repos.clone();
-            // The outcome is in the repositories' snapshot, which the page shows.
-            let read = oxikube_runtime::spawn_kube(cx, async move {
+            // The outcome is in the repositories' snapshot, which the page shows. Replacing the
+            // one still running drops (and so aborts) it.
+            running.replace(oxikube_runtime::spawn_kube(cx, async move {
                 repos.binary_changed().await.ok();
-            });
-            running.replace(Some(read));
-        }),
-    )
+            }));
+        },
+    ))
 }

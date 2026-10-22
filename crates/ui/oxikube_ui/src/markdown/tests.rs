@@ -136,3 +136,15 @@ fn badges_and_images_still_convert_with_unmatched_brackets_around() {
         "[[ [logo](https://i/x.png) ]] [ci](https://ci) ((\n"
     );
 }
+
+/// An image nested in another image's alt (or a badge's) must not survive as an image, and HTML
+/// in an alt is not passed through.
+#[test]
+fn images_nested_in_alt_text_are_neutralised() {
+    let out = sanitize("![![x](https://evil.example/t.png)](u)\n");
+    assert!(!out.contains("!["), "{out}");
+    let out = sanitize("[![a ![b](https://evil.example/p.png)](img)](target)\n");
+    assert!(!out.contains("!["), "{out}");
+    let out = sanitize("![<img src=https://evil.example/q.png>](u)\n");
+    assert!(!out.contains('<'), "{out}");
+}

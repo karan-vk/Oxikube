@@ -50,6 +50,15 @@ fn settle(cx: &mut TestAppContext, until: impl Fn(&HelmGate) -> bool) {
 }
 
 fn start(cx: &mut TestAppContext, settings: &str) -> tokio::runtime::Runtime {
+    start_with(cx, settings, |_| {})
+}
+
+/// [`start`], running `before` once the settings are in and before the controller starts.
+fn start_with(
+    cx: &mut TestAppContext,
+    settings: &str,
+    before: impl FnOnce(&mut gpui::App),
+) -> tokio::runtime::Runtime {
     cx.executor().allow_parking();
     let runtime = oxikube_runtime::build_runtime().expect("a tokio runtime");
     let handle = runtime.handle().clone();
@@ -61,6 +70,7 @@ fn start(cx: &mut TestAppContext, settings: &str) -> tokio::runtime::Runtime {
         store.register_setting::<oxikube_settings::HelmSettings>();
         store.set_user_settings(&text).unwrap();
         cx.set_global(store);
+        before(cx);
         install(cx, std::sync::Arc::new(NoTargets));
     });
     runtime
@@ -191,4 +201,38 @@ fn repositories_and_charts_share_the_controllers_adapter(cx: &mut TestAppContext
         std::thread::sleep(Duration::from_millis(20));
     }
     assert!(services.repos.snapshot().cli_available);
+}
+
+/// The first detection at start-up reads nothing: a machine with Helm spawns no `helm repo list`
+/// per window until a Helm page or command needs it.
+#[gpui::test]
+fn the_first_detection_does_not_read_the_repositories(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let helm = fake_helm(dir.path(), "helm", "v3.14.2+gc309b6f");
+    let repos = std::rc::Rc::new(std::cell::RefCell::new(None));
+    let kept = repos.clone();
+    let _rt = start_with(
+        cx,
+        &format!(r#"{{ "helm": {{ "path": {helm:?} }} }}"#),
+        move |cx| {
+            HelmGateState::install(cx);
+            let clock = std::sync::Arc::new(oxikube_testkit::FakeClockPort::default());
+            let cli = std::sync::Arc::new(oxikube_helm::HelmCli::new(
+                oxikube_helm::HelmCliConfig::default(),
+                std::sync::Arc::new(NoTargets),
+            ));
+            let services = crate::mount::helm_repos::services(cli, clock, cx);
+            let follow = crate::mount::helm_repos::follow_gate(services.repos.clone(), cx);
+            *kept.borrow_mut() = Some((services, follow));
+        },
+    );
+    settle(cx, |g| *g == HelmGate::Full);
+    cx.run_until_parked();
+    std::thread::sleep(Duration::from_millis(100));
+    cx.run_until_parked();
+    let (services, _follow) = repos.borrow_mut().take().unwrap();
+    assert!(
+        !services.repos.snapshot().checked,
+        "nothing was read at start-up"
+    );
 }

@@ -3,14 +3,13 @@
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
-use oxikube_domain::helm::{
-    ChartPart, ChartRef, ChartSummary, HelmCapabilities, RepoEntry, SearchQuery, group_hits,
-};
+use oxikube_domain::helm::{ChartPart, ChartRef, ChartSummary, HelmCapabilities, RepoEntry};
 use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::HelmPort;
 use parking_lot::Mutex;
 use tokio::sync::watch;
 
+use super::catalog::{self, Catalog, Loading};
 use crate::helm_repos::RepoChanges;
 
 /// How many chart details (READMEs, values) are kept.
@@ -69,7 +68,9 @@ struct Caches {
     generation: u64,
     /// Every chart of every repository (`helm search repo --versions`); a keyword filters it in
     /// memory, so typing in the search field never starts a `helm` process.
-    catalog: Option<Arc<Vec<ChartSummary>>>,
+    catalog: Option<Arc<Catalog>>,
+    /// The catalog's load in flight, shared by every search waiting for it.
+    loading: Option<Loading>,
     /// The configured repository aliases: a chart is shown only from one of them.
     repos: Option<Arc<Vec<String>>>,
     details: Bounded<(ChartRef, ChartPart), Arc<str>>,
@@ -100,6 +101,7 @@ impl ChartsService {
                 caches: Mutex::new(Caches {
                     generation,
                     catalog: None,
+                    loading: None,
                     repos: None,
                     details: Bounded::new(DETAILS_KEPT),
                 }),
@@ -125,12 +127,13 @@ impl ChartsService {
     ///
     /// Whatever listing the repositories failed with, other than a missing binary.
     pub async fn ready(&self) -> OxiResult<Readiness> {
+        let generation = self.fresh().generation;
         let listed = self.inner.helm.repos().await;
         if !self.capabilities().can_search_repos {
             return Ok(Readiness::NoHelm);
         }
         let repos = listed?;
-        self.remember_repos(&repos);
+        self.remember_repos(generation, &repos);
         Ok(if repos.is_empty() {
             Readiness::NoRepos
         } else {
@@ -145,6 +148,7 @@ impl ChartsService {
         if caches.generation != generation {
             caches.generation = generation;
             caches.catalog = None;
+            caches.loading = None;
             caches.repos = None;
             caches.details.clear();
         }
@@ -164,57 +168,60 @@ impl ChartsService {
     pub async fn search(&self, keyword: &str) -> OxiResult<Arc<Vec<ChartSummary>>> {
         let catalog = self.catalog().await?;
         let key = keyword.trim().to_lowercase();
-        if key.is_empty() {
-            return Ok(catalog);
-        }
-        Ok(Arc::new(
-            catalog
-                .iter()
-                .filter(|chart| chart_matches(chart, &key))
-                .cloned()
-                .collect(),
-        ))
+        Ok(if key.is_empty() {
+            catalog.all()
+        } else {
+            catalog.matching(&key)
+        })
     }
 
-    /// Every chart, from the cache or one `helm search repo --versions`.
-    async fn catalog(&self) -> OxiResult<Arc<Vec<ChartSummary>>> {
-        let generation = {
-            let caches = self.fresh();
+    /// Every chart, from the cache or the one load in flight (started here when there is none).
+    async fn catalog(&self) -> OxiResult<Arc<Catalog>> {
+        let (generation, loading) = {
+            let mut caches = self.fresh();
             if let Some(hit) = &caches.catalog {
                 return Ok(hit.clone());
             }
-            caches.generation
+            let helm = self.inner.helm.clone();
+            let loading = caches
+                .loading
+                .get_or_insert_with(|| catalog::load(helm))
+                .clone();
+            (caches.generation, loading)
         };
-        let hits = self
-            .inner
-            .helm
-            .search(&SearchQuery {
-                keyword: String::new(),
-                all_versions: true,
-            })
-            .await?;
-        let charts = Arc::new(group_hits(hits));
+        let loaded = loading.await;
         let mut caches = self.inner.caches.lock();
         if caches.generation == generation {
-            caches.catalog = Some(charts.clone());
+            // A failure is not kept: the next search tries again.
+            caches.loading = None;
+            if let Ok(catalog) = &loaded {
+                caches.catalog = Some(catalog.clone());
+            }
         }
-        Ok(charts)
+        loaded.map_err(OxiError::from)
     }
 
-    fn remember_repos(&self, repos: &[RepoEntry]) {
-        let names = Arc::new(repos.iter().map(|r| r.name.clone()).collect());
-        self.fresh().repos = Some(names);
+    /// Keeps `repos` as the configured aliases when no repository changed since `generation`
+    /// (when the list was asked for).
+    fn remember_repos(&self, generation: u64, repos: &[RepoEntry]) {
+        let mut caches = self.fresh();
+        if caches.generation == generation {
+            caches.repos = Some(Arc::new(repos.iter().map(|r| r.name.clone()).collect()));
+        }
     }
 
     /// Whether `repo` is a configured repository alias: from the cache, else (also when the
     /// cache does not have it: it may have been added outside the app) `helm repo list`.
     async fn is_configured(&self, repo: &str) -> OxiResult<bool> {
-        let cached = self.fresh().repos.clone();
+        let (generation, cached) = {
+            let caches = self.fresh();
+            (caches.generation, caches.repos.clone())
+        };
         if cached.is_some_and(|names| names.iter().any(|name| name == repo)) {
             return Ok(true);
         }
         let repos = self.inner.helm.repos().await?;
-        self.remember_repos(&repos);
+        self.remember_repos(generation, &repos);
         Ok(repos.iter().any(|r| r.name == repo))
     }
 
@@ -275,12 +282,6 @@ impl ChartsService {
     pub fn install_requests(&self) -> watch::Receiver<Option<ChartRef>> {
         self.inner.install.subscribe()
     }
-}
-
-/// Whether `chart` matches the lower-cased `key`: in `repo/name` or a version's description.
-fn chart_matches(chart: &ChartSummary, key: &str) -> bool {
-    let contains = |text: &str| text.to_lowercase().contains(key);
-    contains(&chart.reference()) || chart.versions.iter().any(|v| contains(&v.description))
 }
 
 /// A chart name as repositories publish them: no path, URL or flag.
