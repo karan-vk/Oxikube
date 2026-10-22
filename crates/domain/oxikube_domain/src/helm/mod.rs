@@ -36,8 +36,8 @@ pub mod mask;
 pub mod release;
 pub mod repo;
 pub mod request;
-pub mod upgrade;
 pub mod rows;
+pub mod upgrade;
 pub mod values;
 pub mod values_docs;
 
@@ -58,7 +58,7 @@ pub use repo::{
 pub use request::{
     InstallRequest, OutputKind, OutputLine, RollbackRequest, UninstallRequest, UpgradeRequest,
 };
-pub use upgrade::{ObjectKey, ResourceChanges, mask_values_for_diff};
 pub use rows::{ReleaseColumn, sort_releases};
+pub use upgrade::{ObjectKey, ResourceChanges, mask_values_for_diff};
 pub use values::Values;
 pub use values_docs::{KeyDoc, ValuesDocs};
