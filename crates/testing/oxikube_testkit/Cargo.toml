@@ -26,6 +26,9 @@ anyhow = { workspace = true, optional = true }
 gpui = { workspace = true, optional = true }
 gpui_platform = { workspace = true, optional = true }
 image = { workspace = true, optional = true }
+# Helm's release storage encoding for `integration::helm::release_record` (feature `integration`).
+base64 = { workspace = true, optional = true }
+flate2 = { workspace = true, optional = true }
 
 [dev-dependencies]
 base64.workspace = true
@@ -52,7 +55,7 @@ gpui-screenshot = ["screenshot", "gpui-headless", "gpui-test"]
 # consumer) does not run a GPU test on runners without a GPU; the nightly job turns it on.
 gpui-golden = ["gpui-screenshot"]
 # Enables tests that need a live kind cluster (`cargo xtask kind-up`; OXIKUBE_TEST_CONTEXT).
-integration = ["dep:uuid"]
+integration = ["dep:uuid", "dep:base64", "dep:flate2"]
 
 # The harness's own `#[gpui::test]`s: one example per helper (E05-S11).
 [[test]]
