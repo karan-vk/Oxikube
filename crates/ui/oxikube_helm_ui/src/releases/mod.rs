@@ -41,6 +41,8 @@ mod actions;
 mod backend;
 mod delegate;
 mod detail;
+mod detail_lists;
+mod detail_text;
 mod detail_view;
 mod model;
 mod open;
