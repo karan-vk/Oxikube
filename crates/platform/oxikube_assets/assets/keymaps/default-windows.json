@@ -593,6 +593,38 @@
     }
   },
   {
+    // The Helm releases page (E16-S05): the table's cursor, the filter, the detail's tabs (`[` and
+    // `]`), the Values tab's user / all switch and the explicit reveal of masked values.
+    "context": "HelmReleases && !Editing",
+    "bindings": {
+      "up": "helm_releases::SelectPrevious",
+      "k": "helm_releases::SelectPrevious",
+      "down": "helm_releases::SelectNext",
+      "j": "helm_releases::SelectNext",
+      "home": "helm_releases::SelectFirst",
+      "g": "helm_releases::SelectFirst",
+      "end": "helm_releases::SelectLast",
+      "shift-g": "helm_releases::SelectLast",
+      "/": "helm_releases::FocusFilter",
+      "]": "helm_releases::NextTab",
+      "[": "helm_releases::PreviousTab",
+      "v": "helm_releases::ToggleValuesMode",
+      "x": "helm_releases::RevealValues"
+    }
+  },
+  {
+    "context": "HelmReleases",
+    "bindings": {
+      "escape": "helm_releases::CloseDetail"
+    }
+  },
+  {
+    "context": "HelmReleases && Editing",
+    "bindings": {
+      "escape": "helm_releases::FocusTable"
+    }
+  },
+  {
     // Terminals (E09-S07): ctrl-` shows (and focuses) the shown cluster's terminal panel in the
     // bottom dock or hides it; ctrl-~ opens a new shell there (a plain shell tab when no cluster
     // tab is shown).

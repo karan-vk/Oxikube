@@ -779,6 +779,25 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `resources()` joins the plan with `ResourceStore::lookup` (`NotLoaded` / `Absent` / `Found`): `ResourceState::Present { health }`
   (`oxikube_domain::view::health_of`, `None` for kinds without a rule), `Missing` (listed feed, object absent) or `Unknown`. The
   Resources tab of the release detail (E16-S05) consumes it; no command of its own.
+- `oxikube_app::helm_releases` (E16-S05) — `ReleasesService`: a cluster's Helm releases for the Releases view, read natively through a
+  `ReleaseSource` (the binary supplies, per session, an `oxikube_helm::NativeHelmReader` over the session's read-only resource port, the
+  tab's namespace selection, its `ResourceStore` and discovery; `bins/oxikube::mount::helm_releases`). `list` (by namespace and name),
+  `history`, `notes` (scrubbed), `values` (user or computed, as YAML) and `manifest` return text with credential-looking values
+  (`oxikube_domain::helm::mask_values`: sensitive keys, the shared scrubber over every string) and Secret documents masked on a blocking thread, until the
+  user's `helm::RevealValues` for that release (`set_revealed`; lasts until hidden or the detail closes, `conceal`); tools always get
+  `Disclosure::Masked`. `resources` is the E16-S03 lease. `watch` (`ReleaseWatch`) is one `()` per change of the Secrets and ConfigMaps
+  labelled `owner=helm` (store feeds, metadata only, shared; first snapshots swallowed; follows namespace and connection changes through the
+  session updates) so the table updates after an outside `helm upgrade` with no timer. `ReleaseFilter` is the `/` grammar over name,
+  namespace, chart and status. Commands `helm::ShowValues`, `helm::ShowManifest` (masked replies) and `helm::RevealValues` (reply carries a
+  count, never a value), all read-only with tool stubs; `:helm` (alias `:releases`) plans `helm::OpenReleases`.
+- `oxikube_helm_ui::releases` (E16-S05) — the Helm releases page inside `HelmPage` (the sidebar's Helm > Releases entry, `:helm`, palette
+  "Helm: Releases"): a virtualised `oxikube_ui::Table` (Name, Namespace, Chart, Revision, Version, App version, Status, Updated; sort, `/`
+  filter, status tones from theme tokens) over a `ReleasesBackend`, and for the selected release a detail with Resources (health from the
+  store, missing flagged, click opens the object with `resource::Open`, state re-read once a second only while the tab shows), Values
+  (User / All, masked, Reveal button = `helm::RevealValues`), Manifest, Notes (links) and History tabs. The detail draws with a skeleton in the
+  frame of the selection; only the shown tab reads, off the UI thread (`spawn_kube`); lists are coalesced (300 ms) and `notify_coalesced`.
+  Native-only (no `helm`): everything works, the detail says it is read-only and the `helm-release-actions` slot (rollback and uninstall,
+  E16-S06) is absent; the gate decides. Key context `HelmReleases` (defaults in the keymaps). `--perf-scenario helm-releases` (500 releases).
 - `oxikube_app::helm_charts` (E16-S08) — `ChartsService`: the charts catalog over `HelmPort`. `search` runs `helm search repo
   --versions` and groups hits per chart (`oxikube_domain::helm::group_hits`, semver-ordered versions, newest first), cached per
   keyword; `detail` runs `helm show` (README, values, chart) cached per chart version; both caches drop on

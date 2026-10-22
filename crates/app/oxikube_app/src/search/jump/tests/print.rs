@@ -23,6 +23,7 @@ fn reserved_words_print_in_their_short_form() {
     assert_eq!(canonical("context prod"), "ctx prod");
     assert_eq!(canonical("ns"), "ns");
     assert_eq!(canonical("pu"), "pulses");
+    assert_eq!(canonical("releases"), "helm");
     assert_eq!(canonical("-"), "-");
     assert_eq!(canonical("["), "[");
     assert_eq!(canonical("]"), "]");

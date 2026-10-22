@@ -24,6 +24,8 @@
 //!   points: repaint, a data tick on every frame, a hover sweep (E13-S07).
 //! - `pulses` ([`pulses`]): the pulses page, 16 tiles with 14 sparklines: repaint, and every tile
 //!   taking a new sample on every frame (E13-S10).
+//! - `helm-releases` ([`helm_releases`]): the Helm releases page over 500 releases: the first list
+//!   and re-lists, repaint, scrolling the table, selecting a release on every frame (E16-S05).
 //! - `events-stream` ([`events_stream`]): the events view over a full 10 000-event buffer while
 //!   events stream in: live tail, scrolling, typing a filter, the faults toggle, bursts (E14-S03).
 //! - `notifications-burst` ([`notifications`]): 1 000 Warning events in one second reaching the
@@ -39,6 +41,7 @@
 mod charts;
 mod editor_5mb;
 mod events_stream;
+mod helm_releases;
 mod logs_stream;
 mod notifications;
 mod palette;
@@ -76,13 +79,14 @@ pub fn run(name: &str, report: Option<&Path>, probe: bool, launched: Instant) ->
         editor_5mb::NAME => editor_5mb::run(probe),
         charts::NAME => charts::run(probe),
         pulses::NAME => pulses::run(probe),
+        helm_releases::NAME => helm_releases::run(probe),
         events_stream::NAME => events_stream::run(probe),
         notifications::NAME => notifications::run(probe),
         other => {
             eprintln!(
                 "oxikube: unknown perf scenario `{other}` (startup, scroll-10k or \
                  table-scroll-10k, palette, logs-stream, editor-5mb, charts, pulses, \
-                 events-stream, notifications-burst)"
+                 helm-releases, events-stream, notifications-burst)"
             );
             return ExitCode::from(2);
         }

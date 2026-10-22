@@ -112,6 +112,7 @@ mod gallery;
 mod helm;
 mod helm_charts;
 mod helm_install;
+mod helm_releases;
 mod helm_repos;
 mod helm_upgrade;
 mod help;
@@ -211,6 +212,8 @@ pub struct Wiring {
     _metrics_pages: Task<()>,
     /// Opens the Helm repositories page for `helm::ShowRepos` (E16-S07).
     _helm_repos_pages: Task<()>,
+    /// Opens the Helm releases page for `helm::OpenReleases` (E16-S05).
+    _helm_releases_pages: Task<()>,
     /// Opens the Helm charts catalog for `helm::OpenCharts` (E16-S08).
     _helm_charts_pages: Task<()>,
     /// Opens an install tab for each `helm::InstallChart` (E16-S09).
@@ -262,6 +265,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let dispatcher_for_metrics = dispatcher.clone();
     let dispatcher_for_helm_repos = dispatcher.clone();
     let dispatcher_for_helm_charts = dispatcher.clone();
+    let dispatcher_for_helm_releases = dispatcher.clone();
     let dispatcher_for_pulses = dispatcher.clone();
     let dispatcher_for_notifications = dispatcher.clone();
     let dispatcher_for_events = dispatcher.clone();
@@ -399,6 +403,10 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         port_forwards::manager(&state, &services, stores.clone(), cx);
     // Helm (E16-S11): the app's one capability controller; its sink serves `helm::*`.
     let helm_sink = helm::install(cx);
+    // The releases page (E16-S05): read natively from the release records, no binary needed.
+    let helm_releases = helm_releases::service(services.sessions.clone(), stores.clone());
+    let (helm_releases_sink, helm_releases_rx) =
+        oxikube_helm_ui::releases::HelmReleasesRequestSink::channel();
     let registry = bus::build_registry(bus::BusParts {
         events_agent,
         agent_pending: agent.pending.clone(),
@@ -435,6 +443,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         helm_repos_pages: helm_repos_sink,
         helm_charts: helm_services.charts.clone(),
         helm_charts_pages: helm_charts_sink,
+        helm_releases: helm_releases.clone(),
+        helm_releases_pages: helm_releases_sink,
         helm_port: helm_services.helm.clone(),
         helm_progress: helm_progress.clone(),
         helm_upgrade_requests: helm_upgrade_requests.clone(),
@@ -699,6 +709,14 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         window,
         cx,
     );
+    let helm_releases_pages = helm_releases::start_views(
+        helm_releases,
+        dispatcher_for_helm_releases,
+        tabs.downgrade(),
+        helm_releases_rx,
+        window,
+        cx,
+    );
     let helm_charts_pages = helm_charts::start_views(
         helm_services.charts,
         dispatcher_for_helm_charts,
@@ -790,6 +808,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _editor_views: editor_views,
         _metrics_pages: metrics_pages,
         _helm_repos_pages: helm_repos_pages,
+        _helm_releases_pages: helm_releases_pages,
         _helm_charts_pages: helm_charts_pages,
         _helm_install_pages: helm_install_pages,
         _helm_upgrade_pages: helm_upgrade_pages,

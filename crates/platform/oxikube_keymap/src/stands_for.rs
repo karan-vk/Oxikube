@@ -86,6 +86,9 @@ pub const STANDS_FOR: &[(&str, CommandId)] = &[
         "resource_table::ShowPortForwards",
         CommandId::PORTFORWARD_TOGGLE_PANEL,
     ),
+    // The Helm releases page (E16-S05): `x` reveals (or hides again) the masked values of the
+    // selected release.
+    ("helm_releases::RevealValues", CommandId::HELM_REVEAL_VALUES),
     // The Port Forwards panel (E15-S05): the row actions act on the selected forward.
     ("port_forwards::StopSelected", CommandId::PORTFORWARD_STOP),
     (

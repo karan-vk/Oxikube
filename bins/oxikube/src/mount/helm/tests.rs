@@ -83,7 +83,7 @@ fn changing_helm_path_redetects_without_a_restart(cx: &mut TestAppContext) {
     let missing = dir.path().join("no-such-helm");
     let _rt = start(cx, &format!(r#"{{ "helm": {{ "path": {missing:?} }} }}"#));
     settle(cx, |g| {
-        *g == HelmGate::Unavailable {
+        *g == HelmGate::NativeOnly {
             reason: GateReason::BinaryMissing,
         }
     });
@@ -95,7 +95,7 @@ fn changing_helm_path_redetects_without_a_restart(cx: &mut TestAppContext) {
     settle(cx, |g| {
         matches!(
             g,
-            HelmGate::Unavailable {
+            HelmGate::NativeOnly {
                 reason: GateReason::VersionTooOld { found, needed }
             } if found == "3.8.1" && needed == "3.10.0"
         )

@@ -23,6 +23,7 @@
 //! | `Help` | the help overlay (E11-S10); its search field is `Help > Picker > Input` | `empty` while the field is empty |
 //! | `Modal` | a dialog or sheet | |
 //! | `Catalog` | the cluster catalog home (E06-S03) | `Editing` while its search field has focus |
+//! | `HelmReleases` | the cluster's Helm releases page (E16-S05) | `Editing` while its filter field has focus |
 //! | `EventsView` | the cluster's events view (E14-S03) | `Editing` while a filter field has focus, `faults`, `paused` |
 //!
 //! The stack of a focused table is `Workspace > Dock > ClusterTab > Workspace > Pane >
@@ -100,6 +101,8 @@ pub mod contexts {
     pub const EVENTS: &str = "EventsView";
     /// The Port Forwards panel (E15-S05); carries `Editing` while its filter field has the focus.
     pub const PORT_FORWARDS: &str = "PortForwards";
+    /// The Helm releases page (E16-S05); carries `Editing` while its filter field has the focus.
+    pub const HELM_RELEASES: &str = "HelmReleases";
     /// The contexts of the Phase 1 views, the ones the default keymaps define sections for
     /// (E11-S07), in the order of the table in the [module docs](super). A new view that takes
     /// keys adds its name here so the defaults tests cover it.

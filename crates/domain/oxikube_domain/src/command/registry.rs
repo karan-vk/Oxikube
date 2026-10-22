@@ -134,6 +134,14 @@ impl CommandId {
     pub const HELP_SHOW: CommandId = CommandId::new("help::Show");
     /// `ingressclass::SetDefault`: make an IngressClass the cluster's default (annotation patch).
     pub const INGRESS_CLASS_SET_DEFAULT: CommandId = CommandId::new("ingressclass::SetDefault");
+    /// `helm::OpenReleases`: open a cluster's Helm releases (E16-S05, `:helm`).
+    pub const HELM_OPEN_RELEASES: CommandId = CommandId::new("helm::OpenReleases");
+    /// `helm::ShowValues`: print a release's values, credential-looking ones masked (E16-S05).
+    pub const HELM_SHOW_VALUES: CommandId = CommandId::new("helm::ShowValues");
+    /// `helm::ShowManifest`: print a release's manifest, Secret data masked (E16-S05).
+    pub const HELM_SHOW_MANIFEST: CommandId = CommandId::new("helm::ShowManifest");
+    /// `helm::RevealValues`: show a release's masked values in clear in its detail (E16-S05).
+    pub const HELM_REVEAL_VALUES: CommandId = CommandId::new("helm::RevealValues");
     /// `helm::ShowRepos`: open the Helm repositories page (E16-S07).
     pub const HELM_SHOW_REPOS: CommandId = CommandId::new("helm::ShowRepos");
     /// `helm::OpenCharts`: open the Helm charts catalog (E16-S08).
@@ -932,6 +940,14 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Global,
         NONE,
     ),
+    // Opens the page; the releases are read natively from the release Secrets and ConfigMaps, so
+    // no `helm` binary is needed (E16-S05).
+    CommandMeta::read(
+        CommandId::HELM_OPEN_RELEASES,
+        "Helm: Releases",
+        CommandScope::Cluster,
+        NONE,
+    ),
     // Runs `helm version` to find the binary again; reads and changes nothing in any cluster.
     CommandMeta::read(
         CommandId::HELM_RECHECK,
@@ -957,6 +973,13 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Global,
         NONE,
     ),
+    // Reads release records natively and unmasks nothing; reveal is the user's explicit action.
+    CommandMeta::read(
+        CommandId::HELM_REVEAL_VALUES,
+        "Helm: Reveal Release Values",
+        CommandScope::Cluster,
+        NONE,
+    ),
     CommandMeta::read(
         CommandId::HELM_SEARCH_CHARTS,
         "Helm: Search Charts",
@@ -968,6 +991,12 @@ pub static COMMANDS: &[CommandMeta] = &[
         "Helm: Show Chart",
         CommandScope::Global,
         Capabilities::HELM,
+    ),
+    CommandMeta::read(
+        CommandId::HELM_SHOW_MANIFEST,
+        "Helm: Show Release Manifest",
+        CommandScope::Cluster,
+        NONE,
     ),
     // Opens the page; the page itself explains a missing binary, so no capability is needed.
     CommandMeta::read(
@@ -991,6 +1020,12 @@ pub static COMMANDS: &[CommandMeta] = &[
         "Helm: Upgrade Release...",
         CommandScope::Global,
         Capabilities::HELM,
+    ),
+    CommandMeta::read(
+        CommandId::HELM_SHOW_VALUES,
+        "Helm: Show Release Values",
+        CommandScope::Cluster,
+        NONE,
     ),
     // Lists the bindings of the focused view; reads nothing from a cluster.
     CommandMeta::read(

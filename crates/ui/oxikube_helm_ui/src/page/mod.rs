@@ -1,9 +1,9 @@
 //! [`HelmPage`]: the Helm page of a cluster tab (E16-S11), opened by the sidebar's Helm entry.
 //!
-//! It hosts the guidance banner and lists what Helm can do here: only the features the gate
-//! allows are drawn; the banner explains the missing ones. The releases table and release detail (E16-S05) mount into the same page and
-//! show under the banner; until then the page is the place where a missing or too-old `helm`
-//! is explained and fixed.
+//! It hosts the guidance banner and, under it, the releases table and release detail
+//! ([`HelmReleasesView`], E16-S05), which work with no `helm` binary. A page built without a
+//! releases view ([`HelmPage::new`]) lists what Helm can do here instead: only the features the
+//! gate allows are drawn, and the banner explains the missing ones.
 
 use std::rc::Rc;
 
@@ -19,6 +19,7 @@ use oxikube_workspace::{CommandDispatcher, Item, ItemEvent, TabContent};
 
 use crate::banner::{HelmBanner, gated};
 use crate::gate::HelmGateState;
+use crate::releases::HelmReleasesView;
 
 /// The deduplication key of the tab: opening the page twice shows the open one.
 pub const ITEM_KEY: &str = "cluster-helm";
@@ -28,14 +29,19 @@ pub struct HelmPage {
     state: Entity<HelmGateState>,
     banner: Entity<HelmBanner>,
     focus: FocusHandle,
+    /// The releases table and detail, when the page hosts them.
+    releases: Option<Entity<HelmReleasesView>>,
     _follow: gpui::Subscription,
 }
 
 impl EventEmitter<ItemEvent> for HelmPage {}
 
 impl Focusable for HelmPage {
-    fn focus_handle(&self, _: &App) -> FocusHandle {
-        self.focus.clone()
+    fn focus_handle(&self, cx: &App) -> FocusHandle {
+        match &self.releases {
+            Some(releases) => releases.read(cx).focus_handle(cx),
+            None => self.focus.clone(),
+        }
     }
 }
 
@@ -52,8 +58,26 @@ impl HelmPage {
             state,
             banner,
             focus: cx.focus_handle(),
+            releases: None,
             _follow: follow,
         }
+    }
+
+    /// The page over `state` with the cluster's releases `releases` under the banner.
+    pub fn with_releases(
+        state: Entity<HelmGateState>,
+        dispatcher: Rc<dyn CommandDispatcher>,
+        releases: Entity<HelmReleasesView>,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let mut page = Self::new(state, dispatcher, cx);
+        page.releases = Some(releases);
+        page
+    }
+
+    /// The releases view, when the page hosts one.
+    pub fn releases(&self) -> Option<&Entity<HelmReleasesView>> {
+        self.releases.as_ref()
     }
 
     /// The banner entity (tests read it).
@@ -111,6 +135,7 @@ impl Render for HelmPage {
                     .child(label(feature))
             })
         });
+        let hosts_releases = self.releases.is_some();
         v_flex()
             .id("helm-page")
             .debug_selector(|| "helm-page".into())
@@ -133,11 +158,18 @@ impl Render for HelmPage {
                     .text_color(colors.text_muted)
                     .child(version),
             )
-            .child(
+            .children(self.releases.clone().map(|releases| {
+                div()
+                    .debug_selector(|| "helm-releases-slot".into())
+                    .flex_1()
+                    .min_h_0()
+                    .child(releases)
+            }))
+            .children((!hosts_releases).then(|| {
                 v_flex()
                     .id("helm-features")
                     .gap(u(tokens.spacing.xs))
-                    .children(rows),
-            )
+                    .children(rows)
+            }))
     }
 }

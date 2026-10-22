@@ -151,6 +151,29 @@ pub const BUDGETS: &[Budget] = &[
         tolerance: 0.0,
         what: "the same page with a chart's tooltip following the cursor (headless frame, p95)",
     },
+    Budget {
+        scenario: "helm-releases",
+        metric: "first_list_ms",
+        // E16: 500 releases list in under 1 s (the page's first list, headless).
+        limit: 1000.0,
+        tolerance: 0.0,
+        what: "the Helm releases page showing its first 500 releases (headless)",
+    },
+    Budget {
+        scenario: "helm-releases",
+        metric: "frame_ms",
+        // E16-S05: p95 frame <= 8 ms with 500 releases on screen, nothing changing.
+        limit: 8.0,
+        tolerance: 0.0,
+        what: "the Helm releases table of 500 rows repainting (headless frame, p95)",
+    },
+    Budget {
+        scenario: "helm-releases",
+        metric: "scroll_frame_ms",
+        limit: 8.0,
+        tolerance: 0.0,
+        what: "scrolling the Helm releases table of 500 rows (headless frame, p95)",
+    },
 ];
 
 /// A `logs-stream` frame budget (E08-S02, the JSON modes E08-S05, the search modes E08-S03, the merged modes E08-S04):

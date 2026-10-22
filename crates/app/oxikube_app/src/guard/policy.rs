@@ -87,6 +87,10 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ClusterSetColour { cluster, .. }
         | Command::ClusterShowMetricsSettings { cluster }
         | Command::ClusterShowPulses { cluster }
+        | Command::HelmOpenReleases { cluster }
+        | Command::HelmShowValues { cluster, .. }
+        | Command::HelmShowManifest { cluster, .. }
+        | Command::HelmRevealValues { cluster, .. }
         | Command::EventsOpen { cluster, .. }
         | Command::EventsToggleFaults { cluster }
         | Command::EventsTogglePause { cluster }

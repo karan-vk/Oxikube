@@ -21,11 +21,12 @@ use crate::guard::MutationGuard;
 use crate::session::ClusterSessionManager;
 
 /// Every command the jump bar can send.
-const NAVIGATION: [CommandId; 11] = [
+const NAVIGATION: [CommandId; 12] = [
     CommandId::APP_QUIT,
     CommandId::CLUSTER_CONNECT,
     CommandId::CLUSTER_SELECT,
     CommandId::CLUSTER_SHOW_PULSES,
+    CommandId::HELM_OPEN_RELEASES,
     CommandId::JUMP_BACK,
     CommandId::JUMP_FORWARD,
     CommandId::JUMP_LAST,
@@ -160,6 +161,17 @@ fn pulses_dispatches_the_show_pulses_command() {
 }
 
 #[test]
+fn helm_dispatches_the_open_releases_command() {
+    let bus = RecordingBus::new();
+    assert_eq!(
+        bus.run(&plan("helm", &Env::new()).unwrap()),
+        [Command::HelmOpenReleases {
+            cluster: cluster("dev")
+        }]
+    );
+}
+
+#[test]
 fn q_dispatches_the_quit_command() {
     let bus = RecordingBus::new();
     assert_eq!(
@@ -180,6 +192,7 @@ fn every_planned_command_is_a_declared_read_with_a_tool_stub() {
         "ctx",
         "ctx staging",
         "pulses",
+        "helm",
         "q",
         "-",
         "[",

@@ -280,6 +280,24 @@
   escape           port_forwards::Close
 [PortForwards && Editing]
   escape           port_forwards::FocusTable
+[HelmReleases && !Editing]
+  /                helm_releases::FocusFilter
+  [                helm_releases::PreviousTab
+  ]                helm_releases::NextTab
+  down             helm_releases::SelectNext
+  end              helm_releases::SelectLast
+  g                helm_releases::SelectFirst
+  home             helm_releases::SelectFirst
+  j                helm_releases::SelectNext
+  k                helm_releases::SelectPrevious
+  shift-g          helm_releases::SelectLast
+  up               helm_releases::SelectPrevious
+  v                helm_releases::ToggleValuesMode
+  x                helm_releases::RevealValues
+[HelmReleases]
+  escape           helm_releases::CloseDetail
+[HelmReleases && Editing]
+  escape           helm_releases::FocusTable
 [(everywhere)]
   ctrl-`           terminal_panel::TogglePanel
   ctrl-~           terminal::New

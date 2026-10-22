@@ -218,6 +218,17 @@ const VIEW_LOCAL: &[&str] = &[
     "port_forwards::FocusFilter",
     "port_forwards::FocusTable",
     "port_forwards::Close",
+    // The Helm releases page (E16-S05): its cursor, filter, tabs and the Values tab's switch.
+    "helm_releases::SelectNext",
+    "helm_releases::SelectPrevious",
+    "helm_releases::SelectFirst",
+    "helm_releases::SelectLast",
+    "helm_releases::FocusFilter",
+    "helm_releases::FocusTable",
+    "helm_releases::NextTab",
+    "helm_releases::PreviousTab",
+    "helm_releases::ToggleValuesMode",
+    "helm_releases::CloseDetail",
     // The notification centre's list (E14-S05).
     "notification_panel::SelectNext",
     "notification_panel::SelectPrevious",

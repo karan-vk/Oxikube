@@ -86,6 +86,8 @@ pub enum JumpCommand {
     Ns(Option<Spanned<String>>),
     /// `:pulses`: the shown cluster's pulses page (E13-S10).
     Pulses,
+    /// `:helm`: the shown cluster's Helm releases (E16-S05).
+    Helm,
     /// `:pf`: the Port Forwards panel (E15-S05). Not tied to a cluster: it lists every cluster's
     /// forwards.
     PortForwards,
@@ -123,6 +125,7 @@ impl fmt::Display for JumpCommand {
             Self::Ns(None) => f.write_str("ns"),
             Self::Ns(Some(name)) => write!(f, "ns {}", name.value),
             Self::Pulses => f.write_str("pulses"),
+            Self::Helm => f.write_str("helm"),
             Self::PortForwards => f.write_str("pf"),
             Self::Quit => f.write_str("q"),
             Self::History(step) => f.write_str(step.symbol()),
