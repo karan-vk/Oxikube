@@ -7,7 +7,7 @@
 //! | [`charts`] | E16-S08 | the Helm charts catalog: search across the configured repositories, virtualised chart cards (icon placeholder, name, description, version, app version, repository), a detail with the README (sanitised markdown), the versions and the default values, an Install action that hands the chart to the install tab, guidance without `helm` and an empty state that offers the default repositories |
 //! | [`repos`] | E16-S07 | the Helm repositories page: the repositories in Helm's own configuration, add / remove / update (one or all) with per-repository status, quick-add suggestions, guidance when `helm` is missing |
 //! | [`gate`] | E16-S11 | [`HelmGateState`]: the one capability gate every Helm view, command and tool asks (`HelmGate` from `oxikube_domain::helm`: `Full`, `NativeOnly`, `Unavailable`) |
-//! | [`banner`] | E16-S11 | [`HelmBanner`]: the guidance banner (why things are hidden, "Locate helm", "Recheck"); the gating helper [`HelmBanner::gated`] |
+//! | [`banner`] | E16-S11 | [`HelmBanner`]: the guidance banner (why things are hidden, "Locate helm", "Recheck"); the gating helper [`banner::gated`] |
 //! | [`page`] | E16-S11 | [`HelmPage`]: the cluster tab's Helm page (the sidebar's Helm entry): the banner and what is available; the releases view of E16-S05 builds on it |
 //!
 //! Views never test `cli_available` themselves: they ask the gate

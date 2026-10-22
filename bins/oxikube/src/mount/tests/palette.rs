@@ -75,6 +75,12 @@ fn the_palette_lists_exactly_what_the_bus_lists_for_the_view(cx: &mut TestAppCon
         &oxikube_app::ActionContext::of(&session),
     );
     ctx.selection = Selection::one(Gvk::new("", "v1", "Pod"));
+    // The palette sees HELM only while the Helm gate is full (no binary in a test).
+    ctx.capabilities = crate::mount::helm::palette_capabilities(
+        &app.vcx
+            .update(|_, cx| oxikube_helm_ui::HelmGateState::current(cx)),
+        ctx.capabilities,
+    );
     let mut expected: Vec<CommandId> = bus.list(&ctx).iter().map(|info| info.id()).collect();
     expected.sort();
     let mut listed_sorted = listed.clone();

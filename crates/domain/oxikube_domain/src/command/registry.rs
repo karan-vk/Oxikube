@@ -894,20 +894,6 @@ pub static COMMANDS: &[CommandMeta] = &[
         NONE,
     )
     .in_views(EVENTS_VIEW),
-    // Opens the user's `helm.path` setting; changes nothing in any cluster.
-    CommandMeta::read(
-        CommandId::HELM_LOCATE_BINARY,
-        "Locate Helm Binary",
-        CommandScope::Global,
-        NONE,
-    ),
-    // Runs `helm version` to find the binary again; reads and changes nothing in any cluster.
-    CommandMeta::read(
-        CommandId::HELM_RECHECK,
-        "Recheck Helm",
-        CommandScope::Global,
-        NONE,
-    ),
     // Helm repositories live in Helm's own config file on this machine (E16-S07): not a cluster
     // mutation, so no guard tier and runnable on a read-only cluster. No cluster capability is
     // needed: Capabilities::HELM is never granted to a session, and the page explains a missing
@@ -918,9 +904,23 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Global,
         Capabilities::HELM,
     ),
+    // Opens the user's `helm.path` setting; changes nothing in any cluster.
+    CommandMeta::read(
+        CommandId::HELM_LOCATE_BINARY,
+        "Locate Helm Binary",
+        CommandScope::Global,
+        NONE,
+    ),
     CommandMeta::read(
         CommandId::HELM_OPEN_CHARTS,
         "Helm: Charts",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Runs `helm version` to find the binary again; reads and changes nothing in any cluster.
+    CommandMeta::read(
+        CommandId::HELM_RECHECK,
+        "Recheck Helm",
         CommandScope::Global,
         NONE,
     ),
