@@ -87,8 +87,10 @@ pub trait ReleasesBackend: 'static {
     /// The latest revision of every release in the tab's namespaces.
     fn list(&self) -> BoxFuture<'static, OxiResult<Vec<Release>>>;
 
-    /// One item whenever the release records or the scope changed (list again), `None` while the
-    /// cluster is not connected. Called on the UI thread.
+    /// One item whenever the release records, the scope or the connection changed (list again).
+    /// The live backend always has one, even before the cluster connects (it follows the store
+    /// a connect builds); `None` means the backend has no live source (fixtures). Called on the
+    /// UI thread.
     fn watch(&self) -> Option<LocalBoxStream<'static, ()>>;
 
     /// Every revision of `release`, newest first.
@@ -159,9 +161,7 @@ impl ReleasesBackend for ServiceBackend {
     }
 
     fn watch(&self) -> Option<LocalBoxStream<'static, ()>> {
-        self.service
-            .watch(&self.cluster)
-            .map(|watch| watch.boxed_local())
+        Some(self.service.watch(&self.cluster).boxed_local())
     }
 
     fn history(&self, release: &ReleaseRef) -> BoxFuture<'static, OxiResult<Vec<Revision>>> {

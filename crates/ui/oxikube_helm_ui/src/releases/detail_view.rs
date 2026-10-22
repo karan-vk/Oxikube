@@ -36,10 +36,17 @@ impl HelmReleasesView {
             "  \u{b7}  updated {} ago",
             age(release.updated, Timestamp::now())
         ));
-        // Mutating actions (rollback, uninstall; E16-S06) mount in `helm-release-actions`, and only
-        // when the gate allows them. Without `helm` the view is read-only and says so.
+        // Mutating actions (upgrade, E16-S10; rollback, uninstall, E16-S06) mount in
+        // `helm-release-actions`, and only when the gate allows them. Without `helm` the view is
+        // read-only and says so.
         let gate = self.deps.gate.read(cx);
-        let can_mutate = gate.allows(HelmFeature::Rollback) || gate.allows(HelmFeature::Uninstall);
+        let can_mutate = [
+            HelmFeature::Upgrade,
+            HelmFeature::Rollback,
+            HelmFeature::Uninstall,
+        ]
+        .into_iter()
+        .any(|feature| gate.allows(feature));
         let tabs = Tab::ALL.into_iter().fold(
             h_flex().gap(u(tokens.spacing.sm)).px(u(tokens.spacing.xl)),
             |row, tab| {

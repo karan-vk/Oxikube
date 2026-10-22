@@ -1,17 +1,20 @@
 //! The Helm upgrade tab in the running app (E16-S10): `helm::Upgrade` and `helm::UpgradeRelease` on
 //! the bus with their tool stubs, the sidebar's Helm > Upgrade entry listing the releases, a picked
 //! release opening its tab prefilled, and its preview running through the real bus and guard.
+//!
+//! The picker and the prefill read the release records natively through the session's resource
+//! port (the Releases page's reader), never `helm list -A` / `history` / `get values`.
 
 use gpui::TestAppContext;
 use jiff::Timestamp;
 use oxikube_domain::command::{Command, CommandId};
-use oxikube_domain::helm::{
-    ChartHit, ChartRef, Release, ReleaseRef, ReleaseStatus, Revision, Values,
-};
+use oxikube_domain::helm::{ChartHit, ChartRef, ReleaseStatus, Revision};
 use oxikube_helm_ui::upgrade::{HelmUpgradeView, Stage};
 use oxikube_testkit::HelmCall;
 
-use super::helm_repos::{fake_with, run, start};
+use oxikube_testkit::{TestPorts, fixtures};
+
+use super::helm_repos::{fake_with, run, start, start_on};
 use crate::app_state::AppState;
 
 fn tabs(app: &mut super::App) -> Vec<gpui::Entity<HelmUpgradeView>> {
@@ -24,19 +27,30 @@ fn tabs(app: &mut super::App) -> Vec<gpui::Entity<HelmUpgradeView>> {
     })
 }
 
+/// Release `web` revision 2 (chart web-1.2.3, values `replicaCount: 3`) as the storage driver
+/// wrote it, in `default` (the namespace the seeded cluster's tab watches).
+fn release_record() -> oxikube_domain::Resource {
+    let mut json: serde_json::Value =
+        serde_json::from_str(fixtures::raw("helm/release-secret.json").expect("fixture")).unwrap();
+    json["metadata"]["namespace"] = "default".into();
+    oxikube_domain::Resource::from_json(json).expect("a Secret")
+}
+
+/// The seeded cluster with [`release_record`] in its connection's objects.
+fn seeded_with_release() -> TestPorts {
+    let ports = TestPorts::seeded();
+    ports
+        .connector
+        .ports_for(&TestPorts::cluster_id())
+        .resources
+        .insert(release_record());
+    ports
+}
+
+/// The `helm` side of opening a release's tab: the chart search and its defaults (the release itself
+/// is read natively from [`release_record`]).
 fn script_release(fake: &oxikube_testkit::FakeHelmPort) {
     let script = fake.script();
-    script.history.push_ok(vec![Revision {
-        revision: 3,
-        status: ReleaseStatus::Deployed,
-        chart: ChartRef::new("nginx", "15.0.0"),
-        app_version: Some("1.25.0".into()),
-        updated: Timestamp::UNIX_EPOCH,
-        description: String::new(),
-    }]);
-    script
-        .values
-        .push_ok(Values::from_yaml("replicaCount: 2\n").unwrap());
     script.search.push_ok(vec![ChartHit {
         chart: ChartRef::new("nginx", "15.4.0").in_repo("bitnami"),
         app_version: Some("1.25.3".into()),
@@ -65,18 +79,8 @@ fn the_sidebar_lists_the_releases_and_a_picked_one_opens_prefilled_and_previews_
     cx: &mut TestAppContext,
 ) {
     let fake = fake_with(&["bitnami"]);
-    let web = |cluster| ReleaseRef::new(cluster, "default", "web");
-    let mut app = start(cx, &fake);
+    let mut app = start_on(cx, &fake, seeded_with_release());
     app.press("enter");
-    let tab = app.cluster_tabs().pop().expect("the cluster tab");
-    let cluster = app.vcx.update(|_, cx| tab.read(cx).cluster().clone());
-    fake.script().list_releases.push_ok(vec![Release::summary(
-        web(cluster),
-        ChartRef::new("nginx", "15.0.0"),
-        3,
-        ReleaseStatus::Deployed,
-        Timestamp::UNIX_EPOCH,
-    )]);
     script_release(&fake);
 
     assert!(tabs(&mut app).is_empty(), "nothing opens by itself");
@@ -98,7 +102,14 @@ fn the_sidebar_lists_the_releases_and_a_picked_one_opens_prefilled_and_previews_
     );
     assert!(app.drawn("helm-upgrade-values"));
     let values = app.vcx.update(|_, cx| view.read(cx).values(cx));
-    assert_eq!(values.expose(), "replicaCount: 2\n");
+    assert_eq!(values.expose(), "replicaCount: 3\n", "the record's values");
+    assert!(
+        !fake.recorded_calls().iter().any(|c| matches!(
+            c,
+            HelmCall::ListReleases(..) | HelmCall::History(_) | HelmCall::Values { .. }
+        )),
+        "the picker and the prefill read natively"
+    );
 
     let script = fake.script();
     script
@@ -144,7 +155,7 @@ fn the_sidebar_lists_the_releases_and_a_picked_one_opens_prefilled_and_previews_
 fn the_command_with_a_release_opens_its_tab(cx: &mut TestAppContext) {
     let fake = fake_with(&["bitnami"]);
     script_release(&fake);
-    let mut app = start(cx, &fake);
+    let mut app = start_on(cx, &fake, seeded_with_release());
     app.press("enter");
     assert!(run(
         &mut app,
@@ -157,6 +168,12 @@ fn the_command_with_a_release_opens_its_tab(cx: &mut TestAppContext) {
     let opened = tabs(&mut app);
     assert_eq!(opened.len(), 1);
     assert!(app.drawn("helm-upgrade"));
+    let view = opened[0].clone();
+    assert_eq!(
+        app.vcx.update(|_, cx| view.read(cx).values(cx)).expose(),
+        "replicaCount: 3\n",
+        "prefilled from the release record"
+    );
     // Asking again shows the open tab rather than a second one.
     assert!(run(
         &mut app,

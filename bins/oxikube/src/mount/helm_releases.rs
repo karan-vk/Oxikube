@@ -111,9 +111,18 @@ impl ReleaseSource for SessionReleaseSource {
     }
 }
 
-/// The app's releases service over the open sessions.
-pub fn service(sessions: ClusterSessionManager, stores: Arc<ResourceStores>) -> ReleasesService {
-    ReleasesService::new(Arc::new(SessionReleaseSource::new(sessions, stores)))
+/// The release source over the open sessions: one per window, shared by the releases service
+/// and the upgrade tab so both read through the same native readers (and decode caches).
+pub fn source(
+    sessions: ClusterSessionManager,
+    stores: Arc<ResourceStores>,
+) -> Arc<dyn ReleaseSource> {
+    Arc::new(SessionReleaseSource::new(sessions, stores))
+}
+
+/// The app's releases service over `source`.
+pub fn service(source: Arc<dyn ReleaseSource>) -> ReleasesService {
+    ReleasesService::new(source)
 }
 
 /// Starts the window's releases pages over `requests` (the bus's `helm::OpenReleases` handler).

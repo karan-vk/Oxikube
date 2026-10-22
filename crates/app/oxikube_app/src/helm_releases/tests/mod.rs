@@ -56,12 +56,14 @@ pub(super) struct Fixture {
     pub clock: Arc<FakeClockPort>,
     pub updates: broadcast::Sender<SessionUpdate>,
     pub selection: Arc<Mutex<NamespaceSelection>>,
+    /// The cluster's current store; tests swap it for a reconnect or clear it for a disconnect.
+    pub store: Arc<Mutex<Option<ResourceStore>>>,
     pub service: ReleasesService,
 }
 
 struct FixtureSource {
     helm: Arc<FakeHelmPort>,
-    store: ResourceStore,
+    store: Arc<Mutex<Option<ResourceStore>>>,
     updates: broadcast::Sender<SessionUpdate>,
     selection: Arc<Mutex<NamespaceSelection>>,
 }
@@ -76,7 +78,7 @@ impl ReleaseSource for FixtureSource {
     }
 
     fn store(&self, _: &ClusterId) -> Option<ResourceStore> {
-        Some(self.store.clone())
+        self.store.lock().clone()
     }
 
     fn kinds(&self, _: &ClusterId) -> BoxFuture<'static, OxiResult<Arc<KindScopes>>> {
@@ -101,28 +103,13 @@ impl Fixture {
     pub fn new() -> Self {
         let clock = Arc::new(FakeClockPort::default());
         let resources = Arc::new(FakeResourcePort::with_clock(clock.clone()));
-        let tables = Arc::new(FakeTableFeedPort::with_clock(clock.clone()));
-        let store = ResourceStore::new(
-            cluster(),
-            StorePorts {
-                resources: resources.clone(),
-                tables,
-            },
-            StoreRuntime {
-                spawner: Arc::new(|task: BoxFuture<'static, ()>| {
-                    tokio::spawn(task);
-                }),
-                clock: clock.clone(),
-                probe: None,
-            },
-            StoreOptions::default(),
-        );
+        let store = Arc::new(Mutex::new(Some(store_on(&resources, &clock))));
         let helm = Arc::new(FakeHelmPort::native_only());
         let (updates, _) = broadcast::channel(16);
         let selection = Arc::new(Mutex::new(NamespaceSelection::All));
         let service = ReleasesService::new(Arc::new(FixtureSource {
             helm: helm.clone(),
-            store,
+            store: store.clone(),
             updates: updates.clone(),
             selection: selection.clone(),
         }));
@@ -132,6 +119,7 @@ impl Fixture {
             clock,
             updates,
             selection,
+            store,
             service,
         }
     }
@@ -142,6 +130,29 @@ impl Fixture {
             tokio::task::yield_now().await;
         }
     }
+}
+
+/// A store over `resources`, its feeds spawned on the test's runtime.
+pub(super) fn store_on(
+    resources: &Arc<FakeResourcePort>,
+    clock: &Arc<FakeClockPort>,
+) -> ResourceStore {
+    let tables = Arc::new(FakeTableFeedPort::with_clock(clock.clone()));
+    ResourceStore::new(
+        cluster(),
+        StorePorts {
+            resources: resources.clone(),
+            tables,
+        },
+        StoreRuntime {
+            spawner: Arc::new(|task: BoxFuture<'static, ()>| {
+                tokio::spawn(task);
+            }),
+            clock: clock.clone(),
+            probe: None,
+        },
+        StoreOptions::default(),
+    )
 }
 
 /// A release record Secret as the storage driver writes it (labels only; no payload needed
