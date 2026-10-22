@@ -249,6 +249,21 @@ fn closing_the_detail_hides_what_was_revealed(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn a_reveal_granted_with_no_detail_open_does_not_outlive_the_next_open(cx: &mut TestAppContext) {
+    let mut h = open(cx);
+    let view = h.view.clone();
+    h.vcx
+        .update(|_, cx| view.update(cx, |v, cx| v.close_detail(cx)));
+    h.backend.grant(&release_ref("web"), true);
+    assert!(h.backend.data.lock().revealed.contains(&release_ref("web")));
+    let web = release("apps", "web", ReleaseStatus::Deployed, 1);
+    h.vcx
+        .update(|_, cx| view.update(cx, |v, cx| v.open_detail(web, cx)));
+    h.settle();
+    assert!(h.backend.data.lock().revealed.is_empty());
+}
+
+#[gpui::test]
 fn the_manifest_masks_secret_data_until_revealed(cx: &mut TestAppContext) {
     let mut h = open(cx);
     h.click("helm-release-tab:manifest");

@@ -249,7 +249,10 @@ impl ReleasesBackend for FakeBackend {
     }
 
     fn conceal(&self, release: &ReleaseRef) {
-        self.grant(release, false);
+        // Like the service: a no-op (no epoch bump) when it was not revealed.
+        if self.data.lock().revealed.contains(release) {
+            self.grant(release, false);
+        }
     }
 }
 

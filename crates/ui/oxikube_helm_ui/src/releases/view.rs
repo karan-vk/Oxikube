@@ -349,6 +349,8 @@ impl HelmReleasesView {
             return;
         }
         self.conceal_shown();
+        // A reveal granted while no detail was open (palette, agent) must not leak into this one.
+        self.deps.backend.conceal(&release.release);
         let key = release.release.clone();
         self.table.update_quiet(cx, |d| d.select(Some(key)));
         self.detail = Some(ReleaseDetail::new(release, cx));
