@@ -7,6 +7,10 @@ use oxikube_testkit::{FakeHelmPort, HelmCall};
 use super::{release, served};
 use crate::helm::HelmService;
 
+fn stamp(secs: i64) -> jiff::Timestamp {
+    jiff::Timestamp::from_second(secs).unwrap()
+}
+
 fn manifest_calls(fake: &FakeHelmPort) -> usize {
     fake.recorded_calls()
         .iter()
@@ -21,7 +25,10 @@ async fn a_revision_is_read_and_parsed_once() {
         "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: cfg\n---\nkey: [broken\n".into(),
     );
     let service = HelmService::new(fake.clone());
-    let plan = service.plan(&release(), 3, &served()).await.unwrap();
+    let plan = service
+        .plan(&release(), 3, stamp(1), &served())
+        .await
+        .unwrap();
     assert_eq!(plan.resources.len(), 1);
     assert_eq!(
         plan.errors.len(),
@@ -29,7 +36,10 @@ async fn a_revision_is_read_and_parsed_once() {
         "one bad document does not drop the rest"
     );
     // A second ask (nothing else is scripted) is served from the cache.
-    let again = service.plan(&release(), 3, &served()).await.unwrap();
+    let again = service
+        .plan(&release(), 3, stamp(1), &served())
+        .await
+        .unwrap();
     assert_eq!(again.resources.len(), 1);
     assert_eq!(manifest_calls(&fake), 1);
 }
@@ -41,5 +51,36 @@ async fn a_port_error_is_returned() {
         .manifest
         .push_err(oxikube_domain::OxiError::internal("boom"));
     let service = HelmService::new(fake);
-    assert!(service.plan(&release(), 1, &served()).await.is_err());
+    assert!(
+        service
+            .plan(&release(), 1, stamp(1), &served())
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn a_reinstalled_release_does_not_serve_the_old_manifest() {
+    let fake = Arc::new(FakeHelmPort::new());
+    fake.script()
+        .manifest
+        .push_ok("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a\n".into());
+    fake.script()
+        .manifest
+        .push_ok("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: b\n".into());
+    let service = HelmService::new(fake.clone());
+    let first = service
+        .plan(&release(), 1, stamp(1), &served())
+        .await
+        .unwrap();
+    // Uninstall + install under the same name: revision 1 again, a later `updated`.
+    let second = service
+        .plan(&release(), 1, stamp(2), &served())
+        .await
+        .unwrap();
+    assert_eq!(manifest_calls(&fake), 2);
+    assert_ne!(
+        first.resources[0].reference.name,
+        second.resources[0].reference.name
+    );
 }

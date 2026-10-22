@@ -3,6 +3,7 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use jiff::Timestamp;
 use oxikube_domain::helm::{ParsedManifest, ReleaseRef, parse_manifest};
 use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::HelmPort;
@@ -16,7 +17,9 @@ use crate::store::ResourceStore;
 /// How many parsed revisions are kept.
 const PARSED_KEPT: usize = 8;
 
-type Key = (ReleaseRef, u32);
+/// Helm has no release uid; the revision's `updated` stamp tells a reinstalled release (whose
+/// revisions restart at 1) from the one it replaced.
+type Key = (ReleaseRef, u32, Timestamp);
 
 struct Inner {
     helm: Arc<dyn HelmPort>,
@@ -48,14 +51,16 @@ impl HelmService {
     }
 
     /// The parsed manifest of `release` at `revision`: read from the port and parsed off the
-    /// calling thread the first time, then served from a small cache keyed by release and
-    /// revision (a revision's manifest never changes). Hooks and per-document errors are in it.
+    /// calling thread the first time, then served from a small cache keyed by release,
+    /// revision and `updated` stamp (a revision's manifest never changes while the release lives;
+    /// after an uninstall and reinstall revisions restart, but the stamp differs). Hooks and per-document errors are in it.
     pub async fn manifest(
         &self,
         release: &ReleaseRef,
         revision: u32,
+        updated: Timestamp,
     ) -> OxiResult<Arc<ParsedManifest>> {
-        let key = (release.clone(), revision);
+        let key = (release.clone(), revision, updated);
         if let Some(hit) = self.cached(&key) {
             return Ok(hit);
         }
@@ -81,9 +86,10 @@ impl HelmService {
         &self,
         release: &ReleaseRef,
         revision: u32,
+        updated: Timestamp,
         kinds: &KindScopes,
     ) -> OxiResult<Arc<ResourcePlan>> {
-        let parsed = self.manifest(release, revision).await?;
+        let parsed = self.manifest(release, revision, updated).await?;
         Ok(Arc::new(ResourcePlan::build(release, &parsed, kinds)))
     }
 
@@ -94,9 +100,10 @@ impl HelmService {
         store: &ResourceStore,
         release: &ReleaseRef,
         revision: u32,
+        updated: Timestamp,
         kinds: &KindScopes,
     ) -> OxiResult<ReleaseResourcesLease> {
-        let plan = self.plan(release, revision, kinds).await?;
+        let plan = self.plan(release, revision, updated, kinds).await?;
         Ok(ReleaseResourcesLease::new(store, plan))
     }
 }

@@ -10,7 +10,7 @@
 //!
 //! | File | Holds |
 //! |---|---|
-//! | `service` | [`HelmService`]: manifest read and parsed once per `(release, revision)`, the plan |
+//! | `service` | [`HelmService`]: manifest read and parsed once per `(release, revision, updated)`, the plan |
 //! | `plan` | [`ResourcePlan`], [`PlannedResource`]: manifest objects as `ResourceRef`s, release-namespace defaulting, hooks and parse errors kept apart |
 //! | `kinds` | [`KindScopes`]: namespaced or not, served version, from discovery (no hard-coded table) |
 //! | `lease` | [`ReleaseResourcesLease`]: the store feeds the tab needs, released on drop |
