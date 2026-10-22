@@ -36,10 +36,26 @@ const GZIP_MAGIC: [u8; 2] = [0x1f, 0x8b];
 pub(crate) fn decode<T: DeserializeOwned>(driver: Driver, data: &str) -> Result<T, HelmError> {
     let bytes = helm_bytes(driver, data)?;
     let json = inflate(&bytes, MAX_DECODED_BYTES)?;
-    serde_json::from_slice(&json).map_err(|e| {
-        // serde_json's message carries a position and a category, never input text.
-        parse(format!("the release record is not valid JSON ({e})"))
-    })
+    serde_json::from_slice(&json).map_err(|e| parse(json_error(&e)))
+}
+
+/// Describes a JSON failure by category and position only.
+///
+/// serde_json's `Display` is not safe here: type-mismatch errors quote the offending value
+/// (`invalid type: string "hunter2", expected ...`), and that value can be a credential.
+fn json_error(e: &serde_json::Error) -> String {
+    use serde_json::error::Category;
+    let what = match e.classify() {
+        Category::Io => "could not be read",
+        Category::Syntax => "is not valid JSON",
+        Category::Data => "does not have the expected shape",
+        Category::Eof => "is truncated JSON",
+    };
+    format!(
+        "the release record {what} (line {}, column {})",
+        e.line(),
+        e.column()
+    )
 }
 
 /// Undoes the base64 layers, giving Helm's (normally gzipped) bytes.
@@ -169,6 +185,33 @@ mod tests {
         };
         assert!(message.contains("JSON"), "{message}");
         assert!(!message.contains("hunter2"), "{message}");
+    }
+
+    #[test]
+    fn a_wrong_shaped_record_does_not_echo_the_mistyped_value() {
+        #[derive(Debug, serde::Deserialize)]
+        #[allow(dead_code)]
+        struct Shaped {
+            info: Inner,
+        }
+        #[derive(Debug, serde::Deserialize)]
+        #[allow(dead_code)]
+        struct Inner {
+            notes: Option<String>,
+        }
+        for payload in [
+            json!({"info": "s3cr3t-token"}),
+            json!({"info": {"notes": 424242}}),
+        ] {
+            let gz = gzip(payload.to_string().as_bytes());
+            let result = decode::<Shaped>(Driver::ConfigMap, &STANDARD.encode(gz));
+            let Err(HelmError::Parse(message)) = result else {
+                panic!("expected a parse error for {payload}");
+            };
+            assert!(message.contains("shape"), "{message}");
+            assert!(!message.contains("s3cr3t-token"), "{message}");
+            assert!(!message.contains("424242"), "{message}");
+        }
     }
 
     #[test]
