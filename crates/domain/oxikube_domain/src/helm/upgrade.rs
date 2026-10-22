@@ -162,11 +162,9 @@ pub fn mask_values_for_diff(values: &str) -> String {
     while let Some(line) = lines.next() {
         let indent = line.len() - line.trim_start().len();
         let body = line[indent..].trim_start_matches("- ");
-        let block = body.split_once(':').is_some_and(|(key, value)| {
-            let value = value.trim();
-            is_sensitive_field(key.trim().trim_matches(['"', '\'']))
-                && value.starts_with(['|', '>'])
-        });
+        let block = body
+            .split_once(':')
+            .is_some_and(|(_, value)| value.trim().starts_with(['|', '>']));
         if block {
             let mut text = String::new();
             while let Some(next) = lines.peek() {
