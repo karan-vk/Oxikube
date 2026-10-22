@@ -13,8 +13,6 @@ use tokio::sync::watch;
 
 use crate::helm_repos::RepoChanges;
 
-/// How many distinct keywords' results are kept.
-const SEARCHES_KEPT: usize = 8;
 /// How many chart details (READMEs, values) are kept.
 const DETAILS_KEPT: usize = 48;
 
@@ -69,7 +67,11 @@ impl<K: std::hash::Hash + Eq + Clone, V: Clone> Bounded<K, V> {
 struct Caches {
     /// The catalog generation these entries belong to.
     generation: u64,
-    searches: Bounded<String, Arc<Vec<ChartSummary>>>,
+    /// Every chart of every repository (`helm search repo --versions`); a keyword filters it in
+    /// memory, so typing in the search field never starts a `helm` process.
+    catalog: Option<Arc<Vec<ChartSummary>>>,
+    /// The configured repository aliases: a chart is shown only from one of them.
+    repos: Option<Arc<Vec<String>>>,
     details: Bounded<(ChartRef, ChartPart), Arc<str>>,
 }
 
@@ -97,7 +99,8 @@ impl ChartsService {
                 catalog,
                 caches: Mutex::new(Caches {
                     generation,
-                    searches: Bounded::new(SEARCHES_KEPT),
+                    catalog: None,
+                    repos: None,
                     details: Bounded::new(DETAILS_KEPT),
                 }),
                 install: watch::channel(None).0,
@@ -127,6 +130,7 @@ impl ChartsService {
             return Ok(Readiness::NoHelm);
         }
         let repos = listed?;
+        self.remember_repos(&repos);
         Ok(if repos.is_empty() {
             Readiness::NoRepos
         } else {
@@ -140,25 +144,44 @@ impl ChartsService {
         let generation = self.inner.catalog.generation();
         if caches.generation != generation {
             caches.generation = generation;
-            caches.searches.clear();
+            caches.catalog = None;
+            caches.repos = None;
             caches.details.clear();
         }
         caches
     }
 
     /// The charts matching `keyword` (every chart when empty), each with all its versions, newest
-    /// first. Cached per keyword until a repository changes.
+    /// first. The whole catalog is read with one `helm search repo --versions` per catalog
+    /// generation (until a repository changes) and every keyword filters it in memory: a match is
+    /// a case-insensitive substring of `repo/name` or of a version's description, like Helm's own
+    /// literal search.
     ///
     /// # Errors
     ///
     /// [`Unsupported`](oxikube_domain::ErrorKind::Unsupported) without a usable `helm`; otherwise
     /// the adapter's redacted failure.
     pub async fn search(&self, keyword: &str) -> OxiResult<Arc<Vec<ChartSummary>>> {
+        let catalog = self.catalog().await?;
         let key = keyword.trim().to_lowercase();
+        if key.is_empty() {
+            return Ok(catalog);
+        }
+        Ok(Arc::new(
+            catalog
+                .iter()
+                .filter(|chart| chart_matches(chart, &key))
+                .cloned()
+                .collect(),
+        ))
+    }
+
+    /// Every chart, from the cache or one `helm search repo --versions`.
+    async fn catalog(&self) -> OxiResult<Arc<Vec<ChartSummary>>> {
         let generation = {
             let caches = self.fresh();
-            if let Some(hit) = caches.searches.get(&key) {
-                return Ok(hit);
+            if let Some(hit) = &caches.catalog {
+                return Ok(hit.clone());
             }
             caches.generation
         };
@@ -166,30 +189,64 @@ impl ChartsService {
             .inner
             .helm
             .search(&SearchQuery {
-                keyword: keyword.trim().to_owned(),
+                keyword: String::new(),
                 all_versions: true,
             })
             .await?;
         let charts = Arc::new(group_hits(hits));
         let mut caches = self.inner.caches.lock();
         if caches.generation == generation {
-            caches.searches.put(key, charts.clone());
+            caches.catalog = Some(charts.clone());
         }
         Ok(charts)
+    }
+
+    fn remember_repos(&self, repos: &[RepoEntry]) {
+        let names = Arc::new(repos.iter().map(|r| r.name.clone()).collect());
+        self.fresh().repos = Some(names);
+    }
+
+    /// Whether `repo` is a configured repository alias: from the cache, else (also when the
+    /// cache does not have it: it may have been added outside the app) `helm repo list`.
+    async fn is_configured(&self, repo: &str) -> OxiResult<bool> {
+        let cached = self.fresh().repos.clone();
+        if cached.is_some_and(|names| names.iter().any(|name| name == repo)) {
+            return Ok(true);
+        }
+        let repos = self.inner.helm.repos().await?;
+        self.remember_repos(&repos);
+        Ok(repos.iter().any(|r| r.name == repo))
     }
 
     /// `part` of `chart` (the newest version when `chart.version` is empty). Cached per chart
     /// version and part until a repository changes. The text can be large (READMEs) and is shared.
     ///
+    /// The chart must come from a configured repository and its name must be a plain chart name:
+    /// `helm show` also takes URLs and local paths, and `helm::ShowChart` is a read an agent may
+    /// run without asking, so it must never fetch from an arbitrary host or read the disk.
+    ///
     /// # Errors
     ///
-    /// As [`search`](Self::search); [`NotFound`](oxikube_domain::ErrorKind::NotFound)-like
+    /// A [`Validation`](oxikube_domain::ErrorKind::Validation) error for a chart outside the
+    /// configured repositories or with a name that is not a chart name; otherwise as
+    /// [`search`](Self::search), and [`NotFound`](oxikube_domain::ErrorKind::NotFound)-like
     /// failures when the chart or version is gone from the repository.
     pub async fn detail(&self, chart: &ChartRef, part: ChartPart) -> OxiResult<Arc<str>> {
-        if chart.repo.is_none() {
+        let Some(repo) = &chart.repo else {
             return Err(OxiError::validation(
                 "a chart needs its repository to be shown",
             ));
+        };
+        if !is_chart_name(&chart.name) {
+            return Err(OxiError::validation(format!(
+                "{:?} is not a chart name (letters, digits, '-', '_' and '.')",
+                chart.name
+            )));
+        }
+        if !self.is_configured(repo).await? {
+            return Err(OxiError::validation(format!(
+                "{repo:?} is not a configured Helm repository"
+            )));
         }
         let key = (chart.clone(), part);
         let generation = {
@@ -218,4 +275,19 @@ impl ChartsService {
     pub fn install_requests(&self) -> watch::Receiver<Option<ChartRef>> {
         self.inner.install.subscribe()
     }
+}
+
+/// Whether `chart` matches the lower-cased `key`: in `repo/name` or a version's description.
+fn chart_matches(chart: &ChartSummary, key: &str) -> bool {
+    let contains = |text: &str| text.to_lowercase().contains(key);
+    contains(&chart.reference()) || chart.versions.iter().any(|v| contains(&v.description))
+}
+
+/// A chart name as repositories publish them: no path, URL or flag.
+fn is_chart_name(name: &str) -> bool {
+    !name.is_empty()
+        && !name.starts_with(['.', '-'])
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
 }

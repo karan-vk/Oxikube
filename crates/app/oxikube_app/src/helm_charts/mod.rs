@@ -1,11 +1,14 @@
 //! [`ChartsService`] (E16-S08): the charts catalog over [`HelmPort`](oxikube_ports::HelmPort).
 //!
-//! * [`search`](ChartsService::search) runs `helm search repo --versions` and groups the hits per
-//!   chart ([`ChartSummary`](oxikube_domain::helm::ChartSummary), newest version first). Results
-//!   are cached per keyword and dropped whenever a repository was added, removed or refreshed
+//! * [`search`](ChartsService::search) runs `helm search repo --versions` once for the whole
+//!   catalog and groups the hits per chart ([`ChartSummary`](oxikube_domain::helm::ChartSummary),
+//!   newest version first); every keyword filters that cached catalog in memory (no process per
+//!   keystroke). The catalog is dropped whenever a repository was added, removed or refreshed
 //!   ([`HelmReposService::catalog_changes`](crate::HelmReposService::catalog_changes)).
 //! * [`detail`](ChartsService::detail) runs `helm show` for a chart version's metadata, README or
-//!   default values, cached per `(chart, version, part)` in a small bounded cache.
+//!   default values, cached per `(chart, version, part)` in a small bounded cache. Only charts of
+//!   a configured repository with a plain chart name are shown, so `helm::ShowChart` (a read any
+//!   agent may run) never reaches a URL or a local path.
 //! * [`ready`](ChartsService::ready) says whether the catalog can be used at all: no `helm`
 //!   binary (the page shows guidance), no repositories (the page offers to add some), or ready.
 //! * [`request_install`](ChartsService::request_install) is the hand-off to the install tab

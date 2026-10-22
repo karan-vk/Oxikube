@@ -10,6 +10,7 @@ use oxikube_domain::helm::{GateReason, HelmGate, HelmVersion};
 use oxikube_helm_ui::HelmGateState;
 use oxikube_settings::SettingsStore;
 
+use super::controller::NoTargets;
 use super::{Request, install};
 
 /// A shell script that answers `helm version --short` with `version`.
@@ -60,7 +61,7 @@ fn start(cx: &mut TestAppContext, settings: &str) -> tokio::runtime::Runtime {
         store.register_setting::<oxikube_settings::HelmSettings>();
         store.set_user_settings(&text).unwrap();
         cx.set_global(store);
-        install(cx);
+        install(cx, std::sync::Arc::new(NoTargets));
     });
     runtime
 }
@@ -125,7 +126,9 @@ fn other_helm_keys_do_not_redetect_and_recheck_does(cx: &mut TestAppContext) {
     assert_eq!(gate(cx), HelmGate::Full, "no re-detection for another key");
 
     // ...but `helm::Recheck` always does.
-    let sink = cx.update(install);
+    let sink = cx
+        .update(|cx| install(cx, std::sync::Arc::new(NoTargets)))
+        .sink;
     sink.unbounded_send(Request::Recheck).unwrap();
     settle(cx, |g| *g != HelmGate::Full);
 }
@@ -138,4 +141,54 @@ fn the_check_in_flight_shows_and_ends(cx: &mut TestAppContext) {
     settle(cx, |g| *g == HelmGate::Full);
     let checking = cx.update(|cx| HelmGateState::global(cx).unwrap().read(cx).is_checking());
     assert!(!checking, "a finished detection is not 'checking'");
+}
+
+/// The repositories and the charts run on the controller's own adapter: `helm.path` (which the
+/// default PATH lookup would never find) reaches them, a later fix of the path reaches them
+/// without a restart, and the gate change makes the repositories read Helm's list again.
+#[gpui::test]
+fn repositories_and_charts_share_the_controllers_adapter(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let good = fake_helm(dir.path(), "helm-elsewhere", "v3.14.2+gc309b6f");
+    let missing = dir.path().join("no-such-helm");
+    let _rt = start(cx, &format!(r#"{{ "helm": {{ "path": {missing:?} }} }}"#));
+    settle(cx, |g| *g != HelmGate::default());
+    let (installed, services, _follow) = cx.update(|cx| {
+        let installed = install(cx, std::sync::Arc::new(NoTargets));
+        assert!(
+            std::sync::Arc::ptr_eq(
+                &installed.cli,
+                &install(cx, std::sync::Arc::new(NoTargets)).cli
+            ),
+            "one adapter for the app"
+        );
+        let clock = std::sync::Arc::new(oxikube_testkit::FakeClockPort::default());
+        let services = crate::mount::helm_repos::services(installed.cli.clone(), clock, cx);
+        let follow = crate::mount::helm_repos::follow_gate(services.repos.clone(), cx);
+        assert!(follow.is_some(), "the gate exists once the controller runs");
+        (installed, services, follow)
+    });
+    assert_eq!(installed.cli.config().path, Some(missing));
+    assert!(!services.charts.capabilities().can_search_repos);
+    assert!(!services.repos.snapshot().checked);
+
+    set_settings(cx, &format!(r#"{{ "helm": {{ "path": {good:?} }} }}"#));
+    settle(cx, |g| *g == HelmGate::Full);
+    assert_eq!(installed.cli.config().path, Some(good));
+    assert!(
+        services.charts.capabilities().can_search_repos,
+        "the charts see the binary the gate found"
+    );
+    // The gate change re-read the repositories (the fake binary's answer is not a list, so the
+    // read fails, but it ran without anyone opening the page).
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !services.repos.snapshot().checked {
+        assert!(
+            Instant::now() < deadline,
+            "the repositories were never read again"
+        );
+        cx.run_until_parked();
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(services.repos.snapshot().cli_available);
 }

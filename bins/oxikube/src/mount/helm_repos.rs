@@ -1,9 +1,9 @@
 //! The Helm repositories page of the main window (E16-S07): `helm::ShowRepos` opens it in the
 //! active cluster's tab, and the sidebar's Helm > Repositories entry asks for it.
 //!
-//! * [`service`] builds the app's one [`HelmReposService`] over the `helm` CLI adapter. Nothing
-//!   runs at start-up: the adapter looks for the binary the first time the page reads the list
-//!   (on the Tokio bridge), so a machine without Helm costs nothing and the page explains it.
+//! * [`services`] builds the app's one [`HelmReposService`] over the Helm controller's `helm`
+//!   adapter (`helm.path` applies), and [`follow_gate`] re-reads it when a recheck or a new
+//!   `helm.path` changes what was found, so a page that said "no helm" catches up.
 //! * [`start_views`] applies each `helm::ShowRepos` request on the UI thread
 //!   (`oxikube_settings_ui::helm_repos::HelmReposViews`).
 //! * [`install_tab`] runs for every cluster tab: a click on the sidebar's Repositories entry is
@@ -13,10 +13,11 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use futures::channel::mpsc::UnboundedReceiver;
-use gpui::{App, Entity, Task, WeakEntity, Window};
+use gpui::{App, Entity, Subscription, Task, WeakEntity, Window};
 use oxikube_app::{ChartsService, HelmReposService};
 use oxikube_domain::command::{Command, CommandId};
-use oxikube_helm::{HelmCli, HelmCliConfig, TargetResolver};
+use oxikube_helm::HelmCli;
+use oxikube_helm_ui::HelmGateState;
 use oxikube_helm_ui::repos::ServiceBackend;
 use oxikube_ports::ClockPort;
 use oxikube_settings_ui::helm_repos::{HelmReposViews, HelmReposViewsDeps};
@@ -44,20 +45,16 @@ pub struct ServiceOverride(pub HelmServices);
 #[cfg(test)]
 impl gpui::Global for ServiceOverride {}
 
-/// The Helm services over the `helm` binary (found on first use). Repository commands and the
-/// catalog touch no cluster; an install (E16-S09) runs against the kubeconfig context `targets`
-/// finds for its cluster.
-pub fn services(
-    clock: Arc<dyn ClockPort>,
-    targets: Arc<dyn TargetResolver>,
-    cx: &App,
-) -> HelmServices {
+/// The Helm services over `cli`, the app's one `helm` adapter (the Helm controller's, which
+/// follows `helm.path` and `helm::Recheck`). Repository commands and the catalog touch no
+/// cluster; an install (E16-S09) runs against the kubeconfig context the adapter's target
+/// resolver finds for its cluster.
+pub fn services(cli: Arc<HelmCli>, clock: Arc<dyn ClockPort>, cx: &App) -> HelmServices {
     #[cfg(test)]
     if let Some(service) = cx.try_global::<ServiceOverride>() {
         return service.0.clone();
     }
     let _ = cx;
-    let cli = Arc::new(HelmCli::new(HelmCliConfig::default(), targets));
     let repos = HelmReposService::new(cli.clone(), cli.clone(), clock);
     let charts = ChartsService::new(cli.clone(), repos.catalog_changes());
     HelmServices {
@@ -105,4 +102,23 @@ pub fn install_tab(tab: &Entity<ClusterTab>, deps: &TabDeps, window: &mut Window
             }
         })
         .detach();
+}
+
+/// Re-reads the repositories (and so the charts catalog, which follows them) whenever the app's
+/// Helm gate changes: `helm::Recheck` or a new `helm.path` found (or lost) the binary. The read
+/// runs on the Tokio bridge; a newer change replaces (and so aborts) one still running. `None`
+/// before the gate exists.
+pub fn follow_gate(repos: HelmReposService, cx: &mut App) -> Option<Subscription> {
+    let gate = HelmGateState::global(cx)?;
+    let running = std::cell::RefCell::new(None::<oxikube_runtime::KubeTask<()>>);
+    Some(
+        cx.subscribe(&gate, move |_, _: &oxikube_helm_ui::HelmGateChanged, cx| {
+            let repos = repos.clone();
+            // The outcome is in the repositories' snapshot, which the page shows.
+            let read = oxikube_runtime::spawn_kube(cx, async move {
+                repos.binary_changed().await.ok();
+            });
+            running.replace(Some(read));
+        }),
+    )
 }

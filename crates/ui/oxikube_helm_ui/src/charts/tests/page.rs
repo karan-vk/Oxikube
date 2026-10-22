@@ -188,12 +188,8 @@ fn an_empty_readme_is_said_so(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn typing_searches_once_after_the_pause(cx: &mut TestAppContext) {
+fn typing_filters_the_catalog_without_running_helm_again(cx: &mut TestAppContext) {
     let mut h = Harness::open(cx, &["bitnami"], nginx_and_redis());
-    h.fake
-        .script()
-        .search
-        .push_ok(vec![hit("bitnami", "redis", "1.0.0", "7", "A cache")]);
     let searches = |h: &Harness| {
         h.fake
             .recorded_calls()
@@ -201,26 +197,25 @@ fn typing_searches_once_after_the_pause(cx: &mut TestAppContext) {
             .filter(|c| matches!(c, HelmCall::Search(_)))
             .count()
     };
+    assert_eq!(searches(&h), 1, "the page read the whole catalog once");
     h.type_query("red");
-    assert_eq!(searches(&h), 1, "typing alone does not search");
     h.vcx.executor().advance_clock(DEBOUNCE);
     h.settle();
-    assert_eq!(searches(&h), 2, "one search for the three keystrokes");
     h.read(|v| {
         assert_eq!(v.cards().len(), 1);
         assert_eq!(v.cards()[0].name, "redis");
     });
-    let last = h
-        .fake
-        .recorded_calls()
-        .into_iter()
-        .rev()
-        .find_map(|c| match c {
-            HelmCall::Search(q) => Some(q),
-            _ => None,
-        })
-        .unwrap();
-    assert_eq!(last.keyword, "red");
+    for _ in 0..3 {
+        h.vcx.simulate_keystrokes("backspace");
+    }
+    h.vcx.executor().advance_clock(DEBOUNCE);
+    h.settle();
+    h.read(|v| assert_eq!(v.cards().len(), 2, "an empty field shows every chart again"));
+    assert_eq!(
+        searches(&h),
+        1,
+        "keystrokes filter in memory: no helm process per keyword"
+    );
 }
 
 #[gpui::test]
@@ -233,12 +228,16 @@ fn no_matching_chart_is_said_so(cx: &mut TestAppContext) {
 #[gpui::test]
 fn a_failed_search_shows_the_reason_and_keeps_the_page(cx: &mut TestAppContext) {
     let mut h = Harness::open(cx, &["bitnami"], nginx_and_redis());
+    assert!(h.is_laid_out("helm-chart-cards"));
+    // A repository refresh makes the page read the catalog again, and that read fails.
+    let bitnami = || vec![super::repo("bitnami")];
+    h.fake.script().repos.push_ok(bitnami());
+    h.fake.script().repos.push_ok(bitnami());
     h.fake
         .script()
         .search
         .push_err(OxiError::network("no route"));
-    h.type_query("zzz");
-    h.vcx.executor().advance_clock(DEBOUNCE);
+    futures::executor::block_on(h.repos.update(&[])).ok();
     h.settle();
     assert!(h.read(|v| v.problem().is_some()));
     assert!(h.is_laid_out("helm-charts-problem"));
@@ -259,6 +258,28 @@ fn without_repositories_the_page_offers_the_default_ones(cx: &mut TestAppContext
     ));
     h.click("helm-charts-open-repos");
     assert_eq!(h.bus.sent().last(), Some(&Command::HelmShowRepos));
+}
+
+#[gpui::test]
+fn without_repositories_the_page_offers_the_default_repos_setting(cx: &mut TestAppContext) {
+    let mut h = Harness::open(cx, &[], Vec::new());
+    h.vcx.update(|_, cx| {
+        crate::tests::set_settings(
+            cx,
+            r#"{ "helm": { "default_repos": [{ "name": "internal", "url": "https://charts.corp.example" }] } }"#,
+        );
+    });
+    h.settle();
+    assert!(h.is_laid_out("helm-charts-add:internal"));
+    assert!(
+        !h.is_laid_out("helm-charts-add:bitnami"),
+        "the setting replaces the defaults"
+    );
+    h.click("helm-charts-add:internal");
+    assert!(matches!(
+        h.bus.sent().as_slice(),
+        [Command::HelmRepoAdd { name, url, .. }] if name == "internal" && url == "https://charts.corp.example"
+    ));
 }
 
 #[gpui::test]

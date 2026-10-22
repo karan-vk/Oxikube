@@ -204,8 +204,8 @@ impl HelmReposView {
                         Button::new(("helm-repos-suggestion", index))
                             .xsmall()
                             .outline()
-                            .label(suggestion.name)
-                            .tooltip(suggestion.url)
+                            .label(suggestion.name.clone())
+                            .tooltip(suggestion.url.clone())
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 this.use_suggestion(index, window, cx)
                             })),

@@ -93,3 +93,46 @@ fn only_web_and_mail_links_may_be_opened() {
         assert!(!is_safe_link(bad), "{bad}");
     }
 }
+
+/// One long line of unclosed brackets or of many `<script></script>` pairs used to cost
+/// O(n²): 160 KB of `![` took 5 s in release (and hours near the 2 MiB cap). Now each is a few
+/// milliseconds; the bound is generous so a slow debug runner never flakes.
+#[test]
+fn adversarial_lines_are_linear() {
+    let cases = [
+        "![".repeat(200_000),
+        "[![".repeat(130_000),
+        "![a](".repeat(80_000),
+        "<script></script>".repeat(25_000),
+        "<STYLE>x</style>".repeat(25_000),
+    ];
+    for input in cases {
+        let started = std::time::Instant::now();
+        let out = sanitize(&input);
+        let took = started.elapsed();
+        assert!(
+            took < std::time::Duration::from_secs(2),
+            "{} bytes starting {:?} took {took:?}",
+            input.len(),
+            &input[..12]
+        );
+        assert!(out.len() <= input.len());
+    }
+}
+
+#[test]
+fn many_scripts_on_one_line_are_all_removed() {
+    assert_eq!(
+        sanitize("a<script>1</script>b<SCRIPT>2</Script >c\n"),
+        "abc\n"
+    );
+    assert_eq!(sanitize("a<style>x</style"), "a");
+}
+
+#[test]
+fn badges_and_images_still_convert_with_unmatched_brackets_around() {
+    assert_eq!(
+        sanitize("[[ ![logo](https://i/x.png) ]] [![ci](https://b/s.svg)](https://ci) ((\n"),
+        "[[ [logo](https://i/x.png) ]] [ci](https://ci) ((\n"
+    );
+}

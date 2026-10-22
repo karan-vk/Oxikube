@@ -206,16 +206,38 @@ async fn a_staged_password_goes_to_the_add_once_and_is_forgotten() {
 }
 
 #[test]
-fn suggestions_skip_what_is_configured() {
-    let all = default_suggestions(&[]);
-    assert!(all.iter().any(|s| s.name == "bitnami"));
-    let some = default_suggestions(&[entry("bitnami")]);
-    assert!(!some.iter().any(|s| s.name == "bitnami"));
-    let by_url = default_suggestions(&[oxikube_domain::helm::RepoEntry {
-        name: "mine".into(),
-        url: "https://charts.jetstack.io/".into(),
-    }]);
-    assert!(!by_url.iter().any(|s| s.name == "jetstack"));
+fn suggestions_come_from_the_setting_and_skip_what_is_configured() {
+    let setting = |name: &str, url: &str| oxikube_domain::helm::RepoEntry {
+        name: name.into(),
+        url: url.into(),
+    };
+    let defaults = [
+        setting("internal", "https://charts.corp.example"),
+        setting("bitnami", "https://charts.bitnami.com/bitnami"),
+    ];
+    // Exactly the setting, in its order: nothing hard-coded is added.
+    let all = default_suggestions(&defaults, &[]);
+    assert_eq!(all, defaults.to_vec());
+    let some = default_suggestions(&defaults, &[entry("bitnami")]);
+    assert_eq!(some, vec![defaults[0].clone()]);
+    let by_url = default_suggestions(
+        &defaults,
+        &[setting("mine", "https://charts.corp.example/")],
+    );
+    assert!(!by_url.iter().any(|s| s.name == "internal"));
+    // An emptied setting offers nothing.
+    assert!(default_suggestions(&[], &[]).is_empty());
+}
+
+#[tokio::test]
+async fn a_changed_binary_reads_the_list_again_and_restarts_the_catalog() {
+    let fake = fake_with(&["bitnami"]);
+    let service = service(&fake);
+    let catalog = service.catalog_changes();
+    let before = catalog.generation();
+    service.binary_changed().await.unwrap();
+    assert!(service.snapshot().row("bitnami").is_some());
+    assert_eq!(catalog.generation(), before + 1);
 }
 
 /// A repo port that records when each operation starts and ends, to prove they never overlap.

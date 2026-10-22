@@ -143,21 +143,24 @@ impl HelmChartsView {
             .gap(u(tokens.spacing.sm))
             .items_center()
             .flex_wrap();
-        for (index, suggestion) in oxikube_app::helm_repos::default_suggestions(&[])
+        // The user's `helm.default_repos` (hot-reloaded: the view redraws on a settings change).
+        let defaults = crate::repos::default_repos(cx);
+        for (index, suggestion) in oxikube_app::helm_repos::default_suggestions(&defaults, &[])
             .into_iter()
             .enumerate()
         {
+            let name = suggestion.name.clone();
             chips = chips.child(
                 div()
-                    .debug_selector(move || format!("helm-charts-add:{}", suggestion.name))
+                    .debug_selector(move || format!("helm-charts-add:{name}"))
                     .child(
                         Button::new(("helm-charts-add", index))
                             .small()
                             .outline()
                             .label(format!("Add {}", suggestion.name))
-                            .tooltip(suggestion.url)
+                            .tooltip(suggestion.url.clone())
                             .on_click(cx.listener(move |this, _, _, cx| {
-                                this.add_repo(suggestion.name, suggestion.url, cx)
+                                this.add_repo(&suggestion.name, &suggestion.url, cx)
                             })),
                     ),
             );

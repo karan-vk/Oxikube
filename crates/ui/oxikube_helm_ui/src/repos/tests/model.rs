@@ -21,7 +21,7 @@ fn snapshot(status: RepoStatus) -> RepoSnapshot {
 }
 
 fn status_of(status: RepoStatus, now: i64) -> (String, Tone) {
-    let model = ReposModel::build(&snapshot(status), at(now));
+    let model = ReposModel::build(&snapshot(status), at(now), &[]);
     (model.rows[0].status.clone(), model.rows[0].tone)
 }
 
@@ -48,7 +48,7 @@ fn statuses_read_in_words() {
 fn progress_names_what_is_running() {
     let mut snap = snapshot(RepoStatus::Unknown);
     snap.activity = RepoActivity::Updating(vec!["a".into(), "b".into()]);
-    let model = ReposModel::build(&snap, at(0));
+    let model = ReposModel::build(&snap, at(0), &[]);
     assert!(model.busy);
     assert_eq!(
         model.progress.as_deref(),
@@ -56,18 +56,24 @@ fn progress_names_what_is_running() {
     );
     snap.activity = RepoActivity::Adding("x".into());
     assert!(
-        ReposModel::build(&snap, at(0))
+        ReposModel::build(&snap, at(0), &[])
             .progress
             .unwrap()
             .contains("Adding x")
     );
     snap.activity = RepoActivity::Idle;
-    assert!(!ReposModel::build(&snap, at(0)).busy);
+    assert!(!ReposModel::build(&snap, at(0), &[]).busy);
 }
 
 #[test]
-fn suggestions_exclude_what_is_configured() {
-    let model = ReposModel::build(&snapshot(RepoStatus::Unknown), at(0));
-    assert!(model.suggestions.iter().all(|s| s.name != "bitnami"));
-    assert!(!model.suggestions.is_empty());
+fn suggestions_are_the_setting_minus_what_is_configured() {
+    let defaults = [entry("bitnami"), entry("internal")];
+    let model = ReposModel::build(&snapshot(RepoStatus::Unknown), at(0), &defaults);
+    let names: Vec<_> = model.suggestions.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, ["internal"]);
+    let none = ReposModel::build(&snapshot(RepoStatus::Unknown), at(0), &[]);
+    assert!(
+        none.suggestions.is_empty(),
+        "an empty setting offers nothing"
+    );
 }

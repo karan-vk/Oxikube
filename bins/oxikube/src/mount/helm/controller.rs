@@ -1,5 +1,9 @@
 //! The app-wide Helm controller: one `HelmCli`, one [`HelmGateState`], one task.
 //!
+//! The same `HelmCli` serves the repositories page and the charts catalog
+//! ([`Installed::cli`]), so the `helm.path` setting, a hot reload and `helm::Recheck` reach every
+//! Helm view, not only the gate.
+//!
 //! Detection runs `helm version` in a child process, so it goes through `spawn_kube` (the Tokio
 //! bridge, aborted when dropped), never on the UI thread. The task waits for [`Request`]s and
 //! keeps the gate in step: the first detection happens at start-up in the background, a change
@@ -14,7 +18,7 @@ use futures::StreamExt as _;
 use futures::channel::mpsc;
 use gpui::{App, AsyncApp, Global, Subscription, Task, WeakEntity};
 use oxikube_domain::helm::HelmCapabilities;
-use oxikube_helm::{HelmCli, HelmCliConfig, HelmTarget, TargetResolver};
+use oxikube_helm::{HelmCli, HelmCliConfig, TargetResolver};
 use oxikube_helm_ui::HelmGateState;
 use oxikube_runtime::RuntimeMode;
 use oxikube_settings::{HelmSettings, Settings as _};
@@ -28,19 +32,20 @@ pub struct FileOpener(pub Rc<dyn Fn(&Path, &mut App)>);
 
 impl Global for FileOpener {}
 
-/// The cluster commands of the CLI adapter are wired by the Releases view (E16-S05); until then
-/// the adapter only detects the binary, which needs no cluster.
-struct NoTargets;
+/// A resolver that knows no cluster: for tests that only detect the binary.
+#[cfg(test)]
+pub(super) struct NoTargets;
 
+#[cfg(test)]
 impl TargetResolver for NoTargets {
-    fn target(&self, _: &oxikube_domain::ids::ClusterId) -> Option<HelmTarget> {
+    fn target(&self, _: &oxikube_domain::ids::ClusterId) -> Option<oxikube_helm::HelmTarget> {
         None
     }
 }
 
 /// Keeps the controller alive for the app (its task stops when dropped).
 struct Running {
-    sink: Sink,
+    installed: Installed,
     _task: Task<()>,
     _settings: Subscription,
 }
@@ -55,11 +60,24 @@ fn cli_config(settings: &HelmSettings) -> HelmCliConfig {
     }
 }
 
-/// Starts the controller once for the app (later calls return the running one's sink) and
-/// begins the first detection in the background. Returns where to send [`Request`]s.
-pub fn install(cx: &mut App) -> Sink {
+/// What [`install`] hands the window.
+#[derive(Clone)]
+pub struct Installed {
+    /// Where to send [`Request`]s.
+    pub sink: Sink,
+    /// The app's one `helm` adapter, configured from the `helm` setting and reconfigured on every
+    /// change and recheck.
+    pub cli: Arc<HelmCli>,
+}
+
+/// Starts the controller once for the app (later calls return the running one) and begins the
+/// first detection in the background.
+///
+/// `targets` finds each cluster's kubeconfig context for the adapter's cluster commands
+/// (installs, upgrades); only the first call's is used.
+pub fn install(cx: &mut App, targets: Arc<dyn TargetResolver>) -> Installed {
     if let Some(running) = cx.try_global::<Running>() {
-        return running.sink.clone();
+        return running.installed.clone();
     }
     let gate = HelmGateState::install(cx);
     // The releases page (E16-S05) reads the release records natively, with or without a binary.
@@ -67,7 +85,13 @@ pub fn install(cx: &mut App) -> Sink {
     // The task holds the gate weakly: a strong handle in a long-lived task is a leaked entity
     // when the app exits.
     let gate = gate.downgrade();
-    let cli = Arc::new(HelmCli::new(HelmCliConfig::default(), Arc::new(NoTargets)));
+    // Configured from the setting already, so a view that uses the adapter before the first
+    // detection finishes still looks where the user said.
+    let cli = Arc::new(HelmCli::new(
+        cli_config(&HelmSettings::resolve(cx)),
+        targets,
+    ));
+    let installed_cli = cli.clone();
     let (sink, mut requests) = mpsc::unbounded::<Request>();
     let _ = sink.unbounded_send(Request::Recheck);
     let task = cx.spawn(async move |cx| {
@@ -101,12 +125,16 @@ pub fn install(cx: &mut App) -> Sink {
             let _ = sink.unbounded_send(Request::SettingsChanged);
         }
     });
+    let installed = Installed {
+        sink,
+        cli: installed_cli,
+    };
     cx.set_global(Running {
-        sink: sink.clone(),
+        installed: installed.clone(),
         _task: task,
         _settings: settings,
     });
-    sink
+    installed
 }
 
 /// Runs one detection off the UI thread and publishes the answer.

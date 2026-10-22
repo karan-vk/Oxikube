@@ -39,5 +39,5 @@ mod tests;
 
 pub use backend::{ReposBackend, ServiceBackend};
 pub use form::{AddForm, FormErrors, FormWarnings};
-pub use model::{ReposModel, RowModel, Tone};
+pub use model::{ReposModel, RowModel, Tone, default_repos};
 pub use view::{HelmReposView, ITEM_KEY, ReposDeps};
