@@ -9,7 +9,10 @@ use gpui::{
 };
 use jiff::Timestamp;
 use oxikube_domain::command::Command;
-use oxikube_ui::layout::{Scrollbar, h_flex};
+use oxikube_domain::helm::HelmFeature;
+use oxikube_ui::Sizable as _;
+use oxikube_ui::button::{Button, ButtonVariants as _};
+use oxikube_ui::layout::{Scrollbar, h_flex, v_flex};
 use oxikube_ui::{ActiveTokens as _, Icon, IconName, u};
 
 use super::backend::{ObjectRow, ObjectState};
@@ -147,9 +150,10 @@ impl HelmReleasesView {
                 cx,
             );
         }
-        div()
+        let list = div()
             .relative()
-            .size_full()
+            .flex_1()
+            .min_h_0()
             .debug_selector(|| "helm-release-history".into())
             .child(
                 uniform_list(
@@ -160,7 +164,11 @@ impl HelmReleasesView {
                 .track_scroll(&detail.history.scroll)
                 .size_full(),
             )
-            .child(Scrollbar::vertical(&detail.history.scroll))
+            .child(Scrollbar::vertical(&detail.history.scroll));
+        v_flex()
+            .size_full()
+            .child(list)
+            .children(self.rollback_pane(detail, cx))
             .into_any_element()
     }
 
@@ -175,9 +183,14 @@ impl HelmReleasesView {
             return Vec::new();
         };
         let now = Timestamp::now();
+        let can_pick = self.deps.gate.read(cx).allows(HelmFeature::Rollback);
+        let (latest, picked) = (detail.release.revision, detail.history.selected);
         range
             .filter_map(|ix| {
                 let revision = detail.history.revisions.get(ix)?;
+                let number = revision.revision;
+                // The newest revision is what runs now: there is nothing to roll back to.
+                let pickable = can_pick && number != latest;
                 let tone = tone(revision.status);
                 let colour = tone_colour(tone, cx);
                 let selector = format!("helm-release-revision:{}", revision.revision);
@@ -189,6 +202,12 @@ impl HelmReleasesView {
                     h_flex()
                         .id(("helm-release-revision", ix))
                         .debug_selector(move || selector)
+                        .when(picked == Some(number), |row| row.bg(colors.element_hover))
+                        .when(pickable, |row| {
+                            row.cursor_pointer().on_click(
+                                cx.listener(move |this, _, _, cx| this.select_revision(number, cx)),
+                            )
+                        })
                         .h(u(px(ROW_HEIGHT)))
                         .px(u(tokens.spacing.xl))
                         .gap(u(tokens.spacing.lg))
@@ -232,6 +251,23 @@ impl HelmReleasesView {
                                 .text_color(colors.text_muted)
                                 .child(SharedString::from(revision.description.clone())),
                         )
+                        .when(pickable, |row| {
+                            row.child(
+                                div()
+                                    .debug_selector(move || {
+                                        format!("helm-release-rollback-row:{number}")
+                                    })
+                                    .child(
+                                        Button::new(("helm-release-rollback-row", ix))
+                                            .ghost()
+                                            .xsmall()
+                                            .label("Rollback")
+                                            .on_click(cx.listener(move |this, _, _, cx| {
+                                                this.select_revision(number, cx)
+                                            })),
+                                    ),
+                            )
+                        })
                         .into_any_element(),
                 )
             })

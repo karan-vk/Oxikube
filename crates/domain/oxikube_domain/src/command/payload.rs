@@ -334,6 +334,34 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         timeout_secs: Option<u64>,
     },
+    /// Roll a release back to an earlier revision (`helm rollback`, E16-S06). **Mutating** (risk
+    /// medium): blocked on a read-only cluster, one confirmation, audited. Helm records the
+    /// rollback as a new revision, so it can itself be rolled back.
+    #[serde(rename = "helm::Rollback")]
+    HelmRollback {
+        /// The cluster the release is in.
+        cluster: ClusterId,
+        /// The release's namespace.
+        namespace: String,
+        /// The release name.
+        release: String,
+        /// The revision to restore.
+        revision: u32,
+    },
+    /// Remove a release and the objects it made (`helm uninstall`, E16-S06). **Mutating** (risk
+    /// high): blocked on a read-only cluster, the user types the release name, audited.
+    #[serde(rename = "helm::Uninstall")]
+    HelmUninstall {
+        /// The cluster the release is in.
+        cluster: ClusterId,
+        /// The release's namespace.
+        namespace: String,
+        /// The release name.
+        release: String,
+        /// Keep the release's history (`--keep-history`), so it can still be rolled back.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        keep_history: bool,
+    },
     /// Add a chart repository to Helm's own configuration (`helm repo add`, E16-S07). A password
     /// is never part of a command: the add dialog hands it to the app's repository service in
     /// memory, and an agent cannot supply one. An agent's call needs the user's permission
@@ -1789,6 +1817,8 @@ impl Command {
             Command::HelmInstall { .. } => CommandId::HELM_INSTALL,
             Command::HelmUpgrade { .. } => CommandId::HELM_UPGRADE,
             Command::HelmUpgradeRelease { .. } => CommandId::HELM_UPGRADE_RELEASE,
+            Command::HelmRollback { .. } => CommandId::HELM_ROLLBACK,
+            Command::HelmUninstall { .. } => CommandId::HELM_UNINSTALL,
             Command::HelmRepoAdd { .. } => CommandId::HELM_REPO_ADD,
             Command::HelmRepoRemove { .. } => CommandId::HELM_REPO_REMOVE,
             Command::HelmRepoUpdate { .. } => CommandId::HELM_REPO_UPDATE,
@@ -2305,6 +2335,24 @@ mod tests {
                 values: crate::helm::ValuesYaml::default(),
                 wait: false,
                 timeout_secs: None,
+            },
+            Command::HelmRollback {
+                cluster: cluster(),
+                namespace: "demo".into(),
+                release: "web".into(),
+                revision: 2,
+            },
+            Command::HelmUninstall {
+                cluster: cluster(),
+                namespace: "demo".into(),
+                release: "web".into(),
+                keep_history: false,
+            },
+            Command::HelmUninstall {
+                cluster: cluster(),
+                namespace: "demo".into(),
+                release: "web".into(),
+                keep_history: true,
             },
             Command::HelmRepoAdd {
                 name: "bitnami".into(),

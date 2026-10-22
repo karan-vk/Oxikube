@@ -813,6 +813,7 @@ crate's `README.md` for its allowed dependencies. Highlights:
   verdict), `ask` returns the guard's confirmation for a preview's spec only, `start` follows the release (`ReleaseProgress`)
   then dispatches with the answer and streams `helm`'s output; dropping the dispatch kills `helm` (audited cancelled). Values travel
   as `ValuesYaml` (redacted `Debug`) to `helm`'s stdin; the audit names `helm.sh/v3 Release ns/name`, chart, version and flags only.
+- `oxikube_app::helm_ops` (E16-S06) — `helm::Rollback` (mutating, risk medium: one confirmation, tool `helm.rollback`) and `helm::Uninstall` (risk high: the release name typed, keep-history option, tool `helm.uninstall`); blocked on read-only clusters, audited as `helm.sh/v3 Release ns/name` with the revision or flag, never values; `values_diff` feeds the rollback preview. The Releases detail (`oxikube_helm_ui::releases::change`) sends them: History row -> preview (chart, masked values diff) -> button; header Uninstall + Keep history. Both hidden when the gate has no `helm`.
 - `oxikube_helm_ui::install` (E16-S09) — the install tab (`HelmInstallView`, keyed `helm-install:<repo/chart>`, opened in the
   active cluster's tab by every `helm::InstallChart`): release name (DNS-1123, 53), namespace with existing ones offered and
   "Create namespace", version picker, wait/timeout, values in `oxikube_ui::editor::CodeEditor` with `ValuesAssist` (hover and

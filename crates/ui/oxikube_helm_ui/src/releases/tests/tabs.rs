@@ -11,7 +11,7 @@ use serde_json::json;
 use super::{Data, Harness, at, full, object, release, release_ref};
 use crate::releases::{Load, ObjectState, ValuesMode};
 
-fn web() -> Data {
+pub(super) fn web() -> Data {
     let mut data = Data {
         releases: vec![release("apps", "web", ReleaseStatus::Deployed, 3)],
         ..Data::default()

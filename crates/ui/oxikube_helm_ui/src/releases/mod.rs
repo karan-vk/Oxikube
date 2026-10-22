@@ -4,8 +4,9 @@
 //!
 //! Everything here reads natively (the release Secrets and ConfigMaps, through the app's
 //! [`ReleasesService`](oxikube_app::ReleasesService)), so it works with no `helm` binary. What
-//! needs the binary (rollback, uninstall; E16-S06) mounts in the detail's `helm-release-actions`
-//! slot, which draws only when the gate allows it; without `helm` the detail says it is read-only.
+//! needs the binary (uninstall in the header's `helm-release-actions` slot, rollback on the History
+//! tab; E16-S06) draws only when the gate allows it; without `helm` the detail says it is
+//! read-only.
 //!
 //! | Module | Holds |
 //! |---|---|
@@ -16,6 +17,7 @@
 //! | `detail`, `tabs` | [`ReleaseDetail`] and the per-tab reads |
 //! | `render`, `detail_view` | the frame, the toolbar, the detail pane |
 //! | `actions` | the `HelmReleases` key actions |
+//! | `change`, `change_view` | rollback from the History tab (with its values preview) and uninstall from the header (E16-S06): they send `helm::Rollback` / `helm::Uninstall` on the bus |
 //! | `open` | `helm::OpenReleases` and the window's opener |
 //! | `test_support` | [`test_support::StaticBackend`]: canned releases for the `--perf` scenario and previews |
 //!
@@ -39,6 +41,8 @@
 
 mod actions;
 mod backend;
+mod change;
+mod change_view;
 mod delegate;
 mod detail;
 mod detail_lists;
@@ -59,6 +63,7 @@ pub use actions::{
     SelectLast, SelectNext, SelectPrevious, ToggleValuesMode,
 };
 pub use backend::{ObjectRow, ObjectState, ObjectsLease, ReleasesBackend, ServiceBackend};
+pub use change::Preview;
 pub use delegate::ReleasesDelegate;
 pub use detail::{ReleaseDetail, ValuesFacts};
 pub use model::{Load, Phase, RowText, Tab, Tone, ValuesMode, age, links, tone};

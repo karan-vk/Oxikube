@@ -115,6 +115,8 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::PodSanitize { cluster, .. }
         | Command::HelmInstall { cluster, .. }
         | Command::HelmUpgrade { cluster, .. }
+        | Command::HelmRollback { cluster, .. }
+        | Command::HelmUninstall { cluster, .. }
         | Command::ResourceApply { cluster, .. } => Some(cluster),
         Command::TerminalNew { cluster }
         | Command::EditorNewManifest { cluster }
@@ -302,6 +304,9 @@ pub fn audit_target(command: &Command, cluster: &ClusterId) -> ResourceRef {
     if let Some(release) = crate::helm_upgrade::audit_target(command, cluster) {
         return release;
     }
+    if let Some(release) = crate::helm_ops::audit_target(command, cluster) {
+        return release;
+    }
     // A create names the object it will make.
     if let Command::NamespaceCreate { name, .. } = command {
         return ResourceRef::cluster_scoped(cluster.clone(), Gvk::namespace(), &**name);
@@ -347,6 +352,9 @@ pub fn summary(meta: &CommandMeta, command: &Command, context: &str) -> String {
         return summary;
     }
     if let Some(summary) = crate::helm_upgrade::summary(command, context) {
+        return summary;
+    }
+    if let Some(summary) = crate::helm_ops::summary(command, context) {
         return summary;
     }
     if let Command::WorkloadScale { target, replicas } = command {
@@ -477,6 +485,9 @@ pub fn audit_detail(command: &Command) -> Option<String> {
         return Some(detail);
     }
     if let Some(detail) = crate::helm_upgrade::audit_detail(command) {
+        return Some(detail);
+    }
+    if let Some(detail) = crate::helm_ops::audit_detail(command) {
         return Some(detail);
     }
     match command {
@@ -611,6 +622,9 @@ pub fn node_shell_sweep_detail(namespace: &str) -> String {
 /// The text a [`ConfirmTier::TypeName`] confirmation must repeat: the target's name, or
 /// the cluster's context name for a command without one.
 pub fn expected_name(command: &Command, context: &str) -> String {
+    if let Some(release) = crate::helm_ops::expected_name(command) {
+        return release;
+    }
     command
         .target()
         .map_or_else(|| context.to_owned(), |t| t.name.to_string())
