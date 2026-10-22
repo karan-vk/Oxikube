@@ -146,6 +146,10 @@ impl CommandId {
     pub const HELM_INSTALL_CHART: CommandId = CommandId::new("helm::InstallChart");
     /// `helm::Install`: install a chart as a new release, through the mutation guard (E16-S09).
     pub const HELM_INSTALL: CommandId = CommandId::new("helm::Install");
+    /// `helm::UpgradeRelease`: open the upgrade tab of a release (E16-S10).
+    pub const HELM_UPGRADE_RELEASE: CommandId = CommandId::new("helm::UpgradeRelease");
+    /// `helm::Upgrade`: upgrade a release to a chart version, through the mutation guard (E16-S10).
+    pub const HELM_UPGRADE: CommandId = CommandId::new("helm::Upgrade");
     /// `helm::RepoAdd`: add a chart repository to Helm's own configuration (E16-S07).
     pub const HELM_REPO_ADD: CommandId = CommandId::new("helm::RepoAdd");
     /// `helm::RepoRemove`: remove a chart repository from Helm's own configuration (E16-S07).
@@ -971,6 +975,22 @@ pub static COMMANDS: &[CommandMeta] = &[
         "Helm: Repositories",
         CommandScope::Global,
         NONE,
+    ),
+    // Upgrading a release changes the cluster (E16-S10): risk medium, one confirmation after the
+    // preview (the preview is the guard's dry run), blocked on a read-only cluster, audited.
+    CommandMeta::mutation(
+        CommandId::HELM_UPGRADE,
+        "Helm: Upgrade Release",
+        CommandScope::Cluster,
+        Risk::Medium,
+        Capabilities::HELM,
+    ),
+    // Opens the upgrade tab; the upgrade itself is `helm::Upgrade`.
+    CommandMeta::read(
+        CommandId::HELM_UPGRADE_RELEASE,
+        "Helm: Upgrade Release...",
+        CommandScope::Global,
+        Capabilities::HELM,
     ),
     // Lists the bindings of the focused view; reads nothing from a cluster.
     CommandMeta::read(

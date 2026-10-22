@@ -21,6 +21,7 @@ mod helm;
 mod helm_charts;
 mod helm_install;
 mod helm_repos;
+mod helm_upgrade;
 mod help;
 mod immediate;
 mod introspection;

@@ -108,26 +108,8 @@ impl InstallFlow {
         spec.values
             .parse()
             .map_err(|error| InstallError::Invalid(error.to_string()))?;
-        let command = spec.command();
         let context = self.context(&spec.cluster, true);
-        let outcome = match self.bus.dispatch(command.clone(), context.clone()).await {
-            Ok(Outcome::NeedsConfirmation(asked)) if asked.tier <= ConfirmTier::Simple => {
-                let answer = Confirmation::simple(asked.token);
-                self.bus
-                    .dispatch(command, context.with_confirmation(answer))
-                    .await
-            }
-            Ok(Outcome::NeedsConfirmation(asked)) => {
-                let _ = self.bus.decline(asked.token).await;
-                return Err(InstallError::Unconfirmed);
-            }
-            other => other,
-        };
-        let output = match outcome {
-            Ok(Outcome::Completed(output)) => output,
-            Ok(Outcome::NeedsConfirmation(_)) => return Err(InstallError::Unconfirmed),
-            Err(error) => return Err(classify(error)),
-        };
+        let output = rehearse(&self.bus, spec.command(), context).await?;
         let data = output.data.unwrap_or(Value::Null);
         let manifest: Arc<str> = data
             .get("manifest")
@@ -211,8 +193,40 @@ impl InstallFlow {
     }
 }
 
+/// Dispatches `command` as a dry run through the guard, answering its simple confirmation: the
+/// user asked for the rehearsal and it changes nothing (it is audited as a dry run). Shared with
+/// the upgrade tab's preview.
+///
+/// # Errors
+///
+/// [`InstallError::ReadOnly`] on a read-only cluster, [`InstallError::Unconfirmed`] when the guard
+/// wants more than a simple confirmation, [`InstallError::Failed`] otherwise.
+pub(crate) async fn rehearse(
+    bus: &CommandBus,
+    command: oxikube_domain::command::Command,
+    context: DispatchContext,
+) -> Result<crate::command_bus::CommandOutput, InstallError> {
+    let outcome = match bus.dispatch(command.clone(), context.clone()).await {
+        Ok(Outcome::NeedsConfirmation(asked)) if asked.tier <= ConfirmTier::Simple => {
+            let answer = Confirmation::simple(asked.token);
+            bus.dispatch(command, context.with_confirmation(answer))
+                .await
+        }
+        Ok(Outcome::NeedsConfirmation(asked)) => {
+            let _ = bus.decline(asked.token).await;
+            return Err(InstallError::Unconfirmed);
+        }
+        other => other,
+    };
+    match outcome {
+        Ok(Outcome::Completed(output)) => Ok(output),
+        Ok(Outcome::NeedsConfirmation(_)) => Err(InstallError::Unconfirmed),
+        Err(error) => Err(classify(error)),
+    }
+}
+
 /// The [`InstallError`] of a failed dispatch.
-fn classify(error: DispatchError) -> InstallError {
+pub(crate) fn classify(error: DispatchError) -> InstallError {
     match error {
         DispatchError::ReadOnly { context, .. } => InstallError::ReadOnly {
             context: context.to_string(),

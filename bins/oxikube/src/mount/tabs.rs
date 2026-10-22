@@ -98,6 +98,7 @@ pub fn tab_setup(
         super::metrics::install_tab(tab, session, &deps, window, cx);
         super::helm_repos::install_tab(tab, &deps, window, cx);
         super::helm_charts::install_tab(tab, &deps, window, cx);
+        super::helm_upgrade::install_tab(tab, &deps, window, cx);
         super::pulses::install_tab(tab, session, &deps, window, cx);
         crate::events::install_tab(tab, session, &deps.events, cx);
         super::events::install_tab(tab, session, &deps, window, cx);

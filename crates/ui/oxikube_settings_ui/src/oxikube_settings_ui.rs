@@ -20,5 +20,6 @@ pub fn init(cx: &mut gpui::App) {
     metrics::register_sidebar(cx);
     // Charts before Repositories: the catalog is what people open most.
     oxikube_helm_ui::charts::register_sidebar(cx);
+    oxikube_helm_ui::upgrade::register_sidebar(cx);
     helm_repos::register_sidebar(cx);
 }

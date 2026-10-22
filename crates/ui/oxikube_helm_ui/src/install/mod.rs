@@ -58,4 +58,5 @@ pub use backend::{FlowBackend, InstallBackend};
 pub use form::{FormErrors, InstallForm};
 pub use model::{HelmInstallEvent, MAX_LOG_LINES, OutputLog, Shown, Stage};
 pub use open::{HelmInstallViews, HelmInstallViewsDeps};
+pub(crate) use panes::log_rows;
 pub use view::{HelmInstallView, ITEM_KEY_PREFIX, InstallDeps, item_key};

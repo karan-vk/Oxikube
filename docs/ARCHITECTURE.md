@@ -800,6 +800,12 @@ crate's `README.md` for its allowed dependencies. Highlights:
   completion from `oxikube_domain::helm::ValuesDocs`: helm-docs `# --` comments, plain comments, `values.schema.json`), preview
   pane (read-only manifest, objects per kind, errors inline), the guard's confirmation, virtualised output log, Cancel. The binary
   points `helm` at each session's own context and kubeconfig file (`mount/helm_install.rs`, `KubeconfigOrigins`).
+- `oxikube_app::helm_upgrade` (E16-S10) — `helm::Upgrade` (mutating, risk medium, tool `helm.upgrade`), `helm::UpgradeRelease` (opens the tab, tool
+  `helm.upgrade_release`) and `UpgradeFlow`: current release read natively, preview = dry run (`helm template`, server dry run, objects
+  added/removed/changed vs the current manifest), ask, start (streamed via `ReleaseProgress`); audit has chart versions and `reuse_values`, never values.
+- `oxikube_helm_ui::upgrade` (E16-S10) — the upgrade tab (`HelmUpgradeView`, keyed `helm-upgrade:<ns>/<name>`): prefilled values, version picker,
+  values diff and chart-defaults diff (E10 `ManifestDiff`, secrets fingerprinted), `--reuse-values` toggle, preview, medium confirmation; opened from the
+  sidebar's Helm > Upgrade (release picker), the palette, or `helm::UpgradeRelease` (`mount/helm_upgrade.rs`).
 - `oxikube_notify_os` (E14-S06) — the `NotifierPort` adapter for desktop notifications. `OsNotifier` is off until the user opts in
   (`events.os_notifications`): `set_enabled(true)` is the only call that contacts the OS, on a thread of its own, and a system without a
   notification service answers `NotifierStatus::Unavailable`, never a panic. One `Backend` per platform behind a trait: macOS

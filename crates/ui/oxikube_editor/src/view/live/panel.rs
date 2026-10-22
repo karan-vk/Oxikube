@@ -21,10 +21,10 @@ use crate::view::ManifestEditor;
 /// The panel's height, before the UI zoom.
 const PANEL_HEIGHT: f32 = 260.;
 /// A diff row's height, before the UI zoom.
-pub(in crate::view) const ROW_HEIGHT: f32 = 18.;
+pub const ROW_HEIGHT: f32 = 18.;
 
 /// "No changes", "1 change · −1 +1".
-pub(crate) fn summary(diff: &ManifestDiff) -> String {
+pub fn summary(diff: &ManifestDiff) -> String {
     if diff.is_empty() {
         return "No changes".to_owned();
     }
@@ -194,11 +194,7 @@ fn diff_rows(
 
 /// The inline rows `range` of `diff`, as the panel draws them (the apply preview's dialog shows
 /// its diff with them).
-pub(in crate::view) fn inline_rows(
-    diff: &ManifestDiff,
-    range: Range<usize>,
-    cx: &gpui::App,
-) -> Vec<AnyElement> {
+pub fn inline_rows(diff: &ManifestDiff, range: Range<usize>, cx: &gpui::App) -> Vec<AnyElement> {
     let colors = Colors::of(cx);
     range
         .map(|ix| inline_row(diff, diff.inline_rows()[ix], &colors))

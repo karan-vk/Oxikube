@@ -6,6 +6,7 @@
 //! |---|---|---|
 //! | [`charts`] | E16-S08 | the Helm charts catalog: search across the configured repositories, virtualised chart cards (icon placeholder, name, description, version, app version, repository), a detail with the README (sanitised markdown), the versions and the default values, an Install action that hands the chart to the install tab, guidance without `helm` and an empty state that offers the default repositories |
 //! | [`install`] | E16-S09 | the install tab: release name (Helm's rules), namespace (or create it), chart version, values in the E10 code editor with hover / completion from the chart's comments, a dry-run preview (rendered manifest with objects per kind, Secret data masked, the server's verdict), the guard's low-risk confirmation, the install's output streamed, Cancel |
+//! | [`upgrade`] | E16-S10 | the upgrade tab: the release's current values prefilled in the code editor, a chart version picker, the values diff (and the chart defaults' diff between versions), `--reuse-values`, a dry-run preview of the objects added / removed / changed, the guard's medium-risk confirmation, the upgrade's output streamed, Cancel |
 //! | [`repos`] | E16-S07 | the Helm repositories page: the repositories in Helm's own configuration, add / remove / update (one or all) with per-repository status, quick-add suggestions, guidance when `helm` is missing |
 //! | [`gate`] | E16-S11 | [`HelmGateState`]: the one capability gate every Helm view, command and tool asks (`HelmGate` from `oxikube_domain::helm`: `Full`, `NativeOnly`, `Unavailable`) |
 //! | [`banner`] | E16-S11 | [`HelmBanner`]: the guidance banner (why things are hidden, "Locate helm", "Recheck"); the gating helper [`banner::gated`] |
@@ -22,6 +23,7 @@ pub mod gate;
 pub mod install;
 pub mod page;
 pub mod repos;
+pub mod upgrade;
 
 pub use banner::{HelmBanner, gated};
 pub use gate::{HelmGateChanged, HelmGateState};

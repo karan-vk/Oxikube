@@ -55,7 +55,10 @@ pub use commands::{EDITOR_COMMANDS, EditorRequest, EditorViewSink, register_comm
 pub use controller::{EditorViews, EditorViewsDeps};
 pub use create::Create;
 pub use host::{ClusterEditorHost, EditorHost};
-pub use live::{DIFF_DEBOUNCE, DiffLayout, LiveSource, SessionLive};
+pub use live::{
+    DIFF_DEBOUNCE, DiffLayout, LiveSource, ROW_HEIGHT as DIFF_ROW_HEIGHT, SessionLive,
+    inline_rows as diff_inline_rows, summary as diff_summary,
+};
 pub use manifest_editor::{ManifestEditor, ManifestEditorParts};
 pub use model::{Accepted, ManifestModel, PassStats, Problems};
 pub use notice::{Notice, NoticeLevel};

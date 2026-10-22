@@ -39,7 +39,7 @@ tokio.workspace = true
 [features]
 default = []
 # Headless GPU screenshots (`tests/banner_screenshot.rs`, `tests/repos_screenshot.rs`,
-# `tests/charts_screenshot.rs`, `tests/install_screenshot.rs`; harness = false so they run on the
+# `tests/charts_screenshot.rs`, `tests/install_screenshot.rs`, `tests/upgrade_screenshot.rs`; harness = false so they run on the
 # process main thread). Need Metal / Vulkan, so never part of the default gate; the nightly
 # workflow runs them: `cargo test -p oxikube_helm_ui --features screenshot --test <name>`.
 screenshot = []
@@ -53,6 +53,12 @@ required-features = ["screenshot"]
 [[test]]
 name = "install_screenshot"
 path = "tests/install_screenshot.rs"
+harness = false
+required-features = ["screenshot"]
+
+[[test]]
+name = "upgrade_screenshot"
+path = "tests/upgrade_screenshot.rs"
 harness = false
 required-features = ["screenshot"]
 
