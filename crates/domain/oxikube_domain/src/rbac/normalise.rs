@@ -136,14 +136,10 @@ impl NormalisedRules {
     /// [`Access::Granted`], [`Access::Restricted`] or [`Access::Denied`], through the same
     /// matcher as [`AccessRules::level_for`].
     pub fn level(&self, verb: &str, group: &str, resource: &str, name: Option<&str>) -> Access {
-        let mut best = Access::Denied;
-        for level in self
-            .resource_rules()
+        self.resource_rules()
             .filter_map(|rule| rule.level_for(verb, group, resource, name))
-        {
-            best = best.max(level);
-        }
-        best
+            .max()
+            .unwrap_or(Access::Denied)
     }
 
     /// Whether the set allows `verb` on the non-resource `path`.
