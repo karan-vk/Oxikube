@@ -738,6 +738,10 @@ crate's `README.md` for its allowed dependencies. Highlights:
   (with the CLI's login hint), `Forbidden`, `Network`, `Timeout` or `Unsupported` (naming the settings key). Adapters run
   through the `ProcessRunner` trait, so their tests use `testing::RecordedRunner` (feature `testing`) over recorded output;
   `oxikube_testkit::contracts::cloud_discovery` is the behaviour the adapters and `FakeCloudDiscoveryPort` both meet.
+  Module `az` (E18-S04): `AzureAksAdapter` lists enabled subscriptions and `az aks list` per subscription; the entry for an
+  Azure AD cluster is a `kubelogin get-token --login azurecli` exec user (CA from `az aks get-credentials` into a `0700` temp
+  dir deleted immediately, never `--admin`); local-account-only and stopped clusters are `Unsupported`; context
+  `aks:<subscription>:<resource-group>:<name>`.
 - `oxikube_helm` (E16) — the `HelmPort` adapters. Module `cli` (E16-S04): `HelmCli` drives the user's `helm` binary. It
   finds it (`HelmCliConfig::path`, the `helm.path` setting, else `PATH`, `/opt/homebrew/bin`, `/usr/local/bin`), requires
   `helm version --short` >= 3.10 (`BinaryMissing` / `VersionTooOld`, kind `Unsupported`) and caches the answer for the

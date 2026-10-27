@@ -17,6 +17,10 @@ CloudDiscoveryPort adapters that shell out to installed aws/gcloud/az CLIs to li
   `eks list-clusters` + parallel `eks describe-cluster`, and an exec-auth entry (`aws eks get-token`).
   Parsers are tested on recorded output in `tests/fixtures/aws-2.15/`.
 - `gcloud` (E18-S03): `GcloudDiscovery`, the GKE adapter: `gcloud version|auth list|projects list|container clusters list`, ADC file check, `gke-gcloud-auth-plugin` detection, exec-auth entries named `gke:<project>:<location>:<name>`. Fixtures: `tests/fixtures/gcloud-472.0.0/`.
+- `az` (E18-S04): `AzureAksAdapter`, AKS per Azure subscription through `az` (`account list`, `aks list`,
+  `aks show`); entries are `kubelogin get-token --login azurecli` exec users for Azure AD clusters, the
+  CA read from `az aks get-credentials` written to a private temp dir that is deleted at once. Fixtures:
+  `tests/fixtures/az-2.61/`.
 - `testing` (feature `testing`): `RecordedRunner` answers commands from recorded output
   (`tests/fixtures/<cli>-<version>/...`), so adapters are tested without any cloud account.
 
