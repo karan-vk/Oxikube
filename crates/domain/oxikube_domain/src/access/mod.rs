@@ -23,6 +23,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::kinds::Verb;
 
+mod check;
+
+pub use check::{AccessCheck, AccessDecision, Impersonate};
+
 /// How the user stands on one action.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Access {

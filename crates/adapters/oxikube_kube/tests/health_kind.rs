@@ -9,12 +9,13 @@ use std::sync::Arc;
 use kube::config::{KubeConfigOptions, Kubeconfig};
 use kube::{Client, Config};
 use oxikube_domain::ErrorKind;
+use oxikube_domain::access::AccessCheck;
 use oxikube_domain::ids::{ContextName, Gvr};
 use oxikube_domain::session::ClusterSessionState;
 use oxikube_kube::auth::CredentialRefresh;
 use oxikube_kube::health::{
-    AccessQuery, HealthEvent, Liveness, RBAC_DERIVED, RulesCache, can_i, capabilities_for_context,
-    pooled_probe, probe_apiserver_version, probe_capabilities,
+    HealthEvent, Liveness, RBAC_DERIVED, RulesCache, can_i, capabilities_for_context, pooled_probe,
+    probe_apiserver_version, probe_capabilities,
 };
 use oxikube_kube::pool::{ClientPool, PoolConfig};
 use oxikube_testkit::integration::{ensure_kind_context, test_context};
@@ -76,7 +77,7 @@ async fn valid_credentials_are_healthy_and_admin_has_every_rbac_capability() {
     assert_eq!(report.granted, RBAC_DERIVED, "{report:?}");
     assert!(report.denied().is_empty());
 
-    let query = AccessQuery::new("create", Gvr::new("", "v1", "pods"))
+    let query = AccessCheck::new("create", Gvr::new("", "v1", "pods"))
         .subresource("exec")
         .namespace("default");
     let decision = can_i(&client, &query, CredentialRefresh::Static)

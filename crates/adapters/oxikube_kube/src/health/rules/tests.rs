@@ -138,3 +138,19 @@ fn missing_status_is_unknown_not_denied() {
     let snap = RulesSnapshot::from_status(None);
     assert!(snap.is_partial());
 }
+
+#[tokio::test(start_paused = true)]
+async fn invalidate_namespace_forces_a_new_fetch_for_that_namespace_only() {
+    let cache = RulesCache::default();
+    for ns in ["dev", "prod"] {
+        cache
+            .get_or_fetch(&ctx("a"), ns, || async { Ok(snapshot("get")) })
+            .await
+            .unwrap();
+    }
+
+    cache.invalidate_namespace(&ctx("a"), "dev");
+
+    assert!(cache.get(&ctx("a"), "dev").is_none());
+    assert!(cache.get(&ctx("a"), "prod").is_some());
+}

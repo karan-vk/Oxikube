@@ -1,0 +1,43 @@
+//! [`AccessService`]: what the current user may do, from cached rules reviews (E17-S02).
+//!
+//! A thin, cached layer over [`AccessReviewPort`](oxikube_ports::AccessReviewPort) for one
+//! connected cluster. The sidebar, the action bars and the can-i tool (E17-S03, S08) ask it
+//! instead of the port, so ten views asking about one namespace cost one request.
+//!
+//! * **Per-namespace rules cache with a TTL** ([`DEFAULT_TTL`], 60 s, measured on the injected
+//!   `ClockPort`). [`AccessService::rules`] returns the `SelfSubjectRulesReview` of one namespace
+//!   (`None` is the cluster-wide ask, marked [`namespaces_unseen`](oxikube_domain::access::AccessRules::namespaces_unseen)
+//!   because the review sees one probe namespace's Roles only).
+//! * **Single flight.** Concurrent asks for the same namespace share one port call.
+//! * **Invalidation** on connect, namespace change and context switch:
+//!   [`AccessService::invalidate`] and [`AccessService::invalidate_namespace`]; the
+//!   [`AccessRegistry`] hands out one service per [`ClusterSession`](crate::session::ClusterSession)
+//!   connection and starts a fresh one when the connection (so the port) is replaced.
+//! * **Batch can-i.** [`AccessService::can_i_many`] answers from the cached rules whenever
+//!   they can decide ([`AccessRules::decide`](oxikube_domain::access::AccessRules::decide)) and
+//!   falls back to one `SelfSubjectAccessReview` only for the rest (`resourceNames` grants,
+//!   partial reviews), with the number in flight capped at [`MAX_IN_FLIGHT`].
+//! * **Render path.** [`AccessService::peek`] answers from the cache without waiting or
+//!   allocating a request: zero network calls after the first review.
+//! * **Fails open.** A failed review is an error or [`Unknown`](oxikube_domain::access::AccessDecision::Unknown),
+//!   never a deny: only a clear review-based deny feeds greying out; the server stays the
+//!   authority.
+//! * **Accessible namespaces** ([`accessible_namespaces`]): the names to offer when the
+//!   cluster-wide namespace list is forbidden. The cluster's `accessible_namespaces` setting
+//!   (Lens `accessibleNamespaces`) wins when set; otherwise candidates are reviewed and the ones
+//!   where the user may read something are kept.
+//!
+//! Reviews are `POST`s that create nothing, so none of this goes through `MutationGuard`.
+//! Plain async Rust over a port: no gpui, no kube, nothing spawned.
+
+mod cache;
+mod namespaces;
+mod registry;
+mod service;
+
+#[cfg(test)]
+mod tests;
+
+pub use namespaces::{AccessibleNamespaces, NamespaceOrigin, accessible_namespaces};
+pub use registry::AccessRegistry;
+pub use service::{AccessService, DEFAULT_TTL, MAX_IN_FLIGHT};

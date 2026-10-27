@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures::channel::oneshot;
-use oxikube_domain::access::AccessRules;
+use oxikube_domain::access::{AccessCheck, AccessDecision, AccessRules};
 use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_domain::{Capabilities, OxiResult};
 use oxikube_ports::{
@@ -31,6 +31,8 @@ pub struct AccessScripts {
     pub capabilities: Script<Capabilities>,
     /// `rules`.
     pub rules: Script<AccessRules>,
+    /// `can_i`.
+    pub can_i: Script<AccessDecision>,
 }
 
 /// One call made on a [`FakeAccessReviewPort`].
@@ -40,6 +42,12 @@ pub enum AccessCall {
     Capabilities(Option<String>),
     /// `rules(namespace)`.
     Rules(Option<String>),
+    /// `can_i(check)`.
+    CanI(AccessCheck),
+    /// `invalidate_rules(namespace)`.
+    InvalidateRules(Option<String>),
+    /// `invalidate_all_rules()`.
+    InvalidateAllRules,
 }
 
 /// Fake `AccessReviewPort`.
@@ -56,6 +64,8 @@ pub struct FakeAccessReviewPort {
     granted: Mutex<Capabilities>,
     rules: Mutex<AccessRules>,
     namespace_rules: Mutex<HashMap<String, AccessRules>>,
+    decisions: Mutex<Vec<(AccessCheck, AccessDecision)>>,
+    rules_yields: Mutex<usize>,
 }
 
 fake_plumbing!(FakeAccessReviewPort, AccessScripts, AccessCall);
@@ -68,6 +78,8 @@ impl Default for FakeAccessReviewPort {
             granted: Mutex::new(Capabilities::all()),
             rules: Mutex::new(AccessRules::all_access()),
             namespace_rules: Mutex::new(HashMap::new()),
+            decisions: Mutex::new(Vec::new()),
+            rules_yields: Mutex::new(0),
         }
     }
 }
@@ -115,6 +127,64 @@ impl FakeAccessReviewPort {
             .lock()
             .insert(namespace.to_owned(), rules);
     }
+
+    /// Makes `can_i(check)` answer `decision` (the last setting for an equal check wins). A
+    /// check with no setting answers `Allowed`.
+    #[must_use]
+    pub fn with_decision(self, check: AccessCheck, decision: AccessDecision) -> Self {
+        self.set_decision(check, decision);
+        self
+    }
+
+    /// Replaces the answer of `can_i(check)`.
+    pub fn set_decision(&self, check: AccessCheck, decision: AccessDecision) {
+        let mut decisions = self.decisions.lock();
+        decisions.retain(|(known, _)| known != &check);
+        decisions.push((check, decision));
+    }
+
+    /// Makes every `rules` call yield to the executor `times` times before it answers, so a
+    /// test can hold several callers in flight at once (single-flight). Zero disables it.
+    #[must_use]
+    pub fn with_rules_yields(self, times: usize) -> Self {
+        *self.rules_yields.lock() = times;
+        self
+    }
+
+    /// How many `rules` calls were made, for `namespace` (`None` is cluster-wide).
+    pub fn rules_calls(&self, namespace: Option<&str>) -> usize {
+        self.recorded_calls()
+            .iter()
+            .filter(|call| matches!(call, AccessCall::Rules(ns) if ns.as_deref() == namespace))
+            .count()
+    }
+
+    /// How many times the adapter-side rules cache of `namespace` (`None`: cluster-wide) was
+    /// told to forget it.
+    pub fn rules_invalidations(&self, namespace: Option<&str>) -> usize {
+        self.recorded_calls()
+            .iter()
+            .filter(|call| {
+                matches!(call, AccessCall::InvalidateRules(ns) if ns.as_deref() == namespace)
+            })
+            .count()
+    }
+
+    /// How many times the adapter-side rules cache was told to forget everything.
+    pub fn full_rules_invalidations(&self) -> usize {
+        self.recorded_calls()
+            .iter()
+            .filter(|call| matches!(call, AccessCall::InvalidateAllRules))
+            .count()
+    }
+
+    /// How many `can_i` calls were made.
+    pub fn can_i_calls(&self) -> usize {
+        self.recorded_calls()
+            .iter()
+            .filter(|call| matches!(call, AccessCall::CanI(_)))
+            .count()
+    }
 }
 
 #[async_trait]
@@ -130,11 +200,50 @@ impl AccessReviewPort for FakeAccessReviewPort {
     async fn rules(&self, namespace: Option<&str>) -> OxiResult<AccessRules> {
         self.calls
             .record(AccessCall::Rules(namespace.map(str::to_owned)));
+        let yields = *self.rules_yields.lock();
+        for _ in 0..yields {
+            yield_once().await;
+        }
         self.script.rules.next_or_else(|| {
             let own = namespace.and_then(|ns| self.namespace_rules.lock().get(ns).cloned());
             Ok(own.unwrap_or_else(|| self.rules.lock().clone()))
         })
     }
+
+    async fn can_i(&self, check: &AccessCheck) -> OxiResult<AccessDecision> {
+        self.calls.record(AccessCall::CanI(check.clone()));
+        self.script.can_i.next_or_else(|| {
+            let known = self.decisions.lock();
+            Ok(known
+                .iter()
+                .find(|(candidate, _)| candidate == check)
+                .map_or(AccessDecision::Allowed, |(_, decision)| decision.clone()))
+        })
+    }
+
+    fn invalidate_rules(&self, namespace: Option<&str>) {
+        self.calls
+            .record(AccessCall::InvalidateRules(namespace.map(str::to_owned)));
+    }
+
+    fn invalidate_all_rules(&self) {
+        self.calls.record(AccessCall::InvalidateAllRules);
+    }
+}
+
+/// Returns `Pending` once (waking itself), so other tasks run before the caller continues.
+async fn yield_once() {
+    let mut yielded = false;
+    std::future::poll_fn(|cx| {
+        if yielded {
+            std::task::Poll::Ready(())
+        } else {
+            yielded = true;
+            cx.waker().wake_by_ref();
+            std::task::Poll::Pending
+        }
+    })
+    .await;
 }
 
 // --- ClusterConnectorPort ----------------------------------------------------------------
