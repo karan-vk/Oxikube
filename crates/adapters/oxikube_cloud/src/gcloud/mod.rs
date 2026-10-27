@@ -26,7 +26,6 @@ mod parse;
 mod tests;
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use async_trait::async_trait;
 use oxikube_domain::{OxiError, OxiResult};
@@ -35,16 +34,13 @@ use oxikube_ports::cloud::{
     KubeconfigEntry,
 };
 
-use crate::process::{Cli, CliError, CliInvocation, ProcessRunner, RunOpts};
+use crate::process::{Cli, CliError, CliInvocation, ProcessRunner};
 use crate::shared::Shared;
 
 /// The plugin GKE contexts authenticate through.
 pub(crate) const PLUGIN_COMMAND: &str = "gke-gcloud-auth-plugin";
 /// What installs it.
 pub(crate) const PLUGIN_INSTALL: &str = "gcloud components install gke-gcloud-auth-plugin";
-
-/// Listing a project can take a while on a large organisation.
-const LIST_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// The GKE [`CloudDiscoveryPort`] adapter.
 #[derive(Clone)]
@@ -69,18 +65,13 @@ impl GcloudDiscovery {
         self.projects.set(projects);
     }
 
-    /// `gcloud args` asking for JSON, with a generous timeout.
+    /// `gcloud args` asking for JSON; the timeout is the runner's `cloud.command_timeout_secs`.
     pub(super) fn json<I, S>(&self, args: I) -> CliInvocation
     where
         I: IntoIterator<Item = S>,
         S: Into<String>,
     {
-        CliInvocation::new(Cli::Gcloud, args)
-            .with_opts(RunOpts {
-                timeout: Some(LIST_TIMEOUT),
-                ..RunOpts::default()
-            })
-            .json()
+        CliInvocation::new(Cli::Gcloud, args).json()
     }
 }
 

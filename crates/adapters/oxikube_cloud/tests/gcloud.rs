@@ -149,3 +149,26 @@ async fn dropping_the_listing_cancels_both_processes() {
         "a cancelled listing left its process running"
     );
 }
+
+#[tokio::test]
+async fn the_configured_command_timeout_governs_gcloud_listing() {
+    let dir = TempDir::new().expect("temp dir");
+    let gcloud = script(dir.path(), "gcloud", "sleep 5");
+    let config = CliRunnerConfig {
+        paths: BTreeMap::from([(Cli::Gcloud, gcloud)]),
+        login_shell: LoginShell::Disabled,
+        default_timeout: std::time::Duration::from_millis(300),
+        ..CliRunnerConfig::default()
+    };
+    let gke = GcloudDiscovery::new(Arc::new(CliRunner::new(config)));
+    let scope = CloudScope::Gcp {
+        project: "p1".into(),
+    };
+    let started = std::time::Instant::now();
+    let result = gke.list_clusters(&scope).await;
+    assert!(result.is_err(), "a hung gcloud must time out");
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(4),
+        "the 300 ms setting must apply, not a hardcoded 60 s"
+    );
+}

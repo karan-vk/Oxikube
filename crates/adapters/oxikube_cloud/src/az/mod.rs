@@ -28,7 +28,6 @@ mod entry;
 mod model;
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use async_trait::async_trait;
 use oxikube_domain::cloud::SetupHint;
@@ -42,10 +41,6 @@ use serde::de::IgnoredAny;
 use crate::process::{Cli, CliInvocation, ProcessRunner, RunOpts};
 use crate::shared::Shared;
 use model::{AksCluster, AzVersion, Subscription};
-
-/// How long listing a subscription's clusters may take (`az` starts slowly and a subscription
-/// can hold many clusters).
-const LIST_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Where users install `kubelogin` from.
 const KUBELOGIN_INSTALL_URL: &str = "https://azure.github.io/kubelogin/install.html";
@@ -73,10 +68,8 @@ impl AzureAksAdapter {
     }
 
     fn list_opts() -> RunOpts {
-        RunOpts {
-            timeout: Some(LIST_TIMEOUT),
-            ..RunOpts::default()
-        }
+        // No explicit timeout: the runner applies `cloud.command_timeout_secs`.
+        RunOpts::default()
     }
 
     fn azure_subscription(scope: &CloudScope) -> OxiResult<&str> {
