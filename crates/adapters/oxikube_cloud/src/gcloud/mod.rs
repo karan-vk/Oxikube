@@ -58,7 +58,7 @@ impl GcloudDiscovery {
     }
 
     /// `gcloud args` asking for JSON, with a generous timeout.
-    pub(crate) fn json<I, S>(&self, args: I) -> CliInvocation
+    pub(super) fn json<I, S>(&self, args: I) -> CliInvocation
     where
         I: IntoIterator<Item = S>,
         S: Into<String>,
@@ -69,26 +69,6 @@ impl GcloudDiscovery {
                 ..RunOpts::default()
             })
             .json()
-    }
-
-    /// The project of a GCP scope, or a `Validation` error for another provider's.
-    pub(crate) fn project<'a>(&self, scope: &'a CloudScope) -> OxiResult<&'a str> {
-        match scope {
-            CloudScope::Gcp { project } => {
-                if project.is_empty() || project.starts_with('-') {
-                    return Err(OxiError::validation(format!(
-                        "`{project}` is not a Google Cloud project id"
-                    )));
-                }
-                Ok(project)
-            }
-            CloudScope::Aws { .. } | CloudScope::Azure { .. } => {
-                Err(OxiError::validation(format!(
-                    "{} scope `{scope}` given to the GKE adapter",
-                    scope.provider()
-                )))
-            }
-        }
     }
 }
 
@@ -107,7 +87,7 @@ impl CloudDiscoveryPort for GcloudDiscovery {
     }
 
     async fn list_clusters(&self, scope: &CloudScope) -> OxiResult<Vec<DiscoveredCluster>> {
-        let project = self.project(scope)?;
+        let project = project(scope)?;
         let args = ["container", "clusters", "list", "--project", project];
         let listed: Vec<parse::GkeCluster> = self
             .runner
@@ -122,6 +102,24 @@ impl CloudDiscoveryPort for GcloudDiscovery {
 
     async fn kubeconfig_entry(&self, cluster: &DiscoveredCluster) -> OxiResult<KubeconfigEntry> {
         self.build_entry(cluster).await
+    }
+}
+
+/// The project of a GCP scope, or a `Validation` error for another provider's.
+pub(crate) fn project(scope: &CloudScope) -> OxiResult<&str> {
+    match scope {
+        CloudScope::Gcp { project } => {
+            if project.is_empty() || project.starts_with('-') {
+                return Err(OxiError::validation(format!(
+                    "`{project}` is not a Google Cloud project id"
+                )));
+            }
+            Ok(project)
+        }
+        CloudScope::Aws { .. } | CloudScope::Azure { .. } => Err(OxiError::validation(format!(
+            "{} scope `{scope}` given to the GKE adapter",
+            scope.provider()
+        ))),
     }
 }
 

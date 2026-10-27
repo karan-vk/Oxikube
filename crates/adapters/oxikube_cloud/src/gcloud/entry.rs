@@ -2,12 +2,10 @@
 
 use oxikube_domain::ids::ContextName;
 use oxikube_domain::{OxiError, OxiResult};
-use oxikube_ports::cloud::{
-    CloudScope, DiscoveredCluster, ExecInteractiveMode, ExecPlugin, KubeconfigEntry,
-};
+use oxikube_ports::cloud::{DiscoveredCluster, ExecInteractiveMode, ExecPlugin, KubeconfigEntry};
 
 use super::parse::GkeCluster;
-use super::{GcloudDiscovery, PLUGIN_COMMAND, PLUGIN_INSTALL, map_gcloud_error};
+use super::{GcloudDiscovery, PLUGIN_COMMAND, PLUGIN_INSTALL, map_gcloud_error, project};
 use crate::process::Cli;
 
 /// The deterministic context name `gke:<project>:<location>:<name>`.
@@ -20,7 +18,7 @@ impl GcloudDiscovery {
         &self,
         cluster: &DiscoveredCluster,
     ) -> OxiResult<KubeconfigEntry> {
-        let project = self.project(&cluster.scope)?.to_owned();
+        let project = project(&cluster.scope)?.to_owned();
         let Some(plugin) = self.runner.locate(Cli::GkeGcloudAuthPlugin).await else {
             return Err(OxiError::unsupported(format!(
                 "`{PLUGIN_COMMAND}` is not installed, so GKE cluster `{}` cannot be connected: \
@@ -78,9 +76,8 @@ impl GcloudDiscovery {
             .run_json(self.json(args))
             .await
             .map_err(|error| map_gcloud_error(error, project))?;
-        let scope: &CloudScope = &cluster.scope;
         let mut fresh = described
-            .into_discovered(scope)
+            .into_discovered(&cluster.scope)
             .unwrap_or_else(|| cluster.clone());
         fresh.location.clone_from(&cluster.location);
         fresh.name.clone_from(&cluster.name);
