@@ -44,6 +44,8 @@
 //! | `oxikube_helm_ui::charts` | `helm::OpenCharts` (the Helm charts catalog, a tab of the active cluster's tab; E16-S08) |
 //! | `oxikube_app::helm_charts` | `helm::SearchCharts`, `helm::ShowChart` (search the configured repositories, print a chart's metadata, README or default values through the `helm` CLI; read-only) and `helm::InstallChart` (hands a chart to the install tab; opens a tab, installs nothing; E16-S08) |
 //! | `oxikube_rbac_ui::role` | `role::OpenDialog` (the Role / ClusterRole rule dialog, new or editing one, in a cluster tab; E17-S05) |
+//! | `oxikube_rbac_ui::binding` | `binding::OpenDialog` (the RoleBinding / ClusterRoleBinding dialog, new or editing one, in a cluster tab; E17-S06) |
+//! | `oxikube_app::binding_ops` | `binding::Create`, `binding::Edit`, `binding::Delete` (a RoleBinding or ClusterRoleBinding through the server's dry run; mutating, risk medium: a simple confirmation that calls out `cluster-admin` and everybody-groups, blocked on read-only clusters, audited with the role and a subject count; a new roleRef is a delete and a create as one step; E17-S06) |
 //! | `oxikube_app::role_ops` | `role::Create`, `role::Edit`, `role::Delete` (a Role or ClusterRole through the server's dry run; mutating, risk medium: a simple confirmation, blocked on read-only clusters, audited with a rule count; E17-S05) |
 //! | `oxikube_app::sa_kubeconfig` | `serviceaccount::GenerateKubeconfig` (request a ServiceAccount token and build a kubeconfig from it, kept in memory for the account's panel; mutating, risk low: one confirmation; blocked on read-only clusters; audited without the token; E17-S09) |
 //! | `oxikube_app::helm_ops` | `helm::Rollback`, `helm::Uninstall` (roll a release back to a revision / remove it through the `helm` CLI; mutating, risk medium / high: a simple confirmation / the release name typed; blocked on read-only clusters; audited without values; E16-S06) |
@@ -179,6 +181,8 @@ pub struct BusParts {
     pub metrics_pages: oxikube_settings_ui::metrics::MetricsRequestSink,
     /// Where `role::OpenDialog` sends its request (E17-S05).
     pub role_dialogs: oxikube_rbac_ui::role::RoleRequestSink,
+    /// Opens the RoleBinding / ClusterRoleBinding dialog (E17-S06).
+    pub binding_dialogs: oxikube_rbac_ui::binding::BindingRequestSink,
     /// The Helm repositories service (`helm::RepoAdd`, `RepoRemove`, `RepoUpdate`; E16-S07).
     pub helm_repos: oxikube_app::HelmReposService,
     /// Where `helm::ShowRepos` sends its request (E16-S07).
@@ -362,6 +366,12 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     })?;
     registry.install("oxikube_rbac_ui::role", |r| {
         oxikube_rbac_ui::role::register_commands(r, parts.role_dialogs)
+    })?;
+    registry.install("oxikube_rbac_ui::binding", |r| {
+        oxikube_rbac_ui::binding::register_commands(r, parts.binding_dialogs)
+    })?;
+    registry.install("oxikube_app::binding_ops", |r| {
+        oxikube_app::binding_ops::register_commands(r)
     })?;
     registry.install("oxikube_app::role_ops", |r| {
         oxikube_app::role_ops::register_commands(r)

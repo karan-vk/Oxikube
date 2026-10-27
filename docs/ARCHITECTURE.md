@@ -902,6 +902,17 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `resourceNames` with create/list/watch only warns). An aggregated ClusterRole's rules are read-only. Saving sends `role::Create` / `role::Edit` and deleting
   `role::Delete` (mutating, risk medium: one confirmation, a server dry run first, blocked read-only, audited with a rule count; the handlers write Roles and
   ClusterRoles only, an edit is a replace at the `resourceVersion` the dialog read; the delete confirmation names the bindings that name the role).
+- `oxikube_rbac_ui::binding` + `oxikube_app::binding_ops` (E17-S06) — RoleBindings and ClusterRoleBindings. The two kinds register a `KindSpec` (no sidebar slot)
+  whose generic table has the Role ref and Subjects (first subject and `+N`) columns and whose detail panel `BindingPanel` shows the role it grants (a link that
+  opens it), the subjects as a virtualised table (kind, name, namespace, apiGroup) and the rules the role grants (read once through `role_of`, off the UI
+  thread). `BindingDialog` (`binding::OpenDialog`: the table's "New", the row's "Edit Binding…", the panel's "Edit…", the palette) has a role picker that offers
+  only what the binding may name (a ClusterRoleBinding only ClusterRoles, a RoleBinding the Roles of its namespace and every ClusterRole; `BindingChoices` reads
+  the lists, each on its own so a refused list falls back to typing) and subject rows (User / Group with autocomplete from the names bindings already use,
+  ServiceAccount with a namespace and a picker, the `system:serviceaccount:<ns>:<name>` identity shown); `BindingDraft` is its model. Saving sends `binding::Create` /
+  `binding::Edit`, deleting `binding::Delete` (mutating, risk medium: one confirmation that calls out `cluster-admin` and everybody-groups from the domain's
+  `Escalation` table, a server dry run first, blocked read-only, audited with the role and a subject count; the handlers write bindings only). `roleRef` is
+  immutable in the API, so an edit that changes it is `binding::Edit` with `previous`: delete then create as one intent, the old binding put back if the new one
+  is refused.
 - `oxikube_notify_os` (E14-S06) — the `NotifierPort` adapter for desktop notifications. `OsNotifier` is off until the user opts in
   (`events.os_notifications`): `set_enabled(true)` is the only call that contacts the OS, on a thread of its own, and a system without a
   notification service answers `NotifierStatus::Unavailable`, never a panic. One `Backend` per platform behind a trait: macOS

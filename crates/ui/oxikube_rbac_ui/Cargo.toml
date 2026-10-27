@@ -63,3 +63,10 @@ name = "dialog_screenshot"
 path = "tests/dialog_screenshot.rs"
 harness = false
 required-features = ["screenshot"]
+
+# The binding dialog's scenes (E17-S06): `cargo test -p oxikube_rbac_ui --features screenshot --test binding_screenshot`.
+[[test]]
+name = "binding_screenshot"
+path = "tests/binding_screenshot.rs"
+harness = false
+required-features = ["screenshot"]
