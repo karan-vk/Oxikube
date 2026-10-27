@@ -65,7 +65,6 @@ pub async fn accessible_namespaces(
     override_names: &[String],
     candidates: impl IntoIterator<Item = String>,
 ) -> AccessibleNamespaces {
-    let own = |names: BTreeSet<String>| names.into_iter().collect::<Vec<_>>();
     let configured: BTreeSet<String> = override_names
         .iter()
         .map(|name| name.trim().to_owned())
@@ -73,7 +72,7 @@ pub async fn accessible_namespaces(
         .collect();
     if !configured.is_empty() {
         return AccessibleNamespaces {
-            names: own(configured),
+            names: configured.into_iter().collect(),
             origin: NamespaceOrigin::Override,
         };
     }
@@ -94,7 +93,7 @@ pub async fn accessible_namespaces(
         .collect()
         .await;
     AccessibleNamespaces {
-        names: own(kept),
+        names: kept.into_iter().collect(),
         origin: NamespaceOrigin::Reviewed,
     }
 }

@@ -37,6 +37,15 @@ pub(super) struct RulesCache {
     state: Arc<Mutex<State>>,
 }
 
+impl State {
+    fn entry(&self, namespace: Option<&str>) -> Option<&Entry> {
+        match namespace {
+            Some(name) => self.by_namespace.get(name),
+            None => self.cluster_wide.as_ref(),
+        }
+    }
+}
+
 impl RulesCache {
     pub(super) fn new(
         port: Arc<dyn AccessReviewPort>,
@@ -63,10 +72,7 @@ impl RulesCache {
     pub(super) fn peek(&self, namespace: Option<&str>) -> Option<Arc<AccessRules>> {
         let now = self.clock.now();
         let state = self.state.lock();
-        let entry = match namespace {
-            Some(name) => state.by_namespace.get(name),
-            None => state.cluster_wide.as_ref(),
-        }?;
+        let entry = state.entry(namespace)?;
         self.is_fresh(entry, now).then(|| entry.rules.clone())
     }
 
@@ -75,11 +81,10 @@ impl RulesCache {
         let flight = {
             let now = self.clock.now();
             let mut state = self.state.lock();
-            let cached = match namespace {
-                Some(name) => state.by_namespace.get(name),
-                None => state.cluster_wide.as_ref(),
-            };
-            if let Some(entry) = cached.filter(|entry| self.is_fresh(entry, now)) {
+            if let Some(entry) = state
+                .entry(namespace)
+                .filter(|entry| self.is_fresh(entry, now))
+            {
                 return Ok(entry.rules.clone());
             }
             let key = namespace.map(str::to_owned);
