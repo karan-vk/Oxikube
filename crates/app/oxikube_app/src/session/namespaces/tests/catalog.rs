@@ -1,6 +1,7 @@
 //! The namespace list, the stale-name drop and the 403 fallback.
 
 use oxikube_domain::OxiError;
+use oxikube_domain::access::{AccessRule, AccessRules};
 use oxikube_domain::session::NamespaceSelection;
 use oxikube_ports::{ListPage, StatePort};
 use oxikube_testkit::StateCall;
@@ -281,4 +282,61 @@ fn a_forbidden_list_with_accessible_namespaces_prunes_nothing() {
 
     assert!(reconciled.dropped.is_empty());
     assert_eq!(h.selection("a"), set(&["elsewhere"]));
+}
+
+#[test]
+fn a_forbidden_list_adds_the_reviewed_namespaces_the_user_can_read() {
+    let h = Harness::new();
+    h.connect("a", &["dev"]);
+    let ports = h.connector.ports_for(&id("a"));
+    ports.access.set_namespace_rules(
+        "payments",
+        AccessRules::none().with_rule(AccessRule::granting(&["list"], &[""], &["pods"], &[])),
+    );
+    ports
+        .access
+        .set_namespace_rules("secret-ops", AccessRules::none());
+    h.run(h.service.select(&id("a"), set(&["payments"])))
+        .unwrap();
+    h.run(h.service.toggle_favourite(&id("a"), "secret-ops"))
+        .unwrap();
+    ports
+        .resources
+        .script()
+        .list_metadata
+        .push_err(OxiError::forbidden("namespaces is forbidden"));
+
+    let catalog = h.run(h.service.catalog(&id("a"))).unwrap();
+
+    assert_eq!(catalog.source, NamespaceSource::Forbidden);
+    assert_eq!(
+        catalog.names,
+        ["payments"],
+        "secret-ops is reviewed and denied"
+    );
+    assert_eq!(ports.access.rules_calls(Some("payments")), 1);
+}
+
+#[test]
+fn the_accessible_namespaces_setting_replaces_the_review() {
+    let h = Harness::new();
+    h.connect("a", &["dev"]);
+    with_accessible(&h, &["billing"]);
+    let ports = h.connector.ports_for(&id("a"));
+    h.run(h.service.select(&id("a"), set(&["payments"])))
+        .unwrap();
+    ports
+        .resources
+        .script()
+        .list_metadata
+        .push_err(OxiError::forbidden("namespaces is forbidden"));
+
+    let catalog = h.run(h.service.catalog(&id("a"))).unwrap();
+
+    assert_eq!(catalog.names, ["billing"]);
+    assert_eq!(
+        ports.access.rules_calls(Some("payments")),
+        0,
+        "the setting is used as given"
+    );
 }

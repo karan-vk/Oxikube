@@ -57,6 +57,7 @@
 //! | [`namespaces`] | E12-S16 | the Namespace kind: `namespace::Create` / `namespace::Delete` handlers (guarded), [`delete_advice`](namespaces::delete_advice) (HNC and system-namespace warnings, counts of what a namespace holds) and [`NamespaceColumns`](namespaces::NamespaceColumns) (a live Pods count from the pods feed's per-namespace index) |
 //! | [`session::namespaces`] | E06-S07 | [`NamespaceService`](session::namespaces::NamespaceService): namespace selection remembered per cluster, favourites, the namespace list with the RBAC fallback, `namespace::*` commands |
 
+pub mod access;
 pub mod actions;
 pub mod allocation;
 pub mod apply;

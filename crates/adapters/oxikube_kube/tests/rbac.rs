@@ -12,12 +12,12 @@ use k8s_openapi::api::core::v1::{Pod, Secret};
 use k8s_openapi::api::rbac::v1::PolicyRule;
 use kube::api::ListParams;
 use kube::{Api, Client};
-use oxikube_domain::access::{Access, AccessRequirement};
+use oxikube_domain::access::{Access, AccessCheck, AccessRequirement};
 use oxikube_domain::ids::{ContextName, Gvr};
 use oxikube_domain::{Capability, ErrorKind};
 use oxikube_kube::auth::{CredentialRefresh, classify};
 use oxikube_kube::health::{
-    AccessLevel, AccessQuery, RBAC_DERIVED, RulesCache, can_i, capabilities_for_context,
+    AccessLevel, RBAC_DERIVED, RulesCache, can_i, can_i_for_context, capabilities_for_context,
     fetch_rules, rules_for_context,
 };
 use oxikube_kube::{ClientPool, CrdWatchConfig, KubeDiscovery};
@@ -167,17 +167,17 @@ async fn restricted_account_reports_limited_capabilities() {
     let pods = Gvr::new("", "v1", "pods");
     let secrets = Gvr::new("", "v1", "secrets");
     let checks = [
-        (AccessQuery::new("get", pods.clone()), true),
-        (AccessQuery::new("list", pods.clone()), true),
-        (AccessQuery::new("delete", pods.clone()), false),
+        (AccessCheck::new("get", pods.clone()), true),
+        (AccessCheck::new("list", pods.clone()), true),
+        (AccessCheck::new("delete", pods.clone()), false),
         (
-            AccessQuery::new("create", pods.clone()).subresource("exec"),
+            AccessCheck::new("create", pods.clone()).subresource("exec"),
             false,
         ),
-        (AccessQuery::new("get", secrets.clone()), false),
-        (AccessQuery::new("list", secrets.clone()), false),
-        (AccessQuery::new("create", secrets.clone()), false),
-        (AccessQuery::new("delete", secrets), false),
+        (AccessCheck::new("get", secrets.clone()), false),
+        (AccessCheck::new("list", secrets.clone()), false),
+        (AccessCheck::new("create", secrets.clone()), false),
+        (AccessCheck::new("delete", secrets), false),
     ];
     for (query, allowed) in checks {
         let query = query.namespace(ns);
@@ -293,4 +293,57 @@ async fn a_refused_crd_watch_is_reported_and_does_not_retry_hot() {
     assert!(!watch.is_finished(), "parked until the next interval");
     // The fallback re-discovery ran once the watch was refused.
     assert!(!discovery.registry().is_empty());
+}
+
+/// E17-S02: a service account bound in one namespace sees its rules only there, the cluster-wide
+/// checks deny, and the rules-based decision agrees with the server's `SelfSubjectAccessReview`.
+#[tokio::test]
+async fn bound_in_one_namespace_rules_and_cluster_wide_checks_agree() {
+    let Some(kind) = common::kind().await else {
+        return;
+    };
+    let restricted = Restricted::create(&kind).await;
+    let ns = restricted.namespace();
+    let refresh = CredentialRefresh::Static;
+    let cache = RulesCache::default();
+    let pods = Gvr::new("", "v1", "pods");
+
+    let own = rules_for_context(&restricted.pool, &cache, &restricted.context, ns, refresh)
+        .await
+        .expect("own namespace rules");
+    let other = rules_for_context(
+        &restricted.pool,
+        &cache,
+        &restricted.context,
+        "kube-system",
+        refresh,
+    )
+    .await
+    .expect("other namespace rules");
+    assert_eq!(own.level("list", "", "pods"), Access::Granted);
+    assert_eq!(other.level("list", "", "pods"), Access::Denied, "{other:?}");
+
+    let checks = [
+        AccessCheck::new("list", pods.clone()).namespace(ns),
+        AccessCheck::new("delete", pods.clone()).namespace(ns),
+        AccessCheck::new("list", pods.clone()).namespace("kube-system"),
+        // Cluster-wide: no namespace, and a cluster-scoped kind.
+        AccessCheck::new("list", pods.clone()),
+        AccessCheck::new("list", Gvr::new("", "v1", "nodes")),
+    ];
+    let expected = [true, false, false, false, false];
+    for (check, allowed) in checks.iter().zip(expected) {
+        let server = can_i_for_context(&restricted.pool, &restricted.context, check, refresh)
+            .await
+            .expect("access review");
+        assert_eq!(server.is_allowed(), allowed, "{check:?}: {server:?}");
+        let rules = match &check.namespace {
+            Some(namespace) if namespace == ns => Some(&own),
+            Some(_) => Some(&other),
+            None => None,
+        };
+        if let Some(decision) = rules.and_then(|rules| rules.decide(check)) {
+            assert_eq!(decision.is_allowed(), allowed, "rules vs server: {check:?}");
+        }
+    }
 }

@@ -3,7 +3,7 @@
 //! # Adapter
 //!
 //! Implemented by `oxikube_kube` over `SelfSubjectRulesReview` (the `health` module's
-//! `capabilities_for_context`, E03-S05) plus discovery for the non-RBAC flags (Helm,
+//! `capabilities_for_context`, E03-S05) and `SelfSubjectAccessReview` (`can_i`, E17-S02) plus discovery for the non-RBAC flags (Helm,
 //! metrics). One instance per connection; it is part of the
 //! [`ClusterPorts`](crate::ClusterPorts) bundle a
 //! [`ClusterConnectorPort`](crate::ClusterConnectorPort) returns.
@@ -14,7 +14,7 @@
 //! server has the last word on every request.
 
 use async_trait::async_trait;
-use oxikube_domain::access::AccessRules;
+use oxikube_domain::access::{AccessCheck, AccessDecision, AccessRules};
 use oxikube_domain::{Capabilities, OxiResult};
 
 /// Probes the current user's permissions on one cluster. Read-only.
@@ -51,4 +51,13 @@ pub trait AccessReviewPort: Send + Sync {
     /// A review that is `incomplete` or carries an `evaluationError` is returned with
     /// [`AccessRules::partial`] set, not as an error. Adapters may cache the answer briefly.
     async fn rules(&self, namespace: Option<&str>) -> OxiResult<AccessRules>;
+
+    /// Asks the API server whether `check` is allowed (a `SelfSubjectAccessReview`): the
+    /// precise answer for one action on one object, for what the rules cannot decide
+    /// ([`AccessRules::decide`] returns `None`): `resourceNames` grants and partial reviews.
+    ///
+    /// A "no" is [`AccessDecision::Denied`], not an error; an evaluation error without an
+    /// explicit deny is [`AccessDecision::Unknown`]. A check that asks as another identity
+    /// ([`AccessCheck::impersonate`]) is `Unsupported` until an adapter implements it.
+    async fn can_i(&self, check: &AccessCheck) -> OxiResult<AccessDecision>;
 }

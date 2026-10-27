@@ -13,6 +13,7 @@ use parking_lot::Mutex;
 
 use super::catalog::{self, NamespaceCatalog, NamespaceSource, is_valid_namespace_name};
 use super::prefs::NamespacePrefs;
+use crate::access::{AccessRegistry, accessible_namespaces};
 use crate::session::ClusterSessionManager;
 
 /// How long [`select_debounced`](NamespaceService::select_debounced) waits for the next toggle
@@ -53,6 +54,8 @@ pub(super) struct Shared {
     pub(super) manager: ClusterSessionManager,
     pub(super) state: Arc<dyn StatePort>,
     pub(super) clock: Arc<dyn ClockPort>,
+    /// The per-cluster access services (E17-S02): the reviews behind the forbidden-list fallback.
+    pub(super) access: AccessRegistry,
     pub(super) cache: Mutex<HashMap<ClusterId, NamespacePrefs>>,
     /// Clusters that have a record in `StatePort` (loaded or written). Without one the
     /// session keeps the selection it started with.
@@ -86,6 +89,7 @@ impl NamespaceService {
             shared: Arc::new(Shared {
                 manager,
                 state,
+                access: AccessRegistry::new(clock.clone()),
                 clock,
                 cache: Mutex::new(HashMap::new()),
                 stored: Mutex::new(HashSet::new()),
@@ -99,6 +103,11 @@ impl NamespaceService {
     /// The session manager this service drives.
     pub fn manager(&self) -> &ClusterSessionManager {
         &self.shared.manager
+    }
+
+    /// The access services of every cluster, shared with whatever gates the UI on RBAC.
+    pub fn access(&self) -> &AccessRegistry {
+        &self.shared.access
     }
 
     /// The remembered prefs of `cluster` (read from `StatePort` the first time).
@@ -135,30 +144,55 @@ impl NamespaceService {
         Ok(prefs)
     }
 
-    /// Lists the namespaces to offer. The cluster's own list when it answers; the typed names
-    /// when it answers `Forbidden` or cannot be read at all (the failure is a
-    /// [`NamespaceSource`], not an error).
+    /// Lists the namespaces to offer. The cluster's own list when it answers; when it answers
+    /// `Forbidden` or cannot be read at all (the failure is a [`NamespaceSource`], not an
+    /// error), the names the user may reach: the cluster's `accessible_namespaces` setting
+    /// (Lens override) and typed names, plus, when the list is forbidden and no setting is
+    /// given, the candidates (current selection, favourites) whose rules review shows the
+    /// user can read something there (E17-S02).
     ///
     /// # Errors
     ///
     /// The state store's error.
     pub async fn catalog(&self, cluster: &ClusterId) -> OxiResult<NamespaceCatalog> {
-        let mut fallback = self.prefs(cluster).await?.typed;
+        let prefs = self.prefs(cluster).await?;
+        let mut fallback = prefs.typed.clone();
         let session = self.shared.manager.get(cluster);
-        // The cluster's `accessible_namespaces` setting (E06-S08) is offered with the typed
-        // names whenever the list is not the cluster's own.
+        let mut overridden = Vec::new();
         if let Some(session) = &session {
-            fallback.extend(session.prefs().accessible_namespaces.iter().cloned());
+            overridden.clone_from(&session.prefs().accessible_namespaces);
+            fallback.extend(overridden.iter().cloned());
         }
-        let typed = fallback;
-        let Some(reader) = session.and_then(|session| session.resources()) else {
-            return Ok(NamespaceCatalog::new(typed, NamespaceSource::Unavailable));
+        let Some(session) = session else {
+            return Ok(NamespaceCatalog::new(
+                fallback,
+                NamespaceSource::Unavailable,
+            ));
+        };
+        let Some(reader) = session.resources() else {
+            return Ok(NamespaceCatalog::new(
+                fallback,
+                NamespaceSource::Unavailable,
+            ));
         };
         Ok(match catalog::list_names(reader.as_ref()).await {
             Ok(names) => NamespaceCatalog::new(names, NamespaceSource::Cluster),
             Err(err) => {
-                tracing::debug!(%cluster, kind = ?err.kind(), "namespace list failed; using typed names");
-                NamespaceCatalog::new(typed, NamespaceCatalog::source_for(err.kind()))
+                tracing::debug!(%cluster, kind = ?err.kind(), "namespace list failed; using fallback names");
+                let source = NamespaceCatalog::source_for(err.kind());
+                if source == NamespaceSource::Forbidden
+                    && overridden.is_empty()
+                    && let Some(access) = self.shared.access.for_session(cluster, &session)
+                {
+                    let candidates = session
+                        .namespace_selection()
+                        .names()
+                        .map(str::to_owned)
+                        .chain(prefs.favourites.iter().map(str::to_owned));
+                    let reviewed = accessible_namespaces(&access, &[], candidates).await;
+                    fallback.extend(reviewed.names);
+                }
+                NamespaceCatalog::new(fallback, source)
             }
         })
     }
