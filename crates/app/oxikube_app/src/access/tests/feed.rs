@@ -2,6 +2,7 @@
 //! refused, and the hub that shares one feed and releases the subscriptions with its last user.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use futures::executor::LocalPool;
 use futures::future::BoxFuture;
@@ -14,7 +15,7 @@ use serde_json::json;
 
 use super::{binding, role};
 use crate::access::{PolicyFeed, PolicyHub, PolicyStatus};
-use crate::store::{ResourceStore, Spawner, StoreOptions, StorePorts, StoreRuntime};
+use crate::store::{ResourceStore, Spawner, StoreConfig, StoreOptions, StorePorts, StoreRuntime};
 use crate::testing::id;
 
 /// Runs the store's tasks on a `LocalPool`, only when the test says so.
@@ -52,6 +53,11 @@ struct Rig {
 
 impl Rig {
     fn new() -> Self {
+        Self::with_grace(StoreConfig::default())
+    }
+
+    /// A rig whose idle feeds stop after `config.idle_grace`.
+    fn with_grace(config: StoreConfig) -> Self {
         let clock = Arc::new(FakeClockPort::default());
         let port = Arc::new(FakeResourcePort::with_clock(clock.clone()));
         let exec = Executor::default();
@@ -66,7 +72,10 @@ impl Rig {
                 clock,
                 probe: None,
             },
-            StoreOptions::default(),
+            StoreOptions {
+                config,
+                ..StoreOptions::default()
+            },
         );
         Self {
             port,
@@ -145,7 +154,11 @@ fn a_kind_the_user_may_not_list_leaves_the_rest_and_says_so() {
 
 #[test]
 fn the_hub_shares_one_feed_and_releases_it_with_the_last_user() {
-    let mut rig = Rig::new();
+    // No idle grace, so a released subscription stops its watch at once.
+    let mut rig = Rig::with_grace(StoreConfig {
+        idle_grace: Duration::ZERO,
+        ..StoreConfig::default()
+    });
     seed(&rig);
     let hub = PolicyHub::default();
     let cluster = id("a");
@@ -162,4 +175,10 @@ fn the_hub_shares_one_feed_and_releases_it_with_the_last_user() {
     assert_eq!(hub.live(&cluster), 1, "still held by the second user");
     drop(second);
     assert_eq!(hub.live(&cluster), 0);
+    rig.settle();
+    assert_eq!(
+        rig.port.live_watches(),
+        0,
+        "the four RBAC watches go with the last user"
+    );
 }

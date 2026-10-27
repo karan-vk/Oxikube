@@ -2,14 +2,18 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
+use std::time::Duration;
 
 use gpui::{Modifiers, TestAppContext};
 use oxikube_app::access::PolicyStatus;
+use oxikube_app::store::{ResourceStore, StoreOptions, StorePorts, StoreRuntime};
 use oxikube_domain::command::{Command, CommandId};
 use oxikube_domain::ids::{Gvk, ResourceRef};
 use oxikube_domain::rbac::{RbacKind, Subject};
 use oxikube_resources_ui::kinds::KindSpecs;
 use oxikube_testkit::gpui_test::{TestApp, TestWindow};
+use oxikube_testkit::{FakeClockPort, FakeResourcePort, FakeTableFeedPort};
 use oxikube_workspace::CommandDispatcher;
 use serde_json::{Value, json};
 
@@ -228,5 +232,101 @@ fn init_gives_the_registered_kind_its_panel(cx: &mut TestAppContext) {
         assert!(KindSpecs::detail_for(cx, &gvk).is_generic());
         service_account::init(cx);
         assert!(!KindSpecs::detail_for(cx, &gvk).is_generic());
+    });
+}
+
+/// A store over a fake port, its feeds run on threads of their own (they end when aborted).
+fn store_over(port: &Arc<FakeResourcePort>, cluster: &str) -> ResourceStore {
+    let clock = Arc::new(FakeClockPort::default());
+    ResourceStore::new(
+        oxikube_domain::ids::ClusterId::new(
+            "live.yaml",
+            &oxikube_domain::ids::ContextName::new(cluster),
+        ),
+        StorePorts {
+            resources: port.clone(),
+            tables: Arc::new(FakeTableFeedPort::with_clock(clock.clone())),
+        },
+        StoreRuntime {
+            spawner: Arc::new(|task: futures::future::BoxFuture<'static, ()>| {
+                std::thread::spawn(move || futures::executor::block_on(task));
+            }),
+            clock,
+            probe: None,
+        },
+        StoreOptions::default(),
+    )
+}
+
+fn ci_binding(name: &str) -> oxikube_domain::Resource {
+    binding(
+        Some("shop"),
+        name,
+        "viewer",
+        json!([{"kind": "ServiceAccount", "name": "ci", "namespace": "shop"}]),
+    )
+}
+
+/// Lets the panel's poll loop and the feeds run until `done` holds (or fails after five seconds).
+fn until(
+    cx: &mut TestAppContext,
+    window: &mut TestWindow<ServiceAccountPanel>,
+    what: &str,
+    mut done: impl FnMut(&mut TestWindow<ServiceAccountPanel>) -> bool,
+) {
+    for _ in 0..500 {
+        cx.executor().advance_clock(Duration::from_secs(1));
+        cx.run_until_parked();
+        window.draw_frame();
+        if done(window) {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    panic!("timed out waiting for {what}");
+}
+
+#[gpui::test]
+fn the_live_panel_follows_the_feed_and_moves_to_the_store_of_a_reconnect(cx: &mut TestAppContext) {
+    cx.update(oxikube_ui::init);
+    let port = Arc::new(FakeResourcePort::default());
+    port.insert(cluster_role("viewer"));
+    port.insert(ci_binding("ci-views"));
+    let first = store_over(&port, "kind-live-a");
+    let cell = Rc::new(RefCell::new(None));
+    let facts = ServiceAccountFacts::from_resource(&service_account(json!({})));
+    let dispatcher: Rc<dyn CommandDispatcher> = Rc::new(Bus::default());
+    let mut app = TestApp::new(cx);
+    let shared = cell.clone();
+    let mut window = app.open_window(move |_, cx| {
+        ServiceAccountPanel::following(target(), facts, shared, dispatcher, cx)
+    });
+    window.draw_frame();
+
+    // Not connected: nothing is read, and the panel says it is waiting.
+    assert!(window.bounds("sa-bound-loading").is_some());
+
+    *cell.borrow_mut() = Some(first);
+    until(cx, &mut window, "the bound role to appear", |w| {
+        w.bounds("sa-bound-row-0").is_some()
+    });
+    assert!(window.bounds("sa-bound-loading").is_none());
+    assert!(window.bounds("sa-bound-row-1").is_none());
+
+    // A reconnect brings a new store with one more binding: the panel moves to it.
+    let more = Arc::new(FakeResourcePort::default());
+    more.insert(cluster_role("viewer"));
+    more.insert(ci_binding("ci-views"));
+    more.insert(ci_binding("ci-more"));
+    *cell.borrow_mut() = Some(store_over(&more, "kind-live-b"));
+    until(cx, &mut window, "the second binding to appear", |w| {
+        w.bounds("sa-bound-row-1").is_some()
+    });
+
+    // Another reconnect, to a cluster with nothing bound: the old answer is dropped.
+    let empty = Arc::new(FakeResourcePort::default());
+    *cell.borrow_mut() = Some(store_over(&empty, "kind-live-c"));
+    until(cx, &mut window, "the new store's answer", |w| {
+        w.bounds("sa-bound-row-0").is_none() && w.bounds("sa-bound-none").is_some()
     });
 }

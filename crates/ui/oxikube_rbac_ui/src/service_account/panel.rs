@@ -1,11 +1,13 @@
 //! [`ServiceAccountPanel`]: the view and the work behind it.
 
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::{Context, Subscription, Task, WeakEntity};
 use oxikube_app::access::{PolicyFeed, PolicyHub};
+use oxikube_app::store::ResourceStore;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{ClusterId, ResourceRef};
 use oxikube_resources_ui::detail::DetailView;
@@ -26,6 +28,14 @@ enum Source {
     /// Data in hand (tests, screenshots): the account and the bus its commands go to.
     Fixed {
         target: ResourceRef,
+        dispatcher: Rc<dyn CommandDispatcher>,
+    },
+    /// An account whose store is handed over by a cell (tests): the same polling and recompute as
+    /// [`Source::Detail`], without a detail view. The cell is empty while "not connected" and
+    /// holds the new store after a reconnect.
+    Following {
+        target: ResourceRef,
+        store: Rc<RefCell<Option<ResourceStore>>>,
         dispatcher: Rc<dyn CommandDispatcher>,
     },
 }
@@ -60,7 +70,32 @@ impl ServiceAccountPanel {
         let mut panel = Self::bare(Source::Detail(detail));
         panel._detail = subscription;
         panel.read_facts(cx);
-        panel.poll = Some(cx.spawn(async move |this, cx| {
+        panel.start_polling(cx);
+        panel
+    }
+
+    /// A panel that follows the RBAC feed of whatever store `store` holds, as a detail view's
+    /// panel does, over `facts` and without a detail view. For tests of the live path.
+    pub fn following(
+        target: ResourceRef,
+        facts: ServiceAccountFacts,
+        store: Rc<RefCell<Option<ResourceStore>>>,
+        dispatcher: Rc<dyn CommandDispatcher>,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let mut panel = Self::bare(Source::Following {
+            target,
+            store,
+            dispatcher,
+        });
+        panel.facts = Some(facts);
+        panel.start_polling(cx);
+        panel
+    }
+
+    /// Looks at the feed now and then, until the panel is gone.
+    fn start_polling(&mut self, cx: &mut Context<Self>) {
+        self.poll = Some(cx.spawn(async move |this, cx| {
             loop {
                 let wait = this.update(cx, |panel, cx| panel.look(cx));
                 match wait {
@@ -69,7 +104,6 @@ impl ServiceAccountPanel {
                 }
             }
         }));
-        panel
     }
 
     /// A panel over data already in hand: it follows nothing, and its links and buttons send their
@@ -105,7 +139,9 @@ impl ServiceAccountPanel {
             Source::Detail(detail) => detail
                 .upgrade()
                 .map(|detail| detail.read(cx).target().cluster.clone()),
-            Source::Fixed { target, .. } => Some(target.cluster.clone()),
+            Source::Fixed { target, .. } | Source::Following { target, .. } => {
+                Some(target.cluster.clone())
+            }
         }
     }
 
@@ -122,7 +158,9 @@ impl ServiceAccountPanel {
                     .update(cx, |detail, cx| detail.dispatch_command(command, cx))
                     .ok();
             }
-            Source::Fixed { dispatcher, .. } => dispatcher.dispatch(command, cx),
+            Source::Fixed { dispatcher, .. } | Source::Following { dispatcher, .. } => {
+                dispatcher.dispatch(command, cx);
+            }
         }
     }
 
@@ -132,7 +170,7 @@ impl ServiceAccountPanel {
             Source::Detail(detail) => detail
                 .upgrade()
                 .map(|detail| detail.read(cx).target().clone()),
-            Source::Fixed { target, .. } => Some(target.clone()),
+            Source::Fixed { target, .. } | Source::Following { target, .. } => Some(target.clone()),
         }
     }
 
@@ -151,15 +189,16 @@ impl ServiceAccountPanel {
     /// One look at the feed: takes the lease on (or moves it to) the session's current store, and
     /// recomputes when the index moved. How long to wait before the next look.
     fn look(&mut self, cx: &mut Context<Self>) -> Duration {
-        let Source::Detail(detail) = &self.source else {
-            return STEADY_POLL;
-        };
-        let Some(detail) = detail.upgrade() else {
-            return STEADY_POLL;
-        };
-        let (target, store) = {
-            let detail = detail.read(cx);
-            (detail.target().clone(), detail.columns_context().store)
+        let (target, store) = match &self.source {
+            Source::Detail(detail) => {
+                let Some(detail) = detail.upgrade() else {
+                    return STEADY_POLL;
+                };
+                let detail = detail.read(cx);
+                (detail.target().clone(), detail.columns_context().store)
+            }
+            Source::Following { target, store, .. } => (target.clone(), store.borrow().clone()),
+            Source::Fixed { .. } => return STEADY_POLL,
         };
         let Some(store) = store else {
             // Not connected (yet): the next look takes the store the session brings.

@@ -6383,6 +6383,7 @@ name = "oxikube_rbac_ui"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "futures",
  "gpui-pre",
  "gpui-pre-platform",
  "oxikube_app",
