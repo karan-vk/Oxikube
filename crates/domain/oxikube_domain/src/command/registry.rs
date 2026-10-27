@@ -2101,8 +2101,8 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::core("Service")),
-    // Creates a credential (a TokenRequest, or a legacy token Secret after consent): risk low, one
-    // confirmation, blocked on a read-only cluster, audited with the account and the lifetime and
+    // Creates a credential (a TokenRequest, or a legacy token Secret after consent): risk low (medium when the legacy token Secret fallback is allowed,
+    // `Command::effective_risk`), one confirmation, blocked on a read-only cluster, audited with the account and the lifetime and
     // never the token (E17-S09).
     CommandMeta::mutation(
         CommandId::SERVICEACCOUNT_GENERATE_KUBECONFIG,
@@ -2669,6 +2669,7 @@ mod tests {
                 .all(|m| m.tool_risk() == m.risk
                     || m.id == CommandId::RESOURCE_DELETE
                     || m.id == CommandId::SELECTION_DELETE
+                    || m.id == CommandId::SERVICEACCOUNT_GENERATE_KUBECONFIG
                     || m.id == CommandId::WORKLOAD_SCALE)
         );
     }
