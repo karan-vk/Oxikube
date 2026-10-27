@@ -15,8 +15,8 @@
 //! dependency direction. `cargo xtask lint-deps` enforces it.
 
 pub mod aws;
-pub mod gcloud;
 pub mod az;
+pub mod gcloud;
 pub mod process;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
