@@ -26,7 +26,6 @@ mod parse;
 mod tests;
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use async_trait::async_trait;
 use oxikube_domain::{OxiError, OxiResult};
@@ -35,40 +34,44 @@ use oxikube_ports::cloud::{
     KubeconfigEntry,
 };
 
-use crate::process::{Cli, CliError, CliInvocation, ProcessRunner, RunOpts};
+use crate::process::{Cli, CliError, CliInvocation, ProcessRunner};
+use crate::shared::Shared;
 
 /// The plugin GKE contexts authenticate through.
 pub(crate) const PLUGIN_COMMAND: &str = "gke-gcloud-auth-plugin";
 /// What installs it.
 pub(crate) const PLUGIN_INSTALL: &str = "gcloud components install gke-gcloud-auth-plugin";
 
-/// Listing a project can take a while on a large organisation.
-const LIST_TIMEOUT: Duration = Duration::from_secs(60);
-
 /// The GKE [`CloudDiscoveryPort`] adapter.
 #[derive(Clone)]
 pub struct GcloudDiscovery {
     runner: Arc<dyn ProcessRunner>,
+    projects: Shared<Vec<String>>,
 }
 
 impl GcloudDiscovery {
     /// An adapter running `gcloud` through `runner`.
     pub fn new(runner: Arc<dyn ProcessRunner>) -> Self {
-        Self { runner }
+        Self {
+            runner,
+            projects: Shared::new(Vec::new()),
+        }
     }
 
-    /// `gcloud args` asking for JSON, with a generous timeout.
+    /// Scans only `projects` (the `cloud.gcloud.projects` setting); empty scans every project
+    /// `gcloud projects list` reports. Naming projects skips that slow call. The next scan uses
+    /// the new list.
+    pub fn set_projects(&self, projects: Vec<String>) {
+        self.projects.set(projects);
+    }
+
+    /// `gcloud args` asking for JSON; the timeout is the runner's `cloud.command_timeout_secs`.
     pub(super) fn json<I, S>(&self, args: I) -> CliInvocation
     where
         I: IntoIterator<Item = S>,
         S: Into<String>,
     {
-        CliInvocation::new(Cli::Gcloud, args)
-            .with_opts(RunOpts {
-                timeout: Some(LIST_TIMEOUT),
-                ..RunOpts::default()
-            })
-            .json()
+        CliInvocation::new(Cli::Gcloud, args).json()
     }
 }
 

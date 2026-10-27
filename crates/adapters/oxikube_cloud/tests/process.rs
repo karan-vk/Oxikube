@@ -242,6 +242,57 @@ async fn the_concurrency_cap_queues_extra_runs() {
 }
 
 #[tokio::test]
+async fn reconfigure_applies_new_paths_timeout_and_cap_to_the_next_command() {
+    let dir = TempDir::new().unwrap();
+    let first = script(dir.path(), "aws-one", "echo one");
+    let second = script(dir.path(), "aws-two", "echo two");
+    let config = |path: &Path, timeout: Duration, cap: usize| CliRunnerConfig {
+        paths: BTreeMap::from([(Cli::Aws, path.to_owned())]),
+        login_shell: LoginShell::Disabled,
+        default_timeout: timeout,
+        max_concurrent: cap,
+        ..CliRunnerConfig::default()
+    };
+    let runner = Arc::new(CliRunner::new(config(&first, Duration::from_secs(30), 1)));
+    let out = runner
+        .run(CliInvocation::new(Cli::Aws, ["x"]))
+        .await
+        .unwrap();
+    assert_eq!(out.stdout.trim(), "one");
+
+    // A new path: the very next command runs the other binary.
+    runner.reconfigure(config(&second, Duration::from_secs(30), 1));
+    assert_eq!(runner.locate(Cli::Aws).await, Some(second.clone()));
+    let out = runner
+        .run(CliInvocation::new(Cli::Aws, ["x"]))
+        .await
+        .unwrap();
+    assert_eq!(out.stdout.trim(), "two");
+
+    // A new cap: two runs overlap now.
+    let slow = script(dir.path(), "aws-slow", "sleep 0.4");
+    runner.reconfigure(config(&slow, Duration::from_secs(30), 4));
+    let started = Instant::now();
+    let run = || runner.run(CliInvocation::new(Cli::Aws, ["x"]));
+    let (a, b) = tokio::join!(run(), run());
+    a.unwrap();
+    b.unwrap();
+    assert!(
+        started.elapsed() < Duration::from_millis(750),
+        "{:?}",
+        started.elapsed()
+    );
+
+    // A new default timeout.
+    runner.reconfigure(config(&slow, Duration::from_millis(100), 4));
+    let error = runner
+        .run(CliInvocation::new(Cli::Aws, ["x"]))
+        .await
+        .unwrap_err();
+    assert!(matches!(error, CliError::Timeout { .. }), "{error:?}");
+}
+
+#[tokio::test]
 async fn the_login_shell_path_finds_a_cli_the_app_path_lacks() {
     let tools = TempDir::new().unwrap();
     script(tools.path(), "gcloud", "echo gcloud-from-login-path");

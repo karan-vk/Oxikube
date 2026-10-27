@@ -70,6 +70,13 @@ impl GcloudDiscovery {
 
     /// Active projects, the `gcloud config` project first, then by id.
     pub(super) async fn list_projects(&self) -> OxiResult<Vec<CloudScope>> {
+        let configured = self.projects.get();
+        if !configured.is_empty() {
+            return Ok(configured
+                .into_iter()
+                .map(|project| CloudScope::Gcp { project })
+                .collect());
+        }
         let projects: Vec<Project> = self
             .runner
             .run_json(self.json(["projects", "list"]))

@@ -95,8 +95,9 @@ impl AwsDiscovery {
     /// The profiles to scan: the settings' list, else the CLI's, else just `default` (which
     /// is what environment credentials use).
     pub(super) async fn profiles(&self) -> OxiResult<Vec<String>> {
-        if !self.settings.profiles.is_empty() {
-            return Ok(unique(self.settings.profiles.clone()));
+        let configured = self.settings.get().profiles;
+        if !configured.is_empty() {
+            return Ok(unique(configured));
         }
         let output = self
             .runner

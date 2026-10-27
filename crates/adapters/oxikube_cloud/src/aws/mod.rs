@@ -29,6 +29,7 @@ use oxikube_ports::{
 };
 
 use crate::process::ProcessRunner;
+use crate::shared::Shared;
 
 /// The profile every AWS CLI call uses when none is named.
 pub const DEFAULT_PROFILE: &str = "default";
@@ -56,13 +57,21 @@ pub struct AwsSettings {
 /// EKS discovery. Cheap to clone-share behind an `Arc<dyn CloudDiscoveryPort>`.
 pub struct AwsDiscovery {
     runner: Arc<dyn ProcessRunner>,
-    settings: AwsSettings,
+    settings: Shared<AwsSettings>,
 }
 
 impl AwsDiscovery {
     /// Discovery running `aws` through `runner`, narrowed by `settings`.
     pub fn new(runner: Arc<dyn ProcessRunner>, settings: AwsSettings) -> Self {
-        Self { runner, settings }
+        Self {
+            runner,
+            settings: Shared::new(settings),
+        }
+    }
+
+    /// Replaces the narrowing (the `cloud.aws` settings changed). The next scan uses it.
+    pub fn set_settings(&self, settings: AwsSettings) {
+        self.settings.set(settings);
     }
 }
 

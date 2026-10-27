@@ -11,11 +11,12 @@ impl AwsDiscovery {
     /// One scope per profile and region: the settings' regions plus the profile's own default
     /// region. Nothing to scan at all is an error naming the fix, not an empty success.
     pub(super) async fn scan_scopes(&self) -> OxiResult<Vec<CloudScope>> {
+        let configured_regions = self.settings.get().regions;
         let profiles = self.profiles().await?;
         let defaults = join_all(profiles.iter().map(|p| self.default_region(p))).await;
         let mut scopes = Vec::new();
         for (profile, default) in profiles.into_iter().zip(defaults) {
-            let mut regions = self.settings.regions.clone();
+            let mut regions = configured_regions.clone();
             regions.extend(default);
             regions.sort();
             regions.dedup();

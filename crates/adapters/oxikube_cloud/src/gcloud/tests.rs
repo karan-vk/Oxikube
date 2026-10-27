@@ -335,3 +335,20 @@ async fn no_command_prints_a_credential() {
         );
     }
 }
+
+#[tokio::test]
+async fn configured_projects_are_the_scopes_and_skip_the_projects_call() {
+    let runner = Arc::new(base());
+    let gke = GcloudDiscovery::new(runner.clone());
+    gke.set_projects(vec!["only-this".into()]);
+    assert_eq!(gke.scopes().await.unwrap(), vec![project("only-this")]);
+    assert!(
+        runner
+            .calls()
+            .iter()
+            .all(|call| call.args != ["projects", "list"]),
+        "naming projects must not run `gcloud projects list`"
+    );
+    gke.set_projects(Vec::new());
+    assert!(gke.scopes().await.unwrap().len() > 1);
+}

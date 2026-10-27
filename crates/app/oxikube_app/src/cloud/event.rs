@@ -1,5 +1,6 @@
 //! What a discovery run reports: [`CloudDiscoveryEvent`], and how a refresh is asked for.
 
+use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -105,12 +106,16 @@ impl CloudDiscoveryEvent {
 }
 
 /// How discovery runs. The defaults until the `cloud.*` settings (E18-S07) set them.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiscoveryConfig {
     /// How long a listing stays fresh.
     pub ttl: Duration,
     /// How many scopes of one provider are listed at once.
     pub max_parallel_scopes: NonZeroUsize,
+    /// Providers switched off (`cloud.providers.*`): they are not listed by
+    /// [`providers`](super::CloudDiscoveryService::providers), a refresh of one ends at once
+    /// with no clusters, and its running refresh is cancelled.
+    pub disabled: BTreeSet<CloudProvider>,
 }
 
 impl DiscoveryConfig {
@@ -125,6 +130,7 @@ impl Default for DiscoveryConfig {
         Self {
             ttl: Self::DEFAULT_TTL,
             max_parallel_scopes: Self::DEFAULT_MAX_PARALLEL_SCOPES,
+            disabled: BTreeSet::new(),
         }
     }
 }

@@ -19,6 +19,7 @@
 //! Module map:
 //! - [`aliases`]: the user's `aliases.json` (E11-S04): parse with line-numbered diagnostics, hot reload.
 //! - [`cluster`]: the per-cluster settings (`clusters.<id>`: name, colour, read-only, ...), E06-S08.
+//! - [`cloud`]: the `cloud` setting, providers, CLI paths, scan lists, cache TTL, parallelism (E18-S07).
 //! - [`helm`]: the `helm` setting, binary path, server-side apply, default repositories (E16-S11).
 //! - [`kubeconfig`]: the `kubeconfig.sources` setting, the kubeconfig files and folders to read (E06-S05).
 //! - [`metrics`]: the `metrics` setting, which extended resources count as GPUs (E13-S02).
@@ -36,6 +37,7 @@
 //! dependency direction. `cargo xtask lint-deps` enforces it.
 
 pub mod aliases;
+pub mod cloud;
 pub mod cluster;
 pub mod diagnostics;
 pub mod global;
@@ -54,6 +56,7 @@ mod test_support;
 pub mod update;
 pub mod watcher;
 
+pub use cloud::{CloudSettings, CloudSettingsContent};
 pub use cluster::{ClusterSettings, ClusterSettingsContent};
 pub use diagnostics::SettingsDiagnostic;
 pub use global::{init, init_with_dir, update_user_settings};

@@ -16,7 +16,9 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use oxikube_domain::redact::redact;
+use std::sync::{PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tokio::process::Command;
+
 use tokio::sync::{OnceCell, Semaphore};
 
 use super::ProcessRunner;
@@ -69,8 +71,9 @@ impl Default for CliRunnerConfig {
 /// that needs a binary and the answer is kept for the runner's life.
 #[derive(Debug)]
 pub struct CliRunner {
-    config: CliRunnerConfig,
-    slots: Arc<Semaphore>,
+    /// Swapped by [`reconfigure`](Self::reconfigure); every run reads it once at its start.
+    config: RwLock<CliRunnerConfig>,
+    slots: RwLock<Arc<Semaphore>>,
     search_path: OnceCell<SearchPath>,
 }
 
@@ -79,18 +82,36 @@ impl CliRunner {
     pub fn new(config: CliRunnerConfig) -> Self {
         let slots = Arc::new(Semaphore::new(config.max_concurrent.max(1)));
         Self {
-            config,
-            slots,
+            config: RwLock::new(config),
+            slots: RwLock::new(slots),
             search_path: OnceCell::new(),
         }
+    }
+
+    /// Applies a changed configuration (the `cloud` settings, hot reload): path overrides and
+    /// the default timeout take effect for the next command; a new `max_concurrent` gives later
+    /// commands a new slot pool (commands already running keep their slot, so for a moment both
+    /// pools may be in use). The login shell and its probe timeout are read once and keep their
+    /// first values.
+    pub fn reconfigure(&self, config: CliRunnerConfig) {
+        if config.max_concurrent.max(1) != self.snapshot().max_concurrent.max(1) {
+            *write(&self.slots) = Arc::new(Semaphore::new(config.max_concurrent.max(1)));
+        }
+        *write(&self.config) = config;
+    }
+
+    /// The configuration now in force.
+    fn snapshot(&self) -> CliRunnerConfig {
+        read(&self.config).clone()
     }
 
     /// The folders searched, resolving the login shell's `PATH` on first use.
     async fn search_path(&self) -> &SearchPath {
         self.search_path
             .get_or_init(|| async {
-                let login = match self.config.login_shell.program() {
-                    Some(shell) => login_shell_path(&shell, self.config.probe_timeout).await,
+                let config = self.snapshot();
+                let login = match config.login_shell.program() {
+                    Some(shell) => login_shell_path(&shell, config.probe_timeout).await,
                     None => None,
                 };
                 if login.is_none() {
@@ -109,10 +130,11 @@ impl CliRunner {
             cli,
             command: invocation.label(),
         };
+        let slots = read(&self.slots).clone();
         let _slot = tokio::select! {
             biased;
             () = opts.cancel.cancelled() => return Err(cancelled()),
-            slot = self.slots.acquire() => slot.map_err(|_| cancelled())?,
+            slot = slots.acquire() => slot.map_err(|_| cancelled())?,
         };
         let binary = self.locate(cli).await.ok_or(CliError::NotFound { cli })?;
         let search_path = self.search_path().await;
@@ -130,7 +152,9 @@ impl CliRunner {
         let child = command
             .spawn()
             .map_err(|error| spawn_error(invocation, &error))?;
-        let after = opts.timeout.unwrap_or(self.config.default_timeout);
+        let after = opts
+            .timeout
+            .unwrap_or_else(|| self.snapshot().default_timeout);
         // Leaving the select drops `wait_with_output`, and with it the child, on cancel or
         // timeout: `kill_on_drop` kills the process.
         let output = tokio::select! {
@@ -161,6 +185,14 @@ impl CliRunner {
     }
 }
 
+fn read<T>(lock: &RwLock<T>) -> RwLockReadGuard<'_, T> {
+    lock.read().unwrap_or_else(PoisonError::into_inner)
+}
+
+fn write<T>(lock: &RwLock<T>) -> RwLockWriteGuard<'_, T> {
+    lock.write().unwrap_or_else(PoisonError::into_inner)
+}
+
 impl Default for CliRunner {
     fn default() -> Self {
         Self::new(CliRunnerConfig::default())
@@ -187,8 +219,9 @@ fn io_error(invocation: &CliInvocation, error: &io::Error) -> CliError {
 #[async_trait]
 impl ProcessRunner for CliRunner {
     async fn locate(&self, cli: Cli) -> Option<PathBuf> {
-        if let Some(path) = self.config.paths.get(&cli) {
-            return is_executable(path).then(|| path.clone());
+        let overridden = self.snapshot().paths.get(&cli).cloned();
+        if let Some(path) = overridden {
+            return is_executable(&path).then_some(path);
         }
         self.search_path().await.find(cli)
     }

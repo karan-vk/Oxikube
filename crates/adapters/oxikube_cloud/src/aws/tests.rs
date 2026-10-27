@@ -185,6 +185,20 @@ async fn settings_narrow_the_profiles() {
 }
 
 #[tokio::test]
+async fn new_settings_apply_to_the_next_scan() {
+    let (aws, _) = discovery(recorded(), AwsSettings::default());
+    assert_eq!(aws.scopes().await.unwrap().len(), 1);
+    aws.set_settings(AwsSettings {
+        profiles: vec!["prod".into()],
+        regions: vec!["ap-northeast-1".into()],
+    });
+    assert_eq!(
+        aws.scopes().await.unwrap(),
+        vec![scope("prod", "ap-northeast-1"), scope("prod", "eu-west-1")]
+    );
+}
+
+#[tokio::test]
 async fn no_regions_is_a_clear_error_not_an_empty_success() {
     let settings = AwsSettings {
         profiles: vec!["default".into()],
