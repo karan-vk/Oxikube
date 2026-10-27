@@ -11,6 +11,11 @@ CloudDiscoveryPort adapters that shell out to installed aws/gcloud/az CLIs to li
   (`run_json::<T>`), a concurrency cap, the login shell's `PATH` and per-CLI path overrides.
   Failures are a typed `CliError` with redacted stderr, mapped onto `OxiError`. Provider
   adapters take an `Arc<dyn ProcessRunner>`.
+- `aws` (E18-S02): `AwsDiscovery` implements `CloudDiscoveryPort` for EKS: `aws --version` (v2 only),
+  per-profile `sts get-caller-identity` login check (`aws sso login --profile P` hint), profiles x
+  regions scopes (settings + profile default region; none configured is a validation error),
+  `eks list-clusters` + parallel `eks describe-cluster`, and an exec-auth entry (`aws eks get-token`).
+  Parsers are tested on recorded output in `tests/fixtures/aws-2.15/`.
 - `testing` (feature `testing`): `RecordedRunner` answers commands from recorded output
   (`tests/fixtures/<cli>-<version>/...`), so adapters are tested without any cloud account.
 
