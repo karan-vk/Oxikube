@@ -16,6 +16,7 @@
 //! :ctx [name]     :ns [name]     :q           context, namespaces, quit
 //! :helm (:releases)                            the cluster's Helm releases (E16-S05)
 //! :pulses (:pulse, :pu)                        the cluster's pulses page (E13-S10)
+//! :usr   :grp   :rbac <subject>               RBAC users, groups, and a subject's per-verb matrix (E17-S07)
 //! :pf (:portforwards)                          the Port Forwards panel (E15-S05)
 //! :-   :[   :]                                 history
 //! ```

@@ -33,6 +33,8 @@ pub(super) struct Env {
     pub contexts: Vec<JumpContext>,
     pub tables: HashMap<ClusterId, AliasTable>,
     pub namespaces: HashMap<ClusterId, NamespaceCatalog>,
+    /// The RBAC subject names `:rbac` completes, for every cluster.
+    pub subjects: Vec<Arc<str>>,
 }
 
 impl Env {
@@ -54,6 +56,7 @@ impl Env {
             source: NamespaceSource::Cluster,
         };
         Self {
+            subjects: Vec::new(),
             active: Some(cluster("dev")),
             contexts: vec![
                 context("dev", true),
@@ -97,5 +100,9 @@ impl JumpEnv for Env {
 
     fn namespaces(&self, cluster: &ClusterId) -> Option<NamespaceCatalog> {
         self.namespaces.get(cluster).cloned()
+    }
+
+    fn rbac_subjects(&self, _: &ClusterId) -> Arc<[Arc<str>]> {
+        self.subjects.clone().into()
     }
 }

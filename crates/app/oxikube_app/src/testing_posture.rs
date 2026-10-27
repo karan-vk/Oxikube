@@ -168,6 +168,13 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "cluster::ShowMetricsSettings" => Command::ClusterShowMetricsSettings { cluster },
         "helm::ShowRepos" => Command::HelmShowRepos,
         "helm::OpenReleases" => Command::HelmOpenReleases { cluster },
+        "rbac::OpenUsers" => Command::RbacOpenUsers { cluster },
+        "rbac::OpenGroups" => Command::RbacOpenGroups { cluster },
+        "rbac::ShowSubject" => Command::RbacShowSubject {
+            cluster,
+            subject: "system:serviceaccount:default:builder".to_owned(),
+        },
+        "rbac::CopyMatrix" => Command::RbacCopyMatrix { cluster },
         "helm::ShowValues" => Command::HelmShowValues {
             cluster,
             namespace: "apps".to_owned(),

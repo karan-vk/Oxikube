@@ -596,3 +596,41 @@ fn an_alias_that_expands_into_itself_is_a_loop_error_not_a_hang() {
     let e = plan("a", &env).unwrap_err();
     assert_eq!(e.kind, ParseErrorKind::AliasLoop);
 }
+
+#[test]
+fn usr_grp_and_rbac_open_the_subject_pages_of_the_shown_cluster() {
+    assert_eq!(
+        planned("usr").commands,
+        [Command::RbacOpenUsers {
+            cluster: cluster("dev")
+        }]
+    );
+    assert_eq!(
+        planned("grp").commands,
+        [Command::RbacOpenGroups {
+            cluster: cluster("dev")
+        }]
+    );
+    let plan = planned("rbac system:serviceaccount:default:foo");
+    assert_eq!(
+        plan.commands,
+        [Command::RbacShowSubject {
+            cluster: cluster("dev"),
+            subject: "system:serviceaccount:default:foo".to_owned(),
+        }]
+    );
+    assert_eq!(
+        plan.record.as_deref(),
+        Some("rbac system:serviceaccount:default:foo")
+    );
+}
+
+#[test]
+fn the_subject_pages_need_a_shown_cluster() {
+    let mut env = Env::new();
+    env.active = None;
+    for line in ["usr", "grp", "rbac alice"] {
+        let error = plan(line, &env).expect_err(line);
+        assert_eq!(error.kind, ParseErrorKind::NoCluster, "{line}");
+    }
+}

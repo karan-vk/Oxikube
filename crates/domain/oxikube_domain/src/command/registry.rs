@@ -136,6 +136,14 @@ impl CommandId {
     pub const HELP_SHOW: CommandId = CommandId::new("help::Show");
     /// `ingressclass::SetDefault`: make an IngressClass the cluster's default (annotation patch).
     pub const INGRESS_CLASS_SET_DEFAULT: CommandId = CommandId::new("ingressclass::SetDefault");
+    /// `rbac::OpenUsers`: the users of a cluster's RBAC bindings (E17-S07, `:usr`).
+    pub const RBAC_OPEN_USERS: CommandId = CommandId::new("rbac::OpenUsers");
+    /// `rbac::OpenGroups`: the groups of a cluster's RBAC bindings (E17-S07, `:grp`).
+    pub const RBAC_OPEN_GROUPS: CommandId = CommandId::new("rbac::OpenGroups");
+    /// `rbac::ShowSubject`: what one subject may do, as a matrix (E17-S07, `:rbac <subject>`).
+    pub const RBAC_SHOW_SUBJECT: CommandId = CommandId::new("rbac::ShowSubject");
+    /// `rbac::CopyMatrix`: copy the open subject matrix as text (E17-S07).
+    pub const RBAC_COPY_MATRIX: CommandId = CommandId::new("rbac::CopyMatrix");
     /// `helm::OpenReleases`: open a cluster's Helm releases (E16-S05, `:helm`).
     pub const HELM_OPEN_RELEASES: CommandId = CommandId::new("helm::OpenReleases");
     /// `helm::ShowValues`: print a release's values, credential-looking ones masked (E16-S05).
@@ -1671,6 +1679,32 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::RBAC_CAN_I,
         "RBAC: Can I?",
+        CommandScope::Cluster,
+        NONE,
+    ),
+    // The subject views (E17-S07) read the Roles and bindings through the resource port, which
+    // changes nothing in any cluster; copying writes only the clipboard.
+    CommandMeta::read(
+        CommandId::RBAC_COPY_MATRIX,
+        "RBAC: Copy Matrix",
+        CommandScope::Cluster,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::RBAC_OPEN_GROUPS,
+        "RBAC: Groups",
+        CommandScope::Cluster,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::RBAC_OPEN_USERS,
+        "RBAC: Users",
+        CommandScope::Cluster,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::RBAC_SHOW_SUBJECT,
+        "RBAC: Show Subject",
         CommandScope::Cluster,
         NONE,
     ),
