@@ -7,13 +7,14 @@ use std::path::Path;
 use std::sync::Arc;
 
 use oxikube_ports::{
-    AccessReviewPort, AgentClient, AgentPort, ClockPort, CloudDiscoveryPort, ClusterConnectorPort,
-    ClusterSourcePort, ContextProviderPort, CrashReporterPort, DescribePort, DiscoveryPort,
-    DrainPort, EventsMonitor, EventsPort, ExecPort, ExecStreamPort, FsPort, HelmPort, HelmRepoPort,
-    IntegrationPort, LogPort, MetricsPort, NotificationSourcePort, NotifierPort, PortForwardPort,
-    PromqlEndpointPort, PromqlPort, ProviderDetectorPort, QueryCataloguePort, ResourcePort,
-    ResourceReader, ResourceWriter, SchemaPort, SecretStorePort, ServiceProxyPort, StatePort,
-    TableFeedPort, TerminalBackend, ToolDef, ToolName, ToolPort, UpdaterPort, WarningPort,
+    AccessReviewPort, AgentClient, AgentPort, ClockPort, CloudDiscoveryPort, CloudProvider,
+    ClusterConnectorPort, ClusterSourcePort, ContextProviderPort, CrashReporterPort, DescribePort,
+    DiscoveryPort, DrainPort, EventsMonitor, EventsPort, ExecPort, ExecStreamPort, FsPort,
+    HelmPort, HelmRepoPort, IntegrationPort, LogPort, MetricsPort, NotificationSourcePort,
+    NotifierPort, PortForwardPort, PromqlEndpointPort, PromqlPort, ProviderDetectorPort,
+    QueryCataloguePort, ResourcePort, ResourceReader, ResourceWriter, SchemaPort, SecretStorePort,
+    ServiceProxyPort, StatePort, TableFeedPort, TerminalBackend, ToolDef, ToolName, ToolPort,
+    UpdaterPort, WarningPort,
 };
 use oxikube_testkit::*;
 
@@ -89,7 +90,7 @@ fn fakes_are_port_trait_objects() {
     let _: Box<dyn TerminalBackend> = Box::new(FakeTerminalBackend::echo());
     let _: Arc<dyn PortForwardPort> = Arc::new(FakePortForwardPort::new());
     let _: Arc<dyn ClusterSourcePort> = Arc::new(FakeClusterSourcePort::new());
-    let _: Arc<dyn CloudDiscoveryPort> = Arc::new(FakeCloudDiscoveryPort::new());
+    let _: Arc<dyn CloudDiscoveryPort> = Arc::new(FakeCloudDiscoveryPort::new(CloudProvider::Aws));
     let _: Arc<dyn MetricsPort> = Arc::new(FakeMetricsPort::new());
     let _: Arc<dyn PromqlPort> = Arc::new(FakePromqlPort::new());
     let _: Arc<dyn PromqlEndpointPort> = Arc::new(FakePromqlEndpointPort::new());

@@ -727,6 +727,17 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `describe.kubectl_path` settings, hot reloaded by the binary). `oxikube_kube::KubeConnector::set_describe_factory` hands each
   connection's client and discovery to the factory the binary supplies (`bins/oxikube::kube_ports::SourcesConnector`), which
   fills `ClusterPorts::describe` and points `kubectl` at the file that defines the context.
+- `oxikube_cloud` (E18) — the `CloudDiscoveryPort` adapters, one per provider (EKS through `aws`, GKE through `gcloud`, AKS
+  through `az`; E18-S02..S04). The port (`id`, `detect`, `scopes`, `list_clusters(scope)`, `kubeconfig_entry(cluster)`) moves
+  plain data from `oxikube_domain::cloud` (`CloudProvider`, `CloudScope`, `DiscoveredCluster`, `KubeconfigEntry` with an exec
+  plugin and no token field). Module `process` (E18-S01): `CliRunner`, the one way the crate runs a CLI (design copied from
+  `oxikube_helm::cli::run`, not depended on): stdin closed, `kill_on_drop`, a per-command timeout (30 s default), a
+  `CancellationToken`, JSON flags per CLI (`run_json::<T>`), a cap on concurrent processes (4), a lookup on the path override
+  (`cloud.<cli>_path`), the login shell's `PATH` (`$SHELL -lc 'printenv PATH'`, probed once with a timeout, falling back to
+  the app's `PATH`) and `/opt/homebrew/bin`, `/usr/local/bin`; stderr redacted into a typed `CliError` that maps to `Auth`
+  (with the CLI's login hint), `Forbidden`, `Network`, `Timeout` or `Unsupported` (naming the settings key). Adapters run
+  through the `ProcessRunner` trait, so their tests use `testing::RecordedRunner` (feature `testing`) over recorded output;
+  `oxikube_testkit::contracts::cloud_discovery` is the behaviour the adapters and `FakeCloudDiscoveryPort` both meet.
 - `oxikube_helm` (E16) — the `HelmPort` adapters. Module `cli` (E16-S04): `HelmCli` drives the user's `helm` binary. It
   finds it (`HelmCliConfig::path`, the `helm.path` setting, else `PATH`, `/opt/homebrew/bin`, `/usr/local/bin`), requires
   `helm version --short` >= 3.10 (`BinaryMissing` / `VersionTooOld`, kind `Unsupported`) and caches the answer for the

@@ -13,6 +13,7 @@
 //! | [`json`] | [`JsonDoc`]: compact immutable JSON read in place through [`JsonRef`] |
 //! | [`drain`] | node drain as data (E12-S10): [`drain::DrainOptions`], [`drain::plan_drain`] (kubectl's filters), [`drain::DrainProgress`], [`drain::DrainFlags`] (the `node::Drain` payload), [`drain::DrainBoard`] (per-pod progress) |
 //! | [`build`] | manifest builders for kubectl-equivalent actions ([`build::job_from_cronjob`], [`build::suspend_patch`]) |
+//! | [`cloud`] | cloud discovery (E18): [`cloud::CloudProvider`], [`cloud::CloudScope`], [`cloud::DiscoveredCluster`], [`cloud::KubeconfigEntry`] (exec auth only), [`cloud::CloudDetection`] |
 //! | [`helm`] | Helm vocabulary: [`helm::Release`], [`helm::ReleaseRef`], [`helm::Revision`], [`helm::ChartRef`], [`helm::RepoEntry`], [`helm::Values`], [`helm::HelmCapabilities`], [`helm::HelmError`] (E16) |
 //! | [`rollout`] | rollout history and rollback of Deployments, StatefulSets and DaemonSets: [`rollout::Revision`], [`rollout::RollbackPlan`] (E12-S06) |
 //! | [`view`] | typed view-models for core kinds ([`PodSummary`], [`NodeSummary`], ...) |
@@ -53,6 +54,7 @@ pub mod alias;
 pub mod audit;
 mod bounds;
 pub mod build;
+pub mod cloud;
 pub mod colour;
 pub mod command;
 pub mod drain;
