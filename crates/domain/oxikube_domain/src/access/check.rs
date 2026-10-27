@@ -11,14 +11,46 @@ use crate::ids::Gvr;
 
 /// Who a check is asked as, when not the current identity (`kubectl --as`).
 ///
-/// The request shape is reserved for the can-i tool (E17-S08); adapters that cannot
-/// impersonate answer such a check with `Unsupported`.
+/// Answered by a `SubjectAccessReview` (the can-i tool, E17-S08); an adapter that cannot ask as
+/// another identity answers such a check with `Unsupported`. Lives in memory only: it is never
+/// persisted.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct Impersonate {
     /// The user name (`--as`).
     pub user: String,
     /// Groups (`--as-group`).
     pub groups: Vec<String>,
+}
+
+impl Impersonate {
+    /// A user (`--as <user>`).
+    pub fn user(user: impl Into<String>) -> Self {
+        Self {
+            user: user.into(),
+            groups: Vec::new(),
+        }
+    }
+
+    /// A group alone (`--as-group <group>`), with no user name.
+    pub fn group(group: impl Into<String>) -> Self {
+        Self {
+            user: String::new(),
+            groups: vec![group.into()],
+        }
+    }
+
+    /// A ServiceAccount: the user `system:serviceaccount:<namespace>:<name>` in the groups the
+    /// API server gives every ServiceAccount.
+    pub fn service_account(namespace: &str, name: &str) -> Self {
+        Self {
+            user: format!("system:serviceaccount:{namespace}:{name}"),
+            groups: vec![
+                "system:serviceaccounts".to_owned(),
+                format!("system:serviceaccounts:{namespace}"),
+                "system:authenticated".to_owned(),
+            ],
+        }
+    }
 }
 
 /// One action to check: `verb` on `gvr[/subresource]`, optionally scoped.
@@ -198,6 +230,22 @@ mod tests {
             unseen.decide(&AccessCheck::new("list", Gvr::new("", "v1", "nodes"))),
             Some(AccessDecision::Allowed),
             "cluster-scoped resources are fully covered by the review"
+        );
+    }
+
+    #[test]
+    fn impersonation_targets_spell_the_api_servers_identities() {
+        assert_eq!(Impersonate::user("jane").groups, Vec::<String>::new());
+        let group = Impersonate::group("devs");
+        assert_eq!(
+            (group.user.as_str(), group.groups),
+            ("", vec!["devs".to_owned()])
+        );
+        let sa = Impersonate::service_account("shop", "bot");
+        assert_eq!(sa.user, "system:serviceaccount:shop:bot");
+        assert!(
+            sa.groups
+                .contains(&"system:serviceaccounts:shop".to_owned())
         );
     }
 

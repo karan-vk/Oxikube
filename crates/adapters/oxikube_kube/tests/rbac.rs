@@ -12,7 +12,7 @@ use k8s_openapi::api::core::v1::{Pod, Secret};
 use k8s_openapi::api::rbac::v1::PolicyRule;
 use kube::api::ListParams;
 use kube::{Api, Client};
-use oxikube_domain::access::{Access, AccessCheck, AccessRequirement};
+use oxikube_domain::access::{Access, AccessCheck, AccessDecision, AccessRequirement, Impersonate};
 use oxikube_domain::ids::{ContextName, Gvr};
 use oxikube_domain::{Capability, ErrorKind};
 use oxikube_kube::auth::{CredentialRefresh, classify};
@@ -346,4 +346,49 @@ async fn bound_in_one_namespace_rules_and_cluster_wide_checks_agree() {
             assert_eq!(decision.is_allowed(), allowed, "rules vs server: {check:?}");
         }
     }
+}
+
+/// E17-S08: the admin asks as the restricted account through a `SubjectAccessReview`: `get pods`
+/// is allowed and `delete pods` denied, as `kubectl auth can-i --as` answers. The account itself
+/// cannot ask as anyone (no right to create reviews), and the refusal names the permission.
+#[tokio::test]
+async fn subject_access_review_answers_for_another_identity() {
+    let Some(kind) = common::kind().await else {
+        return;
+    };
+    let restricted = Restricted::create(&kind).await;
+    let ns = restricted.namespace();
+    let admin = kind.admin_client().await;
+    let refresh = CredentialRefresh::Static;
+    let pods = Gvr::new("", "v1", "pods");
+    let sa = Impersonate::service_account(ns, "oxi-restricted");
+
+    let get = AccessCheck::new("get", pods.clone())
+        .namespace(ns)
+        .impersonating(sa.clone());
+    let delete = AccessCheck::new("delete", pods.clone())
+        .namespace(ns)
+        .impersonating(sa.clone());
+    assert!(
+        can_i(&admin, &get, refresh)
+            .await
+            .expect("review")
+            .is_allowed(),
+        "the Role grants get"
+    );
+    let denied = can_i(&admin, &delete, refresh).await.expect("review");
+    assert!(
+        matches!(denied, AccessDecision::Denied { .. }),
+        "the Role does not grant delete: {denied:?}"
+    );
+
+    let error = can_i(&restricted.client, &get, refresh)
+        .await
+        .expect_err("the restricted account may not create reviews");
+    assert_eq!(error.kind(), ErrorKind::Forbidden);
+    assert!(
+        error.message().contains("subjectaccessreviews"),
+        "{}",
+        error.message()
+    );
 }
