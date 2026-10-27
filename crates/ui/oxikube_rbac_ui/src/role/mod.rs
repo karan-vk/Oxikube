@@ -6,7 +6,7 @@
 //! | `rows` | [`RuleRow`]: one rule as the table shows it |
 //! | `draft` | [`RoleDraft`]: the dialog's model (the manifest it builds, the problems it finds); no gpui |
 //! | `options` | [`ResourceOptions`]: the resource picker's choices from discovery, and which verbs a pick supports |
-//! | `dialog`, `dialog_view`, `rule_editor` | [`RoleDialog`]: rows of rules with a resource picker and verb checkboxes; "Edit as YAML" |
+//! | `dialog`, `dialog_view`, `rule_card`, `rule_editor` | [`RoleDialog`]: rows of rules with a resource picker and verb checkboxes; "Edit as YAML" |
 //! | `views` | `role::OpenDialog` ([`register_commands`], [`RoleViews`]) |
 //! | `actions` | [`role_row_actions`]: "Edit Rules…" in a Role's row menu and the palette |
 //!
@@ -28,6 +28,7 @@ mod draft;
 mod options;
 mod panel;
 mod rows;
+mod rule_card;
 mod rule_editor;
 mod views;
 
