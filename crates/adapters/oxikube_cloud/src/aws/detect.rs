@@ -29,8 +29,7 @@ impl AwsDiscovery {
         let output = self
             .runner
             .run(CliInvocation::new(Cli::Aws, ["--version"]))
-            .await
-            .map_err(OxiError::from)?;
+            .await?;
         // v2 prints the version on stdout, v1 on stderr.
         let text = format!("{}\n{}", output.stdout, output.stderr);
         let Some((major, version)) = parse_version(&text) else {
@@ -101,8 +100,7 @@ impl AwsDiscovery {
         let output = self
             .runner
             .run(CliInvocation::new(Cli::Aws, ["configure", "list-profiles"]))
-            .await
-            .map_err(OxiError::from)?;
+            .await?;
         let mut profiles: Vec<String> = output
             .stdout
             .lines()

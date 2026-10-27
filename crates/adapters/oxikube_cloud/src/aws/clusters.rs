@@ -87,8 +87,7 @@ impl AwsDiscovery {
                     profile,
                 ],
             ))
-            .await
-            .map_err(OxiError::from)?;
+            .await?;
         // The runner's concurrency cap bounds how many describes run at once.
         let described = join_all(list.clusters.iter().map(|name| async move {
             self.runner
