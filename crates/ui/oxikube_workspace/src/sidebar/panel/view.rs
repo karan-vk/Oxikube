@@ -1,9 +1,9 @@
 //! Drawing the sidebar: one virtualised list of uniform rows.
 
 use gpui::{
-    AnyElement, Context, Div, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
-    Render, SharedString, Stateful, StatefulInteractiveElement as _, Styled as _, Window, div,
-    prelude::FluentBuilder as _, px, uniform_list,
+    AnyElement, Context, Div, FontWeight, Hsla, InteractiveElement as _, IntoElement,
+    ParentElement as _, Render, SharedString, Stateful, StatefulInteractiveElement as _,
+    Styled as _, Window, div, prelude::FluentBuilder as _, px, uniform_list,
 };
 use oxikube_app::CountState;
 use oxikube_ui::input::Input;
@@ -136,11 +136,7 @@ impl SidebarPanel {
         let disabled = colors.text_disabled;
         self.row_frame(ix, &id, 0., cx)
             .debug_selector(move || format!("sidebar-section-{id}"))
-            .when(row.restricted, |frame| {
-                frame
-                    .text_color(disabled)
-                    .tooltip(move |window, cx| Tooltip::new(NO_LIST_PERMISSION).build(window, cx))
-            })
+            .when(row.restricted, |frame| greyed_out(frame, disabled))
             .child(disclosure(row.expandable, row.open, cx))
             .child(
                 Icon::new(row.icon)
@@ -179,11 +175,7 @@ impl SidebarPanel {
         let disabled = cx.colors().text_disabled;
         self.row_frame(ix, &id, indent, cx)
             .debug_selector(move || format!("sidebar-entry-{id}"))
-            .when(row.restricted, |frame| {
-                frame
-                    .text_color(disabled)
-                    .tooltip(move |window, cx| Tooltip::new(NO_LIST_PERMISSION).build(window, cx))
-            })
+            .when(row.restricted, |frame| greyed_out(frame, disabled))
             .child(div().flex_1().truncate().child(row.title.clone()))
             .when_some(row.count.as_ref(), |entry, state| {
                 entry.child(count_badge(&row.id, state, cx))
@@ -271,6 +263,13 @@ fn disclosure(expandable: bool, open: bool, cx: &mut Context<SidebarPanel>) -> i
 }
 
 /// The count badge: the number when the `ResourceStore` has one, a muted dash until then.
+/// Greys a restricted row and explains why on hover.
+fn greyed_out(frame: Stateful<Div>, colour: Hsla) -> Stateful<Div> {
+    frame
+        .text_color(colour)
+        .tooltip(move |window, cx| Tooltip::new(NO_LIST_PERMISSION).build(window, cx))
+}
+
 fn count_placeholder(
     id: &SharedString,
     count: Option<usize>,
