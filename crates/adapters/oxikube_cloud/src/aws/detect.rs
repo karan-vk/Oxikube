@@ -7,7 +7,9 @@ use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::{CloudDetection, CloudProvider, CloudToolStatus, SetupHint};
 use serde::de::IgnoredAny;
 
-use super::{AwsDiscovery, DEFAULT_PROFILE};
+use std::collections::HashSet;
+
+use super::{AwsDiscovery, DEFAULT_PROFILE, profile_args};
 use crate::process::{Cli, CliError, CliInvocation};
 
 /// The major version in `aws-cli/2.15.30 Python/3.11 ...`, with the full `2.15.30`.
@@ -52,10 +54,9 @@ impl AwsDiscovery {
     async fn check_logins(&self, binary: PathBuf, version: String) -> OxiResult<CloudDetection> {
         let profiles = self.profiles().await?;
         let checks = profiles.iter().map(|profile| async move {
-            let invocation = CliInvocation::new(
-                Cli::Aws,
-                ["sts", "get-caller-identity", "--profile", profile.as_str()],
-            );
+            let mut args = vec!["sts".to_owned(), "get-caller-identity".to_owned()];
+            args.extend(profile_args(profile));
+            let invocation = CliInvocation::new(Cli::Aws, args);
             self.runner.run_json::<IgnoredAny>(invocation).await
         });
         let results = join_all(checks).await;
@@ -95,25 +96,34 @@ impl AwsDiscovery {
     /// is what environment credentials use).
     pub(super) async fn profiles(&self) -> OxiResult<Vec<String>> {
         if !self.settings.profiles.is_empty() {
-            return Ok(self.settings.profiles.clone());
+            return Ok(unique(self.settings.profiles.clone()));
         }
         let output = self
             .runner
             .run(CliInvocation::new(Cli::Aws, ["configure", "list-profiles"]))
             .await?;
-        let mut profiles: Vec<String> = output
+        let profiles: Vec<String> = output
             .stdout
             .lines()
             .map(str::trim)
             .filter(|line| !line.is_empty())
             .map(str::to_owned)
             .collect();
-        profiles.dedup();
+        let mut profiles = unique(profiles);
         if profiles.is_empty() {
             profiles.push(DEFAULT_PROFILE.to_owned());
         }
         Ok(profiles)
     }
+}
+
+/// `profiles` without repeats (adjacent or not), keeping the first occurrence's order.
+fn unique(profiles: Vec<String>) -> Vec<String> {
+    let mut seen = HashSet::new();
+    profiles
+        .into_iter()
+        .filter(|profile| seen.insert(profile.clone()))
+        .collect()
 }
 
 fn unusable(version: String, summary: &str) -> CloudDetection {

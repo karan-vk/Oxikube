@@ -8,7 +8,7 @@ use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::{CloudScope, ClusterStatus, DiscoveredCluster};
 use serde::Deserialize;
 
-use super::AwsDiscovery;
+use super::{AwsDiscovery, profile_args};
 use crate::process::{Cli, CliError, CliInvocation};
 
 #[derive(Deserialize)]
@@ -76,34 +76,32 @@ impl AwsDiscovery {
         };
         let list: ListClusters = self
             .runner
-            .run_json(CliInvocation::new(
-                Cli::Aws,
-                [
-                    "eks",
-                    "list-clusters",
-                    "--region",
-                    region,
-                    "--profile",
-                    profile,
-                ],
-            ))
+            .run_json(CliInvocation::new(Cli::Aws, {
+                let mut args = vec!["eks", "list-clusters", "--region", region]
+                    .into_iter()
+                    .map(str::to_owned)
+                    .collect::<Vec<_>>();
+                args.extend(profile_args(profile));
+                args
+            }))
             .await?;
         // The runner's concurrency cap bounds how many describes run at once.
         let described = join_all(list.clusters.iter().map(|name| async move {
             self.runner
-                .run_json::<DescribeCluster>(CliInvocation::new(
-                    Cli::Aws,
-                    [
+                .run_json::<DescribeCluster>(CliInvocation::new(Cli::Aws, {
+                    let mut args = [
                         "eks",
                         "describe-cluster",
                         "--name",
                         name,
                         "--region",
                         region,
-                        "--profile",
-                        profile,
-                    ],
-                ))
+                    ]
+                    .map(str::to_owned)
+                    .to_vec();
+                    args.extend(profile_args(profile));
+                    args
+                }))
                 .await
         }))
         .await;

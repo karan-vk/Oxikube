@@ -39,7 +39,7 @@ fn recorded() -> RecordedRunner {
         )
         .on(
             Cli::Aws,
-            &["configure", "get", "region", "--profile", "default"],
+            &["configure", "get", "region"],
             Reply::fail(1, ""),
         )
         .on(
@@ -47,12 +47,11 @@ fn recorded() -> RecordedRunner {
             &["configure", "get", "region", "--profile", "prod"],
             Reply::Stdout("eu-west-1\n".into()),
         );
-    for profile in ["default", "prod"] {
-        runner = runner.on(
-            Cli::Aws,
-            &["sts", "get-caller-identity", "--profile", profile],
-            fixture("sts-get-caller-identity.json"),
-        );
+    for args in [
+        &["sts", "get-caller-identity"][..],
+        &["sts", "get-caller-identity", "--profile", "prod"][..],
+    ] {
+        runner = runner.on(Cli::Aws, args, fixture("sts-get-caller-identity.json"));
     }
     runner = runner.on(
         Cli::Aws,
@@ -363,4 +362,44 @@ async fn satisfies_the_discovery_contract() {
     assert!(report.scopes > 0 && report.clusters > 0, "{report:?}");
     let (missing, _) = discovery(RecordedRunner::new(), AwsSettings::default());
     cloud_discovery(&missing).await;
+}
+
+#[tokio::test]
+async fn repeated_profiles_yield_each_scope_once() {
+    let settings = AwsSettings {
+        profiles: vec!["prod".into(), "default".into(), "prod".into()],
+        regions: vec!["eu-west-1".into()],
+    };
+    let (aws, _) = discovery(recorded(), settings);
+    let scopes = aws.scopes().await.unwrap();
+    assert_eq!(
+        scopes,
+        vec![scope("prod", "eu-west-1"), scope("default", "eu-west-1")]
+    );
+}
+
+#[tokio::test]
+async fn the_implicit_default_profile_is_never_named_on_the_command_line() {
+    let runner = RecordedRunner::new()
+        .installed(Cli::Aws)
+        .on(Cli::Aws, &["--version"], fixture("version.txt"))
+        .on(
+            Cli::Aws,
+            &["configure", "list-profiles"],
+            Reply::Stdout(String::new()),
+        )
+        .on(
+            Cli::Aws,
+            &["sts", "get-caller-identity"],
+            fixture("sts-get-caller-identity.json"),
+        );
+    let (aws, runner) = discovery(runner, AwsSettings::default());
+    let detection = aws.detect().await.unwrap();
+    assert_eq!(detection.status, CloudToolStatus::Ready);
+    assert!(
+        runner
+            .calls()
+            .iter()
+            .all(|call| !call.args.iter().any(|a| a == "--profile"))
+    );
 }

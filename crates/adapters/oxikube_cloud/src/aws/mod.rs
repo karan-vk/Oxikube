@@ -33,6 +33,16 @@ use crate::process::ProcessRunner;
 /// The profile every AWS CLI call uses when none is named.
 pub const DEFAULT_PROFILE: &str = "default";
 
+/// The `--profile P` flags for `profile`, or none for the implicit `default`: naming it
+/// explicitly fails with `ProfileNotFound` when only environment credentials exist.
+pub(crate) fn profile_args(profile: &str) -> Vec<String> {
+    if profile == DEFAULT_PROFILE {
+        Vec::new()
+    } else {
+        vec!["--profile".to_owned(), profile.to_owned()]
+    }
+}
+
 /// What the user narrows the scan to (the `cloud.aws` settings, E18-S07).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AwsSettings {
