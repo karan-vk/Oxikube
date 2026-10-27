@@ -10,6 +10,7 @@ use base64::engine::general_purpose::STANDARD;
 use oxikube_domain::event::{Event, EventType};
 use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_domain::json::JsonRef;
+use oxikube_domain::rbac::AUTHENTICATED_GROUP;
 use oxikube_domain::{
     ContainerSummary, CronJobSummary, JobSummary, NodeSummary, PodSummary, Resource,
     WorkloadSummary,
@@ -36,6 +37,7 @@ fn json_files_on_disk(dir: &Path, root: &Path, out: &mut Vec<String>) {
                     || n == "metrics-server"
                     || n == "metrics-stack"
                     || n == "openapi"
+                    || n == "rbac"
                     || n == "tables"
             }) {
                 continue;
@@ -486,5 +488,25 @@ fn every_recorded_table_is_registered_and_shaped() {
                 "{name}: rows carry metadata"
             );
         }
+    }
+}
+
+#[test]
+fn the_rbac_recording_is_complete() {
+    let objects = fixtures::rbac::cluster();
+    for name in ["view", "edit", "admin", "cluster-admin"] {
+        assert!(
+            objects
+                .iter()
+                .any(|o| &*o.kind.kind == "ClusterRole" && o.name() == name),
+            "built-in {name} recorded"
+        );
+    }
+    let reviews = fixtures::rbac::reviews();
+    assert_eq!(reviews.len(), 12, "six subjects, two namespaces each");
+    for review in &reviews {
+        assert_eq!(review.status["incomplete"], false, "{:?}", review.subject);
+        assert!(!review.can_i_list.is_empty(), "{:?}", review.subject);
+        assert!(review.groups.iter().any(|g| g == AUTHENTICATED_GROUP));
     }
 }

@@ -283,6 +283,16 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `cargo bench -p oxikube_app --bench reference_index`: 10k Pods build in ~10 ms off the UI thread holding ~6 MB, a 500-op
   churn batch ~0.3 ms, one status update ~1 us, one cell ~30 ns. E12-S15's interim `PvcUsage` / `PvcUsageIndex` /
   `PvcUsageFeed` are gone: this is the one implementation.
+  Module `access` (E17-S01): `SubjectIndex`, "what can this subject do, and through which binding?". It applies the
+  store subscriptions' deltas of Role, ClusterRole, RoleBinding and ClusterRoleBinding (a snapshot replaces its kind,
+  each op edits one object; `subject -> {binding}` is kept incrementally) and answers `subjects`, `bindings_for`,
+  `grants_for` (binding, matched subject, role, `GrantScope`, rules), `rules_for` / `rules_in` (what
+  `kubectl auth can-i --list` lists), `can`, `can_url`, `roles_granting` and `matrix` (k9s's per-group, per-verb table).
+  The objects and the normaliser are pure domain (`oxikube_domain::rbac`: `Role`, `Binding`, `Subject` with its
+  implicit ServiceAccount and `system:authenticated` groups, `PolicyRule` read from JSON, `NormalisedRules`, whose
+  resource rules are `oxikube_domain::access::AccessRule`s, so rules reviews and RBAC objects share one matcher).
+  Aggregated ClusterRoles: live `rules` unioned with the selectors resolved over the ClusterRoles' labels. Fixture-tested
+  against recorded `kubectl auth can-i --list` output (`oxikube_testkit::fixtures::rbac`).
   E12-S05 adds `workload::Restart` and `workload::SetImage` for Deployments, StatefulSets and DaemonSets
   (`WorkloadService::restart`, `plan_set_image`, `set_image`, in `rollout`): restart merge-patches the pod template's
   `kubectl.kubernetes.io/restartedAt` (the kdash builder `oxikube_domain::build::restart_patch`, time from

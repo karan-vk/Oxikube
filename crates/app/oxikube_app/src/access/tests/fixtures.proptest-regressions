@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 88751c88f49bbcdfb5ced77fa26e0cca91f76f32457f125bedc08bdc7a0c31c7 # shrinks to requests = [(3, "get", ("", "pods"), None)]
