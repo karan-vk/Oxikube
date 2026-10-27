@@ -115,11 +115,13 @@ impl AccessService {
     /// Forgets every cached review: call it on connect and context switch.
     pub fn invalidate(&self) {
         self.cache.invalidate();
+        self.cache.port().invalidate_all_rules();
     }
 
     /// Forgets the review of one namespace (`None`: the cluster-wide ask): call it when the
     /// user switches to it so the next ask is fresh.
     pub fn invalidate_namespace(&self, namespace: Option<&str>) {
         self.cache.invalidate_namespace(namespace);
+        self.cache.port().invalidate_rules(namespace);
     }
 }

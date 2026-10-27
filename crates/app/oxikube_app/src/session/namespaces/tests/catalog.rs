@@ -340,3 +340,30 @@ fn the_accessible_namespaces_setting_replaces_the_review() {
         "the setting is used as given"
     );
 }
+
+#[test]
+fn selecting_a_namespace_reviews_it_afresh() {
+    let h = Harness::new();
+    h.connect("a", &["dev", "payments"]);
+    let ports = h.connector.ports_for(&id("a"));
+    let session = h.manager.get(&id("a")).expect("session");
+    let access = h
+        .service
+        .access()
+        .for_session(&id("a"), &session)
+        .expect("access service");
+    h.run(access.rules(Some("payments"))).expect("first review");
+    assert_eq!(ports.access.rules_calls(Some("payments")), 1);
+
+    h.run(h.service.select(&id("a"), set(&["payments"])))
+        .unwrap();
+
+    assert_eq!(
+        ports.access.rules_invalidations(Some("payments")),
+        1,
+        "the adapter's own cache is told to forget it too"
+    );
+    h.run(access.rules(Some("payments")))
+        .expect("second review");
+    assert_eq!(ports.access.rules_calls(Some("payments")), 2);
+}

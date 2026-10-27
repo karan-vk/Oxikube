@@ -44,6 +44,10 @@ pub enum AccessCall {
     Rules(Option<String>),
     /// `can_i(check)`.
     CanI(AccessCheck),
+    /// `invalidate_rules(namespace)`.
+    InvalidateRules(Option<String>),
+    /// `invalidate_all_rules()`.
+    InvalidateAllRules,
 }
 
 /// Fake `AccessReviewPort`.
@@ -155,6 +159,25 @@ impl FakeAccessReviewPort {
             .count()
     }
 
+    /// How many times the adapter-side rules cache of `namespace` (`None`: cluster-wide) was
+    /// told to forget it.
+    pub fn rules_invalidations(&self, namespace: Option<&str>) -> usize {
+        self.recorded_calls()
+            .iter()
+            .filter(|call| {
+                matches!(call, AccessCall::InvalidateRules(ns) if ns.as_deref() == namespace)
+            })
+            .count()
+    }
+
+    /// How many times the adapter-side rules cache was told to forget everything.
+    pub fn full_rules_invalidations(&self) -> usize {
+        self.recorded_calls()
+            .iter()
+            .filter(|call| matches!(call, AccessCall::InvalidateAllRules))
+            .count()
+    }
+
     /// How many `can_i` calls were made.
     pub fn can_i_calls(&self) -> usize {
         self.recorded_calls()
@@ -196,6 +219,15 @@ impl AccessReviewPort for FakeAccessReviewPort {
                 .find(|(candidate, _)| candidate == check)
                 .map_or(AccessDecision::Allowed, |(_, decision)| decision.clone()))
         })
+    }
+
+    fn invalidate_rules(&self, namespace: Option<&str>) {
+        self.calls
+            .record(AccessCall::InvalidateRules(namespace.map(str::to_owned)));
+    }
+
+    fn invalidate_all_rules(&self) {
+        self.calls.record(AccessCall::InvalidateAllRules);
     }
 }
 

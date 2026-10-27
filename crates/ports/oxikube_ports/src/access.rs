@@ -60,4 +60,15 @@ pub trait AccessReviewPort: Send + Sync {
     /// explicit deny is [`AccessDecision::Unknown`]. A check that asks as another identity
     /// ([`AccessCheck::impersonate`]) is `Unsupported` until an adapter implements it.
     async fn can_i(&self, check: &AccessCheck) -> OxiResult<AccessDecision>;
+
+    /// Forgets any rules review the adapter itself cached for `namespace` (`None`: the
+    /// cluster-wide ask), so the next [`rules`](Self::rules) asks the server. Callers that
+    /// invalidate their own cache call this too, or the refetch is served from the adapter's
+    /// snapshot. The default does nothing, for adapters that do not cache.
+    fn invalidate_rules(&self, namespace: Option<&str>) {
+        let _ = namespace;
+    }
+
+    /// Forgets every rules review the adapter cached (connect, context switch).
+    fn invalidate_all_rules(&self) {}
 }

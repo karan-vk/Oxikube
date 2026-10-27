@@ -73,4 +73,13 @@ impl AccessReviewPort for KubeAccess {
     async fn can_i(&self, check: &AccessCheck) -> OxiResult<AccessDecision> {
         can_i_for_context(&self.pool, &self.context, check, REFRESH).await
     }
+
+    fn invalidate_rules(&self, namespace: Option<&str>) {
+        let namespace = namespace.unwrap_or(CLUSTER_WIDE_PROBE_NAMESPACE);
+        self.rules.invalidate_namespace(&self.context, namespace);
+    }
+
+    fn invalidate_all_rules(&self) {
+        self.rules.invalidate_context(&self.context);
+    }
 }

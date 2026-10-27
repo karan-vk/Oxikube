@@ -80,6 +80,20 @@ async fn invalidating_everything_forgets_every_namespace() {
 }
 
 #[tokio::test]
+async fn invalidation_reaches_the_adapter_cache_too() {
+    let (service, port, _clock) = service(FakeAccessReviewPort::new());
+    service.rules(Some("dev")).await.expect("dev");
+
+    service.invalidate_namespace(Some("dev"));
+    service.invalidate_namespace(None);
+    service.invalidate();
+
+    assert_eq!(port.rules_invalidations(Some("dev")), 1);
+    assert_eq!(port.rules_invalidations(None), 1);
+    assert_eq!(port.full_rules_invalidations(), 1);
+}
+
+#[tokio::test]
 async fn ten_concurrent_asks_make_one_review() {
     let (service, port, _clock) = service(FakeAccessReviewPort::new().with_rules_yields(3));
 

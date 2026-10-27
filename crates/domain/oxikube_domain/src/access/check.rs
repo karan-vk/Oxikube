@@ -6,7 +6,7 @@
 //! [`Unknown`](AccessDecision::Unknown), never silently [`Denied`](AccessDecision::Denied), so
 //! a soft gate fails open.
 
-use super::{Access, AccessRules};
+use super::{Access, AccessRules, is_cluster_scoped};
 use crate::ids::Gvr;
 
 /// Who a check is asked as, when not the current identity (`kubectl --as`).
@@ -128,7 +128,16 @@ impl AccessRules {
         if check.impersonate.is_some() {
             return None;
         }
-        let level = self.level(&check.verb, &check.gvr.group, &check.rule_resource());
+        let resource = check.rule_resource();
+        if check.namespace.is_none()
+            && self.namespaces_unseen
+            && !is_cluster_scoped(&check.gvr.group, &resource)
+        {
+            // An all-namespaces ask on a namespaced resource: the review covered one probe
+            // namespace, so even a matching rule may be that namespace's Role alone.
+            return None;
+        }
+        let level = self.level(&check.verb, &check.gvr.group, &resource);
         match level {
             Access::Granted => Some(AccessDecision::Allowed),
             Access::Denied => Some(AccessDecision::Denied {
@@ -164,6 +173,32 @@ mod tests {
             rules.decide(&AccessCheck::new("delete", pods())),
             Some(AccessDecision::Denied { .. })
         ));
+    }
+
+    #[test]
+    fn an_all_namespaces_ask_is_not_answered_from_one_probe_namespace() {
+        let unseen = AccessRules::none()
+            .with_rule(AccessRule::granting(
+                &["list"],
+                &[""],
+                &["pods", "nodes"],
+                &[],
+            ))
+            .into_namespaces_unseen();
+        assert_eq!(
+            unseen.decide(&AccessCheck::new("list", pods())),
+            None,
+            "a Role of the probe namespace must not allow the all-namespaces ask"
+        );
+        assert_eq!(
+            unseen.decide(&AccessCheck::new("list", pods()).namespace("default")),
+            Some(AccessDecision::Allowed)
+        );
+        assert_eq!(
+            unseen.decide(&AccessCheck::new("list", Gvr::new("", "v1", "nodes"))),
+            Some(AccessDecision::Allowed),
+            "cluster-scoped resources are fully covered by the review"
+        );
     }
 
     #[test]
