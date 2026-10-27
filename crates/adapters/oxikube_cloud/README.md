@@ -16,6 +16,7 @@ CloudDiscoveryPort adapters that shell out to installed aws/gcloud/az CLIs to li
   regions scopes (settings + profile default region; none configured is a validation error),
   `eks list-clusters` + parallel `eks describe-cluster`, and an exec-auth entry (`aws eks get-token`).
   Parsers are tested on recorded output in `tests/fixtures/aws-2.15/`.
+- `gcloud` (E18-S03): `GcloudDiscovery`, the GKE adapter: `gcloud version|auth list|projects list|container clusters list`, ADC file check, `gke-gcloud-auth-plugin` detection, exec-auth entries named `gke:<project>:<location>:<name>`. Fixtures: `tests/fixtures/gcloud-472.0.0/`.
 - `testing` (feature `testing`): `RecordedRunner` answers commands from recorded output
   (`tests/fixtures/<cli>-<version>/...`), so adapters are tested without any cloud account.
 

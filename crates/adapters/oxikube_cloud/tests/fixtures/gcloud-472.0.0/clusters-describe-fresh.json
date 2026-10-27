@@ -1,0 +1,8 @@
+{
+  "currentMasterVersion": "1.29.4-gke.1043002",
+  "endpoint": "203.0.113.30",
+  "location": "us-east1",
+  "masterAuth": {"clusterCaCertificate": "RkVSU0g="},
+  "name": "fresh",
+  "status": "RUNNING"
+}

@@ -1,0 +1,1 @@
+ERROR: (gcloud.container.clusters.list) ResponseError: code=403, message=Required "container.clusters.list" permission(s) for "projects/acme-platform-1". PERMISSION_DENIED
