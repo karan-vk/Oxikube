@@ -1,4 +1,5 @@
-//! Screenshot of the ServiceAccount detail panel (E17-S04): an account with a token Secret, an
+//! Screenshots of the ServiceAccount detail panel (E17-S04, with the Kubeconfig section of
+//! E17-S09 empty and with a generated kubeconfig): an account with a token Secret, an
 //! image pull secret, the automount flag unset, and three bound roles (a namespaced grant, a
 //! cluster-wide grant and one reached through a group). Rendered through
 //! `Window::render_to_image`, so the pixels are the real view's output.
@@ -20,9 +21,11 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{AppContext as _, HeadlessAppContext, px, size};
+use oxikube_app::sa_kubeconfig::{GeneratedKubeconfig, TokenSource};
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
 use oxikube_domain::rbac::{BindingKind, BindingRef, GrantScope, RoleKind, RoleRef};
+use oxikube_domain::secret::SecretText;
 use oxikube_rbac_ui::service_account::{
     Automount, BoundRole, BoundRoles, ServiceAccountFacts, ServiceAccountPanel,
 };
@@ -33,7 +36,7 @@ use oxikube_testkit::screenshot::{
 use oxikube_workspace::CommandDispatcher;
 
 const WIDTH: f32 = 760.0;
-const HEIGHT: f32 = 420.0;
+const HEIGHT: f32 = 800.0;
 
 struct Nowhere;
 
@@ -71,7 +74,21 @@ fn bound(
     }
 }
 
-fn render() -> anyhow::Result<RgbaImage> {
+/// The panel as the cluster's detail shows it; `with_kubeconfig` adds a generated kubeconfig (its
+/// token masked, with a one-hour lifetime).
+fn generated(account: ResourceRef) -> GeneratedKubeconfig {
+    let masked = "apiVersion: v1\nkind: Config\nclusters:\n- name: kind-oxikube\n  cluster:\n    server: https://127.0.0.1:6443\n    certificate-authority-data: LS0tLS1CRUdJTi...\nusers:\n- name: ci\n  user:\n    token: '************'\ncontexts:\n- name: ci@kind-oxikube\n  context:\n    cluster: kind-oxikube\n    user: ci\n    namespace: shop\ncurrent-context: ci@kind-oxikube\n";
+    GeneratedKubeconfig {
+        service_account: account,
+        text: SecretText::new("token: not shown"),
+        preview: format!("# The token expires at 2026-10-28T13:00:00Z.\n{masked}"),
+        source: TokenSource::TokenRequest,
+        expires_at: Some("2026-10-28T13:00:00Z".into()),
+        warning: None,
+    }
+}
+
+fn render(with_kubeconfig: bool) -> anyhow::Result<RgbaImage> {
     let mut cx = headless();
     let cluster = ClusterId::new("kubeconfig.yaml", &ContextName::new("kind-oxikube"));
     let target =
@@ -114,7 +131,14 @@ fn render() -> anyhow::Result<RgbaImage> {
         // Pin the appearance: `init` follows the system, which differs between machines.
         oxikube_ui::set_tokens(cx, oxikube_ui::Tokens::dark());
         cx.set_reduce_motion(true);
-        cx.new(|_| ServiceAccountPanel::fixed(target, facts, roles, Rc::new(Nowhere)))
+        cx.new(|cx| {
+            let mut panel =
+                ServiceAccountPanel::fixed(target.clone(), facts, roles, Rc::new(Nowhere));
+            if with_kubeconfig {
+                panel.show_kubeconfig(generated(target), cx);
+            }
+            panel
+        })
     })?;
     cx.run_until_parked();
     cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))?;
@@ -150,11 +174,15 @@ fn check(name: &str, image: RgbaImage) -> anyhow::Result<()> {
 }
 
 fn main() -> ExitCode {
-    let name = "service_account_panel_dark";
-    if let Err(err) = render().and_then(|image| check(name, image)) {
-        eprintln!("{name} screenshot failed: {err:#}");
-        return ExitCode::FAILURE;
+    for (name, with_kubeconfig) in [
+        ("service_account_panel_dark", false),
+        ("service_account_kubeconfig_dark", true),
+    ] {
+        if let Err(err) = render(with_kubeconfig).and_then(|image| check(name, image)) {
+            eprintln!("{name} screenshot failed: {err:#}");
+            return ExitCode::FAILURE;
+        }
     }
-    println!("service account panel screenshot: ok");
+    println!("service account panel screenshots: ok");
     ExitCode::SUCCESS
 }

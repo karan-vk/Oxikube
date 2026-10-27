@@ -443,6 +443,17 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             size: "20Gi".into(),
             from: Some("10Gi".into()),
         },
+        "serviceaccount::GenerateKubeconfig" => Command::ServiceAccountGenerateKubeconfig {
+            target: ResourceRef::namespaced(
+                cluster,
+                Gvk::new("", "v1", "ServiceAccount"),
+                "default",
+                "deployer",
+            ),
+            expiration_seconds: Some(3600),
+            audiences: Vec::new(),
+            allow_legacy_token: false,
+        },
         "storageclass::SetDefault" => Command::StorageClassSetDefault {
             target: ResourceRef::cluster_scoped(
                 cluster,

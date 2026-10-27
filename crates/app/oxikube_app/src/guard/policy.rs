@@ -215,6 +215,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::JobResume { target }
         | Command::PvcResize { target, .. }
         | Command::RoleDelete { target, .. }
+        | Command::ServiceAccountGenerateKubeconfig { target, .. }
         | Command::StorageClassSetDefault { target, .. } => Some(&target.cluster),
         Command::ClusterNextTab
         | Command::ClusterPreviousTab
@@ -380,6 +381,9 @@ pub fn summary(meta: &CommandMeta, command: &Command, context: &str) -> String {
     if let Some(summary) = crate::role_ops::summary(command, context) {
         return summary;
     }
+    if let Some(summary) = crate::sa_kubeconfig::summary(command, context) {
+        return summary;
+    }
     if let Command::WorkloadScale { target, replicas } = command {
         return scale_summary(target, *replicas, context);
     }
@@ -514,6 +518,9 @@ pub fn audit_detail(command: &Command) -> Option<String> {
         return Some(detail);
     }
     if let Some(detail) = crate::role_ops::audit_detail(command) {
+        return Some(detail);
+    }
+    if let Some(detail) = crate::sa_kubeconfig::audit_detail(command) {
         return Some(detail);
     }
     match command {

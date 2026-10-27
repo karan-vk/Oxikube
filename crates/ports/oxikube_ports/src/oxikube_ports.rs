@@ -147,8 +147,9 @@ pub use cluster_prefs::{
     PrometheusOverride, WatchBudgetPrefs,
 };
 pub use cluster_source::{
-    ClusterContext, ClusterSource, ClusterSourcePort, DiagnosticSeverity, SourceDiagnostic,
-    SourceId, SourceKind, SourceState, SourceStatus, SourcesChanged, UserSource, UserSourceKind,
+    ClusterContext, ClusterEndpoint, ClusterSource, ClusterSourcePort, DiagnosticSeverity,
+    SourceDiagnostic, SourceId, SourceKind, SourceState, SourceStatus, SourcesChanged, UserSource,
+    UserSourceKind,
 };
 pub use connector::{
     ClusterConnection, ClusterConnectorPort, ClusterPorts, ConnectRequest, ConnectionGuard,

@@ -63,6 +63,9 @@ const RISKS: &[(CommandId, Risk)] = &[
     (CommandId::SELECTION_DELETE, Risk::Medium),
     (CommandId::SELECTION_LABEL, Risk::Medium),
     (CommandId::SELECTION_RESTART, Risk::Low),
+    // A TokenRequest turned into a kubeconfig (E17-S09): the ServiceAccount panel's Kubeconfig
+    // section and the row menu; the result stays in memory.
+    (CommandId::SERVICEACCOUNT_GENERATE_KUBECONFIG, Risk::Low),
     (CommandId::STORAGECLASS_SET_DEFAULT, Risk::Low),
     (CommandId::WORKLOAD_RESTART, Risk::Low),
     (CommandId::WORKLOAD_ROLLBACK, Risk::Medium),

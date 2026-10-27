@@ -6,6 +6,7 @@
 //! | `panel` | [`ServiceAccountPanel`]: the detail panel above the Overview, and the poll that recomputes the bound roles on a background task when the index moved |
 //! | `render` | the drawing: sections of links |
 //! | `bound` | the virtualised bound-roles list |
+//! | `kubeconfig` | the **Kubeconfig** section: lifetime, generate (`serviceaccount::GenerateKubeconfig`), the masked preview, copy, save, discard (E17-S09) |
 //! | `actions` | [`register_header_action`]: the header's extension point (E17-S09 adds "Generate kubeconfig") |
 //!
 //! The list columns (Name, Namespace, Secrets, Age, Labels) are the shared catalogue's
@@ -22,6 +23,7 @@
 
 mod actions;
 mod bound;
+mod kubeconfig;
 mod model;
 mod panel;
 mod render;
@@ -32,6 +34,7 @@ use oxikube_resources_ui::detail::DetailView;
 use oxikube_resources_ui::kinds::{DetailRenderer, KindSpecs};
 
 pub use actions::{HeaderAction, header_actions, register_header_action};
+pub use kubeconfig::{Expiry, KubeconfigDeps, KubeconfigState, row_actions};
 pub use model::{Automount, BoundRole, BoundRoles, ServiceAccountFacts};
 pub use panel::ServiceAccountPanel;
 

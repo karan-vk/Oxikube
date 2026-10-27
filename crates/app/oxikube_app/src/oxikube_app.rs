@@ -41,6 +41,7 @@
 //! | [`workloads`] | E12-S08, E12-S04, E12-S03 | [`WorkloadService`]: trigger a CronJob (a Job from its template, `kubectl create job --from`), suspend and resume CronJobs and Jobs, and scale the replica controllers (`workload::Scale`, low risk, medium for zero: [`WorkloadService::plan_scale`] reads the `scale` subresource and any autoscaler, [`WorkloadService::scale`] patches `spec.replicas` through it, [`ScaleRunner`] runs it from a dialog); the `cronjob::*`, `job::*` and `workload::Scale` handlers (guarded, audited with the Job's name or the replica counts); evict, delete, force delete and sweep pods (`pod::Evict`, `pod::Delete`, `pod::ForceDelete`, `pod::Sanitize`: medium, high for the force delete, one audit record per pod under a batch id); the pod panel's reads (owner chain, node, environment sources) |
 //! | [`helm`] | E16-S03 | [`HelmService`]: a release revision's manifest parsed once (off the UI thread, cached) into [`ResourcePlan`]s of `ResourceRef`s; [`ReleaseResourcesLease`] holds the store feeds while the Resources tab is open; [`ReleaseResource`] is `Present { health }`, `Missing` or `Unknown` |
 //! | [`helm_charts`] | E16-S08 | [`ChartsService`]: the charts catalog over `HelmPort` (the whole catalog read once per generation and filtered in memory per keyword, grouped per chart with semver-ordered versions; only charts of configured repositories are shown; chart README / values / metadata cached per version; both dropped when a repository changes; readiness: no helm / no repos / ready; the hand-off to the install tab), `helm::SearchCharts` / `ShowChart` / `InstallChart` commands |
+//! | [`sa_kubeconfig`] | E17-S09 | the guarded `serviceaccount::GenerateKubeconfig` (risk low, one confirmation): a `TokenRequest` (legacy token Secret on clusters without it, only when allowed) turned into a kubeconfig held in memory by the `KubeconfigVault`; audited without the token |
 //! | [`helm_ops`] | E16-S06 | the guarded `helm::Rollback` (risk medium, one confirmation) and `helm::Uninstall` (risk high, type the release name; keep-history option); `values_diff` for the rollback preview; audited without values |
 //! | [`role_ops`] | E17-S05 | the guarded `role::Create`, `role::Edit` and `role::Delete` (risk medium, one confirmation, a server dry run first, writing Roles and ClusterRoles only; audited with a rule count) and [`RoleLinks`](role_ops::RoleLinks): the sources of an aggregated ClusterRole and the bindings that name a role |
 //! | [`helm_install`] | E16-S09 | [`InstallFlow`]: the install tab's guarded `helm::Install` (preview = the guard's dry run: `helm template` plus the server's dry run, Secret data masked; ask = the low-risk confirmation; start = the install with its output followed line by line through [`ReleaseProgress`]; Cancel kills `helm`); audited without the values |
@@ -100,6 +101,7 @@ pub mod rbac_subjects;
 pub mod references;
 pub mod role_ops;
 pub mod rollout;
+pub mod sa_kubeconfig;
 pub mod search;
 pub mod secrets;
 pub mod selection;

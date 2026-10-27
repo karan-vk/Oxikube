@@ -179,7 +179,9 @@ pub fn row_actions() -> RowActionRegistry {
         .chain(oxikube_resources_ui::kinds::namespace::namespace_row_actions())
         .chain(oxikube_resources_ui::kinds::node::node_row_actions())
         .chain(oxikube_resources_ui::kinds::secret_row_actions())
-        .chain(oxikube_rbac_ui::role::role_row_actions());
+        .chain(oxikube_rbac_ui::role::role_row_actions())
+        // "Generate Kubeconfig" on ServiceAccounts (E17-S09).
+        .chain(oxikube_rbac_ui::row_actions());
     for spec in specs {
         if let Err(error) = registry.register(spec) {
             // A wiring bug (one command offered twice); the tests catch it.

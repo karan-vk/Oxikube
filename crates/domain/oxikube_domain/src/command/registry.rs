@@ -425,6 +425,10 @@ impl CommandId {
     pub const ROLE_EDIT: CommandId = CommandId::new("role::Edit");
     /// `role::OpenDialog`: open the Role / ClusterRole rule dialog, new or editing one (E17-S05).
     pub const ROLE_OPEN_DIALOG: CommandId = CommandId::new("role::OpenDialog");
+    /// `serviceaccount::GenerateKubeconfig`: request a token for a ServiceAccount and build a
+    /// kubeconfig from it (E17-S09).
+    pub const SERVICEACCOUNT_GENERATE_KUBECONFIG: CommandId =
+        CommandId::new("serviceaccount::GenerateKubeconfig");
     /// `secret::Create`: open the "Create secret" dialog (Opaque, Docker registry, TLS).
     pub const SECRET_CREATE: CommandId = CommandId::new("secret::Create");
     /// `secret::EditDecoded`: open a Secret in the manifest editor with its values decoded.
@@ -2097,6 +2101,18 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::core("Service")),
+    // Creates a credential (a TokenRequest, or a legacy token Secret after consent): risk low (medium when the legacy token Secret fallback is allowed,
+    // `Command::effective_risk`), one confirmation, blocked on a read-only cluster, audited with the account and the lifetime and
+    // never the token (E17-S09).
+    CommandMeta::mutation(
+        CommandId::SERVICEACCOUNT_GENERATE_KUBECONFIG,
+        "Generate ServiceAccount Kubeconfig",
+        CommandScope::Selection,
+        Risk::Low,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::core("ServiceAccount")),
     // One annotation on one StorageClass (and the previous default's, when asked): reversible by
     // setting another class, hence `Low`; the per-session skip of low-risk confirms is E19's.
     CommandMeta::mutation(
@@ -2653,6 +2669,7 @@ mod tests {
                 .all(|m| m.tool_risk() == m.risk
                     || m.id == CommandId::RESOURCE_DELETE
                     || m.id == CommandId::SELECTION_DELETE
+                    || m.id == CommandId::SERVICEACCOUNT_GENERATE_KUBECONFIG
                     || m.id == CommandId::WORKLOAD_SCALE)
         );
     }

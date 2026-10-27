@@ -48,6 +48,7 @@ mod portforward;
 mod roles;
 mod rollback;
 mod rollout;
+mod sa_kubeconfig;
 mod scale;
 mod scoped_feeds;
 mod selection;

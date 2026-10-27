@@ -77,6 +77,7 @@
 
 mod config;
 mod diagnostics;
+mod endpoint;
 mod layout;
 mod pasted;
 mod port;
@@ -331,5 +332,7 @@ impl KubeconfigSources {
 
 #[cfg(test)]
 mod diagnostics_tests;
+#[cfg(test)]
+mod endpoint_tests;
 #[cfg(test)]
 mod user_sources_tests;
