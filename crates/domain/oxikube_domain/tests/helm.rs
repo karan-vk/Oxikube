@@ -9,7 +9,7 @@ use oxikube_domain::helm::{
 use oxikube_domain::ids::{ClusterId, ContextName};
 
 fn values(yaml: &str) -> Values {
-    Values::from_yaml(yaml).unwrap()
+    Values::from_yaml(yaml).expect("test yaml is valid")
 }
 
 #[test]

@@ -117,10 +117,10 @@ pub(super) async fn gone(pid: &str) -> bool {
 /// The pid the fake wrote to `pid`, waiting up to 5 s for it.
 pub(super) async fn pid(fake: &FakeHelm) -> String {
     for _ in 0..100 {
-        if let Ok(pid) = std::fs::read_to_string(fake.dir().join("pid")) {
-            if !pid.trim().is_empty() {
-                return pid.trim().to_owned();
-            }
+        if let Ok(pid) = std::fs::read_to_string(fake.dir().join("pid"))
+            && !pid.trim().is_empty()
+        {
+            return pid.trim().to_owned();
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }

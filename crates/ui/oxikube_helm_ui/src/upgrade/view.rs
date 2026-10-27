@@ -203,7 +203,7 @@ impl HelmUpgradeView {
             InputEvent::Change => cx.notify(),
             // The chart was typed: its versions and defaults are those of the new source.
             InputEvent::PressEnter { .. } | InputEvent::Blur => self.source_changed(window, cx),
-            _ => {}
+            InputEvent::Focus => {}
         }
     }
 

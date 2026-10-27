@@ -164,7 +164,7 @@ impl World {
                     .dispatch(command, ctx.with_confirmation(answer))
                     .await
             }
-            done => Ok(done),
+            done @ Outcome::Completed(_) => Ok(done),
         }
     }
 

@@ -64,8 +64,10 @@ fn recorded() -> Vec<Value> {
     ]
     .into_iter()
     .map(|text| {
-        let mut object: Value = serde_json::from_str(text).unwrap();
-        let metadata = object["metadata"].as_object_mut().unwrap();
+        let mut object: Value = serde_json::from_str(text).expect("recorded fixture is valid JSON");
+        let metadata = object["metadata"]
+            .as_object_mut()
+            .expect("recorded fixture metadata is a JSON object");
         for server_field in ["namespace", "uid", "resourceVersion", "creationTimestamp"] {
             metadata.remove(server_field);
         }
