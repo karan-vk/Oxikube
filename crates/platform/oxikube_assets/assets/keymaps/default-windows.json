@@ -625,6 +625,41 @@
     }
   },
   {
+    // The RBAC subject pages (E17-S07): the cursor, the filter, the verb column whose granting
+    // bindings the detail lists (`h` / `l`), the scope (`s`), the implicit groups (`i`) and the
+    // copy. `enter` opens the subject under the cursor; `escape` goes back to the list.
+    "context": "RbacSubjects && !Editing",
+    "bindings": {
+      "up": "rbac_subjects::SelectPrevious",
+      "k": "rbac_subjects::SelectPrevious",
+      "down": "rbac_subjects::SelectNext",
+      "j": "rbac_subjects::SelectNext",
+      "home": "rbac_subjects::SelectFirst",
+      "g": "rbac_subjects::SelectFirst",
+      "end": "rbac_subjects::SelectLast",
+      "shift-g": "rbac_subjects::SelectLast",
+      "enter": "rbac_subjects::OpenSelected",
+      "/": "rbac_subjects::FocusFilter",
+      "h": "rbac_subjects::PreviousColumn",
+      "l": "rbac_subjects::NextColumn",
+      "s": "rbac_subjects::NextScope",
+      "i": "rbac_subjects::ToggleImplicitGroups",
+      "y": "rbac_subjects::CopyMatrix"
+    }
+  },
+  {
+    "context": "RbacSubjects",
+    "bindings": {
+      "escape": "rbac_subjects::Back"
+    }
+  },
+  {
+    "context": "RbacSubjects && Editing",
+    "bindings": {
+      "escape": "rbac_subjects::FocusTable"
+    }
+  },
+  {
     // Terminals (E09-S07): ctrl-` shows (and focuses) the shown cluster's terminal panel in the
     // bottom dock or hides it; ctrl-~ opens a new shell there (a plain shell tab when no cluster
     // tab is shown).

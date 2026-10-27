@@ -298,6 +298,26 @@
   escape           helm_releases::CloseDetail
 [HelmReleases && Editing]
   escape           helm_releases::FocusTable
+[RbacSubjects && !Editing]
+  /                rbac_subjects::FocusFilter
+  down             rbac_subjects::SelectNext
+  end              rbac_subjects::SelectLast
+  enter            rbac_subjects::OpenSelected
+  g                rbac_subjects::SelectFirst
+  h                rbac_subjects::PreviousColumn
+  home             rbac_subjects::SelectFirst
+  i                rbac_subjects::ToggleImplicitGroups
+  j                rbac_subjects::SelectNext
+  k                rbac_subjects::SelectPrevious
+  l                rbac_subjects::NextColumn
+  s                rbac_subjects::NextScope
+  shift-g          rbac_subjects::SelectLast
+  up               rbac_subjects::SelectPrevious
+  y                rbac_subjects::CopyMatrix
+[RbacSubjects]
+  escape           rbac_subjects::Back
+[RbacSubjects && Editing]
+  escape           rbac_subjects::FocusTable
 [(everywhere)]
   ctrl-`           terminal_panel::TogglePanel
   ctrl-~           terminal::New

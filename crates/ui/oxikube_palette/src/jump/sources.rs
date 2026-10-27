@@ -12,6 +12,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::App;
+use oxikube_app::rbac_subjects::SubjectsService;
 use oxikube_app::search::aliases::{AliasRegistry, AliasTable};
 use oxikube_app::search::jump::{JumpContext, JumpEnv};
 use oxikube_app::session::namespaces::{NamespaceCatalog, NamespaceService};
@@ -31,6 +32,8 @@ pub struct JumpSources {
     pub aliases: AliasRegistry,
     /// The namespace lists.
     pub namespaces: NamespaceService,
+    /// The RBAC subject names the subject pages last saw, for `:rbac <subject>` completion.
+    pub rbac_subjects: SubjectsService,
 }
 
 /// Contexts and namespaces read off the UI thread; what the bar knows between opens.
@@ -102,6 +105,7 @@ pub struct LiveEnv {
     contexts: Vec<JumpContext>,
     aliases: AliasRegistry,
     namespaces: HashMap<ClusterId, NamespaceCatalog>,
+    rbac_subjects: SubjectsService,
 }
 
 impl LiveEnv {
@@ -124,6 +128,7 @@ impl LiveEnv {
             contexts,
             aliases: sources.aliases.clone(),
             namespaces: loaded.namespaces.clone(),
+            rbac_subjects: sources.rbac_subjects.clone(),
         }
     }
 }
@@ -143,5 +148,9 @@ impl JumpEnv for LiveEnv {
 
     fn namespaces(&self, cluster: &ClusterId) -> Option<NamespaceCatalog> {
         self.namespaces.get(cluster).cloned()
+    }
+
+    fn rbac_subjects(&self, cluster: &ClusterId) -> Arc<[Arc<str>]> {
+        self.rbac_subjects.known_names(cluster)
     }
 }

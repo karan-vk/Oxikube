@@ -308,6 +308,16 @@ crate's `README.md` for its allowed dependencies. Highlights:
   resource rules are `oxikube_domain::access::AccessRule`s, so rules reviews and RBAC objects share one matcher).
   Aggregated ClusterRoles: live `rules` unioned with the selectors resolved over the ClusterRoles' labels. Fixture-tested
   against recorded `kubectl auth can-i --list` output (`oxikube_testkit::fixtures::rbac`).
+  Module `rbac_subjects` (E17-S07): the subject views over that index. `PolicyFeed` subscribes to the four RBAC kinds on the
+  cluster's `ResourceStore` (all namespaces, shared with the Roles and Bindings tables) and applies their deltas to a
+  `SubjectIndex` behind a `PolicyHandle` (`status()` says how many feeds have not listed and which kinds were refused);
+  `summaries` lists the Users (users and ServiceAccounts, under `system:serviceaccount:<ns>:<name>`) or Groups with the number
+  of bindings and roles, reading bindings only; `subject_matrix` projects one subject's matrix cluster-wide or per namespace
+  (`Inherit::Direct`, or `ImplicitGroups` for what `system:authenticated` and a ServiceAccount's groups add) and `provenance`
+  names the bindings and roles behind one cell (with the `resourceNames` that make it partial); `SubjectMatrix::to_tsv` is the
+  copy-as-text; `SubjectFilter` is the `/` grammar over rows; `SubjectsService` remembers the subject names `:rbac <subject>`
+  completes. Matrices are computed per selected subject on the background executor. The API cannot list a group's members, so
+  the Groups page says so (`GROUP_MEMBERS_NOTE`).
   E12-S05 adds `workload::Restart` and `workload::SetImage` for Deployments, StatefulSets and DaemonSets
   (`WorkloadService::restart`, `plan_set_image`, `set_image`, in `rollout`): restart merge-patches the pod template's
   `kubectl.kubernetes.io/restartedAt` (the kdash builder `oxikube_domain::build::restart_patch`, time from
@@ -1060,6 +1070,17 @@ crate's `README.md` for its allowed dependencies. Highlights:
   are saved per cluster in the `StatePort` (`events.filter.<cluster>`). `EventsViews` (one per window, `mount::events`)
   applies the `events::*` requests; `perf_scenario::events_stream` measures it; `tests/screenshot.rs` (`--features
   screenshot`) photographs it.
+- `oxikube_rbac_ui` (E17-S07) — the RBAC subject pages (`:usr`, `:grp`, `:rbac <subject>`, the sidebar's Access Control >
+  Users and Groups, the palette's "RBAC: ..."; `rbac::OpenUsers`, `rbac::OpenGroups`, `rbac::ShowSubject`,
+  `rbac::CopyMatrix`, tools `k8s.rbac_*`): `SubjectsView`, a workspace item of the cluster's tab (key `cluster-rbac-subjects`,
+  key context `RbacSubjects`) with two virtualised tables: the Users / Groups list (Name, Kind, Bindings, Roles; `/` filter)
+  and a subject's k9s-style matrix (API group, resource, `GET LIST WATCH CREATE PATCH UPDATE DELETE DEL-LIST EXTRAS`; tick,
+  `~` for named objects only, dash; non-resource URLs after the resources). A scope toggle picks cluster-wide or one namespace
+  the subject is bound in, `i` adds the implicit groups, selecting a row lists the bindings and roles behind each verb column
+  (`h` / `l`), and `y` / "Copy as text" copies the matrix tab-separated. While the feeds list the page says how many of the
+  four are pending; an unknown subject shows "No bindings found" with a hint; a refused list is a warning line. Everything is
+  read from the app's `PolicyHandle`; reads and projections run on the background executor and redraws are
+  `notify_coalesced`. `SubjectsViews` (one per window, `mount::rbac`) applies the `rbac::*` requests.
 - `oxikube_ui::editor` (E07-S06, E10-S04) — gpui-component's editor (`tree-sitter-yaml` feature) behind our own API. `EditorApi`
   is the trait feature views use, in UTF-8 byte offsets and our types (`text`/`set_text`, `version`, `selections`/`select`,
   `set_read_only`, `set_soft_wrap`, `set_diagnostics(Vec<EditorDiagnostic>)`, `add_decoration`/`decorations`/

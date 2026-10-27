@@ -23,6 +23,8 @@ pub enum Slot {
     Namespace,
     /// A cluster context (after `ctx`, or after `@`).
     Context,
+    /// An RBAC subject (after `rbac`).
+    Subject,
     /// A word with nothing to complete (a filter, a selector, after `:q`).
     Nothing,
 }
@@ -74,10 +76,10 @@ pub fn site(line: &str) -> CompletionSite {
     match head.as_str() {
         "ctx" | "context" if index == 1 => with(Slot::Context, partial, span),
         "ns" if index == 1 => with(Slot::Namespace, partial, span),
+        "rbac" if index == 1 => with(Slot::Subject, partial, span),
         "q" | "quit" | "-" | "[" | "]" | "ctx" | "context" | "ns" | "pulses" | "pulse" | "pu"
-        | "helm" | "releases" | "pf" | "portforward" | "portforwards" | "port-forwards" => {
-            nothing(span)
-        }
+        | "helm" | "releases" | "usr" | "users" | "grp" | "groups" | "rbac" | "pf"
+        | "portforward" | "portforwards" | "port-forwards" => nothing(span),
         _ => {
             let is_flag = |text: &str| text.strip_prefix('/').is_some_and(takes_operand);
             // The word right after `/-l` is the filter's operand, not a namespace.
@@ -125,17 +127,21 @@ pub fn candidates(slot: Slot, env: &dyn JumpEnv) -> Vec<Candidate> {
                 detail: if c.connected { "connected" } else { "" }.into(),
             })
             .collect(),
+        Slot::Subject => subject_candidates(env),
         Slot::Nothing => Vec::new(),
     }
 }
 
-const RESERVED: [(&str, &str); 6] = [
+const RESERVED: [(&str, &str); 9] = [
     ("ctx", "switch the cluster context"),
+    ("grp", "RBAC groups of the cluster"),
     ("helm", "Helm releases of the cluster"),
     ("ns", "namespaces"),
     ("pf", "port-forwards of every cluster"),
     ("pulses", "gauges and history per kind"),
     ("q", "quit"),
+    ("rbac", "what a subject may do (rbac <subject>)"),
+    ("usr", "RBAC users and ServiceAccounts of the cluster"),
 ];
 
 fn alias_candidates(env: &dyn JumpEnv) -> Vec<Candidate> {
@@ -161,6 +167,20 @@ fn alias_candidates(env: &dyn JumpEnv) -> Vec<Candidate> {
     }
     out.sort_by(|a, b| a.text.cmp(&b.text));
     out
+}
+
+/// The subjects the cluster's bindings name, as last seen by the subject pages.
+fn subject_candidates(env: &dyn JumpEnv) -> Vec<Candidate> {
+    let Some(cluster) = env.active_cluster() else {
+        return Vec::new();
+    };
+    env.rbac_subjects(&cluster)
+        .iter()
+        .map(|name| Candidate {
+            text: name.clone(),
+            detail: "".into(),
+        })
+        .collect()
 }
 
 fn namespace_candidates(env: &dyn JumpEnv) -> Vec<Candidate> {

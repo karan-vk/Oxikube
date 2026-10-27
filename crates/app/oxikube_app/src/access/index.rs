@@ -24,7 +24,7 @@ use std::sync::Arc;
 use oxikube_domain::access::Access;
 use oxikube_domain::ids::Gvr;
 use oxikube_domain::rbac::{
-    BindingRef, GrantScope, NormalisedRules, PolicyMatrix, RbacKind, RoleId, Subject,
+    Binding, BindingRef, GrantScope, NormalisedRules, PolicyMatrix, RbacKind, RoleId, Subject,
     aggregated_rules,
 };
 use parking_lot::Mutex;
@@ -86,6 +86,30 @@ impl SubjectIndex {
     /// The bindings that apply to `subject`, directly or through a group it is in, sorted.
     pub fn bindings_for(&self, subject: &Subject) -> Vec<BindingRef> {
         self.matching(subject).into_keys().collect()
+    }
+
+    /// The bindings that name `subject` itself, not through a group it is in or an implicit
+    /// group (E17-S07's Users and Groups pages list these). A ServiceAccount is found under both
+    /// spellings: as the subject and as the user `system:serviceaccount:<ns>:<name>`.
+    pub fn bindings_naming(&self, subject: &Subject) -> Vec<&Binding> {
+        let mut spellings = vec![subject.clone()];
+        match subject {
+            Subject::ServiceAccount { .. } => {
+                spellings.extend(subject.username().map(Subject::User));
+            }
+            Subject::User(name) => spellings.push(Subject::from_username(name)),
+            Subject::Group(_) => {}
+        }
+        let mut ids: Vec<&BindingRef> = spellings
+            .iter()
+            .filter_map(|spelling| self.objects.by_subject.get(spelling))
+            .flatten()
+            .collect();
+        ids.sort();
+        ids.dedup();
+        ids.into_iter()
+            .filter_map(|id| self.objects.bindings.get(id))
+            .collect()
     }
 
     /// Each binding's grant to `subject`, sorted by binding.

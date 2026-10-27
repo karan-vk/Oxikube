@@ -8,6 +8,7 @@
 //! ctx      = "ctx" [ name ]        ns   = "ns" [ name ]        quit = "q" | "quit"
 //! pulses   = "pulses" | "pulse" | "pu"
 //! helm     = "helm" | "releases"
+//! rbac     = "usr" | "users" | "grp" | "groups" | "rbac" subject
 //! pf       = "pf" | "portforward" | "portforwards" | "port-forwards"
 //! history  = "-" | "[" | "]"
 //! ```
@@ -59,6 +60,15 @@ pub fn parse(line: &str) -> Result<JumpCommand, ParseError> {
             no_more(rest, "`helm` takes no arguments")?;
             Ok(JumpCommand::Helm)
         }
+        "usr" | "users" => {
+            no_more(rest, "`usr` takes no arguments")?;
+            Ok(JumpCommand::Users)
+        }
+        "grp" | "groups" => {
+            no_more(rest, "`grp` takes no arguments")?;
+            Ok(JumpCommand::Groups)
+        }
+        "rbac" => rbac_subject(first, rest),
         "pf" | "portforward" | "portforwards" | "port-forwards" => {
             no_more(rest, "`pf` takes no arguments")?;
             Ok(JumpCommand::PortForwards)
@@ -67,6 +77,23 @@ pub fn parse(line: &str) -> Result<JumpCommand, ParseError> {
         "ns" => Ok(JumpCommand::Ns(optional_name(rest, "ns")?)),
         _ => resource(first, rest),
     }
+}
+
+/// `rbac <subject>`: exactly one word, the subject.
+fn rbac_subject(first: Token<'_>, rest: &[Token<'_>]) -> Result<JumpCommand, ParseError> {
+    let Some(subject) = rest.first() else {
+        return Err(ParseError::new(
+            ParseErrorKind::Unexpected,
+            Span::new(first.span.end, first.span.end),
+            "`rbac` needs a subject: a user, a group or system:serviceaccount:<ns>:<name> \
+             (`usr` and `grp` list them)",
+        ));
+    };
+    no_more(&rest[1..], "`rbac` takes one subject")?;
+    Ok(JumpCommand::Rbac(Spanned::new(
+        subject.text.to_owned(),
+        subject.span,
+    )))
 }
 
 fn history(step: HistoryStep, rest: &[Token<'_>]) -> Result<JumpCommand, ParseError> {

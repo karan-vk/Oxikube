@@ -92,6 +92,11 @@
 //!     app's `EventService`; its `events::*` commands (faults only, pause, copy, export) are on the
 //!     bus with their tool stubs.
 //!
+//! 19. the RBAC subject pages (E17-S07, `mount::rbac`): `rbac::OpenUsers` (`:usr`, the sidebar's
+//!     Access Control > Users), `rbac::OpenGroups` (`:grp`) and `rbac::ShowSubject` (`:rbac
+//!     <subject>`) open the cluster's users, groups and a subject's per-verb policy matrix in its
+//!     tab, over the Roles and bindings of the cluster's `ResourceStore`; `rbac::CopyMatrix` copies
+//!     the open matrix as text.
 //! 18. the notification centre (E14-S05, `mount::notifications`, `crate::notification_centre`):
 //!     each open cluster's Warning events of the watched kinds become notifications (grouped,
 //!     rate limited, muted per cluster); the window shows them as capped toasts, a bell with the
@@ -129,6 +134,7 @@ mod overview;
 mod palette;
 mod port_forwards;
 mod pulses;
+mod rbac;
 mod resources;
 mod tabs;
 mod terminal;
@@ -243,6 +249,8 @@ pub struct Wiring {
     _events_views: Entity<oxikube_events_ui::EventsViews>,
     /// Opens the can-i dialog for `rbac::CanI` (E17-S08).
     _can_i_dialogs: gpui::Task<()>,
+    /// Opens the RBAC subject pages and applies the `rbac::*` requests (E17-S07).
+    _rbac_views: Entity<oxikube_rbac_ui::subjects::SubjectsViews>,
     /// The notification centre: panel, status-bar bell and toasts (E14-S05).
     _notification_centre: Rc<notifications::CentreMount>,
     /// The Port Forwards panel of the bottom dock and the task serving its commands (E15-S05).
@@ -277,6 +285,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let dispatcher_for_pulses = dispatcher.clone();
     let dispatcher_for_notifications = dispatcher.clone();
     let dispatcher_for_events = dispatcher.clone();
+    let dispatcher_for_rbac = dispatcher.clone();
     let dispatcher_for_port_forwards = dispatcher.clone();
 
     // The log service every log viewer opens its sessions on (E08-S01); `logs.buffer_lines` follows
@@ -332,6 +341,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let resources_slot = ResourceViewsSlot::new();
     let stores = resources::stores(&state, ports.clusters.clock.clone(), cx);
     let pulses_stores = stores.clone();
+    let rbac_stores = stores.clone();
     // The events of every cluster (E14-S02): one feed per cluster, started by its tab; the
     // overviews' warnings panels read the newest warnings from it.
     let badges = crate::events::start(&services.events, ports.clusters.clock.clone(), cx);
@@ -424,6 +434,9 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (overview_sink, overview_rx) = oxikube_overview_ui::OverviewRequestSink::channel();
     let (events_sink, events_rx) = oxikube_events_ui::EventsCommandSink::channel();
     let (can_i_sink, can_i_rx) = oxikube_rbac_ui::can_i::CanIRequestSink::channel();
+    // The RBAC subject pages (E17-S07): the subject names `:rbac` completes are shared with the jump bar.
+    let rbac_subjects = oxikube_app::rbac_subjects::SubjectsService::new();
+    let (rbac_sink, rbac_rx) = oxikube_rbac_ui::subjects::SubjectsRequestSink::channel();
     let (panel_sink, panel_rx) = oxikube_workspace::notifications::NotificationPanelSink::channel();
     let (port_forward_sink, port_forward_rx) = oxikube_portforward_ui::PortForwardUiSink::channel();
     let (port_forwards, port_forward_favourites) =
@@ -482,6 +495,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         ),
         can_i_dialogs: can_i_sink,
         events_views: events_sink,
+        rbac_views: rbac_sink,
         notifications: services.notifications.clone(),
         notification_panel: panel_sink,
         port_forwards: port_forwards.clone(),
@@ -679,6 +693,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
             catalog: services.catalog.clone(),
             aliases: services.aliases.clone(),
             namespaces: services.namespaces.clone(),
+            rbac_subjects: rbac_subjects.clone(),
             history: state.jump_history().clone(),
         },
         jump_rx,
@@ -828,6 +843,19 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         window,
         cx,
     );
+    // The RBAC subject pages (E17-S07): `rbac::OpenUsers` (`:usr`, the sidebar), `rbac::OpenGroups`
+    // (`:grp`) and `rbac::ShowSubject` (`:rbac <subject>`) open them in the cluster tab over the
+    // cluster's store.
+    let rbac_views = rbac::start_views(
+        rbac_subjects,
+        services.sessions.clone(),
+        rbac_stores,
+        dispatcher_for_rbac,
+        tabs.downgrade(),
+        rbac_rx,
+        window,
+        cx,
+    );
     let wiring = cx.new(|_| Wiring {
         tabs,
         bus,
@@ -864,6 +892,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _notification_clicks: notification_clicks,
         _events_views: events_views,
         _can_i_dialogs: can_i_dialogs,
+        _rbac_views: rbac_views,
         _notification_centre: centre,
         _port_forward_panel: port_forward_panel,
     });

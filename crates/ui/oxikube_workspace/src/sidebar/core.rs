@@ -152,29 +152,53 @@ pub fn core_sections() -> Vec<SidebarSection> {
             "Access Control",
             IconName::ShieldCheck,
         )
-        .with_entries(kinds(&[
-            ("serviceaccounts", "Service Accounts", "", "serviceaccounts"),
-            (
-                "clusterroles",
-                "Cluster Roles",
-                "rbac.authorization.k8s.io",
-                "clusterroles",
-            ),
-            ("roles", "Roles", "rbac.authorization.k8s.io", "roles"),
-            (
-                "clusterrolebindings",
-                "Cluster Role Bindings",
-                "rbac.authorization.k8s.io",
-                "clusterrolebindings",
-            ),
-            (
-                "rolebindings",
-                "Role Bindings",
-                "rbac.authorization.k8s.io",
-                "rolebindings",
-            ),
-        ])),
+        .with_entries(
+            kinds(&[
+                ("serviceaccounts", "Service Accounts", "", "serviceaccounts"),
+                (
+                    "clusterroles",
+                    "Cluster Roles",
+                    "rbac.authorization.k8s.io",
+                    "clusterroles",
+                ),
+                ("roles", "Roles", "rbac.authorization.k8s.io", "roles"),
+                (
+                    "clusterrolebindings",
+                    "Cluster Role Bindings",
+                    "rbac.authorization.k8s.io",
+                    "clusterrolebindings",
+                ),
+                (
+                    "rolebindings",
+                    "Role Bindings",
+                    "rbac.authorization.k8s.io",
+                    "rolebindings",
+                ),
+            ])
+            .into_iter()
+            .chain(subject_entries()),
+        ),
         section(11, "custom-resources", "Custom Resources", IconName::Plug).custom_resources(),
+    ]
+}
+
+/// The Users and Groups entries of Access Control (E17-S07). They read the bindings (and the roles
+/// they name), so they show to whoever may list either binding kind (the page says which list was
+/// refused and shows what the other one gave); each opens its command
+/// (`rbac::OpenUsers`, `rbac::OpenGroups`), which `oxikube_rbac_ui` handles. No kind, so no count
+/// badge: a count of bindings would not be a count of users.
+fn subject_entries() -> [SidebarEntry; 2] {
+    let entry = |id: &str, title: &str, command: CommandId| SidebarEntry {
+        requires: vec![
+            AccessRequirement::list("rbac.authorization.k8s.io", "rolebindings"),
+            AccessRequirement::list("rbac.authorization.k8s.io", "clusterrolebindings"),
+        ],
+        target: Some(SidebarTarget::Command(command)),
+        ..SidebarEntry::kind(id, title, "rbac.authorization.k8s.io", "rolebindings")
+    };
+    [
+        entry("rbac-users", "Users", CommandId::RBAC_OPEN_USERS),
+        entry("rbac-groups", "Groups", CommandId::RBAC_OPEN_GROUPS),
     ]
 }
 

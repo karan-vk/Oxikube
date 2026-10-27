@@ -164,6 +164,38 @@ pub enum Command {
         /// The cluster whose releases open.
         cluster: ClusterId,
     },
+    /// Open the users page of the cluster's RBAC (E17-S07, `:usr`): one row per user and
+    /// ServiceAccount named by any RoleBinding or ClusterRoleBinding, with how many bindings and
+    /// roles reach it. Reads only the bindings and roles.
+    #[serde(rename = "rbac::OpenUsers")]
+    RbacOpenUsers {
+        /// The cluster whose users open.
+        cluster: ClusterId,
+    },
+    /// Open the groups page of the cluster's RBAC (E17-S07, `:grp`): one row per group named by
+    /// any binding. The API cannot list a group's members, so the page lists none.
+    #[serde(rename = "rbac::OpenGroups")]
+    RbacOpenGroups {
+        /// The cluster whose groups open.
+        cluster: ClusterId,
+    },
+    /// Show what a subject may do (E17-S07, `:rbac <subject>`): a per-verb matrix by API group
+    /// and resource, each cell traced to the bindings and roles that grant it. Reads only the
+    /// bindings and roles.
+    #[serde(rename = "rbac::ShowSubject")]
+    RbacShowSubject {
+        /// The cluster whose policy is read.
+        cluster: ClusterId,
+        /// The subject: a user name, `system:serviceaccount:<ns>:<name>`, or a group name.
+        subject: String,
+    },
+    /// Copy the open subject matrix to the clipboard as tab-separated text (E17-S07), for a
+    /// ticket.
+    #[serde(rename = "rbac::CopyMatrix")]
+    RbacCopyMatrix {
+        /// The cluster whose matrix view to copy from.
+        cluster: ClusterId,
+    },
     /// Print a release's values (E16-S05), the user-supplied ones or with `all` the chart defaults
     /// merged in. Credential-looking values are masked (`********`) unless the user revealed
     /// them with `helm::RevealValues`. Reads only.
@@ -1823,6 +1855,10 @@ impl Command {
             Command::ClusterShowMetricsSettings { .. } => CommandId::CLUSTER_SHOW_METRICS_SETTINGS,
             Command::HelmShowRepos => CommandId::HELM_SHOW_REPOS,
             Command::HelmOpenReleases { .. } => CommandId::HELM_OPEN_RELEASES,
+            Command::RbacOpenUsers { .. } => CommandId::RBAC_OPEN_USERS,
+            Command::RbacOpenGroups { .. } => CommandId::RBAC_OPEN_GROUPS,
+            Command::RbacShowSubject { .. } => CommandId::RBAC_SHOW_SUBJECT,
+            Command::RbacCopyMatrix { .. } => CommandId::RBAC_COPY_MATRIX,
             Command::HelmShowValues { .. } => CommandId::HELM_SHOW_VALUES,
             Command::HelmShowManifest { .. } => CommandId::HELM_SHOW_MANIFEST,
             Command::HelmRevealValues { .. } => CommandId::HELM_REVEAL_VALUES,
@@ -2418,6 +2454,13 @@ mod tests {
                 namespace: Some("kube-system".into()),
                 filter: Some("BackOff".into()),
             },
+            Command::RbacOpenUsers { cluster: cluster() },
+            Command::RbacOpenGroups { cluster: cluster() },
+            Command::RbacShowSubject {
+                cluster: cluster(),
+                subject: "system:serviceaccount:default:builder".into(),
+            },
+            Command::RbacCopyMatrix { cluster: cluster() },
             Command::EventsToggleFaults { cluster: cluster() },
             Command::EventsTogglePause { cluster: cluster() },
             Command::EventsCopyRow { cluster: cluster() },
@@ -3144,6 +3187,10 @@ mod tests {
                     | Command::ClusterShowMetricsSettings { .. }
                     | Command::HelmShowRepos
                     | Command::HelmOpenReleases { .. }
+                    | Command::RbacOpenUsers { .. }
+                    | Command::RbacOpenGroups { .. }
+                    | Command::RbacShowSubject { .. }
+                    | Command::RbacCopyMatrix { .. }
                     | Command::HelmShowValues { .. }
                     | Command::HelmShowManifest { .. }
                     | Command::HelmRevealValues { .. }
