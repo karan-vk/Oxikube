@@ -14,11 +14,11 @@ use oxikube_ports::CloudScope;
 use super::KUBELOGIN_INSTALL_URL;
 use super::credentials;
 use super::model::{AadProfile, AksCluster, resource_group_of};
-use crate::process::{Cli, CliInvocation, ProcessRunner, RunOpts};
+use crate::process::{Cli, CliInvocation, ProcessRunner};
 
 /// The application id of AKS's managed Azure AD server, the `--server-id` of every managed
 /// AAD cluster (as `kubelogin convert-kubeconfig` writes it).
-pub(super) const MANAGED_AAD_SERVER_ID: &str = "6dae42f8-4368-4678-94ff-3960e28e3630";
+const MANAGED_AAD_SERVER_ID: &str = "6dae42f8-4368-4678-94ff-3960e28e3630";
 
 /// The context name of a cluster: `aks:<subscription-id>:<resource-group>:<name>`, stable so
 /// merging the same cluster twice replaces its entry.
@@ -85,8 +85,7 @@ pub(super) async fn build(
             "--subscription",
             subscription_id,
         ],
-    )
-    .with_opts(RunOpts::default());
+    );
     let shown: AksCluster = runner.run_json(invocation).await?;
     if shown.is_stopped() {
         return Err(OxiError::unsupported(format!(

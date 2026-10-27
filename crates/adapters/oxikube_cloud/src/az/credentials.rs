@@ -16,7 +16,7 @@ use oxikube_domain::{OxiError, OxiResult};
 use serde::Deserialize;
 use tempfile::TempDir;
 
-use crate::process::{Cli, CliInvocation, ProcessRunner, RunOpts};
+use crate::process::{Cli, CliInvocation, ProcessRunner};
 
 /// What a cluster's kubeconfig says about the cluster itself: public data.
 #[derive(Debug, PartialEq, Eq)]
@@ -99,8 +99,7 @@ pub(super) async fn fetch_cluster_info(
             &file.to_string_lossy(),
             "--overwrite-existing",
         ],
-    )
-    .with_opts(RunOpts::default());
+    );
     let outcome = async {
         runner.run(invocation).await?;
         let text = tokio::fs::read_to_string(&file).await.map_err(|error| {

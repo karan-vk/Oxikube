@@ -47,7 +47,7 @@ use model::{AksCluster, AzVersion, Subscription};
 const LIST_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Where users install `kubelogin` from.
-pub(crate) const KUBELOGIN_INSTALL_URL: &str = "https://azure.github.io/kubelogin/install.html";
+const KUBELOGIN_INSTALL_URL: &str = "https://azure.github.io/kubelogin/install.html";
 
 /// Discovers AKS clusters per Azure subscription through `az` and builds `kubelogin` exec
 /// entries for the Azure AD ones.
