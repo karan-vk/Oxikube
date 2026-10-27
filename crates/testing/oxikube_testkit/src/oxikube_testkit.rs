@@ -18,6 +18,8 @@
 //!   points are re-exported here.
 //! - [`commands`]: `fixture_commands(n)`, a deterministic mix of command metadata (every view,
 //!   selection shape and category) for palette, help and keymap tests.
+//! - [`contracts`]: behavioural contracts a fake and the real adapters both satisfy
+//!   ([`contracts::cloud_discovery`] for `CloudDiscoveryPort`).
 //! - [`discovery_sets`]: whole discovery answers for the kind registry and sidebar tests (E12-S01):
 //!   a stock cluster, with the Gateway API, with CRDs, CRDs only.
 //! - [`kinds`]: discovery fixtures, `ResourceKind`s as an API server reports them (`kind(..).short(..)`, `core_kinds()`, CRDs that collide).
@@ -51,6 +53,7 @@
 
 pub mod builders;
 pub mod commands;
+pub mod contracts;
 pub mod discovery_sets;
 pub mod events_scope;
 pub mod fakes;

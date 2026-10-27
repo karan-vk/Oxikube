@@ -5950,6 +5950,18 @@ dependencies = [
 [[package]]
 name = "oxikube_cloud"
 version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "oxikube_domain",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
 
 [[package]]
 name = "oxikube_crash"

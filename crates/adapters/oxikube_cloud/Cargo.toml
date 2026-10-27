@@ -12,6 +12,26 @@ path = "src/oxikube_cloud.rs"
 doctest = false
 
 [dependencies]
+async-trait.workspace = true
+oxikube_domain.workspace = true
+parking_lot = { workspace = true, optional = true }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+parking_lot.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
+
+[features]
+default = []
+# `testing::RecordedRunner`: a `ProcessRunner` that answers from recorded CLI output, for the
+# provider adapters' tests (their own `cfg(test)` code sees it without the feature).
+testing = ["dep:parking_lot"]
 
 [lints]
 workspace = true

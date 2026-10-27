@@ -12,6 +12,9 @@ Port fakes, fixtures, builders, kind helpers, gpui test helpers.
   `FakeDescribePort`, `FakeHelmPort`, `FakeStatePort`, `FakeSecretStorePort`, `FakeNotifierPort`,
   `FakeUpdaterPort`, `FakeCrashReporterPort`, `FakeFsPort`, `FakeClockPort`, `FakeIntegrationPort`,
   `FakeToolPort`, `FakeContextProviderPort`, `FakeAgentPort`, `FakeAgentClient`).
+- `contracts`: behaviour a fake and the real adapters both meet; `contracts::cloud_discovery(&port)`
+  checks a `CloudDiscoveryPort` (detect, scopes, list, kubeconfig entry, foreign input rejected, no
+  secrets in entries) and is run against `FakeCloudDiscoveryPort` and the `oxikube_cloud` adapters.
 - Script responses per method, then assert on calls:
 
   ```rust

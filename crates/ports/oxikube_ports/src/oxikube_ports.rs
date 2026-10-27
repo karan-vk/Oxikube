@@ -138,7 +138,10 @@ pub use agent::{
     ToolCallId, ToolCallInfo, ToolCallPatch, ToolCallStatus, ToolKind, WriteTextFile,
 };
 pub use clock::ClockPort;
-pub use cloud::{CloudDiscoveryPort, CloudProvider, CloudToolStatus, DiscoveredCluster};
+pub use cloud::{
+    CloudDetection, CloudDiscoveryPort, CloudProvider, CloudScope, CloudToolStatus, ClusterStatus,
+    DiscoveredCluster, ExecEnvVar, ExecInteractiveMode, ExecPlugin, KubeconfigEntry, SetupHint,
+};
 pub use cluster_prefs::{
     ClusterPrefs, ClusterPrefsTable, MetricsMode, NodeShellPrefs, PrometheusAuthKind,
     PrometheusOverride, WatchBudgetPrefs,
