@@ -16,8 +16,9 @@ futures.workspace = true
 gpui.workspace = true
 oxikube_app.workspace = true
 oxikube_domain.workspace = true
+oxikube_keymap.workspace = true
 oxikube_resources_ui.workspace = true
-# `spawn_kube` (the review, aborted when the dialog asks again or closes) and `notify_coalesced`.
+# `spawn_kube` (the review and the subject feed pump, aborted on drop) and `notify_coalesced`.
 oxikube_runtime.workspace = true
 oxikube_ui.workspace = true
 oxikube_workspace.workspace = true
@@ -39,10 +40,16 @@ workspace = true
 
 [features]
 default = []
-# Headless GPU screenshot of the ServiceAccount panel (`tests/panel_screenshot.rs`, harness = false
-# so it runs on the process main thread). Needs Metal / Vulkan, so never part of the default gate;
-# the nightly workflow runs it: `cargo test -p oxikube_rbac_ui --features screenshot --test panel_screenshot`.
+# Headless GPU screenshots (`tests/panel_screenshot.rs`, `tests/subjects_screenshot.rs`, harness =
+# false so they run on the process main thread). Need Metal / Vulkan, so never part of the default
+# gate; the nightly workflow runs them: `cargo test -p oxikube_rbac_ui --features screenshot --test <name>`.
 screenshot = []
+
+[[test]]
+name = "subjects_screenshot"
+path = "tests/subjects_screenshot.rs"
+harness = false
+required-features = ["screenshot"]
 
 [[test]]
 name = "panel_screenshot"

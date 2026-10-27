@@ -60,6 +60,14 @@ impl PolicyHandle {
         handle
     }
 
+    /// A handle on an empty policy with `pending` feeds still to list: the loading state, for
+    /// previews and tests.
+    pub fn loading(pending: usize) -> Self {
+        let handle = Self::default();
+        handle.shared.status.lock().pending = pending;
+        handle
+    }
+
     /// Runs `read` on the index.
     pub fn read<R>(&self, read: impl FnOnce(&SubjectIndex) -> R) -> R {
         read(&self.shared.index.read())
