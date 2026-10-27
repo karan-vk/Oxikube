@@ -4,6 +4,7 @@ use oxikube_domain::access::{AccessCheck, AccessDecision};
 use oxikube_domain::redact::redact;
 use serde_json::{Value, json};
 
+use super::request::resource_base;
 use super::request::resource_label;
 use super::subject::CanISubject;
 
@@ -86,11 +87,15 @@ impl CanIAnswer {
         let mut cmd = format!(
             "kubectl auth can-i {} {}",
             self.check.verb,
-            resource_label(&self.check)
+            resource_base(&self.check)
         );
         if let Some(name) = &self.check.name {
             cmd.push('/');
             cmd.push_str(name);
+        }
+        if let Some(sub) = &self.check.subresource {
+            cmd.push_str(" --subresource=");
+            cmd.push_str(sub);
         }
         match &self.check.namespace {
             Some(ns) => cmd.push_str(&format!(" -n {ns}")),

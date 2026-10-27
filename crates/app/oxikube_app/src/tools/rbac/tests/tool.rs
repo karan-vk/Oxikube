@@ -121,3 +121,22 @@ async fn the_service_names_the_method() {
             .contains("answered by: SelfSubjectAccessReview")
     );
 }
+
+#[test]
+fn kubectl_puts_the_name_before_a_separate_subresource_flag() {
+    use crate::tools::rbac::{CanIAnswer, CanIMethod, CanISubject};
+    let check = AccessCheck::new("create", Gvr::new("", "v1", "pods"))
+        .subresource("exec")
+        .namespace("shop")
+        .name("web-0");
+    let answer = CanIAnswer {
+        check,
+        subject: CanISubject::Myself,
+        method: CanIMethod::SelfSubjectAccessReview,
+        decision: AccessDecision::Allowed,
+    };
+    assert_eq!(
+        answer.kubectl(),
+        "kubectl auth can-i create pods/web-0 --subresource=exec -n shop"
+    );
+}

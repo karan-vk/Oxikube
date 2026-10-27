@@ -103,14 +103,20 @@ impl CanIRequest {
 
 /// The resource of `check` as `kubectl` spells it: `pods`, `pods/exec`, `deployments.apps`.
 pub(super) fn resource_label(check: &AccessCheck) -> String {
+    let mut label = resource_base(check);
+    if let Some(sub) = &check.subresource {
+        label.push('/');
+        label.push_str(sub);
+    }
+    label
+}
+
+/// The resource of `check` without its subresource: `pods`, `deployments.apps`.
+pub(super) fn resource_base(check: &AccessCheck) -> String {
     let mut label = check.gvr.resource.to_string();
     if !check.gvr.group.is_empty() {
         label.push('.');
         label.push_str(&check.gvr.group);
-    }
-    if let Some(sub) = &check.subresource {
-        label.push('/');
-        label.push_str(sub);
     }
     label
 }
