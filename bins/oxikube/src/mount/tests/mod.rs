@@ -45,6 +45,7 @@ mod port_forwards;
 mod pulses;
 mod rbac_can_i;
 mod resources;
+mod roles;
 mod rollback;
 mod rollout;
 mod scale;

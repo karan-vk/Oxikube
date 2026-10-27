@@ -154,8 +154,38 @@ fn rbac_kinds() {
         } else {
             cluster("rbac.authorization.k8s.io/v1", kind, json!({}))
         };
-        check(&r, &[("name", "x"), ("age", "27h")]);
+        check(&r, &[("name", "x"), ("rules", "0"), ("age", "27h")]);
     }
+}
+
+#[test]
+fn roles_count_their_rules_and_aggregated_cluster_roles_show_their_selectors() {
+    let rules = json!({"rules": [
+        {"apiGroups": [""], "resources": ["pods"], "verbs": ["get"]},
+        {"nonResourceURLs": ["/healthz"], "verbs": ["get"]},
+    ]});
+    check(
+        &namespaced("rbac.authorization.k8s.io/v1", "Role", rules.clone()),
+        &[("rules", "2")],
+    );
+    check(
+        &cluster("rbac.authorization.k8s.io/v1", "ClusterRole", rules),
+        &[("rules", "2"), ("aggregated", "")],
+    );
+    check(
+        &cluster(
+            "rbac.authorization.k8s.io/v1",
+            "ClusterRole",
+            json!({"aggregationRule": {"clusterRoleSelectors": [
+                {"matchLabels": {"rbac.example/aggregate-to-view": "true"}},
+                {"matchExpressions": [{"key": "tier", "operator": "In", "values": ["a", "b"]}]},
+            ]}}),
+        ),
+        &[(
+            "aggregated",
+            "rbac.example/aggregate-to-view=true; tier In (a,b)",
+        )],
+    );
 }
 
 #[test]

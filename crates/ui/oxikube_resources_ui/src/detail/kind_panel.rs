@@ -80,6 +80,12 @@ impl PanelHost {
             .is_some_and(|session| session.read_only())
     }
 
+    /// The sessions, for a panel that reads more than its object (the Role panel's bindings and
+    /// aggregation sources) through an app service.
+    pub fn sessions(&self) -> &ClusterSessionManager {
+        &self.sessions
+    }
+
     /// The cluster's discovery, while it is connected.
     pub fn discovery(&self) -> Option<Arc<dyn DiscoveryPort>> {
         self.sessions

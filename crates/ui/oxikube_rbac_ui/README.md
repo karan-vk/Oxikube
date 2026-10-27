@@ -11,6 +11,7 @@ RBAC views (SA, roles, bindings), subject-centric matrices, can-i, SA kubeconfig
 - `oxikube_app`
 - `oxikube_ui`
 - `oxikube_workspace`
+- `oxikube_resources_ui` (a kind's spec and detail panel register into its `KindSpecs`; E17-S05)
 
 See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps` fails CI when this crate depends on anything outside its layer rules.
 

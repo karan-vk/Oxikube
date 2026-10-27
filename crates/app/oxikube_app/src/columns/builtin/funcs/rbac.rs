@@ -1,7 +1,8 @@
-//! RBAC binding cells: RoleBinding and ClusterRoleBinding.
+//! RBAC cells: Role, ClusterRole, RoleBinding and ClusterRoleBinding.
 
 use jiff::Timestamp;
 use oxikube_domain::Resource;
+use oxikube_domain::json::JsonRef;
 
 use super::{arr_at, str_at};
 use crate::columns::Cell;
@@ -39,4 +40,43 @@ pub(crate) fn binding_kinds<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> 
         }
     }
     Cell::text(kinds.join(","))
+}
+
+/// `RULES`: how many rules the role holds.
+pub(crate) fn role_rules<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
+    let count = arr_at(res.json(), "rules").len();
+    Cell::int(i64::try_from(count).unwrap_or(i64::MAX))
+}
+
+/// `AGGREGATED`: the selectors of an aggregated ClusterRole's `aggregationRule` as `key=value`
+/// (an expression as `key in (a,b)`), `;`-separated; blank for any other role.
+pub(crate) fn role_aggregated<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
+    let Some(rule) = res.json().get("aggregationRule") else {
+        return Cell::empty();
+    };
+    let mut parts: Vec<String> = Vec::new();
+    for selector in arr_at(rule, "clusterRoleSelectors").iter() {
+        let mut terms: Vec<String> = Vec::new();
+        if let Some(labels) = selector.get("matchLabels").and_then(JsonRef::as_object) {
+            terms.extend(
+                labels.iter().filter_map(|(key, value)| {
+                    value.as_str().map(|value| format!("{key}={value}"))
+                }),
+            );
+        }
+        for expression in arr_at(selector, "matchExpressions").iter() {
+            let (Some(key), Some(operator)) =
+                (str_at(expression, "key"), str_at(expression, "operator"))
+            else {
+                continue;
+            };
+            let values: Vec<&str> = arr_at(expression, "values")
+                .iter()
+                .filter_map(JsonRef::as_str)
+                .collect();
+            terms.push(format!("{key} {operator} ({})", values.join(",")));
+        }
+        parts.push(terms.join(","));
+    }
+    Cell::text(parts.join("; "))
 }

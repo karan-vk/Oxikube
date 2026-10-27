@@ -877,6 +877,15 @@ crate's `README.md` for its allowed dependencies. Highlights:
 - `oxikube_helm_ui::upgrade` (E16-S10) — the upgrade tab (`HelmUpgradeView`, keyed `helm-upgrade:<ns>/<name>`): prefilled values, version picker,
   values diff and chart-defaults diff (E10 `ManifestDiff`, secrets fingerprinted), `--reuse-values` toggle, preview, medium confirmation; opened from the
   sidebar's Helm > Upgrade (release picker), the palette, or `helm::UpgradeRelease` (`mount/helm_upgrade.rs`).
+- `oxikube_rbac_ui::role` + `oxikube_app::role_ops` (E17-S05) — Roles and ClusterRoles. The two kinds register a `KindSpec` (no sidebar slot: Access Control
+  already lists them) whose detail panel `RolePanel` shows the rule table (virtualised uniform rows: API groups, resources, verbs, resource names, non-resource
+  URLs, normalised for reading, the rule as written on hover), an Aggregated badge with the selectors and, read through `RoleLinks` off the UI thread, the
+  ClusterRoles an aggregated role collects from. `RoleDialog` (`role::OpenDialog`: the table's "New", the row's "Edit Rules…", the panel's "Edit rules…", the
+  palette) edits rows of rules: verb checkboxes (a verb the picked kind does not support is disabled), a resource picker over `DiscoveryPort::discover` (plus
+  subresources, free text for CRDs), resource names, URLs in a ClusterRole; its model `RoleDraft` builds the manifest and the problems (errors block saving,
+  `resourceNames` with create/list/watch only warns). An aggregated ClusterRole's rules are read-only. Saving sends `role::Create` / `role::Edit` and deleting
+  `role::Delete` (mutating, risk medium: one confirmation, a server dry run first, blocked read-only, audited with a rule count; the handlers write Roles and
+  ClusterRoles only, an edit is a replace at the `resourceVersion` the dialog read; the delete confirmation names the bindings that name the role).
 - `oxikube_notify_os` (E14-S06) — the `NotifierPort` adapter for desktop notifications. `OsNotifier` is off until the user opts in
   (`events.os_notifications`): `set_enabled(true)` is the only call that contacts the OS, on a thread of its own, and a system without a
   notification service answers `NotifierStatus::Unavailable`, never a panic. One `Backend` per platform behind a trait: macOS

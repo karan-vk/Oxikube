@@ -16,6 +16,9 @@ use crate::guard::{PrefsPatch, PrefsWriter};
 use crate::session::ClusterSessionManager;
 use crate::testing::{id, node, pod};
 
+/// A ClusterRole the posture samples of `role::Create` and `role::Edit` carry.
+const ROLE_MANIFEST: &str = r#"{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"ClusterRole","metadata":{"name":"reader"},"rules":[{"apiGroups":[""],"resources":["pods"],"verbs":["get"]}]}"#;
+
 /// A fake settings store.
 pub(crate) struct FakePrefsWriter {
     manager: ClusterSessionManager,
@@ -236,6 +239,27 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             values: oxikube_domain::helm::ValuesYaml::default(),
             wait: false,
             timeout_secs: None,
+        },
+        "role::OpenDialog" => Command::RoleOpenDialog {
+            cluster: Some(cluster),
+            cluster_role: false,
+            target: None,
+        },
+        "role::Create" => Command::RoleCreate {
+            cluster,
+            manifest: ROLE_MANIFEST.to_owned(),
+        },
+        "role::Edit" => Command::RoleEdit {
+            cluster,
+            manifest: ROLE_MANIFEST.to_owned(),
+        },
+        "role::Delete" => Command::RoleDelete {
+            target: ResourceRef::cluster_scoped(
+                cluster,
+                oxikube_domain::rbac::RbacKind::ClusterRole.gvk(),
+                "reader",
+            ),
+            bindings: None,
         },
         "helm::Rollback" => Command::HelmRollback {
             cluster,

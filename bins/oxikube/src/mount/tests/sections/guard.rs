@@ -54,6 +54,11 @@ const RISKS: &[(CommandId, Risk)] = &[
     // The manifest editor's apply (E10); a Secret's "Edit decoded" applies through it.
     (CommandId::RESOURCE_APPLY, Risk::Low),
     (CommandId::RESOURCE_DELETE, Risk::Medium),
+    // Roles and ClusterRoles (E17-S05): the rule dialog's save and the detail panel's delete (which
+    // counts the bindings first, so it is not a row action); an RBAC change is risk medium.
+    (CommandId::ROLE_CREATE, Risk::Medium),
+    (CommandId::ROLE_DELETE, Risk::Medium),
+    (CommandId::ROLE_EDIT, Risk::Medium),
     // The bulk actions on a table's selection (E12-S19); a one-row selection is the row action.
     (CommandId::SELECTION_DELETE, Risk::Medium),
     (CommandId::SELECTION_LABEL, Risk::Medium),
