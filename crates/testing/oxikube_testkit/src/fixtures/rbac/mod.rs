@@ -14,8 +14,8 @@
 mod printed;
 mod scenario;
 
-pub use printed::{printed_rule, printed_rules};
-pub use scenario::{ACCOUNT, POD_READER, POD_VERBS, RbacScenario, VIEW_BINDING};
+pub use printed::printed_rules;
+pub use scenario::{ACCOUNT, POD_VERBS, RbacScenario, VIEW_BINDING};
 
 use oxikube_domain::Resource;
 use oxikube_domain::rbac::Subject;

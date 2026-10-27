@@ -8,7 +8,7 @@ use oxikube_domain::rbac::PolicyRule;
 /// # Panics
 ///
 /// When `line` is not such a row (no bracketed lists, or not three of them).
-pub fn printed_rule(line: &str) -> PolicyRule {
+fn printed_rule(line: &str) -> PolicyRule {
     let column = line[..line.find('[').expect("a printed row has lists")].trim();
     let lists: Vec<Vec<&str>> = line
         .split('[')

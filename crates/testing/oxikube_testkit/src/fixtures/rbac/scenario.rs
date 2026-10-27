@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 /// The restricted ServiceAccount, in the `home` namespace.
 pub const ACCOUNT: &str = "limited";
 /// The Role (and its RoleBinding) that lets [`ACCOUNT`] read pods in `home`.
-pub const POD_READER: &str = "limited-pods";
+const POD_READER: &str = "limited-pods";
 /// The RoleBinding in `other` that grants [`ACCOUNT`] the ClusterRole `view`.
 pub const VIEW_BINDING: &str = "limited-view";
 /// The verbs the Role grants on pods.

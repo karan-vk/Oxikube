@@ -21,7 +21,7 @@ use super::{DIAGNOSTICS_DIR_ENV, IntegrationError, context_from, kubectl, random
 use crate::fixtures::rbac::RbacScenario;
 
 /// The name a group is impersonated with: `kubectl --as-group` needs a user beside it.
-pub const GROUP_MEMBER: &str = "oxi-member";
+const GROUP_MEMBER: &str = "oxi-member";
 
 /// The [`RbacScenario`] on the cluster for one test: its namespaces are `oxi-test-<rand>-home`
 /// and `oxi-test-<rand>-other`, deleted (with everything in them) when this is dropped, also when
@@ -84,7 +84,7 @@ impl Drop for AppliedScenario {
 /// # Errors
 ///
 /// When `kubectl` cannot be run or refuses the object.
-pub fn apply_json(context: &str, object: &serde_json::Value) -> Result<(), IntegrationError> {
+fn apply_json(context: &str, object: &serde_json::Value) -> Result<(), IntegrationError> {
     let mut child = Command::new("kubectl")
         .args(["--context", context, "apply", "-f", "-"])
         .stdin(Stdio::piped())
@@ -111,7 +111,7 @@ pub fn apply_json(context: &str, object: &serde_json::Value) -> Result<(), Integ
 }
 
 /// The impersonation flags that make `kubectl` ask as `subject`.
-pub fn impersonation(subject: &Subject) -> Vec<String> {
+fn impersonation(subject: &Subject) -> Vec<String> {
     match subject {
         Subject::User(name) => vec![format!("--as={name}")],
         Subject::Group(group) => vec![
