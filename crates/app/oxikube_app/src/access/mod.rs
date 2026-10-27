@@ -30,6 +30,8 @@
 //! E17-S01 adds the [`SubjectIndex`]: the cluster's Roles, ClusterRoles and bindings kept from the
 //! store's subscriptions, turned into normalised rules per subject (`oxikube_domain::rbac` reads and
 //! normalises; `index`, `objects` and `grant` index them). It is plain data with no port.
+//! E17-S04 adds the [`PolicyFeed`] that keeps one from the store's four RBAC subscriptions (abort-on-drop)
+//! and the [`PolicyHub`] that shares it between the views that need it (a ServiceAccount's bound roles).
 //!
 //! * **Soft gates** (E17-S03): [`AccessVisibility`] implements the sidebar's
 //!   [`KindVisibility`](crate::kinds::KindVisibility) over the cached rules, and
@@ -41,7 +43,9 @@
 //! Plain async Rust over a port: no gpui, no kube, nothing spawned.
 
 mod cache;
+mod feed;
 mod grant;
+mod hub;
 mod index;
 mod namespaces;
 mod objects;
@@ -52,7 +56,9 @@ mod visibility;
 #[cfg(test)]
 mod tests;
 
+pub use feed::{PolicyFeed, PolicyStatus};
 pub use grant::{Grant, ScopedRules};
+pub use hub::PolicyHub;
 pub use index::SubjectIndex;
 pub use namespaces::{AccessibleNamespaces, NamespaceOrigin, accessible_namespaces};
 pub use registry::AccessRegistry;

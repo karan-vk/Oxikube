@@ -57,6 +57,7 @@ oxikube_palette.workspace = true
 oxikube_ports.workspace = true
 # History metrics (E13-S05): provider detection and the per-cluster PromQL port.
 oxikube_prometheus.workspace = true
+oxikube_rbac_ui.workspace = true
 oxikube_resources_ui.workspace = true
 oxikube_runtime.workspace = true
 # The cluster metrics page (E13-S05).

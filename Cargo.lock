@@ -5840,6 +5840,7 @@ dependencies = [
  "oxikube_portforward_ui",
  "oxikube_ports",
  "oxikube_prometheus",
+ "oxikube_rbac_ui",
  "oxikube_resources_ui",
  "oxikube_runtime",
  "oxikube_settings",
@@ -6380,6 +6381,21 @@ dependencies = [
 [[package]]
 name = "oxikube_rbac_ui"
 version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "futures",
+ "gpui-pre",
+ "gpui-pre-platform",
+ "oxikube_app",
+ "oxikube_assets",
+ "oxikube_domain",
+ "oxikube_resources_ui",
+ "oxikube_testkit",
+ "oxikube_ui",
+ "oxikube_workspace",
+ "serde_json",
+ "tracing",
+]
 
 [[package]]
 name = "oxikube_resources_ui"
