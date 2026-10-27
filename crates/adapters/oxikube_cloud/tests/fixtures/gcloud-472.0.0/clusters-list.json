@@ -1,0 +1,32 @@
+[
+  {
+    "addonsConfig": {"httpLoadBalancing": {}},
+    "currentMasterVersion": "1.29.4-gke.1043002",
+    "currentNodeCount": 3,
+    "endpoint": "203.0.113.10",
+    "location": "europe-west1",
+    "masterAuth": {
+      "clusterCaCertificate": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t"
+    },
+    "name": "prod",
+    "selfLink": "https://container.googleapis.com/v1/projects/acme-platform-1/locations/europe-west1/clusters/prod",
+    "status": "RUNNING",
+    "someFutureField": {"x": 1}
+  },
+  {
+    "currentMasterVersion": "1.28.9-gke.1000000",
+    "endpoint": "203.0.113.20",
+    "location": "us-central1-b",
+    "masterAuth": {
+      "clusterCaCertificate": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t"
+    },
+    "name": "prod",
+    "selfLink": "https://container.googleapis.com/v1/projects/acme-platform-1/zones/us-central1-b/clusters/prod",
+    "status": "RECONCILING"
+  },
+  {
+    "location": "us-east1",
+    "name": "fresh",
+    "status": "PROVISIONING"
+  }
+]

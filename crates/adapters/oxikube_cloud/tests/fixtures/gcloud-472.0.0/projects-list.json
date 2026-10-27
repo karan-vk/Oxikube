@@ -1,0 +1,23 @@
+[
+  {
+    "createTime": "2022-03-01T10:00:00.000Z",
+    "lifecycleState": "ACTIVE",
+    "name": "Platform",
+    "projectId": "acme-platform-1",
+    "projectNumber": "111111111111"
+  },
+  {
+    "createTime": "2021-01-01T10:00:00.000Z",
+    "lifecycleState": "DELETE_REQUESTED",
+    "name": "Old",
+    "projectId": "acme-old-2",
+    "projectNumber": "222222222222"
+  },
+  {
+    "createTime": "2023-05-01T10:00:00.000Z",
+    "lifecycleState": "ACTIVE",
+    "name": "Data",
+    "projectId": "acme-data-3",
+    "projectNumber": "333333333333"
+  }
+]
