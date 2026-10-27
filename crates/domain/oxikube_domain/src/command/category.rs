@@ -23,7 +23,7 @@ pub enum CommandCategory {
     /// Views, zoom, the palette, the jump bar, the key-binding help and the keymap file
     /// (`view::*`, `palette::*`, `jump::*`, `help::*`, `keymap::*`, `charts::*`).
     View,
-    /// Clusters and kubeconfig sources (`cluster::*`, `kubeconfig::*`).
+    /// Clusters, kubeconfig sources and cloud discovery (`cluster::*`, `kubeconfig::*`, `cloud::*`).
     Cluster,
     /// Namespace selection (`namespace::*`).
     Namespace,
@@ -96,6 +96,7 @@ impl CommandCategory {
             ("charts", CommandCategory::View),
             ("cluster", CommandCategory::Cluster),
             ("kubeconfig", CommandCategory::Cluster),
+            ("cloud", CommandCategory::Cluster),
             ("namespace", CommandCategory::Namespace),
             ("resource", CommandCategory::Resource),
             ("table", CommandCategory::Resource),

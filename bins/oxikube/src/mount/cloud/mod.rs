@@ -19,6 +19,7 @@ use oxikube_cloud::az::AzureAksAdapter;
 use oxikube_cloud::gcloud::GcloudDiscovery;
 use oxikube_cloud::process::{Cli, CliRunner, CliRunnerConfig};
 use oxikube_ports::CloudProvider;
+use oxikube_runtime::RuntimeMode;
 use oxikube_settings::{CloudSettings, Settings as _};
 
 use crate::app_state::AppPorts;
@@ -59,7 +60,13 @@ fn install(cx: &mut App, mut deps: DiscoveryDeps) -> CloudDiscoveryService {
     let aws = Arc::new(AwsDiscovery::new(runner.clone(), aws_settings(&settings)));
     let gcloud = Arc::new(GcloudDiscovery::new(runner.clone()));
     let az = Arc::new(AzureAksAdapter::new(runner.clone()));
-    deps.providers = vec![aws.clone(), gcloud.clone(), az.clone()];
+    // Test apps (`init_deterministic`) have no Tokio process driver, and a test must not run the
+    // developer's real CLIs: no adapter, so every provider reads as not installed.
+    deps.providers = if oxikube_runtime::mode(cx) == Some(RuntimeMode::Deterministic) {
+        Vec::new()
+    } else {
+        vec![aws.clone(), gcloud.clone(), az.clone()]
+    };
     let service = CloudDiscoveryService::new(deps);
     let adapters = Adapters {
         runner,

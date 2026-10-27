@@ -82,6 +82,7 @@ use oxikube_app::{
     ClusterCommands, ClusterSessionManager, ExecService, KubeconfigSourcesService, PrefsWriter,
 };
 use oxikube_catalog_ui::catalog::CATALOG_VIEW;
+use oxikube_catalog_ui::cloud::CLOUD_VIEW;
 use oxikube_catalog_ui::sources::SOURCES_VIEW;
 use oxikube_domain::OxiError;
 use oxikube_domain::command::{self, Command, CommandId};
@@ -101,7 +102,7 @@ use oxikube_workspace::{ClusterCommandRunner, CommandDispatcher};
 use serde_json::json;
 
 /// The views `view::Open` opens in the main window.
-pub const VIEWS: [&str; 3] = [CATALOG_VIEW, SOURCES_VIEW, CHART_GALLERY_VIEW];
+pub const VIEWS: [&str; 4] = [CATALOG_VIEW, SOURCES_VIEW, CLOUD_VIEW, CHART_GALLERY_VIEW];
 
 /// What the registry's handlers run on.
 pub struct BusParts {
@@ -115,6 +116,8 @@ pub struct BusParts {
     pub namespaces: NamespaceService,
     /// The kubeconfig sources service.
     pub sources: KubeconfigSourcesService,
+    /// Cloud discovery behind the `cloud::*` commands (E18-S06).
+    pub cloud: oxikube_app::CloudDiscoveryService,
     /// The sessions the posture commands change.
     pub sessions: ClusterSessionManager,
     /// Where the posture commands persist (`settings.json`).
@@ -244,6 +247,9 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     )?;
     registry.install("oxikube_app::sources", |r| {
         oxikube_app::sources::register_commands(r, &parts.sources)
+    })?;
+    registry.install("oxikube_app::cloud", |r| {
+        oxikube_app::cloud::register_commands(r, &parts.cloud)
     })?;
     registry.install("oxikube_app::apply", |r| {
         oxikube_app::apply::register_commands(r, parts.sessions.clone())

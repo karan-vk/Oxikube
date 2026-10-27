@@ -73,6 +73,8 @@ struct Inner {
     spawner: Arc<dyn Spawner>,
     config: Mutex<DiscoveryConfig>,
     runs: Mutex<HashMap<CloudProvider, ActiveRun>>,
+    /// The streams handed out by [`CloudDiscoveryService::watch`].
+    watchers: Mutex<Vec<mpsc::UnboundedSender<Arc<CloudDiscoveryEvent>>>>,
     /// Held across a read-modify-write of a managed file.
     write: futures::lock::Mutex<()>,
 }
@@ -100,6 +102,7 @@ impl CloudDiscoveryService {
                 spawner: deps.spawner,
                 config: Mutex::new(DiscoveryConfig::default()),
                 runs: Mutex::default(),
+                watchers: Mutex::default(),
                 write: futures::lock::Mutex::new(()),
             }),
         }
@@ -209,6 +212,23 @@ impl CloudDiscoveryService {
         // Abort first, so the run cannot send another step after `Cancelled`.
         drop(guard);
         events.end(CloudDiscoveryEvent::Cancelled { provider })
+    }
+
+    /// Every step of the refreshes that `cloud::Refresh` runs from now on, whoever asked (the
+    /// Cloud section's button, a key, the palette, an agent): how the section shows progress for
+    /// a run it did not start itself. A slow reader is not waited for.
+    pub fn watch(&self) -> BoxStream<'static, Arc<CloudDiscoveryEvent>> {
+        let (tx, rx) = mpsc::unbounded();
+        self.inner.watchers.lock().push(tx);
+        rx.boxed()
+    }
+
+    /// Sends `event` to the open [`watch`](Self::watch) streams and forgets the closed ones.
+    pub(super) fn publish(&self, event: &Arc<CloudDiscoveryEvent>) {
+        self.inner
+            .watchers
+            .lock()
+            .retain(|tx| tx.unbounded_send(event.clone()).is_ok());
     }
 
     /// Whether a refresh of `provider` is running.

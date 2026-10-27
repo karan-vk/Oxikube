@@ -1,5 +1,5 @@
-//! The main window's own views: the catalog home and the kubeconfig sources screen, opened (or
-//! shown again) by `view::Open`.
+//! The main window's own views: the catalog home, the kubeconfig sources screen and the Cloud
+//! section, opened (or shown again) by `view::Open`.
 
 use std::rc::Rc;
 use std::sync::Arc;
@@ -10,6 +10,7 @@ use oxikube_app::{
     CloudDiscoveryService, ClusterCatalog, ClusterSessionManager, KubeconfigSourcesService,
 };
 use oxikube_catalog_ui::catalog::CATALOG_VIEW;
+use oxikube_catalog_ui::cloud::{CLOUD_VIEW, CloudDeps, CloudView, ServiceBackend as CloudBackend};
 use oxikube_catalog_ui::sources::SOURCES_VIEW;
 use oxikube_catalog_ui::{CatalogDeps, CatalogView, ServiceBackend, SourcesDeps, SourcesView};
 use oxikube_ports::ClockPort;
@@ -44,7 +45,7 @@ impl ViewDeps {
         cx.new(|cx| CatalogView::new(deps, window, cx))
     }
 
-    /// Shows `view` ([`CATALOG_VIEW`], [`SOURCES_VIEW`] or `CHART_GALLERY_VIEW`) in
+    /// Shows `view` ([`CATALOG_VIEW`], [`SOURCES_VIEW`], [`CLOUD_VIEW`] or `CHART_GALLERY_VIEW`) in
     /// `workspace`: the open tab when there is one, else a new one. Any other id is ignored (`view::Open` validates it first).
     pub fn open(
         &self,
@@ -67,6 +68,13 @@ impl ViewDeps {
                     workspace: Some(workspace.downgrade()),
                 };
                 Box::new(cx.new(|cx| SourcesView::new(deps, cx)))
+            }
+            CLOUD_VIEW => {
+                let deps = CloudDeps {
+                    backend: Rc::new(CloudBackend::new(self.cloud.clone())),
+                    clock: self.clock.clone(),
+                };
+                Box::new(cx.new(|cx| CloudView::new(deps, cx)))
             }
             CHART_GALLERY_VIEW => {
                 let now = self.clock.now().as_second() as f64;

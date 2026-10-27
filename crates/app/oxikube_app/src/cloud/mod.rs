@@ -7,6 +7,7 @@
 //! | `service` | [`CloudDiscoveryService`]: `refresh`, `cancel`, `cached`, `added`, `add`, `remove` |
 //! | `run` | one refresh as a task: cache answer, `detect`, the scope fan-out, the terminal event |
 //! | `event` | [`CloudDiscoveryEvent`], [`RefreshMode`], [`DiscoveryConfig`], [`AddedCluster`], [`RemovedCluster`] |
+//! | `commands` | the `cloud::*` commands: [`register_commands`] and [`CloudDiscoveryService::execute`] |
 //! | `cache` | the per-scope listings and per-provider detections in the state db, with their time |
 //! | `managed` | the managed kubeconfigs (`<config dir>/kubeconfigs/<cli>.yaml`) and their YAML |
 //!
@@ -45,6 +46,7 @@
 //! Writing a local kubeconfig is not a cluster mutation, so `MutationGuard` does not apply.
 
 mod cache;
+mod commands;
 mod event;
 mod managed;
 mod run;
@@ -53,6 +55,7 @@ mod service;
 #[cfg(test)]
 mod tests;
 
+pub use commands::register_commands;
 pub use event::{AddedCluster, CloudDiscoveryEvent, DiscoveryConfig, RefreshMode, RemovedCluster};
 pub use managed::ManagedEntry;
 pub use service::{CloudDiscoveryService, DiscoveryDeps};

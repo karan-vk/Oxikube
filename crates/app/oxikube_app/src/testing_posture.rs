@@ -6,8 +6,11 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use futures::future::{BoxFuture, FutureExt};
-use oxikube_domain::command::{Command, CommandId, KubeconfigSourceRef, NewKubeconfigSource};
-use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
+use oxikube_domain::cloud::CloudProvider;
+use oxikube_domain::command::{
+    CloudRefreshMode, Command, CommandId, KubeconfigSourceRef, NewKubeconfigSource,
+};
+use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
 use oxikube_domain::{ClusterColour, ClusterPreset, ErrorKind, OxiError, OxiResult};
 use oxikube_ports::{ClusterPrefs, ClusterPrefsTable};
 use parking_lot::Mutex;
@@ -305,6 +308,19 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             cluster,
             target: None,
             events: Vec::new(),
+        },
+        "cloud::Add" => Command::CloudAdd {
+            provider: CloudProvider::Aws,
+            cluster: "aws/p/eu-west-1/c".into(),
+        },
+        "cloud::Cancel" => Command::CloudCancel { provider: None },
+        "cloud::Refresh" => Command::CloudRefresh {
+            provider: None,
+            mode: CloudRefreshMode::Force,
+        },
+        "cloud::Remove" => Command::CloudRemove {
+            provider: CloudProvider::Aws,
+            context: ContextName::new("eks-p-eu-west-1-c"),
         },
         "cluster::SwitchTab" => Command::ClusterSwitchTab { index: 1 },
         "cluster::ToggleFavourite" => Command::ClusterToggleFavourite {

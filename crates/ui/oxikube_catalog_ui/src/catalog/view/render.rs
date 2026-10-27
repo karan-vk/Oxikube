@@ -87,6 +87,15 @@ impl CatalogView {
                 ),
             )
             .child(
+                div().debug_selector(|| "catalog-cloud".into()).child(
+                    Button::new("catalog-cloud")
+                        .small()
+                        .icon(Icon::new(IconName::Cloud).size(u(px(14.))))
+                        .label("Cloud")
+                        .on_click(cx.listener(|this, _, _, cx| this.open_cloud(cx))),
+                ),
+            )
+            .child(
                 div().debug_selector(|| "catalog-sources".into()).child(
                     Button::new("catalog-sources")
                         .small()

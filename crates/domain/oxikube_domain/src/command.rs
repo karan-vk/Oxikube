@@ -36,6 +36,7 @@
 mod availability;
 mod capability;
 mod category;
+mod cloud;
 mod id;
 mod image;
 mod kubeconfig;
@@ -47,6 +48,7 @@ mod risk;
 pub use availability::{Availability, SelectionKind, ViewContext};
 pub use capability::{Capabilities, Capability, UnknownCapability};
 pub use category::CommandCategory;
+pub use cloud::CloudRefreshMode;
 pub use id::{CommandId, UnknownCommandId, is_well_formed};
 pub use image::ImageChange;
 pub use kubeconfig::{KubeconfigSourceRef, NewKubeconfigSource, PastedText};

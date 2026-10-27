@@ -222,6 +222,10 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::KubeconfigAddSource { .. }
         | Command::KubeconfigRemoveSource { .. }
         | Command::KubeconfigReload
+        | Command::CloudRefresh { .. }
+        | Command::CloudCancel { .. }
+        | Command::CloudAdd { .. }
+        | Command::CloudRemove { .. }
         | Command::ViewOpen { .. }
         | Command::PaletteToggle
         | Command::PaletteClearRecents
