@@ -34,7 +34,7 @@ use super::objects::Objects;
 use crate::store::{RowChange, StoreDelta};
 
 /// The subject index. Feed it each RBAC kind's subscription deltas with
-/// [`apply`](Self::apply); see the [module docs](self).
+/// [`apply`](Self::apply); see the module docs.
 #[derive(Debug, Default)]
 pub struct SubjectIndex {
     objects: Objects,
