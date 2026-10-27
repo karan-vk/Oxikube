@@ -176,11 +176,12 @@ impl Run {
     }
 
     fn send_cached(&self, cached: &Snapshot, stale: bool) {
-        let rows = cached.rows_of(&self.wanted(cached));
+        let wanted = self.wanted(cached);
+        let rows = cached.rows_of(&wanted);
         self.events.send(CloudDiscoveryEvent::Cached {
             provider: self.port.id(),
             detection: cached.provider.as_ref().map(|p| p.detection.clone()),
-            clusters: clusters_of(cached, &self.wanted(cached)),
+            clusters: clusters_of(cached, &wanted),
             fetched_at: rows
                 .iter()
                 .map(|row| row.fetched_at)
