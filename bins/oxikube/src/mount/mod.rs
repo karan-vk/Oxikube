@@ -135,8 +135,8 @@ mod palette;
 mod port_forwards;
 mod pulses;
 mod rbac;
-mod role_dialogs;
 mod resources;
+mod role_dialogs;
 mod tabs;
 mod terminal;
 #[cfg(test)]
