@@ -36,6 +36,7 @@ use oxikube_ports::cloud::{
 };
 
 use crate::process::{Cli, CliError, CliInvocation, ProcessRunner, RunOpts};
+use crate::shared::Shared;
 
 /// The plugin GKE contexts authenticate through.
 pub(crate) const PLUGIN_COMMAND: &str = "gke-gcloud-auth-plugin";
@@ -49,12 +50,23 @@ const LIST_TIMEOUT: Duration = Duration::from_secs(60);
 #[derive(Clone)]
 pub struct GcloudDiscovery {
     runner: Arc<dyn ProcessRunner>,
+    projects: Shared<Vec<String>>,
 }
 
 impl GcloudDiscovery {
     /// An adapter running `gcloud` through `runner`.
     pub fn new(runner: Arc<dyn ProcessRunner>) -> Self {
-        Self { runner }
+        Self {
+            runner,
+            projects: Shared::new(Vec::new()),
+        }
+    }
+
+    /// Scans only `projects` (the `cloud.gcloud.projects` setting); empty scans every project
+    /// `gcloud projects list` reports. Naming projects skips that slow call. The next scan uses
+    /// the new list.
+    pub fn set_projects(&self, projects: Vec<String>) {
+        self.projects.set(projects);
     }
 
     /// `gcloud args` asking for JSON, with a generous timeout.

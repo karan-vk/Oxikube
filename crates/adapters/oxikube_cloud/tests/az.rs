@@ -193,6 +193,33 @@ async fn scopes_are_the_enabled_subscriptions() {
 }
 
 #[tokio::test]
+async fn configured_subscriptions_narrow_the_scan_by_id_or_name_and_apply_to_the_next_scan() {
+    let fake = Fake::new(true, true, None);
+    fake.adapter.set_subscriptions(vec!["prod".to_owned()]);
+    let keys: Vec<_> = fake
+        .adapter
+        .scopes()
+        .await
+        .unwrap()
+        .iter()
+        .map(CloudScope::key)
+        .collect();
+    assert_eq!(keys, ["azure/00000000-0000-0000-0000-000000000003"]);
+    fake.adapter.set_subscriptions(vec![DEV.to_owned()]);
+    let keys: Vec<_> = fake
+        .adapter
+        .scopes()
+        .await
+        .unwrap()
+        .iter()
+        .map(CloudScope::key)
+        .collect();
+    assert_eq!(keys, [format!("azure/{DEV}")]);
+    fake.adapter.set_subscriptions(Vec::new());
+    assert_eq!(fake.adapter.scopes().await.unwrap().len(), 2);
+}
+
+#[tokio::test]
 async fn listing_maps_state_endpoint_and_version() {
     let fake = Fake::new(true, true, None);
     let clusters = fake.dev_clusters().await.unwrap();

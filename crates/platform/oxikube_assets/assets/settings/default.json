@@ -108,6 +108,34 @@
       { "name": "prometheus-community", "url": "https://prometheus-community.github.io/helm-charts" }
     ]
   },
+  // Cloud discovery (E18): the Cloud section of the catalog finds EKS, GKE and AKS clusters through
+  // the aws, gcloud and az CLIs you already use. Global; edits apply to the next refresh, and a
+  // provider switched off disappears at once, no restart. Nothing here holds a credential.
+  //   providers     which providers run: "aws", "gcloud", "az" (an unknown id is reported)
+  //   *_path        where a CLI is; empty looks it up (login shell PATH, app PATH, the usual
+  //                 install directories). `gke_gcloud_auth_plugin_path` and `kubelogin_path`
+  //                 locate the exec plugins GKE and AKS contexts run
+  //   aws.profiles  profiles to scan; EMPTY = every profile `aws configure list-profiles` reports
+  //   aws.regions   regions to scan in each profile besides its default region; EMPTY = none extra
+  //   gcloud.projects  project ids to scan; EMPTY = every project (slow on big organisations)
+  //   az.subscriptions  subscription ids or names to scan; EMPTY = every enabled subscription
+  //   cache_ttl_secs  how long a listing stays fresh (30 to 86400)
+  //   parallelism   scopes and CLI processes at once (1 to 16)
+  //   command_timeout_secs  how long one CLI command may run (5 to 600)
+  "cloud": {
+    "providers": { "aws": true, "gcloud": true, "az": true },
+    "aws_path": "",
+    "gcloud_path": "",
+    "az_path": "",
+    "gke_gcloud_auth_plugin_path": "",
+    "kubelogin_path": "",
+    "aws": { "profiles": [], "regions": [] },
+    "gcloud": { "projects": [] },
+    "az": { "subscriptions": [] },
+    "cache_ttl_secs": 900,
+    "parallelism": 4,
+    "command_timeout_secs": 30
+  },
   // Session restore: reopen the clusters, tabs and namespaces of your last session at launch.
   // Off by default. Restoring starts after the window is drawn, so it never delays start-up, and a
   // cluster that fails or cannot be reached only shows an error in its own tab.

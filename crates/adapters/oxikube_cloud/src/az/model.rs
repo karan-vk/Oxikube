@@ -30,6 +30,17 @@ impl Subscription {
             .is_none_or(|state| state.eq_ignore_ascii_case("enabled"))
     }
 
+    /// Whether one of `wanted` is this subscription's id or display name (names ignore case).
+    pub(super) fn matches_any(&self, wanted: &[String]) -> bool {
+        wanted.iter().any(|want| {
+            want.eq_ignore_ascii_case(&self.id)
+                || self
+                    .name
+                    .as_deref()
+                    .is_some_and(|name| name.eq_ignore_ascii_case(want))
+        })
+    }
+
     pub(super) fn into_scope(self) -> CloudScope {
         CloudScope::Azure {
             subscription_id: self.id,

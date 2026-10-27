@@ -965,6 +965,13 @@ crate's `README.md` for its allowed dependencies. Highlights:
   chosen range is kept in `StatePort` under `metrics.history_range` (a per-viewer convenience). No polling here: the view asks,
   and dropping the future cancels the queries. The service is built by `bins/oxikube::metrics_provider` and handed to the views
   as the `oxikube_resources_ui::detail::MetricsHistory` global.
+- `oxikube_settings::cloud` (E18-S07) — the global `cloud` setting: `providers.{aws,gcloud,az}` (unknown id rejected),
+  `{aws,gcloud,az,gke_gcloud_auth_plugin,kubelogin}_path` (empty = look up), the scan lists `aws.profiles` / `aws.regions` /
+  `gcloud.projects` / `az.subscriptions` (empty = all, except regions = none extra), `cache_ttl_secs` (30..86400, 900),
+  `parallelism` (1..16, 4) and `command_timeout_secs` (5..600, 30); out-of-range numbers are clamped. `bins/oxikube::mount::cloud`
+  observes it and pushes it into `CliRunner::reconfigure`, `AwsDiscovery::set_settings` / `GcloudDiscovery::set_projects` /
+  `AzureAksAdapter::set_subscriptions` and `CloudDiscoveryService::set_config` (`DiscoveryConfig::disabled` hides a provider and
+  cancels its run): the next run uses it, no restart.
 - `oxikube_settings::portforward` + `oxikube_app::tools::portforward` (E15-S08) — the `portforward` setting (`default_bind`
   loopback by default, `allowed_in_readonly` false, `port_range` unset = OS-assigned, `annotations` false; also under
   `clusters.<id>.portforward`) and the agent tools `portforward.list_port_forwards` (read-only) and

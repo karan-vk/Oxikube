@@ -107,17 +107,37 @@ impl CloudDiscoveryService {
 
     /// The providers that have an adapter.
     pub fn providers(&self) -> Vec<CloudProvider> {
-        self.inner.providers.iter().map(|p| p.id()).collect()
+        let config = self.inner.config.lock();
+        self.inner
+            .providers
+            .iter()
+            .map(|p| p.id())
+            .filter(|id| !config.disabled.contains(id))
+            .collect()
     }
 
     /// Replaces the configuration (the settings changed). Runs started later use it.
+    ///
+    /// Providers newly switched off stop at once: their running refresh is cancelled.
     pub fn set_config(&self, config: DiscoveryConfig) {
-        *self.inner.config.lock() = config;
+        let newly_disabled: Vec<CloudProvider> = {
+            let mut current = self.inner.config.lock();
+            let newly = config
+                .disabled
+                .difference(&current.disabled)
+                .copied()
+                .collect();
+            *current = config;
+            newly
+        };
+        for provider in newly_disabled {
+            self.cancel(provider);
+        }
     }
 
     /// The configuration in use.
     pub fn config(&self) -> DiscoveryConfig {
-        *self.inner.config.lock()
+        self.inner.config.lock().clone()
     }
 
     /// The managed kubeconfig of `provider`: `<config dir>/kubeconfigs/<cli>.yaml`.
@@ -142,6 +162,15 @@ impl CloudDiscoveryService {
     ) -> BoxStream<'static, CloudDiscoveryEvent> {
         let (tx, rx) = mpsc::unbounded();
         let events = RunEvents::new(tx);
+        if self.is_disabled(provider) {
+            // Switched off in settings: nothing runs, nothing is reported as missing.
+            events.end(CloudDiscoveryEvent::Finished {
+                provider,
+                clusters: Vec::new(),
+                failed_scopes: 0,
+            });
+            return rx.boxed();
+        }
         let Some(port) = self.port(provider) else {
             events.send(CloudDiscoveryEvent::Detected(
                 CloudDetection::not_installed(provider),
@@ -193,7 +222,11 @@ impl CloudDiscoveryService {
 
     /// The cached clusters of `provider` (every cached scope), whatever their age. Reads the
     /// state db only; no CLI runs.
+    /// Empty for a provider switched off in settings.
     pub async fn cached(&self, provider: CloudProvider) -> Vec<DiscoveredCluster> {
+        if self.is_disabled(provider) {
+            return Vec::new();
+        }
         let snapshot = self.inner.cache.load(provider).await;
         run::clusters_of(&snapshot, &snapshot.known_scopes())
     }
@@ -285,6 +318,10 @@ impl CloudDiscoveryService {
             deleted_file,
             disconnected,
         })
+    }
+
+    fn is_disabled(&self, provider: CloudProvider) -> bool {
+        self.inner.config.lock().disabled.contains(&provider)
     }
 
     fn port(&self, provider: CloudProvider) -> Option<Arc<dyn CloudDiscoveryPort>> {

@@ -40,6 +40,7 @@ use oxikube_ports::{
 use serde::de::IgnoredAny;
 
 use crate::process::{Cli, CliInvocation, ProcessRunner, RunOpts};
+use crate::shared::Shared;
 use model::{AksCluster, AzVersion, Subscription};
 
 /// How long listing a subscription's clusters may take (`az` starts slowly and a subscription
@@ -53,12 +54,22 @@ const KUBELOGIN_INSTALL_URL: &str = "https://azure.github.io/kubelogin/install.h
 /// entries for the Azure AD ones.
 pub struct AzureAksAdapter {
     runner: Arc<dyn ProcessRunner>,
+    subscriptions: Shared<Vec<String>>,
 }
 
 impl AzureAksAdapter {
     /// An adapter running `az` (and locating `kubelogin`) through `runner`.
     pub fn new(runner: Arc<dyn ProcessRunner>) -> Self {
-        Self { runner }
+        Self {
+            runner,
+            subscriptions: Shared::new(Vec::new()),
+        }
+    }
+
+    /// Scans only the subscriptions whose id or display name is in `subscriptions` (the
+    /// `cloud.az.subscriptions` setting); empty scans every enabled one. The next scan uses it.
+    pub fn set_subscriptions(&self, subscriptions: Vec<String>) {
+        self.subscriptions.set(subscriptions);
     }
 
     fn list_opts() -> RunOpts {
@@ -131,9 +142,11 @@ impl CloudDiscoveryPort for AzureAksAdapter {
             .runner
             .run_json(CliInvocation::new(Cli::Az, ["account", "list"]))
             .await?;
+        let wanted = self.subscriptions.get();
         Ok(subscriptions
             .into_iter()
             .filter(Subscription::is_enabled)
+            .filter(|subscription| wanted.is_empty() || subscription.matches_any(&wanted))
             .map(Subscription::into_scope)
             .collect())
     }

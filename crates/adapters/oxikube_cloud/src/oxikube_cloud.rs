@@ -18,5 +18,6 @@ pub mod aws;
 pub mod az;
 pub mod gcloud;
 pub mod process;
+mod shared;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;

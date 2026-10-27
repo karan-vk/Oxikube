@@ -55,6 +55,208 @@
         }
       ]
     },
+    "CloudAwsContent": {
+      "additionalProperties": false,
+      "description": "Narrowing the AWS scan.",
+      "properties": {
+        "profiles": {
+          "description": "The AWS named profiles to scan. An empty list scans every profile `aws configure\nlist-profiles` reports (\"all\").",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "regions": {
+          "description": "Regions to scan in every profile, besides each profile's own default region. An empty\nlist scans nothing extra: AWS has no cheap \"all regions\" call.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "CloudAzContent": {
+      "additionalProperties": false,
+      "description": "Narrowing the Azure scan.",
+      "properties": {
+        "subscriptions": {
+          "description": "The subscriptions to scan, each an id or a display name. An empty list scans every\nenabled subscription `az account list` reports (\"all\").",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "CloudGcloudContent": {
+      "additionalProperties": false,
+      "description": "Narrowing the Google Cloud scan.",
+      "properties": {
+        "projects": {
+          "description": "The project ids to scan. An empty list scans every project `gcloud projects list`\nreports (\"all\"), which is slow on a large organisation; naming projects skips that call.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "CloudProvidersContent": {
+      "additionalProperties": false,
+      "description": "Which providers discovery runs. An unknown provider id is an error: the key is reported and\nthe previous value stays.",
+      "properties": {
+        "aws": {
+          "description": "Discover Amazon EKS clusters through the `aws` CLI. Default `true`.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "az": {
+          "description": "Discover Azure AKS clusters through the `az` CLI. Default `true`.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "gcloud": {
+          "description": "Discover Google GKE clusters through the `gcloud` CLI. Default `true`.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "CloudSettingsContent": {
+      "additionalProperties": false,
+      "description": "What one settings layer says about cloud discovery. Holds paths and names, never credentials.",
+      "properties": {
+        "aws": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CloudAwsContent"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What to scan on AWS."
+        },
+        "aws_path": {
+          "description": "The `aws` binary. Empty looks it up (login shell `PATH`, app `PATH`, the usual install\ndirectories).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "az": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CloudAzContent"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What to scan on Azure."
+        },
+        "az_path": {
+          "description": "The `az` binary. Empty looks it up.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cache_ttl_secs": {
+          "description": "How long a listing stays fresh, in seconds. Default 900; at least 30 and at most 86400.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "command_timeout_secs": {
+          "description": "How long one CLI command may run, in seconds. Default 30; clamped to 5 to 600.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "gcloud": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CloudGcloudContent"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What to scan on Google Cloud."
+        },
+        "gcloud_path": {
+          "description": "The `gcloud` binary. Empty looks it up.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "gke_gcloud_auth_plugin_path": {
+          "description": "The `gke-gcloud-auth-plugin` binary GKE contexts run. Empty looks it up.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kubelogin_path": {
+          "description": "The `kubelogin` binary AKS contexts run. Empty looks it up.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "parallelism": {
+          "description": "How many scopes (and CLI processes) run at once. Default 4; clamped to 1 to 16.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "providers": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CloudProvidersContent"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Which providers discovery runs. Turning one off hides its Cloud card at once."
+        }
+      },
+      "type": "object"
+    },
     "ClusterSettings": {
       "additionalProperties": false,
       "description": "Overrides for one cluster: the per-cluster settings (display name, colour, read-only, default namespace, terminal directory, node shell, Prometheus, accessible namespaces, exec policy) and any other setting. Layers merge field by field: defaults, then the top-level values, then this block.",
@@ -79,6 +281,9 @@
             }
           ],
           "description": "The keymap layered under your `keymap.json`: `default` (the per-OS defaults) or `vim`\n(adds `j` / `k` / `g g` / `shift-g` / `ctrl-d` / `ctrl-u`, `d d` delete and `y y` copy name\nto resource tables; the editor, the terminal and text fields are untouched)."
+        },
+        "cloud": {
+          "$ref": "#/$defs/CloudSettingsContent"
         },
         "colour": {
           "description": "Accent colour of the cluster's tab, hotbar dot and badges, as `#rrggbb` or `#rgb`.",
@@ -1681,6 +1886,9 @@
         }
       ],
       "description": "The keymap layered under your `keymap.json`: `default` (the per-OS defaults) or `vim`\n(adds `j` / `k` / `g g` / `shift-g` / `ctrl-d` / `ctrl-u`, `d d` delete and `y y` copy name\nto resource tables; the editor, the terminal and text fields are untouched)."
+    },
+    "cloud": {
+      "$ref": "#/$defs/CloudSettingsContent"
     },
     "clusters": {
       "additionalProperties": {
