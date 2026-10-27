@@ -33,6 +33,8 @@ pub struct JumpDeps {
     pub aliases: AliasRegistry,
     /// The namespace lists.
     pub namespaces: NamespaceService,
+    /// The RBAC subject names, for `:rbac <subject>` completion (E17-S07).
+    pub rbac_subjects: oxikube_app::rbac_subjects::SubjectsService,
     /// The lines run in the bar, kept between runs (E11-S11).
     pub history: Arc<JumpRecents>,
 }
@@ -52,6 +54,7 @@ pub fn mount(
         catalog: deps.catalog,
         aliases: deps.aliases,
         namespaces: deps.namespaces,
+        rbac_subjects: deps.rbac_subjects,
     };
     let host =
         Rc::new(JumpHost::new(&deps.workspace, deps.dispatcher, sources).persist(deps.history));

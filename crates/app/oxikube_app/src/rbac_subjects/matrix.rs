@@ -282,7 +282,7 @@ pub fn provenance(
         .into_iter()
         .filter_map(|grant| {
             let (access, names) = cell_in(&grant.rules, line, column);
-            (access != Access::Denied).then(|| Provenance {
+            (access != Access::Denied).then_some(Provenance {
                 binding: grant.binding,
                 role: grant.role,
                 role_found: grant.role_found,

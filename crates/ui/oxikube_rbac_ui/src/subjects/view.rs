@@ -237,6 +237,7 @@ impl SubjectsView {
         self.why.clear();
         self.clear_filter(window, cx);
         self.refresh(cx);
+        cx.emit(oxikube_workspace::ItemEvent::UpdateTab);
         cx.notify();
     }
 
@@ -251,6 +252,7 @@ impl SubjectsView {
         self.why.clear();
         self.clear_filter(window, cx);
         self.refresh(cx);
+        cx.emit(oxikube_workspace::ItemEvent::UpdateTab);
         cx.notify();
     }
 

@@ -86,6 +86,7 @@ fn world(cx: &mut TestAppContext) -> World {
         catalog: ClusterCatalog::new(source, state.clone(), clock.clone()),
         aliases: aliases.clone(),
         namespaces: NamespaceService::new(sessions, state, clock),
+        rbac_subjects: Default::default(),
     };
     let host = Rc::new(JumpHost::new(&workspace, Rc::new(Sink), sources));
     vcx.update(|window, cx| host.install(window, cx));
