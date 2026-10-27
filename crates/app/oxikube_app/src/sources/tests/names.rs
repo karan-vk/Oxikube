@@ -4,7 +4,9 @@ use std::path::Path;
 
 use proptest::prelude::*;
 
-use super::super::{is_stored_in, pasted_file_name};
+use oxikube_domain::ErrorKind;
+
+use super::super::{is_managed_stem, is_stored_in, pasted_file_name};
 
 #[test]
 fn good_names_become_yaml_files() {
@@ -38,6 +40,20 @@ fn stored_in_means_directly_inside_without_a_way_out() {
         Path::new("/config/kubeconfigs-other/a.yaml")
     ));
     assert!(!is_stored_in(dir, Path::new("/elsewhere/a.yaml")));
+}
+
+#[test]
+fn the_names_cloud_discovery_manages_are_refused() {
+    for name in ["aws", "AWS.yaml", "gcloud", "az.yml", " Az "] {
+        let error = pasted_file_name(name).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::Validation, "{name}");
+        assert!(error.message().contains("reserved"), "{name}: {error}");
+    }
+    // Only the whole name is reserved: a longer one that starts the same is fine.
+    for (name, file) in [("aws-prod", "aws-prod.yaml"), ("az.dev", "az.dev.yaml")] {
+        assert_eq!(pasted_file_name(name).unwrap(), file, "{name}");
+    }
+    assert!(is_managed_stem("GCLOUD") && !is_managed_stem("gcp"));
 }
 
 proptest! {

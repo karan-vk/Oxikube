@@ -140,7 +140,22 @@ crate's `README.md` for its allowed dependencies. Highlights:
   over a `SourceListStore` (settings in the app), the `ClusterSourcePort` (`set_user_sources`,
   `source_statuses`, `validate_kubeconfig`) and the `FsPort` (`write_private`, `remove`); a pasted
   kubeconfig is stored `0600` as `<config dir>/kubeconfigs/<name>.yaml` (ADR 0015), only such files
-  are ever deleted, and the `kubeconfig::*` handlers register with `register_commands`.
+  are ever deleted, and the `kubeconfig::*` handlers register with `register_commands`. The names
+  `aws`, `gcloud` and `az` are reserved for cloud discovery's managed files.
+  Module `cloud` (E18-S05): `CloudDiscoveryService` runs the `CloudDiscoveryPort` adapters on the
+  app's `Spawner` (one abort-on-drop task per provider; a new refresh or `cancel` kills its CLI
+  processes), lists a provider's scopes `max_parallel_scopes` at a time (a failing scope is reported
+  and the others go on) and streams `CloudDiscoveryEvent`s (`Cached`, `Detected`, `Started`,
+  `ScopeDone`, `ScopeFailed`, then `Finished`, `Failed` or `Cancelled`). The cache is two
+  `StatePort` tables (`cloud_scopes`, `cloud_providers`; rows of the `kv` table, no migration) with
+  the listing time: within the TTL it answers without a CLI, past it the cached clusters are sent
+  first and the CLI runs behind them. `add` merges the provider's exec-auth entry by context name
+  into `<config dir>/kubeconfigs/<cli>.yaml` (`aws.yaml`, `gcloud.yaml`, `az.yaml`; a marker line,
+  `FsPort::write_private`, never a token; a file without the marker is refused) and lists it as a
+  `file` source through `KubeconfigSourcesService` so the cluster source reloads it; `remove` drops
+  the entry (the file and its source with the last one) and disconnects the context's open session.
+  The user's own kubeconfig is never touched. The binary wires it in `mount::cloud` over the three
+  `oxikube_cloud` adapters sharing one `CliRunner`.
   Module `session::namespaces` (E06-S07): `NamespaceService` sets a session's `NamespaceSelection`
   (one `NamespaceChanged` per change, 150 ms debounce on the `ClockPort`), remembers selection,
   favourites and typed names per cluster in `StatePort` (kv `cluster/<id>/namespaces`), lists

@@ -11,6 +11,7 @@
 //! |---|---|---|
 //! | [`access`] | E17-S01 | [`SubjectIndex`](access::SubjectIndex): the cluster's Roles, ClusterRoles and bindings from the store's subscriptions, kept incrementally as subject -> bindings -> normalised rules (`oxikube_domain::rbac`); `rules_for`, `bindings_for`, `subjects`, `can`, `roles_granting` and the k9s-style `matrix` |
 //! | [`metrics_history`] | E13-S08 | [`MetricsHistoryService`]: the history graphs of a detail panel's Metrics tab: [`charts_for`] (the charts of each of the six kinds, as data), the range fetch through `PromqlPort` and the stack's query catalogue, reference lines, the remembered range |
+//! | [`cloud`] | E18-S05 | [`CloudDiscoveryService`]: cloud clusters through the `CloudDiscoveryPort` adapters, refreshed off the UI thread with cancellation (one task per provider, scopes fanned out with a cap, per-scope failures kept apart), cached in the state db with a TTL (stale-while-revalidate), and the added ones merged into `<config dir>/kubeconfigs/<cli>.yaml` (atomic, `0600`, exec auth only), listed as kubeconfig sources so the catalog hot-reloads |
 //! | [`catalog`] | E06-S03 | [`ClusterCatalog`]: the kubeconfig contexts with favourites and last-used, and [`ClusterCommands`], the handler of `cluster::Connect`, `cluster::Disconnect` and `cluster::ToggleFavourite` |
 //! | [`search`] | E11-S04, E11-S11 | [`search::fuzzy`]: [`FuzzyService`], the one fuzzy ranking engine; [`search::recents`]: [`StateRecents`] and [`JumpRecents`], persisted through `StatePort`; [`search::aliases`]: [`AliasTable`], the words the `:` jump bar understands (built-in k9s aliases, aliases derived from API discovery, the user's `aliases.json`, collisions listed, never silent), and [`AliasRegistry`], one table per cluster kept in step with the sessions' discovery |
 //! | [`session`] | E06-S01 | [`ClusterSessionManager`]: connect / disconnect / reconnect, the session state machine, capabilities, namespace selection, read-only flag, colour, and the [`SessionUpdates`] stream |
@@ -64,6 +65,7 @@ pub mod allocation;
 pub mod apply;
 pub mod audit;
 pub mod catalog;
+pub mod cloud;
 pub mod cluster_overview;
 pub mod columns;
 pub mod command_bus;
@@ -127,6 +129,7 @@ pub use catalog::{
     CatalogEntry, ClusterCatalog, ClusterCommandOutcome, ClusterCommands, FavouriteChanged,
     FavouritesLagged,
 };
+pub use cloud::{CloudDiscoveryEvent, CloudDiscoveryService};
 pub use columns::{Cell, Column, ColumnId, ColumnProvider, CoreColumns, PodColumns, TableColumns};
 pub use command_bus::{
     CommandBus, CommandContext, CommandHandler, CommandIndex, CommandInfo, CommandOutput,

@@ -5823,6 +5823,7 @@ dependencies = [
  "oxikube_app",
  "oxikube_assets",
  "oxikube_catalog_ui",
+ "oxikube_cloud",
  "oxikube_describe",
  "oxikube_domain",
  "oxikube_editor",

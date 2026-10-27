@@ -14,7 +14,7 @@
 //! | `service` | [`KubeconfigSourcesService`]: `rows`, `add`, `remove`, `reload`, `apply_stored` |
 //! | `list` | [`SourceListStore`] and the in-memory [`MemorySourceList`] |
 //! | `row` | [`SourceRow`], the list entry joined with its status |
-//! | `name` | the file name of a pasted kubeconfig and the "is this ours" path check |
+//! | `name` | the file name of a pasted kubeconfig (never a name cloud discovery manages: `aws`, `gcloud`, `az`) and the "is this ours" path check |
 //! | `commands` | the handlers of `kubeconfig::AddSource`, `RemoveSource` and `Reload` |
 //!
 //! # Pasted kubeconfigs are files, with `0600`
@@ -49,6 +49,6 @@ mod tests;
 
 pub use commands::register_commands;
 pub use list::{MemorySourceList, SourceListStore};
-pub use name::{is_stored_in, pasted_file_name};
+pub use name::{is_managed_stem, is_stored_in, pasted_file_name};
 pub use row::SourceRow;
 pub use service::{KubeconfigSourcesService, SourceChange};

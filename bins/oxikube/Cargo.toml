@@ -33,6 +33,8 @@ kube.workspace = true
 oxikube_app.workspace = true
 oxikube_assets.workspace = true
 oxikube_catalog_ui.workspace = true
+# Cloud discovery (E18-S05): the `aws`, `gcloud` and `az` adapters behind `CloudDiscoveryService`.
+oxikube_cloud.workspace = true
 oxikube_domain.workspace = true
 oxikube_keymap.workspace = true
 oxikube_describe.workspace = true

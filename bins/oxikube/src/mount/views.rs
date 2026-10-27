@@ -6,7 +6,9 @@ use std::sync::Arc;
 
 use super::gallery::{CHART_GALLERY_VIEW, ChartGalleryPage};
 use gpui::{App, AppContext as _, Entity, SharedString, Window};
-use oxikube_app::{ClusterCatalog, ClusterSessionManager, KubeconfigSourcesService};
+use oxikube_app::{
+    CloudDiscoveryService, ClusterCatalog, ClusterSessionManager, KubeconfigSourcesService,
+};
 use oxikube_catalog_ui::catalog::CATALOG_VIEW;
 use oxikube_catalog_ui::sources::SOURCES_VIEW;
 use oxikube_catalog_ui::{CatalogDeps, CatalogView, ServiceBackend, SourcesDeps, SourcesView};
@@ -22,6 +24,8 @@ pub struct ViewDeps {
     pub sessions: ClusterSessionManager,
     /// The kubeconfig sources service behind the sources screen.
     pub sources: KubeconfigSourcesService,
+    /// Cloud discovery and the managed kubeconfigs (E18-S05), for the catalog's Cloud section.
+    pub cloud: CloudDiscoveryService,
     /// Where the views send their commands (the bus).
     pub dispatcher: Rc<dyn CommandDispatcher>,
     /// The clock for "last used".
