@@ -77,12 +77,6 @@ impl fmt::Debug for GeneratedKubeconfig {
     }
 }
 
-#[derive(Default)]
-struct Held {
-    /// Oldest first.
-    entries: Vec<(ResourceRef, GeneratedKubeconfig)>,
-}
-
 /// The kubeconfigs generated and not yet discarded, by ServiceAccount. Cheap to clone: clones
 /// share the store.
 ///
@@ -93,7 +87,8 @@ struct Held {
 /// closes) drops the text, which zeroes the token's memory.
 #[derive(Clone, Default)]
 pub struct KubeconfigVault {
-    held: Arc<Mutex<Held>>,
+    /// Oldest first.
+    held: Arc<Mutex<Vec<(ResourceRef, GeneratedKubeconfig)>>>,
     version: Arc<AtomicU64>,
 }
 
@@ -115,10 +110,10 @@ impl KubeconfigVault {
     pub fn put(&self, kubeconfig: GeneratedKubeconfig) {
         let mut held = self.held.lock();
         let account = kubeconfig.service_account.clone();
-        held.entries.retain(|(key, _)| key != &account);
-        held.entries.push((account, kubeconfig));
-        if held.entries.len() > CAPACITY {
-            held.entries.remove(0);
+        held.retain(|(key, _)| key != &account);
+        held.push((account, kubeconfig));
+        if held.len() > CAPACITY {
+            held.remove(0);
         }
         self.version.fetch_add(1, Ordering::Release);
     }
@@ -127,7 +122,6 @@ impl KubeconfigVault {
     pub fn get(&self, account: &ResourceRef) -> Option<GeneratedKubeconfig> {
         self.held
             .lock()
-            .entries
             .iter()
             .find(|(key, _)| key == account)
             .map(|(_, kubeconfig)| kubeconfig.clone())
@@ -136,9 +130,9 @@ impl KubeconfigVault {
     /// Drops the kubeconfig for `account`.
     pub fn discard(&self, account: &ResourceRef) {
         let mut held = self.held.lock();
-        let before = held.entries.len();
-        held.entries.retain(|(key, _)| key != account);
-        if held.entries.len() != before {
+        let before = held.len();
+        held.retain(|(key, _)| key != account);
+        if held.len() != before {
             self.version.fetch_add(1, Ordering::Release);
         }
     }
@@ -151,7 +145,7 @@ impl KubeconfigVault {
 
     /// How many kubeconfigs are held.
     pub fn len(&self) -> usize {
-        self.held.lock().entries.len()
+        self.held.lock().len()
     }
 
     /// Whether none is held.
