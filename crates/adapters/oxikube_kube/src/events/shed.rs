@@ -69,10 +69,10 @@ impl ShedSet {
         if self.index.contains_key(&key) {
             return;
         }
-        if self.index.len() >= self.limit {
-            if let Some((_, oldest)) = self.order.pop_first() {
-                self.index.remove(&oldest);
-            }
+        if self.index.len() >= self.limit
+            && let Some((_, oldest)) = self.order.pop_first()
+        {
+            self.index.remove(&oldest);
         }
         self.next += 1;
         self.order.insert(self.next, key);

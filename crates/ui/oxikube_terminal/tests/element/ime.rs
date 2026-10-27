@@ -25,7 +25,7 @@ fn mark(h: &mut Harness, text: &str, selected: Option<std::ops::Range<usize>>) {
 }
 
 fn composition(h: &mut Harness) -> Option<String> {
-    h.terminal.read_with(&mut *h.window, |t, _| {
+    h.terminal.read_with(&*h.window, |t, _| {
         t.composition().map(|composition| composition.text.clone())
     })
 }
@@ -154,6 +154,6 @@ fn the_composition_is_painted_without_disturbing_the_grid(cx: &mut TestAppContex
     );
     let row = h
         .terminal
-        .read_with(&mut *h.window, |t, _| t.snapshot().row_text(0));
+        .read_with(&*h.window, |t, _| t.snapshot().row_text(0));
     assert_eq!(row, "$");
 }

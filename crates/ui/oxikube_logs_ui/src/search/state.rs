@@ -17,6 +17,7 @@ pub enum SearchMode {
 
 impl SearchMode {
     /// The other mode.
+    #[must_use]
     pub fn toggled(self) -> Self {
         match self {
             Self::Highlight => Self::Filter,

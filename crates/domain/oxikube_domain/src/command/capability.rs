@@ -36,6 +36,7 @@ bitflags::bitflags! {
 
 impl Capabilities {
     /// The capabilities in `self` that `have` lacks (empty when satisfied).
+    #[must_use]
     pub const fn missing_from(self, have: Capabilities) -> Capabilities {
         self.difference(have)
     }

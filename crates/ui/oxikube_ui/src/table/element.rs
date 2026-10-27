@@ -40,18 +40,21 @@ impl<D: TableDelegate> Table<D> {
     }
 
     /// Alternate row backgrounds.
+    #[must_use]
     pub fn stripe(mut self, stripe: bool) -> Self {
         self.stripe = stripe;
         self
     }
 
     /// Draw the outer border.
+    #[must_use]
     pub fn bordered(mut self, bordered: bool) -> Self {
         self.bordered = bordered;
         self
     }
 
     /// Whether to fade the edge where columns continue past the view (on by default).
+    #[must_use]
     pub fn overflow_cue(mut self, cue: bool) -> Self {
         self.cue = cue;
         self
@@ -63,6 +66,7 @@ impl<D: TableDelegate> Table<D> {
     /// render, so rows follow the zoom like the columns and the text do. A [`ControlSize::Size`]
     /// is a design-time row height in pixels. The library styles a pixel height with its medium
     /// cell padding, so the density's own padding and text step are not applied.
+    #[must_use]
     pub fn size(mut self, size: ControlSize) -> Self {
         self.size = size;
         self

@@ -101,12 +101,10 @@ impl DetailView {
     /// The object as best known: the full read for a feed that carries less, else the feed's
     /// object. `None` until the store answers, and for a Table row without a full read.
     pub fn resource(&self) -> Option<&Resource> {
-        self.full
-            .resource()
-            .or_else(|| match self.object.as_deref() {
-                Some(StoreObject::Resource(resource)) => Some(resource),
-                _ => None,
-            })
+        self.full.resource().or(match self.object.as_deref() {
+            Some(StoreObject::Resource(resource)) => Some(resource),
+            _ => None,
+        })
     }
 
     /// A reference to the object `name` of `gvk` in this object's cluster, and in this object's

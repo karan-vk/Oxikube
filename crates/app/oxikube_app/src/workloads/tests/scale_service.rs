@@ -16,7 +16,7 @@ use crate::workloads::WorkloadService;
 fn completed(outcome: Outcome) -> crate::command_bus::CommandOutput {
     match outcome {
         Outcome::Completed(output) => output,
-        other => panic!("expected completion, got {other:?}"),
+        other @ Outcome::NeedsConfirmation(_) => panic!("expected completion, got {other:?}"),
     }
 }
 

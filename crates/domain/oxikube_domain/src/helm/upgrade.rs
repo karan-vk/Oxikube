@@ -231,11 +231,11 @@ fn mask_line(line: &str) -> String {
     };
     let key = key.trim().trim_matches(['"', '\'']);
     let value = value.trim();
-    if value.starts_with('{') {
-        if let Some(masked) = mask_flow(value) {
-            let prefix_len = line.len() - body.len();
-            return format!("{}{key}: {masked}", &line[..prefix_len]);
-        }
+    if value.starts_with('{')
+        && let Some(masked) = mask_flow(value)
+    {
+        let prefix_len = line.len() - body.len();
+        return format!("{}{key}: {masked}", &line[..prefix_len]);
     }
     let plain = !value.is_empty()
         && !value.starts_with(['|', '>', '[', '{', '#', '&', '*'])

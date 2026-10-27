@@ -7,7 +7,7 @@
 //! Real I/O wakes GPUI tasks from Tokio threads, so a test that uses this allows parking
 //! (`cx.executor().allow_parking()`) and waits with [`wait`], which polls with short real-time
 //! sleeps.
-#![allow(dead_code)]
+#![allow(dead_code, reason = "each test binary uses a subset of these helpers")]
 
 pub mod editor;
 
@@ -66,7 +66,7 @@ pub fn launch(cx: &mut TestAppContext, context: &str) -> Launched {
 pub fn launch_with(cx: &mut TestAppContext, context: &str, extra: serde_json::Value) -> Launched {
     let dir = tempfile::tempdir().expect("a temp dir");
     let config = dir.path().join("config");
-    std::fs::create_dir_all(&config).unwrap();
+    std::fs::create_dir_all(&config).expect("create the temp config dir");
     std::fs::write(config.join("settings.json"), {
         let mut settings =
             serde_json::json!({ "kubeconfig": { "sources": [{ "kind": "default" }] } });
@@ -75,7 +75,7 @@ pub fn launch_with(cx: &mut TestAppContext, context: &str, extra: serde_json::Va
         }
         settings.to_string()
     })
-    .unwrap();
+    .expect("write the test settings.json");
     let env = StartupEnv {
         config: ConfigSource::Dir(config),
         runtime: RuntimeChoice::Tokio,

@@ -12,7 +12,7 @@
 //!    against `tokio::spawn` + `JoinHandle` on the same runtime.
 //!
 //! Runs on GPUI's test platform (no window), so the numbers are CPU cost only.
-#![allow(clippy::print_stdout)]
+#![allow(clippy::print_stdout, reason = "an example reports on stdout")]
 
 use gpui::{AppContext as _, Context, TestAppContext};
 use oxikube_runtime::{FRAME_INTERVAL, init, notify_coalesced, spawn_kube};
@@ -117,7 +117,7 @@ fn stream(cx: &mut TestAppContext) {
 fn spawn_overhead(cx: &mut TestAppContext) {
     const N: u32 = 20_000;
     cx.executor().allow_parking();
-    cx.update(|cx| init(cx)).expect("tokio runtime");
+    cx.update(init).expect("tokio runtime");
     let handle = cx
         .update(|cx| oxikube_runtime::handle(cx))
         .expect("tokio mode");

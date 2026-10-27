@@ -43,11 +43,13 @@ static LIVE: AtomicUsize = AtomicUsize::new(0);
 unsafe impl GlobalAlloc for Counting {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         LIVE.fetch_add(layout.size(), Ordering::Relaxed);
+        // SAFETY: the caller upholds `GlobalAlloc::alloc`'s contract for `layout`; passed through unchanged.
         unsafe { System.alloc(layout) }
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         LIVE.fetch_sub(layout.size(), Ordering::Relaxed);
+        // SAFETY: `ptr` came from `System.alloc` above with this same `layout`, per the caller's contract.
         unsafe { System.dealloc(ptr, layout) }
     }
 }
@@ -178,7 +180,11 @@ fn main() {
             })
             .collect(),
     );
-    assert_eq!(index.pods(), PODS);
+    assert_eq!(
+        index.pods(),
+        PODS,
+        "churn adds and removes in equal numbers"
+    );
 
     // One status update that mounts the same claims: the common case, per pod.
     let single: Vec<StoreDelta> = (0..samples * 20)
@@ -244,7 +250,9 @@ fn main() {
             .collect(),
     );
     let column = ColumnId::new(PODS_COLUMN);
-    let now: Timestamp = "2026-01-02T03:04:05Z".parse().unwrap();
+    let now: Timestamp = "2026-01-02T03:04:05Z"
+        .parse()
+        .expect("literal RFC 3339 timestamp parses");
     const BATCH: usize = 1_000;
     report(
         "Pods cell (per call)",

@@ -186,7 +186,7 @@ async fn delete_reports_gone_or_still_deleting() {
         .expect("delete");
     match outcome {
         DeleteOutcome::Deleting(object) => assert!(object.meta.deletion.is_some()),
-        other => panic!("expected Deleting, got {other:?}"),
+        other @ DeleteOutcome::Deleted => panic!("expected Deleting, got {other:?}"),
     }
 }
 

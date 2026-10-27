@@ -228,10 +228,10 @@ impl KubeResources {
     /// The API handle for a resolved kind: typed for the core kinds when configured,
     /// otherwise dynamic.
     fn kind_api(&self, resource: &ApiResource, namespace: Option<&str>) -> Box<dyn KindApi> {
-        if self.config.access_path == AccessPath::Typed {
-            if let Some(api) = typed::select(&self.client, resource, namespace) {
-                return api;
-            }
+        if self.config.access_path == AccessPath::Typed
+            && let Some(api) = typed::select(&self.client, resource, namespace)
+        {
+            return api;
         }
         Box::new(self.dynamic(resource, namespace))
     }

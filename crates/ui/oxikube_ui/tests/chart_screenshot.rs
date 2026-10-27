@@ -10,7 +10,11 @@
 //! matches it within tolerance (`OXIKUBE_UPDATE_GOLDENS=1` regenerates). The two themes of a case
 //! must differ.
 
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "a screenshot test reports on stdout and stderr"
+)]
 
 use gpui::{
     AnyWindowHandle, AppContext as _, Context, Entity, HeadlessAppContext, Hsla, IntoElement,

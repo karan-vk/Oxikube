@@ -215,6 +215,11 @@ pub fn check_golden(actual: &RgbaImage, golden: &Path, tolerance: Tolerance) -> 
 
 /// Panicking wrapper over [`check_golden`] for use in tests: golden `name` under
 /// `goldens_root` (see [`golden_path`]).
+///
+/// # Panics
+///
+/// When [`check_golden`] fails: the golden differs beyond `tolerance`, is missing, or cannot
+/// be read or written.
 #[track_caller]
 pub fn assert_matches_golden(
     actual: &RgbaImage,

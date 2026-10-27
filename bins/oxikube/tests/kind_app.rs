@@ -171,7 +171,7 @@ fn open_pods_from_sidebar(vcx: &mut VisualTestContext, tab: &Entity<ClusterTab>)
         });
         (table.gvk().kind.to_string(), namespaces)
     });
-    assert_eq!(kind, "Pod");
+    assert_eq!(kind, "Pod", "the app opens on the pods table");
     assert!(
         namespaces.iter().any(|ns| ns == "kube-system"),
         "the pods table lists kind's kube-system pods, got namespaces {namespaces:?}"

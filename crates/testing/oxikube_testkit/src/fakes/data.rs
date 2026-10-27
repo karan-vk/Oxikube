@@ -358,6 +358,21 @@ impl LogPort for FakeLogPort {
     }
 }
 
+/// Finds `gvk` the way the real registry does: an exact match for a versioned `gvk`; for an
+/// empty version, the version the server prefers (any served version if none is marked).
+fn find_kind(kinds: &[ResourceKind], gvk: &Gvk) -> Option<ResourceKind> {
+    if !gvk.version.is_empty() {
+        return kinds.iter().find(|k| &k.gvk == gvk).cloned();
+    }
+    let same = |k: &&ResourceKind| k.gvk.group == gvk.group && k.gvk.kind == gvk.kind;
+    kinds
+        .iter()
+        .filter(same)
+        .find(|k| k.preferred)
+        .or_else(|| kinds.iter().find(same))
+        .cloned()
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
@@ -495,19 +510,4 @@ mod tests {
             }
         );
     }
-}
-
-/// Finds `gvk` the way the real registry does: an exact match for a versioned `gvk`; for an
-/// empty version, the version the server prefers (any served version if none is marked).
-fn find_kind(kinds: &[ResourceKind], gvk: &Gvk) -> Option<ResourceKind> {
-    if !gvk.version.is_empty() {
-        return kinds.iter().find(|k| &k.gvk == gvk).cloned();
-    }
-    let same = |k: &&ResourceKind| k.gvk.group == gvk.group && k.gvk.kind == gvk.kind;
-    kinds
-        .iter()
-        .filter(same)
-        .find(|k| k.preferred)
-        .or_else(|| kinds.iter().find(same))
-        .cloned()
 }

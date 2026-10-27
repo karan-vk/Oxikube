@@ -114,12 +114,12 @@ impl ConfigMapPanel {
             return;
         };
         // A key that is gone closes its preview; one that changed shows the new text.
-        if let Some(open) = self.preview.take() {
-            if let Some(entry) = view.entries.iter().find(|e| e.key == open.key) {
-                let text: Arc<str> = Arc::from(entry.preview());
-                open.view.update(cx, |code, cx| code.set_text(text, cx));
-                self.preview = Some(open);
-            }
+        if let Some(open) = self.preview.take()
+            && let Some(entry) = view.entries.iter().find(|e| e.key == open.key)
+        {
+            let text: Arc<str> = Arc::from(entry.preview());
+            open.view.update(cx, |code, cx| code.set_text(text, cx));
+            self.preview = Some(open);
         }
         self.view = Some(Arc::new(view));
         cx.notify();

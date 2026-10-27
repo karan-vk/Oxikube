@@ -14,12 +14,12 @@ const PROD: &str = "3f2a9c1b7d4e8a60";
 const LAB: &str = "0011223344556677";
 
 fn id(text: &str) -> ClusterId {
-    text.parse().unwrap()
+    text.parse().expect("test cluster id is 16 hex digits")
 }
 
 fn setup(cx: &mut TestAppContext, user: &str) -> tempfile::TempDir {
-    let dir = tempfile::tempdir().unwrap();
-    std::fs::write(dir.path().join("settings.json"), user).unwrap();
+    let dir = tempfile::tempdir().expect("create temp config dir");
+    std::fs::write(dir.path().join("settings.json"), user).expect("write settings.json fixture");
     cx.update(|cx| init_with_dir(dir.path(), cx));
     dir
 }
@@ -27,7 +27,11 @@ fn setup(cx: &mut TestAppContext, user: &str) -> tempfile::TempDir {
 fn reload(cx: &mut TestAppContext, text: &str) {
     let text = text.to_owned();
     cx.update(|cx| {
-        SettingsStore::update_global(cx, |store, _| store.set_user_settings(&text).unwrap())
+        SettingsStore::update_global(cx, |store, _| {
+            store
+                .set_user_settings(&text)
+                .expect("test settings text parses")
+        })
     });
     cx.run_until_parked();
 }

@@ -250,10 +250,11 @@ fn action_names(platform: KeymapPlatform) -> Vec<String> {
     let mut names = Vec::new();
     for section in defaults(platform) {
         for value in section.bindings.values() {
-            if let KeymapAction::Action { name, .. } = KeymapAction::from_json(value).unwrap() {
-                if !names.contains(&name) {
-                    names.push(name);
-                }
+            if let KeymapAction::Action { name, .. } =
+                KeymapAction::from_json(value).expect("default keymap binding parses")
+                && !names.contains(&name)
+            {
+                names.push(name);
             }
         }
     }

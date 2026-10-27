@@ -6,7 +6,11 @@
 //!
 //! `cargo run -p oxikube_state_sqlite --release --example open_bench [audit_rows]`
 
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "a benchmark reports on stdout and stderr"
+)]
 
 use std::time::{Duration, Instant};
 
@@ -34,20 +38,20 @@ fn main() {
         let layout = json!({ "version": 1, "dock_area": { "center": { "items": (0..12).map(|i| json!({"kind": "pods", "state": {"ns": format!("ns-{i}")}})).collect::<Vec<_>>() } } });
         state
             .table_put(
-                &StateTable::new("workspace_layout").unwrap(),
-                &StateKey::new("main").unwrap(),
+                &StateTable::new("workspace_layout").expect("a valid table name"),
+                &StateKey::new("main").expect("a valid key"),
                 layout,
             )
             .await
-            .unwrap();
+            .expect("store the layout");
         for i in 0..200 {
             state
                 .kv_set(
-                    &StateKey::new(format!("recent/{i}")).unwrap(),
+                    &StateKey::new(format!("recent/{i}")).expect("a valid key"),
                     json!({"i": i}),
                 )
                 .await
-                .unwrap();
+                .expect("store a recent entry");
         }
         let cluster = ClusterId::new("kubeconfig", &ContextName::new("prod"));
         let records: Vec<AuditRecord> = (0..audit_rows)
@@ -59,7 +63,8 @@ fn main() {
                     format!("web-{i}"),
                 );
                 AuditRecord::new(
-                    jiff::Timestamp::from_second(1_790_000_000 + i as i64).unwrap(),
+                    jiff::Timestamp::from_second(1_790_000_000 + i as i64)
+                        .expect("a 2026 instant is in range"),
                     "alice",
                     Initiator::Ui,
                     "pod::Delete",
@@ -69,7 +74,10 @@ fn main() {
                 )
             })
             .collect();
-        state.append_audit(&records).await.unwrap();
+        state
+            .append_audit(&records)
+            .await
+            .expect("append the audit records");
     });
     let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
 
@@ -81,12 +89,15 @@ fn main() {
         opens.push(started.elapsed());
         let started = Instant::now();
         let layout = block_on(state.table_get(
-            &StateTable::new("workspace_layout").unwrap(),
-            &StateKey::new("main").unwrap(),
+            &StateTable::new("workspace_layout").expect("a valid table name"),
+            &StateKey::new("main").expect("a valid key"),
         ))
-        .unwrap();
+        .expect("read the layout");
         reads.push(started.elapsed());
-        assert!(layout.is_some());
+        assert!(
+            layout.is_some(),
+            "the layout written during setup must read back"
+        );
     }
     opens.sort();
     reads.sort();
@@ -99,7 +110,7 @@ fn main() {
             "{name:>18}: p50 {:>7.2?}  p95 {:>7.2?}  max {:>7.2?}",
             percentile(v, 0.5),
             percentile(v, 0.95),
-            v.last().unwrap()
+            v.last().expect("runs > 0, so there is a sample")
         );
     }
 }

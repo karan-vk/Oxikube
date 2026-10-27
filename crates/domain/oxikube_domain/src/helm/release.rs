@@ -143,6 +143,7 @@ impl ChartRef {
     }
 
     /// The same chart in repository `repo`.
+    #[must_use]
     pub fn in_repo(mut self, repo: impl Into<String>) -> Self {
         self.repo = Some(repo.into());
         self

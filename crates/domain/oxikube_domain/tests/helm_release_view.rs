@@ -15,7 +15,7 @@ fn release(ns: &str, name: &str, chart: (&str, &str), revision: u32, at: i64) ->
         ChartRef::new(chart.0, chart.1),
         revision,
         ReleaseStatus::Deployed,
-        Timestamp::from_second(at).unwrap(),
+        Timestamp::from_second(at).expect("timestamp in range"),
     );
     r.app_version = Some(format!("{}.0", revision));
     r

@@ -193,6 +193,7 @@ impl ClientPool {
     /// Evictions need it: a PodDisruptionBudget refuses one with HTTP 429, which the default
     /// client retries for minutes before the caller sees it (see
     /// [`KubeResources::with_unretried_client`](crate::KubeResources::with_unretried_client)).
+    #[must_use]
     pub fn without_retries(&self) -> Self {
         let (kubeconfig, in_cluster) = {
             let state = self.state.lock();

@@ -17,7 +17,7 @@ fn cache(count: usize) -> Vec<Arc<StoreObject>> {
     (0..count)
         .map(|i| {
             let name = if i % 3 == 0 { "web" } else { "db" };
-            let mut r = pod().namespace("x").name(&format!("{name}-{i}")).build();
+            let mut r = pod().namespace("x").name(format!("{name}-{i}")).build();
             r.meta.resource_version = Some("1".into());
             Arc::new(StoreObject::Resource(r))
         })

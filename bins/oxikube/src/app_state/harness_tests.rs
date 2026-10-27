@@ -25,7 +25,7 @@ fn state_key(name: &str) -> StateKey {
 #[gpui::test]
 fn a_view_reads_the_installed_app_state(cx: &mut TestAppContext) {
     let mut app = TestApp::new(cx);
-    app.update(|cx| AppState::test(cx));
+    app.update(AppState::test);
     let mut window = app.open_window(|_, _| ThemeLabel);
     // Rendering reads `AppState::global`, which panics when the state is not installed.
     window.draw_frame();
@@ -53,6 +53,6 @@ fn test_with_keeps_the_fakes_so_the_test_can_assert_on_them(cx: &mut TestAppCont
 #[should_panic(expected = "before any other AppState::test call")]
 fn test_with_after_another_state_panics(cx: &mut TestAppContext) {
     let mut app = TestApp::new(cx);
-    app.update(|cx| AppState::test(cx));
+    app.update(AppState::test);
     app.update(|cx| AppState::test_with(cx, &TestPorts::empty()));
 }

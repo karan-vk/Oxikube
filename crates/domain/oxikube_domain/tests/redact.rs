@@ -87,7 +87,7 @@ fn authorization_keys_with_a_snake_case_prefix() {
     );
     assert_scrubbed("x_authorization=SECRETXAUTH", &["SECRETXAUTH"]);
     #[derive(Debug)]
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "fields exist only to be rendered through Debug")]
     struct Upstream {
         proxy_authorization: Option<String>,
         x_authorization: String,
@@ -319,13 +319,13 @@ fn a_data_block_on_the_first_line_of_an_indented_string() {
 
     // `{:#?}` Debug of a struct holding the manifest, and of one nested deeper.
     #[derive(Debug)]
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "fields exist only to be rendered through Debug")]
     struct Spec {
         manifest: &'static str,
         replicas: u32,
     }
     #[derive(Debug)]
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "fields exist only to be rendered through Debug")]
     struct Wrapper {
         spec: Spec,
     }

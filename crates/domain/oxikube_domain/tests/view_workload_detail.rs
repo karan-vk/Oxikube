@@ -14,7 +14,7 @@ fn res(api_version: &str, kind: &str, spec: Value, status: Value) -> Resource {
         "metadata": {"name": "web", "namespace": "shop", "creationTimestamp": "2026-09-01T00:00:00Z"},
         "spec": spec, "status": status
     }))
-    .unwrap()
+    .expect("a workload resource")
 }
 
 fn template() -> Value {

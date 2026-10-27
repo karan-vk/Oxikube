@@ -93,6 +93,10 @@ impl FuzzyService {
 
     /// [`rank`](Self::rank) over any items: `text` is what the query is matched against and
     /// `recency` is the item's place among the recents (`Some(0)` is the latest), if it is one.
+    ///
+    /// # Panics
+    ///
+    /// Never: a fresh lease always holds its scratch until it is dropped.
     pub fn rank_with<T>(
         &self,
         query: &str,

@@ -131,13 +131,13 @@ impl Registry {
                     std::cmp::Ordering::Greater => diff.added.extend(new.next().cloned()),
                     std::cmp::Ordering::Equal => {
                         let (before, after) = (old.next(), new.next());
-                        if let (Some(before), Some(after)) = (before, after) {
-                            if before != after {
-                                diff.changed.push(KindChange {
-                                    before: before.clone(),
-                                    after: after.clone(),
-                                });
-                            }
+                        if let (Some(before), Some(after)) = (before, after)
+                            && before != after
+                        {
+                            diff.changed.push(KindChange {
+                                before: before.clone(),
+                                after: after.clone(),
+                            });
                         }
                     }
                 },

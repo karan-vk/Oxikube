@@ -15,7 +15,11 @@
 //! for this OS (`tests/goldens/<os>/workspace.png`), the image matches it within tolerance.
 //! Regenerate with `OXIKUBE_UPDATE_GOLDENS=1`.
 
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "a screenshot test reports on stdout and stderr"
+)]
 
 use std::{path::Path, process::ExitCode, sync::Arc};
 

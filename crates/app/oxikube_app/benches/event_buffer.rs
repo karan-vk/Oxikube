@@ -109,7 +109,11 @@ fn run(n: usize, runs: usize) {
         }
         (started.elapsed(), buffer)
     });
-    assert_eq!(buffer.len(), n);
+    assert_eq!(
+        buffer.len(),
+        n,
+        "every distinct event fits: the buffer is sized to the batch"
+    );
     drop(buffer);
 
     let (relist, _) = best(runs, || {
@@ -148,7 +152,11 @@ fn run(n: usize, runs: usize) {
         buffer.upsert(event);
     }
     let update = started.elapsed();
-    assert_eq!(buffer.len(), n);
+    assert_eq!(
+        buffer.len(),
+        n,
+        "updates must upsert in place, not add rows"
+    );
 
     // What views read: the first screen of the events view, the faults-only screen, one
     // object's tab, and a badge per visible row.

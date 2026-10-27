@@ -82,6 +82,11 @@ pub struct ResourceActions {
 impl ResourceActions {
     /// The core row actions (delete), the pods' (E12-S03) and the CRD list's (E07-S07: open its custom
     /// resources, show its details) over `bus`, acting as `who` (the local user's name, for the audit log).
+    ///
+    /// # Panics
+    ///
+    /// If a CRD or pod row action has the id of one already registered: a programming error
+    /// that the crate's tests catch.
     pub fn new(
         bus: &CommandBus,
         sessions: ClusterSessionManager,

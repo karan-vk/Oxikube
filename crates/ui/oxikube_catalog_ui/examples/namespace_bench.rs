@@ -10,7 +10,7 @@
 //! keystroke in the search box costs), and a selection change through the `NamespaceService`
 //! (session update + debounce bookkeeping + remembering, on in-memory fakes).
 
-#![allow(clippy::print_stdout)]
+#![allow(clippy::print_stdout, reason = "an example reports on stdout")]
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};

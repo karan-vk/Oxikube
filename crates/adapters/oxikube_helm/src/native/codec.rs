@@ -190,12 +190,18 @@ mod tests {
     #[test]
     fn a_wrong_shaped_record_does_not_echo_the_mistyped_value() {
         #[derive(Debug, serde::Deserialize)]
-        #[allow(dead_code)]
+        #[allow(
+            dead_code,
+            reason = "fields exist only to give serde a shape to reject"
+        )]
         struct Shaped {
             info: Inner,
         }
         #[derive(Debug, serde::Deserialize)]
-        #[allow(dead_code)]
+        #[allow(
+            dead_code,
+            reason = "fields exist only to give serde a shape to reject"
+        )]
         struct Inner {
             notes: Option<String>,
         }

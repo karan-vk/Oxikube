@@ -9,7 +9,11 @@
 //! docs/PERFORMANCE.md (palette: filter 2 000 entries <= 5 ms; first paint of 20 contexts under
 //! one frame), not the frame budget itself (that needs `oxikube --perf` in a real window).
 
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "a benchmark reports on stdout and stderr"
+)]
 
 use std::rc::Rc;
 use std::sync::Arc;

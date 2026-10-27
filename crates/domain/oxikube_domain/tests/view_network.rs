@@ -14,6 +14,10 @@ use oxikube_domain::Resource;
 use serde_json::{Value, json};
 
 /// A namespaced (or, with `namespace` `None`, cluster-scoped) object with `body` merged in.
+///
+/// # Panics
+///
+/// If the assembled JSON is not a valid resource (a malformed fixture).
 pub fn object(
     api_version: &str,
     kind: &str,

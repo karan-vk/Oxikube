@@ -104,7 +104,7 @@ fn labels_with_unlisted_keys_are_stored_inline() {
 #[test]
 fn strings_either_side_of_the_short_form_limit() {
     for len in [0, 1, 126, 127, 128, 129, 300, 70_000] {
-        let text = "é".repeat(len / 2) + &"x".repeat(len % 2);
+        let text = format!("{}{}", "é".repeat(len / 2), "x".repeat(len % 2));
         let value = json!({ "k": text, "after": 7 });
         let doc = doc(&value);
         assert_eq!(

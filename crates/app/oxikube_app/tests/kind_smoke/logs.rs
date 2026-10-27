@@ -78,18 +78,14 @@ async fn a_followed_session_streams_a_live_pod_and_cancels_on_drop() {
     pods.create(&PostParams::default(), &echo_pod("echo"))
         .await
         .expect("create the pod");
-    eventually(
-        "the pod to run",
-        || String::new(),
-        || async {
-            pods.get("echo")
-                .await
-                .ok()
-                .and_then(|p| p.status)
-                .and_then(|s| s.phase)
-                .is_some_and(|phase| phase == "Running")
-        },
-    )
+    eventually("the pod to run", String::new, || async {
+        pods.get("echo")
+            .await
+            .ok()
+            .and_then(|p| p.status)
+            .and_then(|s| s.phase)
+            .is_some_and(|phase| phase == "Running")
+    })
     .await;
 
     let logs = Arc::new(KubeLogs::new(client.clone()));
@@ -164,18 +160,14 @@ async fn the_buffer_bound_and_tail_hold_against_a_live_stream() {
     pods.create(&PostParams::default(), &echo_pod("echo"))
         .await
         .expect("create the pod");
-    eventually(
-        "the pod to run",
-        || String::new(),
-        || async {
-            pods.get("echo")
-                .await
-                .ok()
-                .and_then(|p| p.status)
-                .and_then(|s| s.phase)
-                .is_some_and(|phase| phase == "Running")
-        },
-    )
+    eventually("the pod to run", String::new, || async {
+        pods.get("echo")
+            .await
+            .ok()
+            .and_then(|p| p.status)
+            .and_then(|s| s.phase)
+            .is_some_and(|phase| phase == "Running")
+    })
     .await;
     // Let it write a few lines first, so `tail` has something to cut.
     tokio::time::sleep(Duration::from_secs(3)).await;

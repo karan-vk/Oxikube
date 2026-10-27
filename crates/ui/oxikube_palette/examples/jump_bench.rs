@@ -10,7 +10,11 @@
 //! completion filter over 2 000 candidates <= 5 ms, keystroke-to-visible <= 1 frame), not the
 //! frame budget itself (that needs `oxikube --perf`).
 
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "a benchmark reports on stdout and stderr"
+)]
 
 use std::rc::Rc;
 use std::sync::Arc;

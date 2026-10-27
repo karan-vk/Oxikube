@@ -1,5 +1,5 @@
 //! Shared helpers for the adapter's integration tests.
-#![allow(dead_code)]
+#![allow(dead_code, reason = "each test binary uses a subset of these helpers")]
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -23,9 +23,9 @@ pub fn endpoint(server: &MockServer) -> PromEndpoint {
 
 /// A five-second range ending at a fixed instant.
 pub fn range() -> TimeRange {
-    let end = Timestamp::from_second(1_791_707_599).unwrap();
+    let end = Timestamp::from_second(1_791_707_599).expect("a 2026 instant is in range");
     TimeRange {
-        start: Timestamp::from_second(1_791_707_595).unwrap(),
+        start: Timestamp::from_second(1_791_707_595).expect("a 2026 instant is in range"),
         end,
         step: Duration::from_secs(2),
     }

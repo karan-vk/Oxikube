@@ -70,7 +70,11 @@ fn main() {
             json.len(),
             samples,
             || {
-                assert_eq!(black_box(first_error(black_box(&json))), None);
+                assert_eq!(
+                    black_box(first_error(black_box(&json))),
+                    None,
+                    "{name}: the generated JSON must be strictly valid"
+                );
             },
         );
     }

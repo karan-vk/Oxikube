@@ -89,6 +89,7 @@ impl ClusterSpec {
     }
 
     /// The same over `nodes` nodes.
+    #[must_use]
     pub fn with_nodes(self, nodes: usize) -> Self {
         Self {
             nodes: nodes.max(1),

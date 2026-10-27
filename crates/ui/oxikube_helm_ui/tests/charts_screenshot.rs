@@ -10,7 +10,11 @@
 //! image size, that it is not blank and, when a golden exists for this OS, that it matches within
 //! tolerance. Regenerate with `OXIKUBE_UPDATE_GOLDENS=1`.
 
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "a harness-less test binary reports its results on stdout and stderr"
+)]
 
 use std::cell::RefCell;
 use std::path::Path;

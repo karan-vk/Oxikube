@@ -145,11 +145,11 @@ impl BulkDialog {
     /// Focuses the field the user types in: the typed phrase, the editor's first key, or the
     /// dialog itself.
     pub fn focus_input(&self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(editor) = &self.editor {
-            if let Some(row) = editor.rows.first() {
-                row.key.update(cx, |input, cx| input.focus(window, cx));
-                return;
-            }
+        if let Some(editor) = &self.editor
+            && let Some(row) = editor.rows.first()
+        {
+            row.key.update(cx, |input, cx| input.focus(window, cx));
+            return;
         }
         if self.plan.phrase().is_some() {
             self.typed.update(cx, |input, cx| input.focus(window, cx));

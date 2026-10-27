@@ -81,8 +81,10 @@ async fn resource_version_semantics_reach_the_server() {
         "resourceVersion=42&resourceVersionMatch=NotOlderThan"
     );
 
-    let mut any = ListOptions::default();
-    any.resource_version = Some("0".into());
+    let any = ListOptions {
+        resource_version: Some("0".into()),
+        ..ListOptions::default()
+    };
     list(any.clone()).await.unwrap();
     assert_eq!(
         query_of(&api, PODS, 3),
@@ -108,8 +110,10 @@ async fn resource_version_semantics_reach_the_server() {
 #[tokio::test]
 async fn invalid_resource_version_combinations_never_reach_the_server() {
     let api = server();
-    let mut options = ListOptions::default();
-    options.version_match = Some(VersionMatch::Exact);
+    let options = ListOptions {
+        version_match: Some(VersionMatch::Exact),
+        ..ListOptions::default()
+    };
     let err = resources(&api)
         .list(&pod_gvk(), Some("default"), &options)
         .await

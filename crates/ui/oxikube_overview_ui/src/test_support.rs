@@ -43,6 +43,10 @@ pub struct Preview {
 }
 
 /// The end of the sample history: a fixed time, so screenshots are stable.
+///
+/// # Panics
+///
+/// Never: the fixed second is well inside [`Timestamp`]'s range.
 pub fn sample_end() -> Timestamp {
     Timestamp::from_second(1_790_000_000).expect("a time")
 }
@@ -177,6 +181,10 @@ fn line(kind: MetricKind, base: f64, swing: f64, end: Timestamp) -> HistoryLine 
 }
 
 /// An hour of cluster CPU and memory, ending at [`sample_end`].
+///
+/// # Panics
+///
+/// Never: the start, an hour before [`sample_end`], is well inside [`Timestamp`]'s range.
 pub fn sample_history() -> ClusterHistory {
     let end = sample_end();
     ClusterHistory {

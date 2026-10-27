@@ -8,7 +8,11 @@
 //! nightly job: `cargo test -p oxikube_portforward_ui --features screenshot --test
 //! dialog_screenshot`. Regenerate the goldens with `OXIKUBE_UPDATE_GOLDENS=1`.
 
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "a screenshot test reports on stdout and stderr"
+)]
 
 use std::net::SocketAddr;
 use std::path::Path;

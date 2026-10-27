@@ -26,7 +26,11 @@
 //! and the table scrolls: one more character every six frames (the first applies at once, the
 //! rest after the bar's debounce), then back out one character at a time.
 
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "a benchmark reports on stdout and stderr"
+)]
 
 use std::rc::Rc;
 use std::sync::Arc;

@@ -192,8 +192,16 @@ fn run(pods: usize, lines: usize, buffer_lines: usize) {
         }
         (b.len(), b.dropped(), inversions)
     });
-    assert_eq!(len, buffer_lines.min(total));
-    assert_eq!(dropped as usize, total.saturating_sub(buffer_lines));
+    assert_eq!(
+        len,
+        buffer_lines.min(total),
+        "the merged buffer keeps at most buffer_lines rows"
+    );
+    assert_eq!(
+        dropped as usize,
+        total.saturating_sub(buffer_lines),
+        "every merged line past the cap is counted as dropped"
+    );
 
     let per_s = total as f64 / elapsed.as_secs_f64();
     println!(

@@ -12,7 +12,11 @@ impl ThemeTokens {
     /// index) and the syntax styles both set a colour for (by capture name).
     pub fn for_each_color_pair(&self, other: &ThemeTokens, mut f: impl FnMut(Hsla, Hsla)) {
         let (mine, theirs) = (self.fixed_colors(), other.fixed_colors());
-        debug_assert_eq!(mine.len(), theirs.len());
+        debug_assert_eq!(
+            mine.len(),
+            theirs.len(),
+            "fixed_colors lists the same slots for every theme"
+        );
         for (a, b) in mine.into_iter().zip(theirs) {
             f(a, b);
         }

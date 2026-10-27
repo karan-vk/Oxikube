@@ -53,7 +53,7 @@ fn embedded_keymaps_are_well_formed() {
                 let action = oxikube_keymap::KeymapAction::from_json(value).unwrap();
                 if let oxikube_keymap::KeymapAction::Action { name, .. } = action {
                     assert!(
-                        oxikube_keymap::registry::namespace_of(&name) != "",
+                        !oxikube_keymap::registry::namespace_of(&name).is_empty(),
                         "`{name}` must be namespaced"
                     );
                 }
@@ -148,7 +148,10 @@ fn data_action_names_and_build_errors_are_values_not_panics(cx: &mut TestAppCont
 /// bound is deliberately loose so a slow CI machine does not flake (a debug build here is
 /// still ~100x under it).
 #[gpui::test]
-#[allow(clippy::print_stdout)]
+#[allow(
+    clippy::print_stdout,
+    reason = "the test reports the reload cost on stdout"
+)]
 fn reload_cost_is_small(cx: &mut TestAppContext) {
     let sections = 50;
     // Valid, distinct keys: `ctrl-alt-<letter>` (13 letters) for the plain bindings.

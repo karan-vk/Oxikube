@@ -9,7 +9,11 @@
 //! docs/PERFORMANCE.md (palette: open <= 1 frame, filter 2 000 entries <= 5 ms), not the frame
 //! budget itself.
 
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "a benchmark reports on stdout and stderr"
+)]
 
 use std::fmt::Write as _;
 use std::rc::Rc;
@@ -167,7 +171,10 @@ fn bench(label: &str, user_keymap: &str, entries: &str) {
         w.vcx.run_until_parked();
         w.vcx.update(|window, cx| window.draw(cx).clear(cx));
         open.push(started.elapsed().as_secs_f64() * 1000.0);
-        assert!(overlay_open(&w));
+        assert!(
+            overlay_open(&w),
+            "the help overlay opens on the first toggle of each round"
+        );
         let host = w.host.clone();
         w.vcx.update(|window, cx| host.toggle(window, cx));
         w.vcx.run_until_parked();

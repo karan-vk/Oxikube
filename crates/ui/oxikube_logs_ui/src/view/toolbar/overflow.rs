@@ -135,7 +135,7 @@ impl LogView {
                             let view = view.clone();
                             menu.item(menu_row(id, label).checked(checked).on_click(
                                 move |_, _, cx| {
-                                    view.update(cx, |view, cx| request(view, cx)).ok();
+                                    view.update(cx, request).ok();
                                 },
                             ))
                         }

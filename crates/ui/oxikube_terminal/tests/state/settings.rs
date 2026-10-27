@@ -8,7 +8,11 @@ use super::{harness, next_frame};
 
 fn set_user_settings(cx: &mut TestAppContext, text: &str) {
     cx.update(|cx| {
-        SettingsStore::update_global(cx, |store, _| store.set_user_settings(text).unwrap())
+        SettingsStore::update_global(cx, |store, _| {
+            store
+                .set_user_settings(text)
+                .expect("the test settings parse")
+        })
     });
 }
 

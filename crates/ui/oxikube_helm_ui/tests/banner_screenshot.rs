@@ -8,7 +8,11 @@
 //! nightly job: `cargo test -p oxikube_helm_ui --features screenshot --test banner_screenshot`.
 //! Regenerate the goldens with `OXIKUBE_UPDATE_GOLDENS=1`.
 
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "a harness-less test binary reports its results on stdout and stderr"
+)]
 
 use std::path::Path;
 use std::process::ExitCode;

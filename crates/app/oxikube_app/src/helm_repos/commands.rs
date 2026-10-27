@@ -50,6 +50,10 @@ impl RepoPermission for DenyAgentRepoAdd {
 /// # Errors
 ///
 /// A [`RegisterError`] when an id is already taken.
+///
+/// # Panics
+///
+/// When a command id is not declared in `oxikube_domain::command` (a programming error).
 pub fn register_commands(
     registry: &mut CommandRegistry,
     service: HelmReposService,

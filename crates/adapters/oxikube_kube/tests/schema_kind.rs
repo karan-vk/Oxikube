@@ -33,11 +33,15 @@ static LIVE: AtomicIsize = AtomicIsize::new(0);
 unsafe impl GlobalAlloc for Counting {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         LIVE.fetch_add(layout.size() as isize, Ordering::Relaxed);
+        // SAFETY: the caller upholds `GlobalAlloc::alloc`'s contract, which is passed through
+        // to the system allocator unchanged.
         unsafe { System.alloc(layout) }
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         LIVE.fetch_sub(layout.size() as isize, Ordering::Relaxed);
+        // SAFETY: `ptr` came from this allocator, which got it from `System` with `layout`, as
+        // the caller of `dealloc` guarantees.
         unsafe { System.dealloc(ptr, layout) }
     }
 
@@ -46,6 +50,8 @@ unsafe impl GlobalAlloc for Counting {
             new_size as isize - layout.size() as isize,
             Ordering::Relaxed,
         );
+        // SAFETY: `ptr` came from `System` via this allocator with `layout`, and the caller
+        // upholds `realloc`'s size contract, so forwarding it is sound.
         unsafe { System.realloc(ptr, layout, new_size) }
     }
 }

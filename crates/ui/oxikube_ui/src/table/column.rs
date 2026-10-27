@@ -92,12 +92,14 @@ impl TableColumn {
     }
 
     /// Initial width.
+    #[must_use]
     pub fn width(mut self, width: Pixels) -> Self {
         self.width = width.max(self.min_width);
         self
     }
 
     /// Minimum width (raises the width if it is below it).
+    #[must_use]
     pub fn min_width(mut self, min_width: Pixels) -> Self {
         self.min_width = min_width;
         self.width = self.width.max(min_width);
@@ -105,42 +107,49 @@ impl TableColumn {
     }
 
     /// Right-align (numeric columns).
+    #[must_use]
     pub fn right(mut self) -> Self {
         self.align = ColumnAlign::Right;
         self
     }
 
     /// Centre-align.
+    #[must_use]
     pub fn center(mut self) -> Self {
         self.align = ColumnAlign::Center;
         self
     }
 
     /// Make the header sortable, currently unsorted.
+    #[must_use]
     pub fn sortable(mut self) -> Self {
         self.sort = Some(SortDirection::Unsorted);
         self
     }
 
     /// Make the header sortable and mark `direction` as the active sort.
+    #[must_use]
     pub fn sorted(mut self, direction: SortDirection) -> Self {
         self.sort = Some(direction);
         self
     }
 
     /// Allow or forbid resizing.
+    #[must_use]
     pub fn resizable(mut self, resizable: bool) -> Self {
         self.resizable = resizable;
         self
     }
 
     /// Allow or forbid reordering.
+    #[must_use]
     pub fn movable(mut self, movable: bool) -> Self {
         self.movable = movable;
         self
     }
 
     /// Pin to the left edge.
+    #[must_use]
     pub fn fixed_left(mut self) -> Self {
         self.fixed_left = true;
         self

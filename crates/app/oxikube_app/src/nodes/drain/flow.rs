@@ -138,7 +138,7 @@ impl DrainFlow {
                     bus.dispatch(command, context().with_confirmation(answer))
                         .await?
                 }
-                done => done,
+                done @ Outcome::Completed(_) => done,
             };
             match outcome {
                 Outcome::Completed(output) => Ok(output.message.unwrap_or_default()),

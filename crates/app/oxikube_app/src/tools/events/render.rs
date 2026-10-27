@@ -63,8 +63,8 @@ pub(super) fn age_text(age: SignedDuration) -> String {
     let s = age.as_secs().max(0);
     match s {
         ..120 => format!("{s}s"),
-        ..7_200 => format!("{}m", s / 60),
-        ..172_800 => format!("{}h", s / 3_600),
+        120..7_200 => format!("{}m", s / 60),
+        7_200..172_800 => format!("{}h", s / 3_600),
         _ => format!("{}d", s / 86_400),
     }
 }

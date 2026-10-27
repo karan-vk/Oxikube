@@ -54,9 +54,11 @@ impl Cluster for KubeCluster {
 
     async fn pods(&self, namespace: &str, selector: &PodSelector) -> OxiResult<Vec<PodInfo>> {
         let api: Api<Pod> = Api::namespaced(self.client.clone(), namespace);
-        let mut params = ListParams::default();
-        params.field_selector = selector.field_selector();
-        params.label_selector = selector.label_selector();
+        let params = ListParams {
+            field_selector: selector.field_selector(),
+            label_selector: selector.label_selector(),
+            ..ListParams::default()
+        };
         let list = api.list(&params).await.map_err(|e| classify(&e))?;
         Ok(list.items.iter().filter_map(pod_info).collect())
     }
@@ -67,9 +69,11 @@ impl Cluster for KubeCluster {
         selector: &PodSelector,
     ) -> BoxStream<'static, Vec<PodInfo>> {
         let api: Api<Pod> = Api::namespaced(self.client.clone(), namespace);
-        let mut config = watcher::Config::default();
-        config.field_selector = selector.field_selector();
-        config.label_selector = selector.label_selector();
+        let config = watcher::Config {
+            field_selector: selector.field_selector(),
+            label_selector: selector.label_selector(),
+            ..watcher::Config::default()
+        };
         let mut set = PodSet::default();
         watcher(api, config)
             .default_backoff()

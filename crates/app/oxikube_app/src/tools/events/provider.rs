@@ -263,7 +263,7 @@ fn finish(
 /// the reason instead of a silent gap.
 fn error_block(title: String, mut header: Vec<String>, why: &str) -> ContextBlock {
     header.push(format!("# error: {}", one_line(why, 320)));
-    ContextBlock::text(title, header.join("\n") + "\n")
+    ContextBlock::text(title, format!("{}\n", header.join("\n")))
 }
 
 /// The block for a kind word the cluster does not know, with the closest words.

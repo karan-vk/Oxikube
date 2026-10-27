@@ -178,6 +178,10 @@ pub fn write_chart(dir: &Path, version: &str, extra: bool) -> PathBuf {
 /// Revision `revision` of release `name` in `namespace`, `deployed`, as the object `driver`
 /// stores it (labels and `data.release` exactly as Helm writes them: base64 of gzipped JSON,
 /// base64'd once more by the API for a Secret). Ready for `kubectl create -f -`.
+///
+/// # Panics
+///
+/// When gzipping the record in memory fails, which a `Vec` sink cannot do.
 pub fn release_record(driver: Driver, namespace: &str, name: &str, revision: u32) -> Value {
     let record = json!({
         "name": name,

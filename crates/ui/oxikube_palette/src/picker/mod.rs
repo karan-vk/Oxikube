@@ -119,12 +119,14 @@ impl<D: PickerDelegate> Picker<D> {
     }
 
     /// Sets the picker's width (before UI zoom).
+    #[must_use]
     pub fn width(mut self, width: Pixels) -> Self {
         self.width = width;
         self
     }
 
     /// Sets the most the list grows to before it scrolls (before UI zoom).
+    #[must_use]
     pub fn max_height(mut self, max_height: Pixels) -> Self {
         self.max_height = max_height;
         self

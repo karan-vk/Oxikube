@@ -8,6 +8,10 @@ pub struct QueryGeneration(u64);
 
 impl QueryGeneration {
     /// Starts a new query and returns its generation.
+    #[expect(
+        clippy::should_implement_trait,
+        reason = "a counter, not an iterator: `next` never ends and `oxikube_palette` calls it by name"
+    )]
     pub fn next(&mut self) -> u64 {
         self.0 += 1;
         self.0

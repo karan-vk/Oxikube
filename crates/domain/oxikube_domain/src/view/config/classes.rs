@@ -84,12 +84,9 @@ impl RuntimeClassSummary {
 fn toleration_text(t: JsonRef<'_>) -> String {
     let key = str_of(t, "key").unwrap_or("");
     let mut out = String::from(if key.is_empty() { "<all>" } else { key });
-    match (str_of(t, "operator"), str_of(t, "value")) {
-        (Some("Equal") | None, Some(value)) => {
-            out.push('=');
-            out.push_str(value);
-        }
-        _ => {}
+    if let (Some("Equal") | None, Some(value)) = (str_of(t, "operator"), str_of(t, "value")) {
+        out.push('=');
+        out.push_str(value);
     }
     if let Some(effect) = str_of(t, "effect") {
         out.push(':');

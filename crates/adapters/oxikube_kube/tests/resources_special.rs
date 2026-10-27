@@ -57,8 +57,10 @@ async fn resource_version_semantics_against_a_real_server() {
         .clone()
         .expect("list resource version");
 
-    let mut any = ListOptions::default();
-    any.resource_version = Some("0".into());
+    let any = ListOptions {
+        resource_version: Some("0".into()),
+        ..ListOptions::default()
+    };
     resources
         .list(&pod_gvk(), Some(ns.name()), &any)
         .await

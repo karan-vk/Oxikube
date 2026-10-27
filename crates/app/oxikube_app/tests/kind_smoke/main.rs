@@ -64,6 +64,10 @@ pub const DEADLINE: Duration = Duration::from_secs(30);
 
 /// Polls `check` every 50 ms until it holds, failing the test after [`DEADLINE`] with
 /// `diagnostics` (session states, feed list, counters) in the message.
+///
+/// # Panics
+///
+/// When `check` still fails after [`DEADLINE`].
 pub async fn eventually<F, Fut>(what: &str, diagnostics: impl Fn() -> String, mut check: F)
 where
     F: FnMut() -> Fut,

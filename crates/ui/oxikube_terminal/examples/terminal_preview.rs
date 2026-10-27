@@ -15,7 +15,11 @@
 //! (ctrl-shift-c / ctrl-shift-v on Linux and Windows) copy and paste; an input method composes
 //! inline at the cursor; `htop`, `vim` or `less` get mouse reports (Shift-drag selects instead).
 //! The preview has no workspace, so a multi-line paste is not asked about.
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "a benchmark reports on stdout and stderr"
+)]
 
 use std::rc::Rc;
 

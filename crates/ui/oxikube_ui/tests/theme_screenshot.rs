@@ -11,7 +11,11 @@
 //! the image matches it within tolerance (`OXIKUBE_UPDATE_GOLDENS=1` regenerates). The two
 //! images must also differ.
 
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "a screenshot test reports on stdout and stderr"
+)]
 
 use gpui::{
     AppContext as _, Context, HeadlessAppContext, Hsla, IntoElement, ParentElement as _, Render,

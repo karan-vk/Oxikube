@@ -87,6 +87,11 @@ pub fn entry(name: &str) -> CatalogEntry {
 
 /// `count` distinct entries named like real clusters (`prod-eu-17`, `staging-us-4`, ...), spread
 /// over a few kubeconfig files, with every seventh a favourite and every third used at some point.
+///
+/// # Panics
+///
+/// If `count` is so large that a last-used time (a minute apart per entry) leaves
+/// [`Timestamp`]'s range.
 pub fn synthetic_entries(count: usize) -> Vec<CatalogEntry> {
     const ENVS: [&str; 5] = ["prod", "staging", "dev", "qa", "sandbox"];
     const REGIONS: [&str; 6] = ["eu", "us", "ap", "sa", "af", "me"];

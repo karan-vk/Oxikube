@@ -77,6 +77,10 @@ pub fn unpullable_deployment(name: &str, replicas: u32) -> Value {
 /// # Errors
 ///
 /// [`IntegrationError::Kubectl`] when kubectl cannot be run or refuses the object.
+///
+/// # Panics
+///
+/// Never in practice: stdin is piped, so the spawned child always has a stdin handle.
 pub fn create(context: &str, namespace: &str, manifest: &Value) -> Result<(), IntegrationError> {
     use std::io::Write as _;
     let mut child = Command::new("kubectl")
@@ -160,6 +164,10 @@ impl EventArrivals {
     ///
     /// [`IntegrationError::Kubectl`] when kubectl cannot be run, the marker cannot be created
     /// or the watch does not print it in time.
+    ///
+    /// # Panics
+    ///
+    /// Never in practice: stdout is piped, so the spawned watch always has a stdout handle.
     pub fn start(
         context: &str,
         namespace: &str,

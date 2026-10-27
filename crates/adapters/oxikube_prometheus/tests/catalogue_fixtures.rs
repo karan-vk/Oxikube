@@ -71,7 +71,7 @@ fn prefix(provider: MetricsProviderKind) -> &'static str {
 
 fn plan() -> RangePlan {
     RangePlan::ending_at(
-        Timestamp::from_second(1_791_707_599).unwrap(),
+        Timestamp::from_second(1_791_707_599).expect("a 2026 instant is in range"),
         Duration::from_secs(15 * 60),
     )
 }

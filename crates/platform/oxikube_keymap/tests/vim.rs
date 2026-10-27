@@ -67,7 +67,10 @@ fn install(cx: &mut TestAppContext, platform: KeymapPlatform, vim: bool, user: &
 }
 
 fn press(cx: &mut TestAppContext, keys: &str, contexts: &[&str]) -> Resolution {
-    cx.read(|cx| resolve(cx, keys, &parse_stack(contexts).unwrap()).unwrap())
+    cx.read(|cx| {
+        let stack = parse_stack(contexts).expect("test context stack parses");
+        resolve(cx, keys, &stack).expect("test keystrokes parse")
+    })
 }
 
 fn runs(cx: &mut TestAppContext, keys: &str, contexts: &[&str]) -> Option<&'static str> {
@@ -369,7 +372,7 @@ fn vim_does_not_touch_text_entry_terminal_editor_or_palette(cx: &mut TestAppCont
         );
     }
     // The filter field is text, `ctrl-d` included, and the terminal keeps EOF.
-    assert_eq!(press(cx, "ctrl-d", &OTHER_CONTEXTS[0]), Resolution::Unbound);
+    assert_eq!(press(cx, "ctrl-d", OTHER_CONTEXTS[0]), Resolution::Unbound);
     for text in ["j", "k", "d", "y", "g", "/", "shift-g"] {
         assert_eq!(
             press(cx, text, &TABLE_EDITING),

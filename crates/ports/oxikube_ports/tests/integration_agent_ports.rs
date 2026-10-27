@@ -29,7 +29,7 @@ struct ScaleTool(ToolDef);
 impl ScaleTool {
     fn new() -> Self {
         Self(ToolDef::mutating(
-            ToolName::new("k8s.workload_scale").unwrap(),
+            ToolName::new("k8s.workload_scale").expect("`k8s.workload_scale` is a valid tool name"),
             "Scale a workload",
             json!({"type": "object", "properties": {"replicas": {"type": "integer"}}}),
             Risk::Medium,
@@ -268,12 +268,12 @@ impl AgentPort for StubAgent {
         client_info: ClientInfo,
         client: Arc<dyn AgentClient>,
     ) -> OxiResult<AgentInfo> {
-        let mut seen = self.seen.lock().unwrap();
+        let mut seen = self.seen.lock().expect("stub mutex is not poisoned");
         if seen.initialised {
             return Err(OxiError::conflict("already initialised"));
         }
         seen.initialised = true;
-        *self.client.lock().unwrap() = Some(client);
+        *self.client.lock().expect("stub mutex is not poisoned") = Some(client);
         Ok(AgentInfo {
             name: "stub-agent".into(),
             version: client_info.version,
@@ -299,7 +299,11 @@ impl AgentPort for StubAgent {
     }
 
     async fn new_session(&self, request: NewSessionRequest) -> OxiResult<AgentSessionId> {
-        assert!(request.cwd.is_absolute());
+        assert!(
+            request.cwd.is_absolute(),
+            "ACP requires an absolute session cwd, got {:?}",
+            request.cwd
+        );
         Ok(AgentSessionId::from("sess_1"))
     }
 
@@ -308,9 +312,18 @@ impl AgentPort for StubAgent {
         session: &AgentSessionId,
         prompt: Vec<ContentPart>,
     ) -> OxiResult<StopReason> {
-        self.seen.lock().unwrap().prompts.push(prompt);
+        self.seen
+            .lock()
+            .expect("stub mutex is not poisoned")
+            .prompts
+            .push(prompt);
         // The agent asks permission through the client mid-turn.
-        let client = self.client.lock().unwrap().clone().expect("initialised");
+        let client = self
+            .client
+            .lock()
+            .expect("stub mutex is not poisoned")
+            .clone()
+            .expect("initialised");
         let outcome = client
             .request_permission(PermissionRequest {
                 session: session.clone(),
@@ -339,12 +352,20 @@ impl AgentPort for StubAgent {
     }
 
     async fn cancel(&self, session: &AgentSessionId) -> OxiResult<()> {
-        self.seen.lock().unwrap().cancelled.push(session.clone());
+        self.seen
+            .lock()
+            .expect("stub mutex is not poisoned")
+            .cancelled
+            .push(session.clone());
         Ok(())
     }
 
     async fn close_session(&self, session: &AgentSessionId) -> OxiResult<()> {
-        self.seen.lock().unwrap().closed.push(session.clone());
+        self.seen
+            .lock()
+            .expect("stub mutex is not poisoned")
+            .closed
+            .push(session.clone());
         Ok(())
     }
 
@@ -412,7 +433,7 @@ impl AgentClient for StubClient {
     async fn write_text_file(&self, request: WriteTextFile) -> OxiResult<()> {
         self.written
             .lock()
-            .unwrap()
+            .expect("stub mutex is not poisoned")
             .push((request.path, request.content));
         Ok(())
     }

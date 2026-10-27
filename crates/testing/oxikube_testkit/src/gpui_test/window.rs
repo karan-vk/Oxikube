@@ -39,6 +39,10 @@ impl<V: Render + 'static> TestWindow<V> {
     }
 
     /// The root view entity.
+    ///
+    /// # Panics
+    ///
+    /// When the window has been closed.
     pub fn root(&mut self) -> Entity<V> {
         self.handle
             .entity(&self.vcx)
@@ -46,6 +50,10 @@ impl<V: Render + 'static> TestWindow<V> {
     }
 
     /// Updates the root view, then settles.
+    ///
+    /// # Panics
+    ///
+    /// When the window has been closed.
     pub fn update_root<R>(
         &mut self,
         f: impl FnOnce(&mut V, &mut Window, &mut Context<V>) -> R,

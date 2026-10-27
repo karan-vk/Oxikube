@@ -67,6 +67,7 @@ impl ContextDefinition {
 
     /// Marks this definition as the synthetic in-cluster context (E03-S10), by provenance,
     /// so [`build_config`](super::build_config) applies the in-cluster client fix-ups.
+    #[must_use]
     pub fn with_in_cluster(mut self, in_cluster: bool) -> Self {
         self.in_cluster = in_cluster;
         self

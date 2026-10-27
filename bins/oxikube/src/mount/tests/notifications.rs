@@ -40,7 +40,9 @@ pub(super) fn dispatch(app: &mut App, command: Command) -> oxikube_app::command_
     let outcome = slot.borrow_mut().take().expect("the command finished");
     match outcome.expect("the command runs") {
         oxikube_app::command_bus::Outcome::Completed(output) => output,
-        other => panic!("expected a completed command, got {other:?}"),
+        other @ oxikube_app::command_bus::Outcome::NeedsConfirmation(_) => {
+            panic!("expected a completed command, got {other:?}")
+        }
     }
 }
 

@@ -187,11 +187,11 @@ impl TestNamespace {
         std::fs::create_dir_all(dir)?;
         std::fs::write(
             dir.join(format!("{}.events.txt", self.name)),
-            self.events() + "\n",
+            format!("{}\n", self.events()),
         )?;
         std::fs::write(
             dir.join(format!("{}.pods.txt", self.name)),
-            self.pods() + "\n",
+            format!("{}\n", self.pods()),
         )
     }
 
@@ -296,6 +296,10 @@ mod tests {
 
     /// Runs only with a cluster (`OXIKUBE_TEST_CONTEXT=kind-oxikube`); skips otherwise.
     #[test]
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "the test simulates a failing test to exercise the namespace's panic-time diagnostics"
+    )]
     fn a_namespace_dropped_by_a_failing_test_saves_its_events_first() {
         let Some(ctx) = test_context() else { return };
         let dir = tempfile::tempdir().expect("temp dir");

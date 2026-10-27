@@ -19,6 +19,10 @@ pub struct ListPortForwardsTool {
 
 impl ListPortForwardsTool {
     /// The tool over `manager`.
+    ///
+    /// # Panics
+    ///
+    /// Never: [`LIST_PORT_FORWARDS`] is a constant, well-formed tool name.
     pub fn new(manager: PortForwardManager) -> Self {
         let def = ToolDef::read_only(
             ToolName::new(LIST_PORT_FORWARDS).expect("a well-formed name"),

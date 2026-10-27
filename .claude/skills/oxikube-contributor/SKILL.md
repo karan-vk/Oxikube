@@ -117,6 +117,9 @@ A story is done when all of the following hold:
   `cargo deny check` pass locally and in CI.
 - New public types have rustdoc; `oxikube_domain` and `oxikube_ports` keep
   `#![deny(missing_docs)]` green.
+- Code follows `docs/STYLE.md` (Google Rust Style Guide, ADR 0018): no `unwrap` outside tests,
+  `expect` messages that say why, `# Panics` docs, `SAFETY:` comments, no glob imports, one
+  module per `use`. A lint wrong for one item gets `#[expect(..., reason = "...")]`; every `#[allow]` has a reason.
 - Settings you added have defaults in `default.json`, a schema entry, and hot reload.
 - Commands you added appear in the palette with a keybinding (if sensible) and a tool
   stub; mutating ones state their guard tier in the PR.
@@ -140,7 +143,8 @@ A story is done when all of the following hold:
 | `references/github-project.md` | claiming work, finding dependencies, labelling issues |
 
 Repo-level docs: `docs/ARCHITECTURE.md` (the canonical crate map), `docs/CONTEXT.md`
-(domain glossary; use its terms in type names), `docs/adr/` (decisions; add one when you
+(domain glossary; use its terms in type names), `docs/STYLE.md` (Rust style; read before
+writing Rust), `docs/adr/` (decisions; add one when you
 change a decision), `docs/research/` (the feature inventories and ecosystem research
 behind the plan), `docs/PLAN.md` (the full epic and story catalogue).
 

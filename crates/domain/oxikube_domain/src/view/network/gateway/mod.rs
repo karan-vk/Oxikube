@@ -4,7 +4,7 @@
 //! | File | Holds |
 //! |---|---|
 //! | `class` | [`GatewayClassSummary`]: controller, description, parameters and its `Accepted` condition |
-//! | `gateway` | [`GatewaySummary`]: class, listeners ([`ListenerSummary`]) with their attached routes and status, addresses ([`GatewayAddress`]) |
+//! | `gateway_summary` | [`GatewaySummary`]: class, listeners ([`ListenerSummary`]) with their attached routes and status, addresses ([`GatewayAddress`]) |
 //! | `route` | [`RouteSummary`]: hostnames, parents ([`RouteParent`]) with the status each controller reported, rules |
 //! | `rules` | [`RouteRule`] and [`RouteBackend`]: the matches, filters and backends of a route's rules |
 //!
@@ -12,14 +12,14 @@
 //! reason and message the controller gave (`Accepted`, `Programmed`, `ResolvedRefs`).
 
 mod class;
-mod gateway;
+mod gateway_summary;
 mod route;
 mod rules;
 
 use std::sync::Arc;
 
 pub use class::GatewayClassSummary;
-pub use gateway::{GatewayAddress, GatewaySummary, ListenerSummary};
+pub use gateway_summary::{GatewayAddress, GatewaySummary, ListenerSummary};
 pub use route::{RouteKind, RouteParent, RouteSummary};
 pub use rules::{RouteBackend, RouteRule};
 

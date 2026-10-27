@@ -65,9 +65,10 @@ fn check(name: &str, log: &Path) {
         .collect();
     let path = manifest().join(format!("tests/logs_corpus/expected/{name}.json"));
     if std::env::var_os("OXIKUBE_BLESS").is_some() {
-        let mut out = serde_json::to_string_pretty(&got).unwrap();
+        let mut out =
+            serde_json::to_string_pretty(&got).expect("parsed log entries serialise to JSON");
         out.push('\n');
-        std::fs::write(&path, out).unwrap();
+        std::fs::write(&path, out).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
         return;
     }
     let want: Vec<Value> = serde_json::from_str(

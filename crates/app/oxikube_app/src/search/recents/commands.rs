@@ -39,6 +39,10 @@ pub struct StateRecents {
 
 impl StateRecents {
     /// Recents over `state`, empty until [`load`](Self::load) runs.
+    ///
+    /// # Panics
+    ///
+    /// Never: the recents key is a constant, valid state key.
     pub fn new(state: Arc<dyn StatePort>) -> Self {
         Self {
             state,

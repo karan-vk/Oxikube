@@ -53,7 +53,7 @@ fn config_map(rv: &str, level: &str) -> Resource {
         "metadata": {"name": "web-config", "namespace": "shop", "resourceVersion": rv},
         "data": {"log_level": level, "port": "8080", "region": "eu-west-1"}
     }))
-    .unwrap()
+    .expect("the ConfigMap fixture is a valid resource")
 }
 
 fn deployment() -> Resource {
@@ -73,7 +73,7 @@ fn deployment() -> Resource {
         },
         "status": {"replicas": 3, "readyReplicas": 3}
     }))
-    .unwrap()
+    .expect("the Deployment fixture is a valid resource")
 }
 
 const TYPED: &str = "\

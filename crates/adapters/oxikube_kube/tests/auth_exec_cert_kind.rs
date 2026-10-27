@@ -48,7 +48,8 @@ fn exec_kubeconfig(kind: &common::Kind, dir: &Path, cert: &str, key: &str) -> Ku
             "expirationTimestamp": "2099-01-01T00:00:00Z",
         }
     });
-    std::fs::write(dir.join("credential.json"), credential.to_string()).unwrap();
+    std::fs::write(dir.join("credential.json"), credential.to_string())
+        .expect("write credential.json into the temp dir");
     let script = dir.join("plugin.sh");
     std::fs::write(
         &script,
@@ -58,7 +59,7 @@ fn exec_kubeconfig(kind: &common::Kind, dir: &Path, cert: &str, key: &str) -> Ku
             dir.join("credential.json").display()
         ),
     )
-    .unwrap();
+    .expect("write plugin.sh into the temp dir");
     let mut kubeconfig = kind.kubeconfig.clone();
     let user = kubeconfig.auth_infos[0]
         .auth_info

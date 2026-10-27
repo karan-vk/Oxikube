@@ -37,14 +37,22 @@ pub fn check_invariants(result: &ParseResult) {
     let mut last_doc_start = 0;
     for doc in result.docs() {
         assert!(doc.span.start >= last_doc_start, "documents out of order");
-        assert!(doc.span.start <= doc.span.end && doc.span.end <= text.len());
+        assert!(
+            doc.span.start <= doc.span.end && doc.span.end <= text.len(),
+            "document span {:?} outside text of length {}",
+            doc.span,
+            text.len()
+        );
         last_doc_start = doc.span.start;
         let mut last_start = 0;
         for (i, node) in doc.nodes().iter().enumerate() {
             let id = NodeId::new(i);
             let span = &node.span;
             assert!(span.start <= span.end && span.end <= text.len(), "{span:?}");
-            assert!(text.is_char_boundary(span.start) && text.is_char_boundary(span.end));
+            assert!(
+                text.is_char_boundary(span.start) && text.is_char_boundary(span.end),
+                "node span {span:?} not on char boundaries"
+            );
             assert!(span.start >= last_start, "pre-order not sorted at {span:?}");
             last_start = span.start;
             if let Some(parent) = node.parent {
@@ -53,13 +61,18 @@ pub fn check_invariants(result: &ParseResult) {
                     outer.start <= span.start && span.end <= outer.end,
                     "{span:?} outside {outer:?}"
                 );
-                assert!(doc.children(parent).any(|c| c == id));
+                assert!(
+                    doc.children(parent).any(|c| c == id),
+                    "node at {span:?} missing from its parent's children"
+                );
             }
             if !span.is_empty() {
                 let found = doc.node_at(span.start).expect("node at its own start");
                 let mut up = Some(found);
                 while up.is_some_and(|u| u != id) {
-                    up = doc.node(up.unwrap()).parent;
+                    up = doc
+                        .node(up.expect("the loop condition checked up is Some"))
+                        .parent;
                 }
                 assert_eq!(up, Some(id), "node_at({}) not inside {span:?}", span.start);
             }
@@ -75,8 +88,17 @@ pub fn check_invariants(result: &ParseResult) {
         }
     }
     for diag in result.diagnostics() {
-        assert!(diag.span.start <= diag.span.end && diag.span.end <= text.len());
-        assert!(text.is_char_boundary(diag.span.start) && text.is_char_boundary(diag.span.end));
+        assert!(
+            diag.span.start <= diag.span.end && diag.span.end <= text.len(),
+            "diagnostic span {:?} outside text of length {}",
+            diag.span,
+            text.len()
+        );
+        assert!(
+            text.is_char_boundary(diag.span.start) && text.is_char_boundary(diag.span.end),
+            "diagnostic span {:?} not on char boundaries",
+            diag.span
+        );
     }
     for offset in 0..=text.len() {
         if text.is_char_boundary(offset) {

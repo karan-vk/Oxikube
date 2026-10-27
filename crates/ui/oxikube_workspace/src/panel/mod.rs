@@ -68,7 +68,10 @@ pub enum PanelEvent {
 }
 
 /// A dockable side panel.
-#[allow(unused_variables)]
+#[allow(
+    unused_variables,
+    reason = "default method bodies ignore their arguments"
+)]
 pub trait Panel: Focusable + EventEmitter<PanelEvent> + Render + Sized {
     /// Names the panel in persisted layouts. Once chosen, never change it.
     fn persistent_name() -> &'static str;

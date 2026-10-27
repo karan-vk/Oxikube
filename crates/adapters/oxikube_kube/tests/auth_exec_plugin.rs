@@ -24,8 +24,8 @@ const OK_CREDENTIAL: &str = r#"printf '{"apiVersion":"client.authentication.k8s.
 
 fn config_with_plugin(dir: &Path, script: &str, mode: Option<ExecInteractiveMode>) -> Config {
     let path = dir.join("plugin.sh");
-    std::fs::write(&path, script).unwrap();
-    let mut config = Config::new("http://127.0.0.1:1".parse().unwrap());
+    std::fs::write(&path, script).expect("write plugin.sh into the temp dir");
+    let mut config = Config::new("http://127.0.0.1:1".parse().expect("a literal URI parses"));
     // `sh script` rather than executing the file: avoids ETXTBSY races between tests.
     config.auth_info.exec = Some(ExecConfig {
         api_version: Some("client.authentication.k8s.io/v1".into()),
@@ -42,7 +42,7 @@ fn config_with_plugin(dir: &Path, script: &str, mode: Option<ExecInteractiveMode
 async fn connect(config: Config) -> Result<(), kube::Error> {
     let client = tokio::task::spawn_blocking(move || Client::try_from(config))
         .await
-        .unwrap()?;
+        .expect("the client build task does not panic")?;
     client.apiserver_version().await.map(|_| ())
 }
 

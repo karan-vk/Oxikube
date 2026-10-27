@@ -50,7 +50,7 @@ impl Fixture {
                 cluster: None,
                 template: template.map(str::to_owned),
             })
-            .unwrap();
+            .expect("the editor request channel is open");
         self.vcx.run_until_parked();
     }
 
@@ -549,7 +549,7 @@ fn web(rv: &str, mode: &str) -> Resource {
         "metadata": {"name": "web", "namespace": "shop", "resourceVersion": rv, "uid": "u-1"},
         "data": {"mode": mode}
     }))
-    .unwrap()
+    .expect("fixture ConfigMap web is a valid resource")
 }
 
 fn other() -> Resource {
@@ -559,7 +559,7 @@ fn other() -> Resource {
         "metadata": {"name": "other", "namespace": "shop", "resourceVersion": "9"},
         "data": {"k": "v"}
     }))
-    .unwrap()
+    .expect("fixture ConfigMap other is a valid resource")
 }
 
 #[gpui::test]

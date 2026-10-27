@@ -16,6 +16,11 @@ use oxikube_domain::OxiError;
 pub fn classify_kubeconfig(err: &KubeconfigError) -> OxiError {
     use KubeconfigError as K;
     let invalid_entry = || OxiError::validation("invalid kubeconfig entry");
+    #[expect(
+        clippy::match_wildcard_for_single_variants,
+        reason = "the wildcard deliberately covers variants a kube bump adds, so they never echo \
+                  their text"
+    )]
     let (base, safe_source) = match err {
         K::LoadContext(_) => (
             OxiError::not_found("the context has no definition in the kubeconfig"),
@@ -50,7 +55,10 @@ pub fn classify_kubeconfig(err: &KubeconfigError) -> OxiError {
         | K::ParseClusterUrl(_) => (invalid_entry(), true),
         // `Parse` can quote YAML, credentials included; future variants get the same
         // conservative treatment.
-        #[allow(unreachable_patterns)]
+        #[allow(
+            unreachable_patterns,
+            reason = "the client error enum is non-exhaustive, so the arm may be reachable"
+        )]
         _ => (invalid_entry(), false),
     };
     if safe_source {
@@ -85,7 +93,10 @@ pub fn classify_tls_setup(err: &RustlsTlsError) -> OxiError {
         T::InvalidServerName(_) => OxiError::validation(
             "the TLS server name (`tls-server-name` or the server host) is not valid",
         ),
-        #[allow(unreachable_patterns)]
+        #[allow(
+            unreachable_patterns,
+            reason = "the client error enum is non-exhaustive, so the arm may be reachable"
+        )]
         _ => OxiError::validation("the TLS settings in the kubeconfig are invalid"),
     }
 }

@@ -60,7 +60,7 @@ async fn kill_takes_the_whole_process_group() {
         .output
         .split("child=")
         .nth(1)
-        .and_then(|rest| rest.trim().split_whitespace().next())
+        .and_then(|rest| rest.split_whitespace().next())
         .and_then(|pid| pid.parse().ok())
         .unwrap_or_else(|| panic!("no pid in {:?}", run.output));
     assert!(process_exists(child));

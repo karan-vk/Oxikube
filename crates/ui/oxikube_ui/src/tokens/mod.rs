@@ -13,7 +13,10 @@ mod contrast;
 mod fills;
 mod from_theme;
 mod source;
-#[allow(clippy::module_inception)]
+#[allow(
+    clippy::module_inception,
+    reason = "the module re-exports the file of the same name"
+)]
 mod tokens;
 
 pub use active::ActiveTokens;

@@ -230,7 +230,10 @@ mod tests {
     use super::*;
 
     /// Each function only has to compile: it proves `Arc<dyn Port>` is valid.
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "the fields only have to compile to prove object safety"
+    )]
     struct ObjectSafe {
         cluster_source: Arc<dyn ClusterSourcePort>,
         cloud: Arc<dyn CloudDiscoveryPort>,
