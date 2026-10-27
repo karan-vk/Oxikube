@@ -7,21 +7,19 @@ use std::time::Duration;
 use futures::StreamExt as _;
 use futures::channel::mpsc::unbounded;
 use gpui::{
-    App, AppContext as _, ClipboardItem, Context, Entity, EventEmitter, FocusHandle, Focusable,
-    SharedString, Subscription, Task, WeakEntity, Window,
+    App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable, SharedString,
+    Subscription, Task, WeakEntity, Window,
 };
 use oxikube_app::rbac_subjects::{
-    Inherit, MatrixColumn, PolicyHandle, PolicyStatus, Provenance, SubjectFilter, SubjectList,
-    SubjectMatrix, provenance, resolve_subject, scopes_of, subject_matrix, subject_name, summaries,
+    Inherit, MatrixColumn, PolicyHandle, PolicyStatus, Provenance, SubjectFilter, SubjectMatrix,
 };
-use oxikube_domain::command::Command;
 use oxikube_domain::ids::ClusterId;
 use oxikube_domain::kinds::Verb;
 use oxikube_domain::rbac::{GrantScope, Subject};
-use oxikube_runtime::{notify_coalesced, spawn_kube};
+use oxikube_runtime::spawn_kube;
 use oxikube_ui::input::{InputEvent, InputState};
-use oxikube_ui::table::{RowClick, TableEvent, TableHandle, TableOptions};
-use oxikube_workspace::{CommandDispatcher, Toast, Workspace};
+use oxikube_ui::table::{TableHandle, TableOptions};
+use oxikube_workspace::{CommandDispatcher, Workspace};
 
 use super::backend::SubjectsBackend;
 use super::grid::MatrixDelegate;
@@ -71,9 +69,9 @@ pub struct SubjectsView {
     pub(crate) column: MatrixColumn,
     /// The bindings and roles behind the selected cell.
     pub(crate) why: Vec<Provenance>,
-    generation: u64,
-    read_task: Option<Task<()>>,
-    why_task: Option<Task<()>>,
+    pub(super) generation: u64,
+    pub(super) read_task: Option<Task<()>>,
+    pub(super) why_task: Option<Task<()>>,
     feed_task: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
@@ -212,7 +210,7 @@ impl SubjectsView {
         self.refresh(cx);
     }
 
-    fn set_editing(&mut self, editing: bool, cx: &mut Context<Self>) {
+    pub(super) fn set_editing(&mut self, editing: bool, cx: &mut Context<Self>) {
         if self.editing != editing {
             self.editing = editing;
             cx.notify();
@@ -274,149 +272,6 @@ impl SubjectsView {
             .update(cx, |input, cx| input.set_value("", window, cx));
     }
 
-    // --- reading the policy -------------------------------------------------------------------
-
-    /// Reads the index again for the page that is shown, on the background executor. A request
-    /// while one is running replaces it (the newest wins).
-    pub fn refresh(&mut self, cx: &mut Context<Self>) {
-        let Some(handle) = self.policy.clone() else {
-            return;
-        };
-        self.status = handle.status();
-        self.phase = if self.status.pending > 0 {
-            Phase::Loading {
-                pending: self.status.pending,
-            }
-        } else {
-            Phase::Ready
-        };
-        self.generation += 1;
-        let generation = self.generation;
-        match self.page {
-            Page::Users | Page::Groups => {
-                let list = if self.page == Page::Users {
-                    SubjectList::Users
-                } else {
-                    SubjectList::Groups
-                };
-                self.read_task = Some(cx.spawn(async move |this, cx| {
-                    let rows = cx
-                        .background_executor()
-                        .spawn(async move { handle.read(|index| summaries(index, list)) })
-                        .await;
-                    this.update(cx, |this, cx| this.listed(generation, rows, cx))
-                        .ok();
-                }));
-            }
-            Page::Subject => {
-                let asked = self.asked.clone();
-                let picked = self.picked_scope.clone();
-                let inherit = self.inherit;
-                self.read_task = Some(cx.spawn(async move |this, cx| {
-                    let computed = cx
-                        .background_executor()
-                        .spawn(async move { compute(&handle, &asked, picked, inherit) })
-                        .await;
-                    this.update(cx, |this, cx| this.computed(generation, computed, cx))
-                        .ok();
-                }));
-            }
-        }
-        cx.notify();
-    }
-
-    fn listed(
-        &mut self,
-        generation: u64,
-        rows: Vec<oxikube_app::rbac_subjects::SubjectSummary>,
-        cx: &mut Context<Self>,
-    ) {
-        if generation != self.generation || self.page == Page::Subject {
-            return;
-        }
-        let filter = self.filter.clone();
-        let note = match (&self.phase, self.page) {
-            (Phase::Loading { pending }, _) => {
-                format!("Reading roles and bindings ({pending} of 4 lists pending)...")
-            }
-            (_, Page::Groups) => "No binding names a group.".to_owned(),
-            _ => "No binding names a user or ServiceAccount.".to_owned(),
-        };
-        self.list.update_quiet(cx, |d| {
-            d.set_rows(rows, &filter);
-            d.set_empty_note(note);
-        });
-        self.list.refresh(cx);
-        notify_coalesced(cx);
-    }
-
-    fn computed(&mut self, generation: u64, computed: Computed, cx: &mut Context<Self>) {
-        if generation != self.generation || self.page != Page::Subject {
-            return;
-        }
-        let Computed {
-            subject,
-            scopes,
-            scope,
-            matrix,
-        } = computed;
-        let note = self.empty_matrix_note(&subject, &matrix);
-        let matrix = Arc::new(matrix);
-        let selected_line = self.grid.read(cx, |d| {
-            d.selected_row().and_then(|row| d.line(row).cloned())
-        });
-        let filter = self.filter.clone();
-        let column = self.column;
-        self.grid.update_quiet(cx, |d| {
-            d.set_matrix(Some(matrix.clone()), &filter);
-            d.set_note(note);
-            d.set_column(Some(column));
-            // The selection follows its line (the same group and resource) through a refresh.
-            let row = selected_line.and_then(|old| {
-                (0..d.len()).find(|&row| {
-                    d.line(row)
-                        .is_some_and(|l| l.api_group == old.api_group && l.resource == old.resource)
-                })
-            });
-            d.select_row(row);
-        });
-        self.subject = Some(subject);
-        self.scopes = scopes;
-        self.scope = scope;
-        self.matrix = Some(matrix);
-        self.grid.refresh(cx);
-        self.read_why(cx);
-        notify_coalesced(cx);
-    }
-
-    fn empty_matrix_note(&self, subject: &Subject, matrix: &SubjectMatrix) -> String {
-        if !matrix.is_empty() {
-            return String::new();
-        }
-        if self.status.pending > 0 {
-            return format!(
-                "Reading roles and bindings ({} of 4 lists pending)...",
-                self.status.pending
-            );
-        }
-        let known = self.policy.as_ref().is_some_and(|policy| {
-            policy.read(|index| index.subjects().iter().any(|s| same_identity(s, subject)))
-        });
-        if known {
-            format!(
-                "No rules reach {} {}. Its bindings may name roles that do not exist.",
-                subject.kind(),
-                subject_name(subject)
-            )
-        } else {
-            format!(
-                "No bindings found for \"{}\". Check the spelling, or pick a subject from Users or \
-                 Groups.",
-                self.asked
-            )
-        }
-    }
-
     // --- filter, selection ---------------------------------------------------------------------
 
     /// Applies the filter text (typed, or put there by the page).
@@ -435,220 +290,6 @@ impl SubjectsView {
             }
         }
         cx.notify();
-    }
-
-    fn on_list_event(&mut self, event: &TableEvent, cx: &mut Context<Self>) {
-        if let TableEvent::RowClicked(RowClick { row, count, .. }) = event {
-            self.select_row(*row, cx);
-            if *count >= 2 {
-                self.open_selected(cx);
-            }
-        }
-    }
-
-    fn on_grid_event(&mut self, event: &TableEvent, cx: &mut Context<Self>) {
-        if let TableEvent::RowClicked(RowClick { row, .. }) = event {
-            self.select_row(*row, cx);
-        }
-    }
-
-    /// Selects row `row` of the shown table.
-    pub fn select_row(&mut self, row: usize, cx: &mut Context<Self>) {
-        if self.page == Page::Subject {
-            self.grid.update_quiet(cx, |d| d.select_row(Some(row)));
-            self.grid.refresh(cx);
-            self.grid.reveal_row(row, cx);
-            self.read_why(cx);
-        } else {
-            let Some(subject) = self.list.read(cx, |d| d.subject(row).cloned()) else {
-                return;
-            };
-            self.list.update_quiet(cx, |d| d.select(Some(subject)));
-            self.list.refresh(cx);
-            self.list.reveal_row(row, cx);
-        }
-        cx.notify();
-    }
-
-    /// Moves the selection `delta` rows (the first row when none is selected).
-    pub fn step(&mut self, delta: isize, cx: &mut Context<Self>) {
-        let (count, current) = if self.page == Page::Subject {
-            self.grid.read(cx, |d| (d.len(), d.selected_row()))
-        } else {
-            self.list.read(cx, |d| {
-                (d.len(), d.selected().and_then(|s| d.position_of(s)))
-            })
-        };
-        if count == 0 {
-            return;
-        }
-        let next = match current {
-            None => 0,
-            Some(row) => row.saturating_add_signed(delta).min(count - 1),
-        };
-        self.select_row(next, cx);
-    }
-
-    /// Selects the first or the last row.
-    pub fn select_end(&mut self, last: bool, cx: &mut Context<Self>) {
-        let count = if self.page == Page::Subject {
-            self.grid.read(cx, |d| d.len())
-        } else {
-            self.list.read(cx, |d| d.len())
-        };
-        if count > 0 {
-            self.select_row(if last { count - 1 } else { 0 }, cx);
-        }
-    }
-
-    /// Opens the matrix of the selected list row: the command `rbac::ShowSubject`, the same one
-    /// `:rbac`, the palette and an agent run.
-    pub fn open_selected(&mut self, cx: &mut Context<Self>) {
-        if self.page == Page::Subject {
-            return;
-        }
-        let Some(subject) = self.list.read(cx, |d| d.selected().cloned()) else {
-            return;
-        };
-        self.deps.dispatcher.dispatch(
-            Command::RbacShowSubject {
-                cluster: self.cluster.clone(),
-                subject: subject_name(&subject).to_string(),
-            },
-            cx,
-        );
-    }
-
-    pub(super) fn focus_filter(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.filter_input
-            .update(cx, |input, cx| input.focus(window, cx));
-    }
-
-    pub(super) fn focus_rows(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        window.focus(&self.focus, cx);
-        self.set_editing(false, cx);
-    }
-
-    // --- the matrix: scope, groups, columns, provenance ----------------------------------------
-
-    /// Shows the matrix of `scope`.
-    pub fn set_scope(&mut self, scope: GrantScope, cx: &mut Context<Self>) {
-        if self.page != Page::Subject || scope == self.scope {
-            return;
-        }
-        self.picked_scope = Some(scope);
-        self.refresh(cx);
-    }
-
-    /// The next scope: cluster-wide, then each namespace, round.
-    pub fn next_scope(&mut self, cx: &mut Context<Self>) {
-        if self.scopes.len() < 2 {
-            return;
-        }
-        let at = self
-            .scopes
-            .iter()
-            .position(|s| *s == self.scope)
-            .unwrap_or(0);
-        let next = self.scopes[(at + 1) % self.scopes.len()].clone();
-        self.set_scope(next, cx);
-    }
-
-    /// Includes the groups the API server adds on its own, or leaves them out.
-    pub fn toggle_implicit_groups(&mut self, cx: &mut Context<Self>) {
-        if self.page != Page::Subject {
-            return;
-        }
-        self.inherit = match self.inherit {
-            Inherit::Direct => Inherit::ImplicitGroups,
-            Inherit::ImplicitGroups => Inherit::Direct,
-        };
-        self.refresh(cx);
-    }
-
-    /// Picks the verb column whose granting bindings the detail lists.
-    pub fn set_column(&mut self, column: MatrixColumn, cx: &mut Context<Self>) {
-        self.column = column;
-        self.grid.update_quiet(cx, |d| d.set_column(Some(column)));
-        self.grid.refresh(cx);
-        self.read_why(cx);
-        cx.notify();
-    }
-
-    /// Moves the picked column one step, stopping at the ends.
-    pub fn step_column(&mut self, forward: bool, cx: &mut Context<Self>) {
-        let all: Vec<MatrixColumn> = MatrixColumn::all().collect();
-        let at = all.iter().position(|c| *c == self.column).unwrap_or(0);
-        let next = if forward {
-            (at + 1).min(all.len() - 1)
-        } else {
-            at.saturating_sub(1)
-        };
-        self.set_column(all[next], cx);
-    }
-
-    /// Reads the bindings behind the selected cell (off the UI thread).
-    fn read_why(&mut self, cx: &mut Context<Self>) {
-        self.why_task = None;
-        let (Some(policy), Some(subject)) = (self.policy.clone(), self.subject.clone()) else {
-            self.why.clear();
-            return;
-        };
-        let Some(line) = self
-            .grid
-            .read(cx, |d| d.selected_row().and_then(|r| d.line(r).cloned()))
-        else {
-            self.why.clear();
-            return;
-        };
-        let (scope, inherit, column) = (self.scope.clone(), self.inherit, self.column);
-        let generation = self.generation;
-        self.why_task = Some(cx.spawn(async move |this, cx| {
-            let why = cx
-                .background_executor()
-                .spawn(async move {
-                    policy.read(|index| provenance(index, &subject, &scope, inherit, &line, column))
-                })
-                .await;
-            this.update(cx, |this, cx| {
-                if this.generation == generation {
-                    this.why = why;
-                    cx.notify();
-                }
-            })
-            .ok();
-        }));
-    }
-
-    /// Copies the matrix as tab-separated text (`rbac::CopyMatrix`).
-    pub fn copy_matrix(&mut self, cx: &mut Context<Self>) {
-        let Some(matrix) = self.matrix.clone().filter(|m| !m.is_empty()) else {
-            self.toast(Toast::info("There is no matrix to copy."), cx);
-            return;
-        };
-        cx.write_to_clipboard(ClipboardItem::new_string(matrix.to_tsv()));
-        self.toast(
-            Toast::info(format!("Copied {} rows as text.", matrix.lines.len())),
-            cx,
-        );
-    }
-
-    /// Asks the bus to copy the matrix: the button and the key send the command.
-    pub(super) fn request_copy(&mut self, cx: &mut Context<Self>) {
-        self.deps.dispatcher.dispatch(
-            Command::RbacCopyMatrix {
-                cluster: self.cluster.clone(),
-            },
-            cx,
-        );
-    }
-
-    fn toast(&self, toast: Toast, cx: &mut Context<Self>) {
-        if let Some(workspace) = &self.workspace {
-            workspace
-                .update(cx, |workspace, cx| workspace.show_toast(toast, cx))
-                .ok();
-        }
     }
 
     /// The tab title.
@@ -704,50 +345,4 @@ impl SubjectsView {
     pub fn phase(&self) -> &Phase {
         &self.phase
     }
-}
-
-/// What the background pass hands back for a subject page.
-struct Computed {
-    subject: Subject,
-    scopes: Vec<GrantScope>,
-    scope: GrantScope,
-    matrix: SubjectMatrix,
-}
-
-/// Resolves the typed name, lists its scopes and projects its matrix.
-fn compute(
-    policy: &PolicyHandle,
-    asked: &str,
-    picked: Option<GrantScope>,
-    inherit: Inherit,
-) -> Computed {
-    policy.read(|index| {
-        let subject = resolve_subject(index, asked);
-        let scopes = scopes_of(index, &subject, inherit);
-        let scope = picked.unwrap_or_else(|| {
-            // Cluster-wide when the subject has grants there; otherwise the first namespace.
-            let cluster = subject_matrix(index, &subject, &GrantScope::Cluster, inherit);
-            match scopes.get(1) {
-                Some(first) if cluster.grants == 0 => first.clone(),
-                _ => GrantScope::Cluster,
-            }
-        });
-        let matrix = subject_matrix(index, &subject, &scope, inherit);
-        Computed {
-            subject,
-            scopes,
-            scope,
-            matrix,
-        }
-    })
-}
-
-/// Whether two subjects are the same identity (`User system:serviceaccount:a:b` is the
-/// ServiceAccount `a/b`).
-fn same_identity(a: &Subject, b: &Subject) -> bool {
-    let canonical = |s: &Subject| match s {
-        Subject::User(name) => Subject::from_username(name),
-        other => other.clone(),
-    };
-    canonical(a) == canonical(b)
 }

@@ -28,6 +28,7 @@
 //! Kubernetes does not list which users belong to a group, so a group's page shows what the
 //! bindings grant to anyone in it and no members ([`GROUP_MEMBERS_NOTE`]).
 
+mod cells;
 mod feed;
 mod filter;
 mod matrix;

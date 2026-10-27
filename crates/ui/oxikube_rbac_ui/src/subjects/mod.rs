@@ -33,11 +33,15 @@
 
 mod actions;
 mod backend;
+mod detail;
 mod grid;
 mod list;
+mod matrix_actions;
 mod model;
 mod open;
+mod read;
 mod render;
+mod selection;
 mod view;
 
 #[cfg(test)]
