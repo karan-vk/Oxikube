@@ -8,6 +8,7 @@ mod config;
 mod managed;
 mod refresh;
 mod scoped;
+mod tool;
 
 use std::path::PathBuf;
 use std::sync::Arc;

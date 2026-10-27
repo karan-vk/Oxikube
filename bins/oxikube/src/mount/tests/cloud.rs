@@ -56,3 +56,16 @@ fn the_cloud_commands_are_on_the_bus_with_tool_stubs(cx: &mut TestAppContext) {
         assert!(bus.tool(id).is_some(), "{id} has an MCP tool stub");
     }
 }
+
+#[gpui::test]
+fn the_discover_clusters_tool_is_registered_read_only(cx: &mut TestAppContext) {
+    let mut app = App::start(cx, TestPorts::seeded());
+    let state = app.vcx.update(|_, cx| AppState::global(cx));
+    let hooks = state.agent_hooks().expect("agent hooks");
+    let defs = hooks.tools.defs();
+    let def = defs
+        .iter()
+        .find(|def| def.name.as_str() == "cloud.discover_clusters")
+        .expect("the tool is registered");
+    assert!(!def.is_mutating(), "discovery only reads");
+}

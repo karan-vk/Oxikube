@@ -159,6 +159,8 @@ crate's `README.md` for its allowed dependencies. Highlights:
   commands (E18-S06; `app.cloud_*` tools, no guard tier: they run the CLIs read-only and edit only
   the managed files) are `CloudDiscoveryService::execute` and `cloud::register_commands`; `watch`
   streams every refresh's events to whoever follows them, whichever surface asked.
+  The read-only agent tool `cloud.discover_clusters` (E18-S08, `tools::cloud`) answers from the
+  cache and refreshes only on `refresh: true`; its results hold no endpoint, CA or exec argument.
   Module `session::namespaces` (E06-S07): `NamespaceService` sets a session's `NamespaceSelection`
   (one `NamespaceChanged` per change, 150 ms debounce on the `ClockPort`), remembers selection,
   favourites and typed names per cluster in `StatePort` (kv `cluster/<id>/namespaces`), lists
