@@ -193,6 +193,37 @@ fn namespace_and_service_account() {
 }
 
 #[test]
+fn service_account_columns_are_name_namespace_secrets_age_and_count_any_secrets() {
+    use crate::columns::{ColumnProvider as _, CoreColumns};
+    let columns = CoreColumns::new().columns(
+        &oxikube_domain::ids::Gvk::new("", "v1", "ServiceAccount"),
+        oxikube_domain::Capabilities::empty(),
+    );
+    let default: Vec<&str> = columns
+        .iter()
+        .filter(|c| !c.wide)
+        .map(|c| c.id.as_str())
+        .collect();
+    assert!(
+        default.starts_with(&["name", "namespace", "secrets", "age"]),
+        "{default:?}"
+    );
+    // Zero, one and a missing `secrets` field (the usual case since Kubernetes 1.24).
+    check(
+        &namespaced("v1", "ServiceAccount", json!({"secrets": []})),
+        &[("secrets", "0")],
+    );
+    check(
+        &namespaced("v1", "ServiceAccount", json!({"secrets": [{"name": "a"}]})),
+        &[("secrets", "1")],
+    );
+    check(
+        &namespaced("v1", "ServiceAccount", json!({})),
+        &[("secrets", "0")],
+    );
+}
+
+#[test]
 fn service_columns_are_the_lens_set_with_status() {
     use crate::columns::{ColumnProvider as _, CoreColumns};
     let columns = CoreColumns::new().columns(

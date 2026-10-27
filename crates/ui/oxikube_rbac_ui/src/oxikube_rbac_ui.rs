@@ -4,3 +4,16 @@
 //!
 //! See `README.md` in this crate and `docs/ARCHITECTURE.md` for the allowed
 //! dependency direction. `cargo xtask lint-deps` enforces it.
+//!
+//! | Module | Story | Holds |
+//! |---|---|---|
+//! | [`service_account`] | E17-S04 | the ServiceAccount detail panel: secrets, image pull secrets, automount, the roles bound to it (from the app's `SubjectIndex`) and a link to its Used by tab |
+
+pub mod service_account;
+
+/// Registers what this crate puts in the app: the ServiceAccount detail panel. Called once from
+/// the binary's init, after `oxikube_resources_ui::init` (which registers the ServiceAccount kind
+/// this gives its panel).
+pub fn init(cx: &mut gpui::App) {
+    service_account::init(cx);
+}

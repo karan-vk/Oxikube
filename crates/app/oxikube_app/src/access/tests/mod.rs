@@ -5,6 +5,7 @@
 mod accessible;
 mod batch;
 mod cache;
+mod feed;
 mod fixtures;
 mod incremental;
 mod index;
