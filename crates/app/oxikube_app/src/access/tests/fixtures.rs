@@ -10,7 +10,7 @@ use std::sync::Arc;
 use oxikube_domain::access::AccessRules;
 use oxikube_domain::ids::Gvr;
 use oxikube_domain::rbac::{NormalisedRules, PolicyRule, Role, aggregated_rules};
-use oxikube_testkit::fixtures::rbac::{self, RecordedReview};
+use oxikube_testkit::fixtures::rbac::{self, RecordedReview, printed_rules};
 use proptest::prelude::*;
 use serde_json::Value;
 
@@ -26,36 +26,6 @@ fn review_rules(review: &RecordedReview) -> Vec<PolicyRule> {
     let mut rules = rules_of(&review.status, "resourceRules");
     rules.extend(rules_of(&review.status, "nonResourceRules"));
     rules
-}
-
-/// One row `kubectl auth can-i --list` printed, back as a rule: `resource.group/sub`,
-/// `[urls]`, `[names]`, `[verbs]`.
-fn printed_rule(line: &str) -> PolicyRule {
-    let column = line[..line.find('[').expect("a printed row has lists")].trim();
-    let lists: Vec<Vec<&str>> = line
-        .split('[')
-        .skip(1)
-        .map(|part| {
-            part.split(']')
-                .next()
-                .unwrap_or("")
-                .split_whitespace()
-                .collect()
-        })
-        .collect();
-    let [urls, names, verbs] = lists.as_slice() else {
-        panic!("three lists in {line:?}");
-    };
-    if column.is_empty() {
-        return PolicyRule::non_resource(verbs, urls);
-    }
-    let (head, subresource) = column
-        .split_once('/')
-        .map_or((column, None), |(h, s)| (h, Some(s)));
-    let (resource, group) = head.split_once('.').unwrap_or((head, ""));
-    let resource =
-        subresource.map_or_else(|| resource.to_owned(), |sub| format!("{resource}/{sub}"));
-    PolicyRule::resource(verbs, &[group], &[&resource], names)
 }
 
 fn recorded() -> (SubjectIndex, Vec<RecordedReview>) {
@@ -89,7 +59,7 @@ fn the_index_lists_what_the_rules_review_lists() {
 fn the_index_lists_what_kubectl_auth_can_i_list_printed() {
     let (index, reviews) = recorded();
     for review in &reviews {
-        let printed: Vec<PolicyRule> = review.can_i_list.iter().map(|l| printed_rule(l)).collect();
+        let printed = printed_rules(&review.can_i_list);
         assert_eq!(
             index.rules_in(&review.subject, Some(&review.namespace)),
             NormalisedRules::from_policy(&printed),

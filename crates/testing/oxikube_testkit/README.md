@@ -79,6 +79,18 @@ Port fakes, fixtures, builders, kind helpers, gpui test helpers.
   fails, a debug container works). One container `main`, never restarted, labelled
   `oxikube.test/suite`, images from the pre-pulled list.
 
+## The RBAC scenario (E17-S10)
+
+- `fixtures::rbac::RbacScenario` (always on): two namespaces, `home` and `other`, and in `home` the
+  ServiceAccount `limited` that may `get`/`list`/`watch` pods there (a Role and its RoleBinding);
+  `view_binding()` is the RoleBinding granting it the aggregated ClusterRole `view` in `other`.
+  Plain JSON, so the offline `oxikube_app` test indexes the same objects the kind suites apply.
+- `fixtures::rbac::printed_rules` reads `kubectl auth can-i --list` rows back as `PolicyRule`s.
+- `integration::rbac` (feature `integration`): `AppliedScenario::apply(context)` (fresh
+  `oxi-test-<rand>-home` / `-other` namespaces, deleted on drop), `can_i_list(context, subject,
+  namespace)` (impersonated with `--as` / `--as-group`), `save_diagnostic` (both sides of a failed
+  comparison into the uploaded diagnostics, never a token).
+
 ## GPUI tests (feature `gpui-test`)
 
 - `oxikube_testkit::gpui_test::TestApp::new(cx)` wraps the `TestAppContext` of a `#[gpui::test]`:

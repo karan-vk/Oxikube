@@ -18,6 +18,7 @@ pub mod helm;
 pub mod metrics;
 pub mod nginx;
 pub mod pods;
+pub mod rbac;
 
 /// Environment variable naming the kubectl context of the kind cluster under test.
 pub const CONTEXT_ENV: &str = "OXIKUBE_TEST_CONTEXT";

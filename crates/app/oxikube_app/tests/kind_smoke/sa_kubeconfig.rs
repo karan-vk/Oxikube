@@ -31,7 +31,7 @@ use crate::clock::TokioClock;
 use crate::cluster::{Kind, catalog_entry, read_only_pod_viewer};
 
 /// The kind context's server address and CA, as its kubeconfig entry says.
-fn endpoint_of(kind: &Kind) -> ClusterEndpoint {
+pub fn endpoint_of(kind: &Kind) -> ClusterEndpoint {
     let cluster = kind.kubeconfig.clusters[0]
         .cluster
         .as_ref()

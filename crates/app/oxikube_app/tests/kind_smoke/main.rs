@@ -46,6 +46,7 @@ mod node_shell;
 mod nodes;
 mod pods;
 mod portforward;
+mod rbac;
 mod roles;
 mod rollback;
 mod rollout;

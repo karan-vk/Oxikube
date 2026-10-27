@@ -11,6 +11,7 @@ mod incremental;
 mod index;
 mod random;
 mod registry;
+mod scenario;
 mod visibility;
 
 use std::collections::BTreeMap;
