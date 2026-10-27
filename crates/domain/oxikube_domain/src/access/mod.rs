@@ -17,7 +17,9 @@
 //!
 //! Matching follows the API server's RBAC rules: `*` matches any verb, API group or resource;
 //! `*/exec` matches the `exec` subresource of any resource; the core group is the empty
-//! string.
+//! string; a non-resource URL rule ending in `*` is a prefix glob
+//! ([`non_resource_url_matches`]). The RBAC objects' rules ([`crate::rbac`]) normalise into
+//! these same [`AccessRule`]s, so one matcher answers rules reviews and policy alike.
 
 use serde::{Deserialize, Serialize};
 
@@ -85,10 +87,35 @@ impl AccessRule {
             && self.resources.iter().any(|r| resource_matches(r, resource))
             && self.verbs.iter().any(|v| v == "*" || v == verb)
     }
+
+    /// What this one rule says about `verb` on `group`/`resource`, optionally for the object
+    /// `name`: `None` when the rule does not apply, [`Access::Granted`] when it applies to that
+    /// object (or to every object), [`Access::Restricted`] when it applies only to named objects
+    /// and no name was asked about.
+    pub fn level_for(
+        &self,
+        verb: &str,
+        group: &str,
+        resource: &str,
+        name: Option<&str>,
+    ) -> Option<Access> {
+        if !self.covers(verb, group, resource) {
+            return None;
+        }
+        if self.resource_names.is_empty() {
+            return Some(Access::Granted);
+        }
+        match name {
+            Some(name) if self.resource_names.iter().any(|n| n == name) => Some(Access::Granted),
+            Some(_) => None,
+            None => Some(Access::Restricted),
+        }
+    }
 }
 
-/// RBAC resource matching for a requested `resource[/subresource]`.
-fn resource_matches(rule: &str, requested: &str) -> bool {
+/// RBAC resource matching for a requested `resource[/subresource]` (the API server's
+/// `ResourceMatches`): `*` matches everything, `*/sub` matches any resource's `sub`.
+pub fn resource_matches(rule: &str, requested: &str) -> bool {
     if rule == "*" || rule == requested {
         return true;
     }
@@ -96,6 +123,17 @@ fn resource_matches(rule: &str, requested: &str) -> bool {
         (Some(sub), Some((_, requested_sub))) => sub == requested_sub,
         _ => false,
     }
+}
+
+/// RBAC matching for a non-resource URL (`/healthz`, `/metrics`), the API server's
+/// `NonResourceURLMatches`: `*` matches every path, and a rule ending in `*` is a prefix glob
+/// (`/metrics/*` matches `/metrics/cadvisor`, not `/metrics`).
+pub fn non_resource_url_matches(rule: &str, requested: &str) -> bool {
+    if rule == "*" || rule == requested {
+        return true;
+    }
+    rule.strip_suffix('*')
+        .is_some_and(|prefix| requested.starts_with(prefix))
 }
 
 /// The rules of one or more reviews, plus how trustworthy the list is.
@@ -162,16 +200,23 @@ impl AccessRules {
     /// What the rules say about `verb` on `group`/`resource` (`resource` may carry a
     /// subresource: `pods/log`).
     pub fn level(&self, verb: &str, group: &str, resource: &str) -> Access {
+        self.level_for(verb, group, resource, None)
+    }
+
+    /// What the rules say about `verb` on `group`/`resource` for the object `name` (`None`: any
+    /// object, as [`level`](Self::level) asks). With a name, a `resourceNames` rule grants only
+    /// when it lists that name, so the answer is never [`Access::Restricted`].
+    pub fn level_for(&self, verb: &str, group: &str, resource: &str, name: Option<&str>) -> Access {
         let mut best = None::<Access>;
-        for rule in self
+        for level in self
             .rules
             .iter()
-            .filter(|r| r.covers(verb, group, resource))
+            .filter_map(|r| r.level_for(verb, group, resource, name))
         {
-            if rule.resource_names.is_empty() {
+            if level == Access::Granted {
                 return Access::Granted;
             }
-            best = Some(Access::Restricted);
+            best = Some(level);
         }
         match best {
             Some(level) => level,
@@ -427,6 +472,38 @@ mod tests {
         let mut merged = AccessRules::none();
         merged.merge(r);
         assert!(merged.namespaces_unseen);
+    }
+
+    #[test]
+    fn a_named_object_is_granted_only_by_rules_that_name_it() {
+        let named = rules(AccessRule::granting(&["get"], &[""], &["secrets"], &["a"]));
+        assert_eq!(
+            named.level_for("get", "", "secrets", None),
+            Access::Restricted
+        );
+        assert_eq!(
+            named.level_for("get", "", "secrets", Some("a")),
+            Access::Granted
+        );
+        assert_eq!(
+            named.level_for("get", "", "secrets", Some("b")),
+            Access::Denied
+        );
+        let all = rules(AccessRule::granting(&["get"], &[""], &["secrets"], &[]));
+        assert_eq!(
+            all.level_for("get", "", "secrets", Some("b")),
+            Access::Granted
+        );
+    }
+
+    #[test]
+    fn non_resource_urls_match_exactly_or_by_a_trailing_star() {
+        assert!(non_resource_url_matches("*", "/healthz"));
+        assert!(non_resource_url_matches("/healthz", "/healthz"));
+        assert!(!non_resource_url_matches("/healthz", "/healthz/ping"));
+        assert!(non_resource_url_matches("/metrics/*", "/metrics/cadvisor"));
+        assert!(!non_resource_url_matches("/metrics/*", "/metrics"));
+        assert!(non_resource_url_matches("/api*", "/apis"));
     }
 
     #[test]

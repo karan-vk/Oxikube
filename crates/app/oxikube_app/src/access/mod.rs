@@ -27,17 +27,26 @@
 //!   (Lens `accessibleNamespaces`) wins when set; otherwise candidates are reviewed and the ones
 //!   where the user may read something are kept.
 //!
+//! E17-S01 adds the [`SubjectIndex`]: the cluster's Roles, ClusterRoles and bindings kept from the
+//! store's subscriptions, turned into normalised rules per subject (`oxikube_domain::rbac` reads and
+//! normalises; `index`, `objects` and `grant` index them). It is plain data with no port.
+//!
 //! Reviews are `POST`s that create nothing, so none of this goes through `MutationGuard`.
 //! Plain async Rust over a port: no gpui, no kube, nothing spawned.
 
 mod cache;
+mod grant;
+mod index;
 mod namespaces;
+mod objects;
 mod registry;
 mod service;
 
 #[cfg(test)]
 mod tests;
 
+pub use grant::{Grant, ScopedRules};
+pub use index::SubjectIndex;
 pub use namespaces::{AccessibleNamespaces, NamespaceOrigin, accessible_namespaces};
 pub use registry::AccessRegistry;
 pub use service::{AccessService, DEFAULT_TTL, MAX_IN_FLIGHT};

@@ -9,6 +9,7 @@
 //! | [`alias`] | [`AliasTarget`]: what a jump-bar alias (`deploy`, a user's `prodpods`) resolves to |
 //! | [`kinds`] | [`ResourceKind`](kinds::ResourceKind), [`Verb`](kinds::Verb), [`VerbSet`](kinds::VerbSet) |
 //! | [`access`] | [`AccessRules`](access::AccessRules): what the user may do per resource (a rules review as data), [`AccessRequirement`](access::AccessRequirement) |
+//! | [`rbac`] | RBAC policy as data (E17-S01): [`Role`](rbac::Role), [`Binding`](rbac::Binding), [`Subject`](rbac::Subject), [`PolicyRule`](rbac::PolicyRule) read from JSON; the rule normaliser ([`NormalisedRules`](rbac::NormalisedRules)) into the [`access`] matcher's rules; [`PolicyMatrix`](rbac::PolicyMatrix) |
 //! | [`resource`] | the thin [`Resource`] model: [`ObjectMeta`] + the object's JSON |
 //! | [`json`] | [`JsonDoc`]: compact immutable JSON read in place through [`JsonRef`] |
 //! | [`drain`] | node drain as data (E12-S10): [`drain::DrainOptions`], [`drain::plan_drain`] (kubectl's filters), [`drain::DrainProgress`], [`drain::DrainFlags`] (the `node::Drain` payload), [`drain::DrainBoard`] (per-pod progress) |
@@ -75,6 +76,7 @@ pub mod notification;
 pub mod portforward;
 pub mod preset;
 pub mod quantity;
+pub mod rbac;
 pub mod redact;
 pub mod resource;
 pub mod rollout;
