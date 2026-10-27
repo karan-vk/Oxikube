@@ -34,12 +34,14 @@ esac
 
 fn adapter(dir: &TempDir, with_plugin: bool) -> GcloudDiscovery {
     let mut paths = BTreeMap::from([(Cli::Gcloud, script(dir.path(), "gcloud", FAKE_GCLOUD))]);
-    if with_plugin {
-        paths.insert(
-            Cli::GkeGcloudAuthPlugin,
-            script(dir.path(), "gke-gcloud-auth-plugin", "exit 0"),
-        );
-    }
+    // Without the plugin the path points at a file that does not exist, so a plugin
+    // installed on the host cannot be found through PATH.
+    let plugin = if with_plugin {
+        script(dir.path(), "gke-gcloud-auth-plugin", "exit 0")
+    } else {
+        dir.path().join("absent-gke-gcloud-auth-plugin")
+    };
+    paths.insert(Cli::GkeGcloudAuthPlugin, plugin);
     let config = CliRunnerConfig {
         paths,
         login_shell: LoginShell::Disabled,
@@ -83,5 +85,67 @@ async fn a_missing_plugin_blocks_the_entry_with_the_install_command() {
         error
             .message()
             .contains("gcloud components install gke-gcloud-auth-plugin")
+    );
+}
+
+/// A `gcloud` that takes a second per project, leaving a marker only when it ran to the end.
+fn slow_adapter(dir: &TempDir) -> GcloudDiscovery {
+    let body = format!(
+        r#"
+case "$*" in
+  "container clusters list --project p1 --format=json"|"container clusters list --project p2 --format=json")
+    sleep 1; touch "{}/done-$4"; echo '[]' ;;
+  *) exit 2 ;;
+esac
+"#,
+        dir.path().display()
+    );
+    let paths = BTreeMap::from([(Cli::Gcloud, script(dir.path(), "gcloud", &body))]);
+    let config = CliRunnerConfig {
+        paths,
+        login_shell: LoginShell::Disabled,
+        ..CliRunnerConfig::default()
+    };
+    GcloudDiscovery::new(Arc::new(CliRunner::new(config)))
+}
+
+fn gcp(project: &str) -> CloudScope {
+    CloudScope::Gcp {
+        project: project.into(),
+    }
+}
+
+#[tokio::test]
+async fn two_projects_list_in_parallel() {
+    let dir = TempDir::new().expect("temp dir");
+    let gke = slow_adapter(&dir);
+    let (p1, p2) = (gcp("p1"), gcp("p2"));
+    let started = std::time::Instant::now();
+    let (first, second) = tokio::join!(gke.list_clusters(&p1), gke.list_clusters(&p2));
+    first.expect("p1");
+    second.expect("p2");
+    assert!(
+        started.elapsed() < std::time::Duration::from_millis(1900),
+        "two 1 s listings took {:?}: they ran one after the other",
+        started.elapsed()
+    );
+    assert!(dir.path().join("done-p1").exists() && dir.path().join("done-p2").exists());
+}
+
+#[tokio::test]
+async fn dropping_the_listing_cancels_both_processes() {
+    let dir = TempDir::new().expect("temp dir");
+    let gke = slow_adapter(&dir);
+    let (p1, p2) = (gcp("p1"), gcp("p2"));
+    let both = async { tokio::join!(gke.list_clusters(&p1), gke.list_clusters(&p2)) };
+    let cancelled = tokio::time::timeout(std::time::Duration::from_millis(300), both).await;
+    assert!(
+        cancelled.is_err(),
+        "the listings finished before the cancel"
+    );
+    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+    assert!(
+        !dir.path().join("done-p1").exists() && !dir.path().join("done-p2").exists(),
+        "a cancelled listing left its process running"
     );
 }
