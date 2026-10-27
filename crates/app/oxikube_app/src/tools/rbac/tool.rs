@@ -27,7 +27,7 @@ use crate::tools::metrics::session_for;
 /// The tool's name.
 pub const CAN_I: &str = "k8s.can_i";
 
-/// The `k8s.can_i` tool: see the [module docs](self).
+/// The `k8s.can_i` tool: see the module docs.
 pub struct CanITool {
     def: ToolDef,
     service: CanIService,

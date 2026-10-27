@@ -117,7 +117,7 @@ pub struct ResourceOptions {
 
 impl ResourceOptions {
     /// The options of the kinds `discover()` returned: the preferred version of each, the
-    /// subresources of [`SUBRESOURCES`] and `proxy` for nodes, pods and services, sorted by
+    /// subresources of `SUBRESOURCES` and `proxy` for nodes, pods and services, sorted by
     /// label.
     pub fn from_kinds(kinds: &[ResourceKind]) -> Self {
         let mut by_name: BTreeMap<(String, String), ResourceOption> = BTreeMap::new();

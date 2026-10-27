@@ -70,6 +70,9 @@ fn old_files_are_pruned_to_the_configured_count() {
             "old",
         )
         .unwrap();
+        // The appender prunes by creation time; filesystem timestamps are coarse (a few ms on
+        // Linux), so without a gap the fixtures tie and the oldest is not reliably the one removed.
+        std::thread::sleep(std::time::Duration::from_millis(30));
     }
     let mut config = config(dir.path());
     config.max_files = 3;

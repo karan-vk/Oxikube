@@ -40,7 +40,7 @@ fn printed_rule(line: &str) -> PolicyRule {
 ///
 /// # Panics
 ///
-/// When a row is not one `kubectl auth can-i --list` prints (see [`printed_rule`]).
+/// When a row is not one `kubectl auth can-i --list` prints (see `printed_rule`).
 pub fn printed_rules<S: AsRef<str>>(printed: &[S]) -> Vec<PolicyRule> {
     printed
         .iter()

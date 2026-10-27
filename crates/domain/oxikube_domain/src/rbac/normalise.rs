@@ -54,7 +54,7 @@ impl NonResourceRule {
     }
 }
 
-/// A normalised, sorted, de-duplicated rule set. See the [module docs](self).
+/// A normalised, sorted, de-duplicated rule set. See the module docs.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct NormalisedRules {
     rules: Vec<NormalisedRule>,
