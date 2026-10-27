@@ -98,6 +98,9 @@
 //!     unread count on the right of the status bar and the right-dock panel
 //!     (`notifications::TogglePanel`, `cmd-shift-i` / `ctrl-shift-i`, the palette, the bell);
 //!     raised ones reach the OS notifier once the user opted in.
+//! 19. cloud discovery (E18-S05, `mount::cloud`): the app's one `CloudDiscoveryService` over the
+//!     `aws`, `gcloud` and `az` adapters, handed to the main window's views (`ViewDeps::cloud`) for
+//!     the catalog's Cloud section (E18-S06); it runs no CLI until a refresh is asked for.
 //!
 //! Nothing here reads a file or touches the network: the catalog's first read of the kubeconfig
 //! files runs on the Tokio bridge once this update has ended, which is after the first frame
@@ -105,6 +108,7 @@
 //! [`Wiring`] entity the workspace keeps.
 
 pub mod bus;
+mod cloud;
 mod describe;
 mod editor;
 mod events;
@@ -358,6 +362,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         ports.clusters.kubeconfigs_dir.clone(),
     );
     let follow_sources = oxikube_catalog_ui::sources::follow(sources.clone(), cx);
+    // Cloud discovery (E18-S05): nothing runs until the Cloud section asks for a refresh.
+    let cloud = cloud::discovery(&ports, sources.clone(), services.sessions.clone(), cx);
 
     let (views_tx, views_rx) = mpsc::unbounded();
     let (kinds_tx, kinds_rx) = mpsc::unbounded();
@@ -604,6 +610,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         catalog: services.catalog.clone(),
         sessions: services.sessions.clone(),
         sources,
+        cloud,
         dispatcher: dispatcher.clone(),
         clock: ports.clusters.clock.clone(),
     };
