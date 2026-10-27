@@ -24,13 +24,15 @@ pub enum Issue {
     Network,
     /// The CLI took too long (`ErrorKind::Timeout`).
     Timeout,
+    /// An AWS profile has no region to scan (`ErrorKind::Validation`).
+    NoRegions,
     /// Anything else; the adapter's own (redacted) message is the best there is.
     Other,
 }
 
 impl Issue {
     /// Every issue, for the table's tests.
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::NotLoggedIn,
         Self::CliMissing,
         Self::CliTooOld,
@@ -38,6 +40,7 @@ impl Issue {
         Self::Forbidden,
         Self::Network,
         Self::Timeout,
+        Self::NoRegions,
         Self::Other,
     ];
 
@@ -49,14 +52,28 @@ impl Issue {
             ErrorKind::Forbidden => Self::Forbidden,
             ErrorKind::Network => Self::Network,
             ErrorKind::Timeout => Self::Timeout,
+            ErrorKind::Validation
+                if error
+                    .message()
+                    .to_ascii_lowercase()
+                    .contains("no aws regions") =>
+            {
+                Self::NoRegions
+            }
             ErrorKind::Unsupported => {
                 let message = error.message().to_ascii_lowercase();
-                if message.contains("plugin") || message.contains("kubelogin") {
+                if message.contains("is not installed")
+                    && (message.contains("plugin") || message.contains("kubelogin"))
+                {
                     Self::PluginMissing
-                } else if message.contains("upgrade") {
+                } else if message.contains("does not support") && message.contains("upgrade") {
                     Self::CliTooOld
-                } else {
+                } else if message.contains("was not found on") {
                     Self::CliMissing
+                } else {
+                    // Disabled API, stopped cluster, local accounts, odd `--version`: the
+                    // adapter's own message carries the fix.
+                    Self::Other
                 }
             }
             _ => Self::Other,
@@ -144,6 +161,12 @@ pub fn remediation(
         Issue::Timeout => (
             format!("The `{cli}` CLI took too long to answer. Refresh to try again."),
             None,
+        ),
+        Issue::NoRegions => (
+            "No AWS regions are configured to scan. Add regions in the cloud settings, or set a \
+             default region for the profile, then refresh."
+                .to_owned(),
+            Some("aws configure set region <region> --profile <profile>".to_owned()),
         ),
         Issue::Other => (
             "Discovery failed. Refresh to try again; the log has the details.".to_owned(),

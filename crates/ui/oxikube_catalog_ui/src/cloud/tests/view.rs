@@ -274,12 +274,12 @@ fn every_error_kind_ends_in_words_and_a_fix_not_a_raw_failure(cx: &mut TestAppCo
         ),
         (OxiError::timeout("exit 124"), "took too long", false),
         (
-            OxiError::unsupported("`aws` was not found on PATH"),
+            OxiError::unsupported("`aws` was not found on the login shell's PATH"),
             "was not found",
             false,
         ),
         (
-            OxiError::unsupported("the auth plugin is missing"),
+            OxiError::unsupported("`kubelogin` is not installed, so a cluster cannot be connected"),
             "missing",
             false,
         ),

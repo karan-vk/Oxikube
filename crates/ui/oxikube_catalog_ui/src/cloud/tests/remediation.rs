@@ -92,3 +92,32 @@ fn errors_map_to_issues_by_kind_and_wording() {
         Issue::PluginMissing
     );
 }
+
+#[test]
+fn unsupported_errors_keep_their_own_message_unless_the_cli_is_missing() {
+    let kinds = [
+        "the Kubernetes Engine API is not enabled in project p: run `gcloud services enable x`",
+        "AKS cluster `x` is stopped; start it with `az aks start -n x`",
+        "AKS cluster `x` signs in with local accounts only. Enable Azure AD integration",
+        "`aws --version` printed something unexpected: hmm",
+    ];
+    for message in kinds {
+        assert_eq!(
+            Issue::of(&OxiError::unsupported(message)),
+            Issue::Other,
+            "{message}"
+        );
+    }
+    let missing = OxiError::unsupported("`gcloud` was not found on the login shell's PATH");
+    assert_eq!(Issue::of(&missing), Issue::CliMissing);
+    let plugin = OxiError::unsupported("`kubelogin` is not installed, so cluster cannot connect");
+    assert_eq!(Issue::of(&plugin), Issue::PluginMissing);
+    let old = OxiError::unsupported("this version of `az` does not support `x`; upgrade it");
+    assert_eq!(Issue::of(&old), Issue::CliTooOld);
+}
+
+#[test]
+fn missing_regions_has_its_own_issue() {
+    let error = OxiError::validation("no AWS regions to scan: add regions");
+    assert_eq!(Issue::of(&error), Issue::NoRegions);
+}
