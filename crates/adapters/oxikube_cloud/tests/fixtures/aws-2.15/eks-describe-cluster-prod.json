@@ -1,0 +1,22 @@
+{
+    "cluster": {
+        "name": "prod",
+        "arn": "arn:aws:eks:eu-west-1:000000000000:cluster/prod",
+        "createdAt": "2024-01-15T10:21:33.123000+00:00",
+        "version": "1.29",
+        "endpoint": "https://0123456789ABCDEF0123456789ABCDEF.gr7.eu-west-1.eks.amazonaws.com",
+        "roleArn": "arn:aws:iam::000000000000:role/eks-cluster-role",
+        "resourcesVpcConfig": {
+            "subnetIds": ["subnet-0a1b2c3d"],
+            "endpointPublicAccess": true,
+            "endpointPrivateAccess": false
+        },
+        "status": "ACTIVE",
+        "certificateAuthority": {
+            "data": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCmZha2UKLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo="
+        },
+        "platformVersion": "eks.7",
+        "tags": {"team": "platform"},
+        "someFutureField": {"ignored": true}
+    }
+}

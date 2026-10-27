@@ -1,0 +1,10 @@
+{
+    "cluster": {
+        "name": "staging",
+        "arn": "arn:aws:eks:eu-west-1:000000000000:cluster/staging",
+        "version": "1.30",
+        "status": "CREATING",
+        "certificateAuthority": {},
+        "platformVersion": "eks.2"
+    }
+}

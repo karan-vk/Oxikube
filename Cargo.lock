@@ -5952,7 +5952,10 @@ name = "oxikube_cloud"
 version = "0.0.1"
 dependencies = [
  "async-trait",
+ "futures",
  "oxikube_domain",
+ "oxikube_ports",
+ "oxikube_testkit",
  "parking_lot",
  "serde",
  "serde_json",
