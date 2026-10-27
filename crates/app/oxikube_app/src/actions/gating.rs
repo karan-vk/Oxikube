@@ -44,6 +44,10 @@ pub fn required_access(command: CommandId) -> Option<RequiredAccess> {
             verb: "update",
             subresource: Some("scale"),
         }),
+        CommandId::POD_EVICT => Some(RequiredAccess {
+            verb: "create",
+            subresource: Some("eviction"),
+        }),
         CommandId::WORKLOAD_RESTART
         | CommandId::WORKLOAD_SET_IMAGE
         | CommandId::WORKLOAD_ROLLBACK
@@ -53,6 +57,7 @@ pub fn required_access(command: CommandId) -> Option<RequiredAccess> {
         | CommandId::CRONJOB_RESUME
         | CommandId::NODE_CORDON
         | CommandId::NODE_UNCORDON
+        | CommandId::NODE_DRAIN
         | CommandId::PVC_RESIZE
         | CommandId::STORAGECLASS_SET_DEFAULT
         | CommandId::INGRESS_CLASS_SET_DEFAULT

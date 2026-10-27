@@ -142,6 +142,15 @@ fn only_mutating_row_commands_map_to_a_verb() {
     );
     let scale = required_access(CommandId::WORKLOAD_SCALE).expect("scale");
     assert_eq!((scale.verb, scale.subresource), ("update", Some("scale")));
+    let evict = required_access(CommandId::POD_EVICT).expect("evict");
+    assert_eq!(
+        (evict.verb, evict.subresource),
+        ("create", Some("eviction"))
+    );
+    assert_eq!(
+        required_access(CommandId::NODE_DRAIN).map(|need| need.verb),
+        Some("patch")
+    );
     for read in [
         CommandId::RESOURCE_OPEN,
         CommandId::RESOURCE_VIEW_YAML,
