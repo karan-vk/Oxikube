@@ -10,8 +10,16 @@ use super::super::def::{
 };
 use super::super::funcs as f;
 
-const ROLE: &[ColumnDef] = &[NAME, NAMESPACE, AGE, LABELS];
-const CLUSTER_ROLE: &[ColumnDef] = &[NAME, AGE, LABELS];
+const RULES: ColumnDef = ColumnDef::new("rules", "Rules", Func(f::role_rules)).number();
+
+const ROLE: &[ColumnDef] = &[NAME, NAMESPACE, RULES, AGE, LABELS];
+const CLUSTER_ROLE: &[ColumnDef] = &[
+    NAME,
+    RULES,
+    AGE,
+    ColumnDef::new("aggregated", "Aggregated", Func(f::role_aggregated)),
+    LABELS,
+];
 
 const ROLE_BINDING: &[ColumnDef] = &[
     NAME,

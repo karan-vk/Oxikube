@@ -407,6 +407,16 @@ impl CommandId {
     /// `resource::ShowUsedBy`: open a ServiceAccount, ConfigMap, Secret, claim or PriorityClass on
     /// its "Used by" tab (k9s `u`).
     pub const RESOURCE_SHOW_USED_BY: CommandId = CommandId::new("resource::ShowUsedBy");
+    /// `role::Create`: create a Role or ClusterRole from a manifest, through the mutation guard
+    /// (E17-S05).
+    pub const ROLE_CREATE: CommandId = CommandId::new("role::Create");
+    /// `role::Delete`: delete a Role or ClusterRole, through the mutation guard (E17-S05).
+    pub const ROLE_DELETE: CommandId = CommandId::new("role::Delete");
+    /// `role::Edit`: replace a Role or ClusterRole with an edited manifest, through the mutation
+    /// guard (E17-S05).
+    pub const ROLE_EDIT: CommandId = CommandId::new("role::Edit");
+    /// `role::OpenDialog`: open the Role / ClusterRole rule dialog, new or editing one (E17-S05).
+    pub const ROLE_OPEN_DIALOG: CommandId = CommandId::new("role::OpenDialog");
     /// `secret::Create`: open the "Create secret" dialog (Opaque, Docker registry, TLS).
     pub const SECRET_CREATE: CommandId = CommandId::new("secret::Create");
     /// `secret::EditDecoded`: open a Secret in the manifest editor with its values decoded.
@@ -488,6 +498,12 @@ impl CommandId {
 }
 
 const NONE: Capabilities = Capabilities::empty();
+
+/// The kinds `role::Delete` acts on.
+const ROLE_KINDS: &[(&str, &str)] = &[
+    ("rbac.authorization.k8s.io", "Role"),
+    ("rbac.authorization.k8s.io", "ClusterRole"),
+];
 
 /// The views a selection of resources is acted on from: a table row or the detail view of one.
 const TABLE_VIEWS: &[ViewContext] = &[ViewContext::Table, ViewContext::Detail];
@@ -1924,6 +1940,41 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::One),
+    // Changing RBAC can hand out real privileges (E17-S05): risk medium, one simple confirmation
+    // naming the role and the cluster, a server dry run first, blocked on a read-only cluster,
+    // audited with a rule count only. The handler writes Roles and ClusterRoles and nothing else,
+    // so an agent cannot use these to write any other kind.
+    CommandMeta::mutation(
+        CommandId::ROLE_CREATE,
+        "Create Role",
+        CommandScope::Cluster,
+        Risk::Medium,
+        NONE,
+    ),
+    CommandMeta::mutation(
+        CommandId::ROLE_DELETE,
+        "Delete Role",
+        CommandScope::Selection,
+        Risk::Medium,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::AnyOf(ROLE_KINDS)),
+    CommandMeta::mutation(
+        CommandId::ROLE_EDIT,
+        "Edit Role",
+        CommandScope::Cluster,
+        Risk::Medium,
+        NONE,
+    ),
+    // Opens the rule dialog; the change reaches the cluster only through `role::Create` and
+    // `role::Edit`, which are guarded.
+    CommandMeta::read(
+        CommandId::ROLE_OPEN_DIALOG,
+        "Role: New or Edit Rules…",
+        CommandScope::Cluster,
+        NONE,
+    ),
     // Opens a dialog that builds a Secret manifest in an editor tab (E12-S11); like
     // `resource::Create` it changes nothing in a cluster. The object is made by `resource::Apply`
     // (risk low, the dry-run diff with the values masked is the confirmation, blocked read-only).

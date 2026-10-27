@@ -1834,6 +1834,53 @@ pub enum Command {
         #[serde(default = "default_clear_previous")]
         clear_previous: bool,
     },
+    /// Open the Role / ClusterRole rule dialog (E17-S05): a new Role, a new ClusterRole, or the
+    /// rules of the existing `target`. Changes nothing; the dialog's save is [`RoleCreate`] or
+    /// [`RoleEdit`].
+    ///
+    /// [`RoleCreate`]: Command::RoleCreate
+    /// [`RoleEdit`]: Command::RoleEdit
+    #[serde(rename = "role::OpenDialog")]
+    RoleOpenDialog {
+        /// The cluster whose tab gets the dialog; the shown one when `None`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cluster: Option<ClusterId>,
+        /// A new ClusterRole instead of a new Role (ignored when `target` is set).
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        cluster_role: bool,
+        /// The existing Role or ClusterRole to edit; a new one when `None`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<ResourceRef>,
+    },
+    /// Create a Role or ClusterRole (E17-S05). **Mutating** (risk medium): blocked on a read-only
+    /// cluster, one confirmation, a server dry run first, audited. Any other kind is refused.
+    #[serde(rename = "role::Create")]
+    RoleCreate {
+        /// The cluster to create it in.
+        cluster: ClusterId,
+        /// The object as JSON text (`apiVersion: rbac.authorization.k8s.io/v1`).
+        manifest: String,
+    },
+    /// Replace a Role or ClusterRole with an edited manifest (E17-S05). **Mutating** (risk
+    /// medium). The manifest carries `metadata.resourceVersion`, so a change made since the
+    /// dialog opened fails with a conflict instead of being overwritten.
+    #[serde(rename = "role::Edit")]
+    RoleEdit {
+        /// The cluster the role is in.
+        cluster: ClusterId,
+        /// The whole object as JSON text, with its `resourceVersion`.
+        manifest: String,
+    },
+    /// Delete a Role or ClusterRole (E17-S05). **Mutating** (risk medium).
+    #[serde(rename = "role::Delete")]
+    RoleDelete {
+        /// The Role or ClusterRole.
+        target: ResourceRef,
+        /// How many bindings name it, when the caller counted them: the confirmation warns that
+        /// they will be left pointing at nothing.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        bindings: Option<u32>,
+    },
 }
 
 impl Command {
@@ -2064,6 +2111,10 @@ impl Command {
             Command::JobResume { .. } => CommandId::JOB_RESUME,
             Command::PvcResize { .. } => CommandId::PVC_RESIZE,
             Command::StorageClassSetDefault { .. } => CommandId::STORAGECLASS_SET_DEFAULT,
+            Command::RoleOpenDialog { .. } => CommandId::ROLE_OPEN_DIALOG,
+            Command::RoleCreate { .. } => CommandId::ROLE_CREATE,
+            Command::RoleEdit { .. } => CommandId::ROLE_EDIT,
+            Command::RoleDelete { .. } => CommandId::ROLE_DELETE,
             Command::NodeDrain { .. } => CommandId::NODE_DRAIN,
         }
     }
@@ -2182,7 +2233,9 @@ impl Command {
             | Command::JobSuspend { target }
             | Command::JobResume { target }
             | Command::PvcResize { target, .. }
+            | Command::RoleDelete { target, .. }
             | Command::StorageClassSetDefault { target, .. } => Some(target),
+            Command::RoleOpenDialog { target, .. } => target.as_ref(),
             _ => None,
         }
     }
@@ -2679,6 +2732,23 @@ mod tests {
             Command::SecretCreate {
                 cluster: Some(cluster()),
             },
+            Command::RoleOpenDialog {
+                cluster: Some(cluster()),
+                cluster_role: true,
+                target: None,
+            },
+            Command::RoleCreate {
+                cluster: cluster(),
+                manifest: "{}".into(),
+            },
+            Command::RoleEdit {
+                cluster: cluster(),
+                manifest: "{}".into(),
+            },
+            Command::RoleDelete {
+                target: pod(),
+                bindings: Some(2),
+            },
             Command::TableToggleWide {
                 cluster: cluster(),
                 gvk: Gvk::new("", "v1", "Pod"),
@@ -3153,6 +3223,7 @@ mod tests {
                     | Command::SecretReveal { .. }
                     | Command::SecretEditDecoded { .. }
                     | Command::SecretCreate { .. }
+                    | Command::RoleOpenDialog { .. }
                     | Command::TableToggleWide { .. }
                     | Command::LogsClear { .. }
                     | Command::LogsCopy { .. }
