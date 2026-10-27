@@ -131,7 +131,7 @@ fn rbac_kinds() {
         &binding,
         &[
             ("role", "ClusterRole/view"),
-            ("subjects", "ann,ci,bob"),
+            ("subjects", "ann +2"),
             ("subject-kinds", "User,ServiceAccount"),
         ],
     );

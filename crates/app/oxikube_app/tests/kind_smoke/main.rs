@@ -19,6 +19,7 @@ mod aliases;
 mod allocation;
 mod auth_required;
 mod auto_reconnect;
+mod bindings;
 mod clock;
 mod cluster;
 mod columns;

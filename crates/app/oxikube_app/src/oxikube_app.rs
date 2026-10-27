@@ -44,6 +44,7 @@
 //! | [`sa_kubeconfig`] | E17-S09 | the guarded `serviceaccount::GenerateKubeconfig` (risk low, one confirmation): a `TokenRequest` (legacy token Secret on clusters without it, only when allowed) turned into a kubeconfig held in memory by the `KubeconfigVault`; audited without the token |
 //! | [`helm_ops`] | E16-S06 | the guarded `helm::Rollback` (risk medium, one confirmation) and `helm::Uninstall` (risk high, type the release name; keep-history option); `values_diff` for the rollback preview; audited without values |
 //! | [`role_ops`] | E17-S05 | the guarded `role::Create`, `role::Edit` and `role::Delete` (risk medium, one confirmation, a server dry run first, writing Roles and ClusterRoles only; audited with a rule count) and [`RoleLinks`](role_ops::RoleLinks): the sources of an aggregated ClusterRole and the bindings that name a role |
+//! | [`binding_ops`] | E17-S06 | the guarded `binding::Create`, `binding::Edit` and `binding::Delete` (risk medium, one confirmation that calls out `cluster-admin` and everybody-groups, a server dry run first, writing RoleBindings and ClusterRoleBindings only; a changed `roleRef` is a delete and a create as one intent; audited with the role and a subject count) and [`BindingChoices`](binding_ops::BindingChoices): what the dialog's pickers offer |
 //! | [`helm_install`] | E16-S09 | [`InstallFlow`]: the install tab's guarded `helm::Install` (preview = the guard's dry run: `helm template` plus the server's dry run, Secret data masked; ask = the low-risk confirmation; start = the install with its output followed line by line through [`ReleaseProgress`]; Cancel kills `helm`); audited without the values |
 //! | [`helm_upgrade`] | E16-S10 | [`UpgradeFlow`]: the upgrade tab's guarded `helm::Upgrade` (a release's current chart and values read natively; preview = the guard's dry run: `helm template` with the values, the server's dry run, the objects added / removed / changed against the current manifest; ask = the medium-risk confirmation; start = the upgrade with its output followed line by line; Cancel kills `helm`); `helm::UpgradeRelease` hands a release to the tab; audited with the chart versions and `reuse_values`, never the values |
 //! | [`helm_releases`] | E16-S05 | [`ReleasesService`]: a cluster's Helm releases for the Releases view, read natively (list, history, values, manifest, notes, the E16-S03 resources join), credential-looking values and Secret manifests masked until the user's `helm::RevealValues`, a live watch on the release Secrets and ConfigMaps, the `/` filter over rows; `helm::ShowValues` / `ShowManifest` / `RevealValues` commands |
@@ -67,6 +68,7 @@ pub mod actions;
 pub mod allocation;
 pub mod apply;
 pub mod audit;
+pub mod binding_ops;
 pub mod catalog;
 pub mod cloud;
 pub mod cluster_overview;

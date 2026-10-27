@@ -24,7 +24,7 @@ const CLUSTER_ROLE: &[ColumnDef] = &[
 const ROLE_BINDING: &[ColumnDef] = &[
     NAME,
     NAMESPACE,
-    ColumnDef::new("role", "Role", Func(f::binding_role)),
+    ColumnDef::new("role", "Role ref", Func(f::binding_role)),
     ColumnDef::new("subjects", "Subjects", Func(f::binding_subjects)),
     ColumnDef::new("subject-kinds", "Subject Kinds", Func(f::binding_kinds)),
     AGE,
@@ -33,7 +33,7 @@ const ROLE_BINDING: &[ColumnDef] = &[
 
 const CLUSTER_ROLE_BINDING: &[ColumnDef] = &[
     NAME,
-    ColumnDef::new("role", "Role", Func(f::binding_role)),
+    ColumnDef::new("role", "Role ref", Func(f::binding_role)),
     ColumnDef::new("subjects", "Subjects", Func(f::binding_subjects)),
     ColumnDef::new("subject-kinds", "Subject Kinds", Func(f::binding_kinds)),
     AGE,

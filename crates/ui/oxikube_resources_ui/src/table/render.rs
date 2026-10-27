@@ -170,12 +170,17 @@ impl ResourceTable {
         // Roles and ClusterRoles (E17-S05) open the rule dialog instead.
         let role = spec.offers(oxikube_domain::command::CommandId::ROLE_OPEN_DIALOG);
         let cluster_role = &*self.kind.gvk.kind == "ClusterRole";
+        // So do RoleBindings and ClusterRoleBindings (E17-S06).
+        let binding = spec.offers(oxikube_domain::command::CommandId::BINDING_OPEN_DIALOG);
+        let cluster_binding = &*self.kind.gvk.kind == "ClusterRoleBinding";
         let tooltip = if namespaces {
             "Create a namespace"
         } else if secret {
             "Create a Secret: Opaque, Docker registry or TLS"
         } else if role {
             "Create a role with verb checkboxes and a resource picker"
+        } else if binding {
+            "Create a binding with a role picker and subjects"
         } else {
             "Create a resource from a template"
         };
@@ -195,6 +200,12 @@ impl ResourceTable {
                         let command = if secret {
                             Command::SecretCreate {
                                 cluster: Some(cluster.clone()),
+                            }
+                        } else if binding {
+                            Command::BindingOpenDialog {
+                                cluster: Some(cluster.clone()),
+                                cluster_binding,
+                                target: None,
                             }
                         } else if role {
                             Command::RoleOpenDialog {

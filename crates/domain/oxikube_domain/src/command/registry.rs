@@ -415,6 +415,18 @@ impl CommandId {
     /// `resource::ShowUsedBy`: open a ServiceAccount, ConfigMap, Secret, claim or PriorityClass on
     /// its "Used by" tab (k9s `u`).
     pub const RESOURCE_SHOW_USED_BY: CommandId = CommandId::new("resource::ShowUsedBy");
+    /// `binding::Create`: create a RoleBinding or ClusterRoleBinding from a manifest, through the
+    /// mutation guard (E17-S06).
+    pub const BINDING_CREATE: CommandId = CommandId::new("binding::Create");
+    /// `binding::Delete`: delete a RoleBinding or ClusterRoleBinding, through the mutation guard
+    /// (E17-S06).
+    pub const BINDING_DELETE: CommandId = CommandId::new("binding::Delete");
+    /// `binding::Edit`: change a RoleBinding or ClusterRoleBinding (a new `roleRef` is a delete
+    /// and a create as one intent), through the mutation guard (E17-S06).
+    pub const BINDING_EDIT: CommandId = CommandId::new("binding::Edit");
+    /// `binding::OpenDialog`: open the RoleBinding / ClusterRoleBinding dialog, new or editing one
+    /// (E17-S06).
+    pub const BINDING_OPEN_DIALOG: CommandId = CommandId::new("binding::OpenDialog");
     /// `role::Create`: create a Role or ClusterRole from a manifest, through the mutation guard
     /// (E17-S05).
     pub const ROLE_CREATE: CommandId = CommandId::new("role::Create");
@@ -517,6 +529,12 @@ const ROLE_KINDS: &[(&str, &str)] = &[
     ("rbac.authorization.k8s.io", "ClusterRole"),
 ];
 
+/// The kinds `binding::Delete` acts on.
+const BINDING_KINDS: &[(&str, &str)] = &[
+    ("rbac.authorization.k8s.io", "RoleBinding"),
+    ("rbac.authorization.k8s.io", "ClusterRoleBinding"),
+];
+
 /// The views a selection of resources is acted on from: a table row or the detail view of one.
 const TABLE_VIEWS: &[ViewContext] = &[ViewContext::Table, ViewContext::Detail];
 /// The kinds a restart rolls: the pod-template workloads whose controller replaces pods when the
@@ -565,6 +583,41 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandId::APP_TOGGLE_OS_NOTIFICATIONS,
         "Toggle OS Notifications",
         CommandScope::Global,
+        NONE,
+    ),
+    // A binding is where RBAC privileges are handed out (E17-S06): risk medium like the roles, one
+    // simple confirmation (a binding to cluster-admin or to everybody is called out in its text), a
+    // server dry run first, blocked on a read-only cluster, audited with the role and a subject
+    // count only. The handlers write RoleBindings and ClusterRoleBindings and nothing else.
+    CommandMeta::mutation(
+        CommandId::BINDING_CREATE,
+        "Add Binding",
+        CommandScope::Cluster,
+        Risk::Medium,
+        NONE,
+    ),
+    CommandMeta::mutation(
+        CommandId::BINDING_DELETE,
+        "Delete Binding",
+        CommandScope::Selection,
+        Risk::Medium,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::AnyOf(BINDING_KINDS)),
+    CommandMeta::mutation(
+        CommandId::BINDING_EDIT,
+        "Edit Binding",
+        CommandScope::Cluster,
+        Risk::Medium,
+        NONE,
+    ),
+    // Opens the binding dialog; the change reaches the cluster only through `binding::Create` and
+    // `binding::Edit`, which are guarded.
+    CommandMeta::read(
+        CommandId::BINDING_OPEN_DIALOG,
+        "Binding: New or Edit Subjects…",
+        CommandScope::Cluster,
         NONE,
     ),
     // Opens the chart gallery (a page of every chart state) as a tab; reads nothing from a

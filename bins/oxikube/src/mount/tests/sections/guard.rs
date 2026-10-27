@@ -25,6 +25,11 @@ use crate::app_state::AppState;
 /// The risk of every mutating command (docs/CONTEXT.md, "Risk / ConfirmTier"): low and medium
 /// confirm with one click, high and irreversible with the name typed.
 const RISKS: &[(CommandId, Risk)] = &[
+    // RoleBindings and ClusterRoleBindings (E17-S06): the binding dialog's save and the detail
+    // panel's delete; a binding hands out privileges, so risk medium.
+    (CommandId::BINDING_CREATE, Risk::Medium),
+    (CommandId::BINDING_DELETE, Risk::Medium),
+    (CommandId::BINDING_EDIT, Risk::Medium),
     (CommandId::CRONJOB_RESUME, Risk::Low),
     (CommandId::CRONJOB_SUSPEND, Risk::Low),
     (CommandId::CRONJOB_TRIGGER, Risk::Low),

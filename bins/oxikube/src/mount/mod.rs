@@ -228,6 +228,8 @@ pub struct Wiring {
     _helm_repos_pages: Task<()>,
     /// Opens the Role / ClusterRole rule dialog for `role::OpenDialog` (E17-S05).
     _role_dialogs: Task<()>,
+    /// Opens the RoleBinding / ClusterRoleBinding dialog for `binding::OpenDialog` (E17-S06).
+    _binding_dialogs: Task<()>,
     /// Opens the Helm releases page for `helm::OpenReleases` (E16-S05).
     _helm_releases_pages: Task<()>,
     /// Opens the Helm charts catalog for `helm::OpenCharts` (E16-S08).
@@ -285,6 +287,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let dispatcher_for_metrics = dispatcher.clone();
     let dispatcher_for_helm_repos = dispatcher.clone();
     let dispatcher_for_roles = dispatcher.clone();
+    let dispatcher_for_bindings = dispatcher.clone();
     let dispatcher_for_helm_charts = dispatcher.clone();
     let dispatcher_for_helm_releases = dispatcher.clone();
     let dispatcher_for_pulses = dispatcher.clone();
@@ -408,6 +411,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (editor_sink, editor_rx) = oxikube_editor::view::EditorViewSink::channel();
     let (metrics_sink, metrics_rx) = oxikube_settings_ui::metrics::MetricsRequestSink::channel();
     let (role_sink, role_rx) = oxikube_rbac_ui::role::RoleRequestSink::channel();
+    let (binding_sink, binding_rx) = oxikube_rbac_ui::binding::BindingRequestSink::channel();
     let (helm_repos_sink, helm_repos_rx) =
         oxikube_settings_ui::helm_repos::HelmReposRequestSink::channel();
     // Installs (E16-S09) run against each session's own kubeconfig context and file.
@@ -491,6 +495,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         metrics_pages: metrics_sink,
         helm_repos: helm_repos.clone(),
         role_dialogs: role_sink,
+        binding_dialogs: binding_sink,
         helm_repos_pages: helm_repos_sink,
         helm_charts: helm_services.charts.clone(),
         helm_charts_pages: helm_charts_sink,
@@ -792,6 +797,14 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         window,
         cx,
     );
+    let binding_dialogs = role_dialogs::start_binding_views(
+        services.sessions.clone(),
+        dispatcher_for_bindings,
+        tabs.downgrade(),
+        binding_rx,
+        window,
+        cx,
+    );
     let helm_repos_pages = helm_repos::start_views(
         helm_repos,
         dispatcher_for_helm_repos,
@@ -901,6 +914,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _metrics_pages: metrics_pages,
         _helm_repos_pages: helm_repos_pages,
         _role_dialogs: role_dialogs,
+        _binding_dialogs: binding_dialogs,
         _helm_releases_pages: helm_releases_pages,
         _helm_charts_pages: helm_charts_pages,
         _helm_install_pages: helm_install_pages,

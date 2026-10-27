@@ -19,13 +19,18 @@ pub(crate) fn binding_role<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
     }
 }
 
-/// `SUBJECTS`: the bound names, in order, comma-separated.
+/// `SUBJECTS`: the first bound name, and `+N` for the others (the detail lists them all).
 pub(crate) fn binding_subjects<'a>(res: &'a Resource, _now: Timestamp) -> Cell<'a> {
-    let names: Vec<&str> = arr_at(res.json(), "subjects")
+    let mut names = arr_at(res.json(), "subjects")
         .iter()
-        .filter_map(|s| str_at(s, "name"))
-        .collect();
-    Cell::text(names.join(","))
+        .filter_map(|s| str_at(s, "name"));
+    let Some(first) = names.next() else {
+        return Cell::empty();
+    };
+    match names.count() {
+        0 => Cell::text(first),
+        more => Cell::text(format!("{first} +{more}")),
+    }
 }
 
 /// `SUBJECT KINDS`: the distinct kinds of the subjects (`User`, `Group`, `ServiceAccount`).

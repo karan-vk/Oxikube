@@ -22,6 +22,9 @@ use crate::testing::{id, node, pod};
 /// A ClusterRole the posture samples of `role::Create` and `role::Edit` carry.
 const ROLE_MANIFEST: &str = r#"{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"ClusterRole","metadata":{"name":"reader"},"rules":[{"apiGroups":[""],"resources":["pods"],"verbs":["get"]}]}"#;
 
+/// A RoleBinding the posture samples of `binding::Create` and `binding::Edit` carry.
+const BINDING_MANIFEST: &str = r#"{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"ClusterRoleBinding","metadata":{"name":"readers"},"roleRef":{"apiGroup":"rbac.authorization.k8s.io","kind":"ClusterRole","name":"view"},"subjects":[{"apiGroup":"rbac.authorization.k8s.io","kind":"User","name":"ana"}]}"#;
+
 /// A fake settings store.
 pub(crate) struct FakePrefsWriter {
     manager: ClusterSessionManager,
@@ -242,6 +245,27 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             values: oxikube_domain::helm::ValuesYaml::default(),
             wait: false,
             timeout_secs: None,
+        },
+        "binding::OpenDialog" => Command::BindingOpenDialog {
+            cluster: Some(cluster),
+            cluster_binding: false,
+            target: None,
+        },
+        "binding::Create" => Command::BindingCreate {
+            cluster,
+            manifest: BINDING_MANIFEST.to_owned(),
+        },
+        "binding::Edit" => Command::BindingEdit {
+            cluster,
+            manifest: BINDING_MANIFEST.to_owned(),
+            previous: None,
+        },
+        "binding::Delete" => Command::BindingDelete {
+            target: ResourceRef::cluster_scoped(
+                cluster,
+                oxikube_domain::rbac::RbacKind::ClusterRoleBinding.gvk(),
+                "readers",
+            ),
         },
         "role::OpenDialog" => Command::RoleOpenDialog {
             cluster: Some(cluster),

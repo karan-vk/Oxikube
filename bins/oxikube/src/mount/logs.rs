@@ -165,7 +165,7 @@ pub fn start_views(
 /// Browser" on Services, E12-S13; "Set as default" on IngressClasses, E12-S14; "Resize…" on
 /// claims and "Set as Default" on storage classes, E12-S15; "Use namespace", "Toggle favourite",
 /// "New namespace…" and "Delete" on Namespaces, E12-S16; "Cordon" and "Uncordon" on nodes, E12-S09; "Reveal Values" and "Edit Decoded" on Secrets,
-/// E12-S11; "Edit Rules…" on Roles and ClusterRoles, E17-S05).
+/// E12-S11; "Edit Rules…" on Roles and ClusterRoles, E17-S05; "Edit Binding…" on RoleBindings and ClusterRoleBindings, E17-S06).
 pub fn row_actions() -> RowActionRegistry {
     let mut registry = RowActionRegistry::core();
     let specs = oxikube_resources_ui::crds::crd_row_actions()
@@ -181,7 +181,8 @@ pub fn row_actions() -> RowActionRegistry {
         .chain(oxikube_resources_ui::kinds::secret_row_actions())
         .chain(oxikube_rbac_ui::role::role_row_actions())
         // "Generate Kubeconfig" on ServiceAccounts (E17-S09).
-        .chain(oxikube_rbac_ui::row_actions());
+        .chain(oxikube_rbac_ui::row_actions())
+        .chain(oxikube_rbac_ui::binding::binding_row_actions());
     for spec in specs {
         if let Err(error) = registry.register(spec) {
             // A wiring bug (one command offered twice); the tests catch it.

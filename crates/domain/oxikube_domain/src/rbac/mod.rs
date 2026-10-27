@@ -13,6 +13,7 @@
 //! | `selector` | [`AggregationRule`], [`RoleSelector`]: what an aggregated ClusterRole collects |
 //! | `role` | [`Role`], [`RoleRef`], [`RoleId`], [`aggregated_rules`], [`aggregated_from`] |
 //! | `binding` | [`Binding`], [`BindingRef`], [`GrantScope`] (cluster-wide or one namespace) |
+//! | `escalation` | [`Escalation`]: bindings to `cluster-admin` or to everybody, singled out in confirmations |
 //! | `normalise` | [`NormalisedRules`], [`NormalisedRule`], [`NonResourceRule`]: the normaliser |
 //! | `matrix` | [`PolicyMatrix`]: k9s's per-group, per-verb table of a rule set |
 //!
@@ -30,6 +31,7 @@
 //! their own only where a binding names them.
 
 mod binding;
+mod escalation;
 mod kind;
 mod matrix;
 mod normalise;
@@ -42,6 +44,7 @@ mod subject;
 mod tests;
 
 pub use binding::{Binding, BindingKind, BindingRef, GrantScope};
+pub use escalation::{CLUSTER_ADMIN, Escalation};
 pub use kind::{RBAC_GROUP, RbacError, RbacKind};
 pub use matrix::{EXTRAS_HEADER, MATRIX_VERBS, MatrixRow, PolicyMatrix, verb_header};
 pub use normalise::{NonResourceRule, NormalisedRule, NormalisedRules};

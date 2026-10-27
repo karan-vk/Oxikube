@@ -93,7 +93,7 @@ pub fn binds(binding: &Binding, role: &RoleId) -> bool {
     }
 }
 
-async fn list_all(
+pub(crate) async fn list_all(
     reader: &Arc<dyn ResourceReader>,
     gvk: Gvk,
     namespace: Option<&str>,

@@ -1939,6 +1939,58 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         bindings: Option<u32>,
     },
+    /// Open the RoleBinding / ClusterRoleBinding dialog (E17-S06): a new binding, or the
+    /// subjects and role of the existing `target`. Changes nothing; the dialog's save is
+    /// [`BindingCreate`] or [`BindingEdit`].
+    ///
+    /// [`BindingCreate`]: Command::BindingCreate
+    /// [`BindingEdit`]: Command::BindingEdit
+    #[serde(rename = "binding::OpenDialog")]
+    BindingOpenDialog {
+        /// The cluster whose tab gets the dialog; the shown one when `None`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cluster: Option<ClusterId>,
+        /// A new ClusterRoleBinding instead of a new RoleBinding (ignored when `target` is set).
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        cluster_binding: bool,
+        /// The existing binding to edit; a new one when `None`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<ResourceRef>,
+    },
+    /// Create a RoleBinding or ClusterRoleBinding (E17-S06). **Mutating** (risk medium): blocked
+    /// on a read-only cluster, one confirmation (a binding to `cluster-admin` or to everybody is
+    /// called out), a server dry run first, audited. Any other kind is refused.
+    #[serde(rename = "binding::Create")]
+    BindingCreate {
+        /// The cluster to create it in.
+        cluster: ClusterId,
+        /// The object as JSON text (`apiVersion: rbac.authorization.k8s.io/v1`).
+        manifest: String,
+    },
+    /// Change a RoleBinding or ClusterRoleBinding (E17-S06). **Mutating** (risk medium).
+    ///
+    /// Without `previous` the manifest replaces the binding in place (its `roleRef` must be
+    /// unchanged: the API refuses to change it, and `metadata.resourceVersion` makes a change
+    /// made since the dialog opened fail with a conflict). With `previous` (the binding as it
+    /// was) the `roleRef` changes, which the API only allows by making a new object: the old
+    /// binding is deleted and the new one created as one audited intent, and the old one is put
+    /// back if the new one is refused.
+    #[serde(rename = "binding::Edit")]
+    BindingEdit {
+        /// The cluster the binding is in.
+        cluster: ClusterId,
+        /// The whole new object as JSON text.
+        manifest: String,
+        /// The binding as it was, as JSON text, when the `roleRef` changes.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        previous: Option<String>,
+    },
+    /// Delete a RoleBinding or ClusterRoleBinding (E17-S06). **Mutating** (risk medium).
+    #[serde(rename = "binding::Delete")]
+    BindingDelete {
+        /// The binding.
+        target: ResourceRef,
+    },
 }
 
 impl Command {
@@ -2180,6 +2232,10 @@ impl Command {
             Command::RoleCreate { .. } => CommandId::ROLE_CREATE,
             Command::RoleEdit { .. } => CommandId::ROLE_EDIT,
             Command::RoleDelete { .. } => CommandId::ROLE_DELETE,
+            Command::BindingOpenDialog { .. } => CommandId::BINDING_OPEN_DIALOG,
+            Command::BindingCreate { .. } => CommandId::BINDING_CREATE,
+            Command::BindingEdit { .. } => CommandId::BINDING_EDIT,
+            Command::BindingDelete { .. } => CommandId::BINDING_DELETE,
             Command::NodeDrain { .. } => CommandId::NODE_DRAIN,
         }
     }
@@ -2300,8 +2356,11 @@ impl Command {
             | Command::PvcResize { target, .. }
             | Command::RoleDelete { target, .. }
             | Command::ServiceAccountGenerateKubeconfig { target, .. }
+            | Command::BindingDelete { target }
             | Command::StorageClassSetDefault { target, .. } => Some(target),
-            Command::RoleOpenDialog { target, .. } => target.as_ref(),
+            Command::RoleOpenDialog { target, .. } | Command::BindingOpenDialog { target, .. } => {
+                target.as_ref()
+            }
             _ => None,
         }
     }
@@ -2816,6 +2875,21 @@ mod tests {
                 cluster_role: true,
                 target: None,
             },
+            Command::BindingOpenDialog {
+                cluster: Some(cluster()),
+                cluster_binding: true,
+                target: None,
+            },
+            Command::BindingCreate {
+                cluster: cluster(),
+                manifest: "{}".into(),
+            },
+            Command::BindingEdit {
+                cluster: cluster(),
+                manifest: "{}".into(),
+                previous: Some("{}".into()),
+            },
+            Command::BindingDelete { target: pod() },
             Command::RoleCreate {
                 cluster: cluster(),
                 manifest: "{}".into(),
@@ -3314,6 +3388,7 @@ mod tests {
                     | Command::SecretEditDecoded { .. }
                     | Command::SecretCreate { .. }
                     | Command::RoleOpenDialog { .. }
+                    | Command::BindingOpenDialog { .. }
                     | Command::TableToggleWide { .. }
                     | Command::LogsClear { .. }
                     | Command::LogsCopy { .. }
