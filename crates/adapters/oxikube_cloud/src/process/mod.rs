@@ -62,19 +62,10 @@ impl dyn ProcessRunner {
         let cli = invocation.cli;
         let command = invocation.label();
         let output = self.run(invocation).await?;
-        parse_json(cli, command, &output.stdout)
+        serde_json::from_str(&output.stdout).map_err(|error| CliError::InvalidJson {
+            cli,
+            command,
+            reason: oxikube_domain::redact::redact(&error.to_string()).into_owned(),
+        })
     }
-}
-
-/// Parses a command's JSON stdout.
-pub(crate) fn parse_json<T: DeserializeOwned>(
-    cli: Cli,
-    command: String,
-    stdout: &str,
-) -> Result<T, CliError> {
-    serde_json::from_str(stdout).map_err(|error| CliError::InvalidJson {
-        cli,
-        command,
-        reason: oxikube_domain::redact::redact(&error.to_string()).into_owned(),
-    })
 }
