@@ -150,14 +150,14 @@ impl Settings for CloudSettings {
             cache_ttl: Duration::from_secs(clamp(
                 "cloud.cache_ttl_secs",
                 content.cache_ttl_secs,
-                900,
+                defaults.cache_ttl.as_secs(),
                 MIN_TTL_SECS,
                 MAX_TTL_SECS,
             )),
             parallelism: usize::try_from(clamp(
                 "cloud.parallelism",
                 content.parallelism.map(u64::from),
-                4,
+                u64::try_from(defaults.parallelism).unwrap_or(4),
                 1,
                 u64::from(MAX_PARALLELISM),
             ))
@@ -165,7 +165,7 @@ impl Settings for CloudSettings {
             command_timeout: Duration::from_secs(clamp(
                 "cloud.command_timeout_secs",
                 content.command_timeout_secs,
-                30,
+                defaults.command_timeout.as_secs(),
                 MIN_TIMEOUT_SECS,
                 MAX_TIMEOUT_SECS,
             )),
