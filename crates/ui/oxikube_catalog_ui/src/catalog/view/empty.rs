@@ -1,9 +1,13 @@
 //! The bodies shown instead of the list: loading, failed, empty and nothing-matches.
 
 use gpui::{
-    App, InteractiveElement as _, IntoElement, ParentElement as _, SharedString, Styled as _, div,
+    App, Context, InteractiveElement as _, IntoElement, ParentElement as _, SharedString,
+    Styled as _, div,
 };
+use oxikube_ui::button::Button;
 use oxikube_ui::{ActiveTokens as _, Icon, IconName, layout::v_flex, u};
+
+use super::CatalogView;
 
 /// Title of the empty state.
 pub const EMPTY_TITLE: &str = "No clusters yet";
@@ -58,7 +62,7 @@ pub(super) fn failed(message: &SharedString, cx: &App) -> impl IntoElement {
 }
 
 /// There is no cluster at all: explains how to add kubeconfigs.
-pub(super) fn empty(cx: &App) -> impl IntoElement {
+pub(super) fn empty(cx: &mut Context<CatalogView>) -> impl IntoElement {
     let tokens = cx.tokens();
     centred(IconName::Boxes, EMPTY_TITLE.into(), cx)
         .debug_selector(|| "catalog-empty".into())
@@ -71,6 +75,14 @@ pub(super) fn empty(cx: &App) -> impl IntoElement {
                         .debug_selector(move || format!("catalog-empty-step-{ix}"))
                         .child(*step)
                 })),
+        )
+        .child(
+            div().debug_selector(|| "catalog-empty-cloud".into()).child(
+                Button::new("catalog-empty-cloud")
+                    .icon(Icon::new(IconName::Cloud).size(u(gpui::px(14.))))
+                    .label("Discover cloud clusters")
+                    .on_click(cx.listener(|this, _, _, cx| this.open_cloud(cx))),
+            ),
         )
 }
 

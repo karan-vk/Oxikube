@@ -96,6 +96,9 @@ pub mod contexts {
     pub const MODAL: &str = "Modal";
     /// The cluster catalog home.
     pub const CATALOG: &str = "Catalog";
+    /// The catalog's Cloud section (E18-S06): refresh, cancel and add; carries `Loading` while a
+    /// discovery runs.
+    pub const CATALOG_CLOUD: &str = "CatalogCloud";
     /// The pulses page (E13-S10): a grid of gauges, one tile selected.
     pub const PULSES: &str = "Pulses";
     /// The cluster's events view (E14-S03); carries `Editing`, `faults` and `paused`.

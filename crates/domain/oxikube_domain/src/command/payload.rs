@@ -5,13 +5,15 @@ use std::net::IpAddr;
 
 use serde::{Deserialize, Serialize};
 
+use super::cloud::CloudRefreshMode;
 use super::id::CommandId;
 use super::image::ImageChange;
 use super::kubeconfig::{KubeconfigSourceRef, NewKubeconfigSource};
 use super::meta::CommandMeta;
 use super::registry;
+use crate::cloud::CloudProvider;
 use crate::colour::ClusterColour;
-use crate::ids::{ClusterId, Gvk, ResourceRef};
+use crate::ids::{ClusterId, ContextName, Gvk, ResourceRef};
 use crate::log::{LevelChip, LogRange, LogSaveScope};
 use crate::portforward::ForwardPort;
 use crate::preset::ClusterPreset;
@@ -636,6 +638,42 @@ pub enum Command {
     /// Re-read every kubeconfig source now.
     #[serde(rename = "kubeconfig::Reload")]
     KubeconfigReload,
+    /// Discover the managed clusters of a cloud provider with its CLI (`aws`, `gcloud`, `az`), or
+    /// of every provider. Reads from the provider and caches the listing; changes nothing.
+    #[serde(rename = "cloud::Refresh")]
+    CloudRefresh {
+        /// The provider; `None` refreshes all of them.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        provider: Option<CloudProvider>,
+        /// Whether a fresh cache may answer.
+        #[serde(default)]
+        mode: CloudRefreshMode,
+    },
+    /// Stop a running cloud discovery (its CLI processes are killed).
+    #[serde(rename = "cloud::Cancel")]
+    CloudCancel {
+        /// The provider; `None` stops all of them.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        provider: Option<CloudProvider>,
+    },
+    /// Add a discovered cloud cluster to the catalog: an exec-auth entry in Oxikube's own managed
+    /// kubeconfig for the provider (no token is written; the user's kubeconfig is not touched).
+    #[serde(rename = "cloud::Add")]
+    CloudAdd {
+        /// The provider.
+        provider: CloudProvider,
+        /// The discovered cluster's key (`aws/prod/eu-west-1/prod-eu`), from the last listing.
+        cluster: String,
+    },
+    /// Remove a cloud cluster that was added: its managed kubeconfig entry goes and an open
+    /// session of it is disconnected.
+    #[serde(rename = "cloud::Remove")]
+    CloudRemove {
+        /// The provider.
+        provider: CloudProvider,
+        /// The context name of the added cluster.
+        context: ContextName,
+    },
     /// Open a registered view (overview, events, ...) by id.
     #[serde(rename = "view::Open")]
     ViewOpen {
@@ -1942,6 +1980,10 @@ impl Command {
             Command::KubeconfigAddSource { .. } => CommandId::KUBECONFIG_ADD_SOURCE,
             Command::KubeconfigRemoveSource { .. } => CommandId::KUBECONFIG_REMOVE_SOURCE,
             Command::KubeconfigReload => CommandId::KUBECONFIG_RELOAD,
+            Command::CloudRefresh { .. } => CommandId::CLOUD_REFRESH,
+            Command::CloudCancel { .. } => CommandId::CLOUD_CANCEL,
+            Command::CloudAdd { .. } => CommandId::CLOUD_ADD,
+            Command::CloudRemove { .. } => CommandId::CLOUD_REMOVE,
             Command::ViewOpen { .. } => CommandId::VIEW_OPEN,
             Command::PaletteToggle => CommandId::PALETTE_TOGGLE,
             Command::PaletteClearRecents => CommandId::PALETTE_CLEAR_RECENTS,
@@ -2585,6 +2627,19 @@ mod tests {
                 },
             },
             Command::KubeconfigReload,
+            Command::CloudRefresh {
+                provider: Some(CloudProvider::Aws),
+                mode: CloudRefreshMode::Force,
+            },
+            Command::CloudCancel { provider: None },
+            Command::CloudAdd {
+                provider: CloudProvider::Gcp,
+                cluster: "gcp/p/europe-west1/c".into(),
+            },
+            Command::CloudRemove {
+                provider: CloudProvider::Azure,
+                context: ContextName::new("aks-sub-westeurope-c"),
+            },
             Command::ViewOpen {
                 view: "overview".into(),
             },
@@ -3346,6 +3401,43 @@ mod kubeconfig_tests {
         let shown = format!("{command:?} {again:#?}");
         assert!(!shown.contains("s3cr3t"), "{shown}");
         assert!(shown.contains("bytes"), "{shown}");
+    }
+
+    #[test]
+    fn cloud_commands_are_flat_json_app_tools_without_a_guard_tier() {
+        let command: Command = serde_json::from_value(json!({
+            "type": "cloud::Refresh",
+            "provider": "gcp",
+        }))
+        .unwrap();
+        assert_eq!(
+            command,
+            Command::CloudRefresh {
+                provider: Some(CloudProvider::Gcp),
+                mode: CloudRefreshMode::IfStale,
+            }
+        );
+        assert_eq!(command.id().tool_name(), "app.cloud_refresh");
+        assert_eq!(
+            serde_json::to_value(Command::CloudCancel { provider: None }).unwrap(),
+            json!({ "type": "cloud::Cancel" })
+        );
+        for command in [
+            command,
+            Command::CloudCancel { provider: None },
+            Command::CloudAdd {
+                provider: CloudProvider::Aws,
+                cluster: "aws/p/eu-west-1/c".into(),
+            },
+            Command::CloudRemove {
+                provider: CloudProvider::Aws,
+                context: ContextName::new("eks-p-eu-west-1-c"),
+            },
+        ] {
+            let meta = command.meta();
+            assert!(!meta.mutating && !meta.privileged, "{}", meta.id);
+            assert_eq!(meta.confirm, crate::safety::ConfirmTier::None);
+        }
     }
 
     #[test]

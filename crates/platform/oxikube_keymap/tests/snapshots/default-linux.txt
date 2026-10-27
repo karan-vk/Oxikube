@@ -39,6 +39,9 @@
   end              catalog::SelectLast
   enter            catalog::ConnectSelected
   home             catalog::SelectFirst
+[CatalogCloud]
+  ctrl-r           cloud::Refresh
+  escape           cloud::Cancel
 [Picker]
   ctrl-end         picker::SelectLast
   ctrl-enter       picker::SecondaryConfirm

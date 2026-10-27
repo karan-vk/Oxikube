@@ -3,6 +3,7 @@
 //! runtime; nothing touches the disk or runs a CLI.
 
 mod cache;
+mod commands;
 mod config;
 mod managed;
 mod refresh;

@@ -11,6 +11,7 @@ mod apply;
 mod bulk;
 mod charts;
 mod chrome;
+mod cloud;
 mod create;
 mod editor;
 mod events;
@@ -271,6 +272,8 @@ fn the_bus_holds_every_command_of_the_mounted_ui(cx: &mut TestAppContext) {
         (CommandId::NAMESPACE_CREATE, "oxikube_app::namespaces"),
         (CommandId::NAMESPACE_DELETE, "oxikube_app::namespaces"),
         (CommandId::KUBECONFIG_RELOAD, "oxikube_app::sources"),
+        (CommandId::CLOUD_REFRESH, "oxikube_app::cloud"),
+        (CommandId::CLOUD_ADD, "oxikube_app::cloud"),
         (CommandId::CLUSTER_SET_COLOUR, "oxikube_app::posture"),
         (CommandId::CLUSTER_SELECT, "oxikube_workspace"),
         (CommandId::VIEW_OPEN, "oxikube"),

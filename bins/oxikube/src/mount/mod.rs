@@ -458,6 +458,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         cluster_commands: services.cluster_commands.clone(),
         namespaces: services.namespaces.clone(),
         sources: sources.clone(),
+        cloud: cloud.clone(),
         sessions: services.sessions.clone(),
         prefs: Arc::new(SettingsPrefsWriter::new(cx)),
         tabs: sink.clone(),

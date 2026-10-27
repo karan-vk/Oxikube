@@ -102,6 +102,15 @@
     }
   },
   {
+    // The catalog's Cloud section (E18-S06): refresh the providers now, or stop the running
+    // discovery.
+    "context": "CatalogCloud",
+    "bindings": {
+      "ctrl-r": "cloud::Refresh",
+      "escape": "cloud::Cancel"
+    }
+  },
+  {
     // Pickers (E11-S02): the command palette, the container chooser of a pod shell and every
     // other list with a query field. Up / down (and ctrl-p / ctrl-n) move the selection and wrap,
     // home / end and page up / page down jump to the first / last match, enter confirms, ctrl-enter

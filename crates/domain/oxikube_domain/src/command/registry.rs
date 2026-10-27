@@ -27,6 +27,14 @@ impl CommandId {
     /// `charts::OpenGallery`: open the chart gallery, every chart state on one page (a reference
     /// page for the metrics views and their reviewers).
     pub const CHARTS_OPEN_GALLERY: CommandId = CommandId::new("charts::OpenGallery");
+    /// `cloud::Add`: add a discovered cloud cluster to the catalog (a managed kubeconfig entry).
+    pub const CLOUD_ADD: CommandId = CommandId::new("cloud::Add");
+    /// `cloud::Cancel`: stop a running cloud discovery.
+    pub const CLOUD_CANCEL: CommandId = CommandId::new("cloud::Cancel");
+    /// `cloud::Refresh`: discover the clusters of a cloud provider (or of all of them).
+    pub const CLOUD_REFRESH: CommandId = CommandId::new("cloud::Refresh");
+    /// `cloud::Remove`: remove a cloud cluster that was added from the catalog.
+    pub const CLOUD_REMOVE: CommandId = CommandId::new("cloud::Remove");
     /// `cluster::ApplyPreset`: give a cluster a prod / staging / dev / none posture.
     pub const CLUSTER_APPLY_PRESET: CommandId = CommandId::new("cluster::ApplyPreset");
     /// `cluster::CancelConnect`: cancel a connection attempt that is still in flight.
@@ -560,6 +568,32 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::CHARTS_OPEN_GALLERY,
         "Open Chart Gallery",
+        CommandScope::Global,
+        NONE,
+    ),
+    // The cloud commands (E18-S06) run the provider CLIs read-only and edit Oxikube's own managed
+    // kubeconfigs, never a cluster and never the user's kubeconfig: not `mutating`, no guard tier.
+    CommandMeta::read(
+        CommandId::CLOUD_ADD,
+        "Add Cloud Cluster",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::CLOUD_CANCEL,
+        "Cancel Cloud Discovery",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::CLOUD_REFRESH,
+        "Refresh Cloud Clusters",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::CLOUD_REMOVE,
+        "Remove Cloud Cluster",
         CommandScope::Global,
         NONE,
     ),

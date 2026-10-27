@@ -155,7 +155,10 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `file` source through `KubeconfigSourcesService` so the cluster source reloads it; `remove` drops
   the entry (the file and its source with the last one) and disconnects the context's open session.
   The user's own kubeconfig is never touched. The binary wires it in `mount::cloud` over the three
-  `oxikube_cloud` adapters sharing one `CliRunner`.
+  `oxikube_cloud` adapters sharing one `CliRunner`. The `cloud::Refresh`, `Cancel`, `Add` and `Remove`
+  commands (E18-S06; `app.cloud_*` tools, no guard tier: they run the CLIs read-only and edit only
+  the managed files) are `CloudDiscoveryService::execute` and `cloud::register_commands`; `watch`
+  streams every refresh's events to whoever follows them, whichever surface asked.
   Module `session::namespaces` (E06-S07): `NamespaceService` sets a session's `NamespaceSelection`
   (one `NamespaceChanged` per change, 150 ms debounce on the `ClockPort`), remembers selection,
   favourites and typed names per cluster in `StatePort` (kv `cluster/<id>/namespaces`), lists
@@ -1405,7 +1408,16 @@ crate's `README.md` for its allowed dependencies. Highlights:
   visible rows, colours come from the parse for the rows on screen, and a new width re-wraps off the UI thread. Selection
   (click, drag, double/triple click), copy, select all and key scrolling are the view's own keys (`CodeView` context, bound by
   `oxikube_ui::init` as the component library binds its inputs'). A multi-megabyte object costs no UI-thread work per line.
-- `oxikube_catalog_ui` — the cluster catalog UI. Module `sources` (E06-S05): `SourcesView`, the
+- `oxikube_catalog_ui` — the cluster catalog UI. Module `cloud` (E18-S06): `CloudView`, the Cloud
+  section (a workspace `Item`, `CLOUD_VIEW`, opened by `view::Open` from the catalog toolbar's Cloud
+  button or its empty state): a card per provider whose CLI was found (hidden otherwise), with its
+  phase (Loading with "3 of 7 scopes", Loaded, Degraded with the detection's hints, Error), scope
+  filter chips, a virtualised cluster list (location, version, status, "In catalog") with Add and
+  a confirmed Remove, and the remediation table (`Issue` to words and a fixing command, copyable;
+  opening a terminal needs one without a cluster, so copy is the stand-in). The first refresh is
+  asked for after the first frame; rapid Refresh clicks start one run; Escape or closing the
+  section sends `cloud::Cancel`; the key context is `CatalogCloud` (`cmd-r`/`ctrl-r` bound to
+  `cloud::Refresh`). Module `sources` (E06-S05): `SourcesView`, the
   kubeconfig sources screen (a workspace `Item`): one row per entry of `kubeconfig.sources` with its
   status (found with N contexts, or the error inline next to that one source), add file / add folder
   through the platform picker (async), a paste dialog with a credentials warning (hosted by the

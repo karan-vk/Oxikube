@@ -10,6 +10,10 @@ Cluster catalog home, hotbar, kubeconfig sources management, cloud discovery UI,
   catalog reads with each one's status (errors inline), add file / folder through the platform picker,
   paste (stored `0600`, ADR 0015), remove and reload, as `kubeconfig::*` commands; `SettingsSourceList`
   and `follow` keep it in step with `kubeconfig.sources` in `settings.json`. See `src/sources/mod.rs`.
+- `cloud` (E18-S06): the catalog's Cloud section, `CloudView`: one card per detected provider
+  (hidden when its CLI is missing), scope filters, cluster rows with status / version / region and
+  Add / Remove, refresh with progress and cached results, remediation for each error, as `cloud::*`
+  commands; the key context is `CatalogCloud`. See `src/cloud/mod.rs`.
 - `namespaces` (E06-S07): the namespace selector dropdown (All, multi-select, favourites, search,
   `0`-`9` keys). See the module docs in `src/namespaces/mod.rs`.
 
