@@ -1,0 +1,48 @@
+[
+  {
+    "aadProfile": {"adminGroupObjectIds": ["33333333-3333-3333-3333-333333333333"], "enableAzureRbac": true, "managed": true, "tenantId": "11111111-1111-1111-1111-111111111111"},
+    "currentKubernetesVersion": "1.29.4",
+    "fqdn": "aad-dns-abc123.hcp.westeurope.azmk8s.io",
+    "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-aad/providers/Microsoft.ContainerService/managedClusters/aad",
+    "kubernetesVersion": "1.29",
+    "location": "westeurope",
+    "name": "aad",
+    "powerState": {"code": "Running"},
+    "provisioningState": "Succeeded",
+    "resourceGroup": "rg-aad"
+  },
+  {
+    "aadProfile": null,
+    "currentKubernetesVersion": "1.28.9",
+    "fqdn": "local-dns-def456.hcp.northeurope.azmk8s.io",
+    "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-local/providers/Microsoft.ContainerService/managedClusters/local",
+    "location": "northeurope",
+    "name": "local",
+    "powerState": {"code": "Running"},
+    "provisioningState": "Succeeded",
+    "resourceGroup": "rg-local"
+  },
+  {
+    "aadProfile": {"managed": true, "tenantId": "11111111-1111-1111-1111-111111111111"},
+    "currentKubernetesVersion": "1.29.4",
+    "fqdn": "idle-dns-789.hcp.westeurope.azmk8s.io",
+    "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-aad/providers/Microsoft.ContainerService/managedClusters/idle",
+    "location": "westeurope",
+    "name": "idle",
+    "powerState": {"code": "Stopped"},
+    "provisioningState": "Succeeded",
+    "resourceGroup": "rg-aad"
+  },
+  {
+    "aadProfile": {"managed": true, "tenantId": "11111111-1111-1111-1111-111111111111"},
+    "fqdn": null,
+    "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-aad/providers/Microsoft.ContainerService/managedClusters/new",
+    "kubernetesVersion": "1.30",
+    "location": "westeurope",
+    "name": "new",
+    "powerState": {"code": "Running"},
+    "privateFqdn": "new-dns-000.privatelink.westeurope.azmk8s.io",
+    "provisioningState": "Creating",
+    "resourceGroup": "rg-aad"
+  }
+]

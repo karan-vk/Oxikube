@@ -5,6 +5,7 @@
 //!
 //! | Module | Holds |
 //! |---|---|
+//! | [`az`] | [`AzureAksAdapter`](az::AzureAksAdapter): AKS through `az` per subscription, `kubelogin` exec entries for Azure AD clusters (E18-S04) |
 //! | [`process`] | [`CliRunner`](process::CliRunner), the one way this crate runs a CLI: timeouts, cancellation, JSON output, a concurrency cap, the login shell's `PATH`; the [`ProcessRunner`](process::ProcessRunner) seam the adapters are tested through |
 //! | [`aws`] | [`AwsDiscovery`](aws::AwsDiscovery): EKS discovery through the `aws` CLI (E18-S02) |
 //! | [`gcloud`] | [`GcloudDiscovery`](gcloud::GcloudDiscovery), the GKE `CloudDiscoveryPort` over `gcloud` and `gke-gcloud-auth-plugin` |
@@ -15,6 +16,7 @@
 
 pub mod aws;
 pub mod gcloud;
+pub mod az;
 pub mod process;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
