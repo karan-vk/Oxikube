@@ -105,7 +105,8 @@
 //!     raised ones reach the OS notifier once the user opted in.
 //! 19. cloud discovery (E18-S05, `mount::cloud`): the app's one `CloudDiscoveryService` over the
 //!     `aws`, `gcloud` and `az` adapters, handed to the main window's views (`ViewDeps::cloud`) for
-//!     the catalog's Cloud section (E18-S06); it runs no CLI until a refresh is asked for.
+//!     the catalog's Cloud section (E18-S06); it runs no CLI until a refresh is asked for. The
+//!     read-only agent tool `cloud.discover_clusters` (E18-S08) reads the same service.
 //!
 //! Nothing here reads a file or touches the network: the catalog's first read of the kubeconfig
 //! files runs on the Tokio bridge once this update has ended, which is after the first frame
@@ -390,6 +391,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let follow_sources = oxikube_catalog_ui::sources::follow(sources.clone(), cx);
     // Cloud discovery (E18-S05): nothing runs until the Cloud section asks for a refresh.
     let cloud = cloud::discovery(&ports, sources.clone(), services.sessions.clone(), cx);
+    cloud::install_agent_tools(&state, &cloud);
 
     let (views_tx, views_rx) = mpsc::unbounded();
     let (kinds_tx, kinds_rx) = mpsc::unbounded();

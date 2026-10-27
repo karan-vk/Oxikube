@@ -13,6 +13,7 @@ use std::sync::Arc;
 
 use gpui::App;
 use oxikube_app::cloud::{DiscoveryConfig, DiscoveryDeps};
+use oxikube_app::tools::cloud as agent_tools;
 use oxikube_app::{CloudDiscoveryService, ClusterSessionManager, KubeconfigSourcesService};
 use oxikube_cloud::aws::{AwsDiscovery, AwsSettings};
 use oxikube_cloud::az::AzureAksAdapter;
@@ -22,7 +23,7 @@ use oxikube_ports::CloudProvider;
 use oxikube_runtime::RuntimeMode;
 use oxikube_settings::{CloudSettings, Settings as _};
 
-use crate::app_state::AppPorts;
+use crate::app_state::{AppPorts, AppState};
 
 #[cfg(test)]
 mod tests;
@@ -141,5 +142,16 @@ fn service_config(settings: &CloudSettings) -> DiscoveryConfig {
             .into_iter()
             .filter(|provider| !settings.is_enabled(*provider))
             .collect(),
+    }
+}
+
+/// Registers the read-only `cloud.discover_clusters` tool for hosted agents (E18-S08). It answers
+/// from the discovery cache and runs a CLI only when the agent passes `refresh: true`.
+pub fn install_agent_tools(state: &AppState, service: &CloudDiscoveryService) {
+    let Some(hooks) = state.agent_hooks() else {
+        return;
+    };
+    if let Err(error) = agent_tools::install(&hooks.tools, service) {
+        tracing::error!(%error, "the cloud discovery tool could not be registered");
     }
 }
