@@ -1,5 +1,6 @@
 //! [`CloudBackend`]: where the Cloud section sends its commands and reads discovery from.
 
+use std::future::Future;
 use std::sync::Arc;
 
 use futures::stream::BoxStream;
@@ -47,15 +48,24 @@ impl ServiceBackend {
     }
 }
 
+/// Runs `work` on the Tokio bridge and flattens the join error into the result.
+fn on_bridge<T, F>(cx: &mut App, work: F) -> Task<OxiResult<T>>
+where
+    T: Send + 'static,
+    F: Future<Output = OxiResult<T>> + Send + 'static,
+{
+    cx.spawn(async move |cx| {
+        spawn_kube(&*cx, work)
+            .await
+            .map_err(OxiError::from)
+            .and_then(|inner| inner)
+    })
+}
+
 impl CloudBackend for ServiceBackend {
     fn run(&self, command: Command, cx: &mut App) -> Task<OxiResult<CommandOutput>> {
         let service = self.service.clone();
-        cx.spawn(async move |cx| {
-            spawn_kube(&*cx, async move { service.execute(&command).await })
-                .await
-                .map_err(OxiError::from)
-                .and_then(|inner| inner)
-        })
+        on_bridge(cx, async move { service.execute(&command).await })
     }
 
     fn watch(&self) -> BoxStream<'static, Arc<CloudDiscoveryEvent>> {
@@ -64,11 +74,6 @@ impl CloudBackend for ServiceBackend {
 
     fn added(&self, provider: CloudProvider, cx: &mut App) -> Task<OxiResult<Vec<ManagedEntry>>> {
         let service = self.service.clone();
-        cx.spawn(async move |cx| {
-            spawn_kube(&*cx, async move { service.added(provider).await })
-                .await
-                .map_err(OxiError::from)
-                .and_then(|inner| inner)
-        })
+        on_bridge(cx, async move { service.added(provider).await })
     }
 }
