@@ -92,3 +92,67 @@ async fn a_mention_of_the_wrong_shape_is_a_validation_error() {
     assert!(resolve(&h, "@rbac/user/jane", &scope()).await.is_err());
     assert!(resolve(&h, "@rbac/sa/shop", &scope()).await.is_err());
 }
+
+fn pods(verb: &str, sa: &Impersonate) -> AccessCheck {
+    AccessCheck::new(verb, Gvr::new("", "", "pods"))
+        .namespace("shop")
+        .impersonating(sa.clone())
+}
+
+#[tokio::test]
+async fn verb_rows_list_allowed_denied_and_unknown_verbs_apart() {
+    let h = Harness::connected().await;
+    let sa = Impersonate::service_account("shop", "bot");
+    h.access()
+        .set_decision(pods("list", &sa), AccessDecision::Denied { reason: None });
+    h.access().set_decision(
+        pods("create", &sa),
+        AccessDecision::Unknown {
+            reason: "evaluation error".into(),
+        },
+    );
+    h.access().set_decision(
+        AccessCheck::new("delete", Gvr::new("apps", "", "statefulsets"))
+            .namespace("shop")
+            .impersonating(sa.clone()),
+        AccessDecision::Denied { reason: None },
+    );
+    h.access().set_decision(
+        AccessCheck::new("*", Gvr::new("*", "", "*")).impersonating(sa),
+        AccessDecision::Allowed,
+    );
+    let body = resolve(&h, "@rbac/sa/shop/bot", &scope())
+        .await
+        .expect("block");
+    assert!(
+        body.contains("* on *: allowed (cluster-admin level)"),
+        "{body}"
+    );
+    assert!(
+        body.contains("pods: get patch delete (unknown: create)"),
+        "{body}"
+    );
+    assert!(
+        body.contains("statefulsets.apps: get list create patch\n"),
+        "{body}"
+    );
+    assert!(
+        body.contains("deployments.apps: get list create patch delete"),
+        "{body}"
+    );
+}
+
+#[tokio::test]
+async fn a_user_subject_naming_the_service_account_is_a_binding() {
+    let h = Harness::connected().await;
+    h.objects().insert(role_binding(
+        "shop",
+        "as-user",
+        "editor",
+        json!([{"kind": "User", "name": "system:serviceaccount:shop:bot"}]),
+    ));
+    let body = resolve(&h, "@rbac/sa/shop/bot", &scope())
+        .await
+        .expect("block");
+    assert!(body.contains("as-user -> Role editor"), "{body}");
+}

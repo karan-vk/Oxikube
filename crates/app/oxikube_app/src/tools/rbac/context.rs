@@ -119,12 +119,18 @@ impl ContextProviderPort for RbacContextProvider {
                 if summary.everything {
                     lines.push("* on *: allowed (cluster-admin level)".to_owned());
                 }
+                if summary.everything_unknown {
+                    lines.push("* on *: unknown (the review was inconclusive)".to_owned());
+                }
                 for row in &summary.rows {
-                    let verbs = if row.allowed.is_empty() {
+                    let mut verbs = if row.allowed.is_empty() {
                         "none".to_owned()
                     } else {
                         row.allowed.join(" ")
                     };
+                    if !row.unknown.is_empty() {
+                        verbs = format!("{verbs} (unknown: {})", row.unknown.join(" "));
+                    }
                     lines.push(format!("{}: {verbs}", row.resource));
                 }
             }
@@ -238,6 +244,12 @@ fn match_binding(
             {
                 via = Some(String::new());
                 break;
+            }
+            Some("User")
+                if field("name")
+                    == Some(format!("system:serviceaccount:{namespace}:{name}").as_str()) =>
+            {
+                via = Some(" (as user)".to_owned());
             }
             Some("Group") if field("name").is_some_and(|g| groups.iter().any(|x| x == g)) => {
                 via = Some(format!(

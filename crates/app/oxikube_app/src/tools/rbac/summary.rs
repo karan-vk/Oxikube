@@ -36,6 +36,8 @@ pub(super) struct Row {
     pub(super) resource: String,
     /// The verbs the review allowed.
     pub(super) allowed: Vec<&'static str>,
+    /// The verbs whose review was inconclusive (never shown as denied).
+    pub(super) unknown: Vec<&'static str>,
 }
 
 /// What the reviews said.
@@ -43,10 +45,20 @@ pub(super) struct Row {
 pub(super) struct Summary {
     /// Whether `*` on `*` is allowed (cluster-admin-like).
     pub(super) everything: bool,
+    /// Whether the `*` on `*` review was inconclusive.
+    pub(super) everything_unknown: bool,
     /// One row per resource.
     pub(super) rows: Vec<Row>,
     /// Why the summary is missing or incomplete (no permission to review as another subject).
     pub(super) unavailable: Option<String>,
+}
+
+/// One review's outcome; unknown is kept apart from denied.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Verdict {
+    Allowed,
+    Denied,
+    Unknown,
 }
 
 /// One review; a named function so the stream's closure is not higher-ranked over the borrow.
@@ -81,19 +93,26 @@ pub(super) async fn summarize(
         summary.unavailable = Some(error.message().to_owned());
         return summary;
     }
-    let allowed: Vec<bool> = answers
+    let verdicts: Vec<Verdict> = answers
         .iter()
-        .map(|a| matches!(a, Ok(AccessDecision::Allowed)))
+        .map(|a| match a {
+            Ok(AccessDecision::Allowed) => Verdict::Allowed,
+            Ok(AccessDecision::Unknown { .. }) => Verdict::Unknown,
+            _ => Verdict::Denied,
+        })
         .collect();
-    summary.everything = allowed[0];
+    summary.everything = verdicts[0] == Verdict::Allowed;
+    summary.everything_unknown = verdicts[0] == Verdict::Unknown;
     for (i, (group, plural, _)) in RESOURCES.iter().enumerate() {
         let start = 1 + i * VERBS.len();
-        let verbs = VERBS
-            .iter()
-            .zip(&allowed[start..start + VERBS.len()])
-            .filter(|(_, ok)| **ok)
-            .map(|(verb, _)| *verb)
-            .collect();
+        let answered = VERBS.iter().zip(&verdicts[start..start + VERBS.len()]);
+        let verbs_with = |wanted: Verdict| {
+            answered
+                .clone()
+                .filter(|(_, verdict)| **verdict == wanted)
+                .map(|(verb, _)| *verb)
+                .collect::<Vec<_>>()
+        };
         let resource = if group.is_empty() {
             (*plural).to_owned()
         } else {
@@ -101,7 +120,8 @@ pub(super) async fn summarize(
         };
         summary.rows.push(Row {
             resource,
-            allowed: verbs,
+            allowed: verbs_with(Verdict::Allowed),
+            unknown: verbs_with(Verdict::Unknown),
         });
     }
     summary
