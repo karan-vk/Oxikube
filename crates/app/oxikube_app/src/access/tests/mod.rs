@@ -10,6 +10,7 @@ mod incremental;
 mod index;
 mod random;
 mod registry;
+mod visibility;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;

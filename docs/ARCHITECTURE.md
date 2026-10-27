@@ -1596,7 +1596,7 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `cluster_sidebar` state table. Since E12-S01 the kind entries of Nodes, Workloads, Config, Network, Storage and
   Namespaces come from the kind registry (`oxikube_resources_ui::kinds` publishes them with
   `SidebarRegistry::set_entries`); each names its kind (`SidebarEntry::kind`), and the panel shows it only when the
-  cluster's discovery serves it and `SidebarDeps::visibility` allows it (`KindGate`), rebuilding on `KindsChanged`. Module `session` (E05-S12): `window::New`
+  cluster's discovery serves it and `SidebarDeps::visibility` allows it (`KindGate`), rebuilding on `KindsChanged`. Since E17-S03 the app mounts `oxikube_app::access::AccessVisibility` there (cached `AccessService` rules, refreshed on connect and namespace change; unknown never hides): denied kinds are hidden and counted in a "Limited access" line whose "Show all" link draws them greyed ("no list permission"); `ResourceActions::with_access` greys mutating row actions the cached review denies (`oxikube_app::actions::ActionAccess`, "no delete permission"), a soft gate in front of `MutationGuard`. Module `session` (E05-S12): `window::New`
   (several windows, one `Workspace` each, shared globals), UI zoom (`view::ZoomIn`/`ZoomOut`/`ZoomReset`,
   the `ui_scale` setting), the effective reduce-motion flag (`reduce_motion` setting over the OS
   preference, read by views through `oxikube_ui::motion`), and the quit guard (`app::Quit`:

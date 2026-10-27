@@ -76,6 +76,13 @@ impl RulesCache {
         self.is_fresh(entry, now).then(|| entry.rules.clone())
     }
 
+    /// The cached rules of `namespace` whatever their age: a soft gate keeps its last answer
+    /// while a newer review is on its way, instead of flipping to "unknown" at the TTL.
+    pub(super) fn peek_stale(&self, namespace: Option<&str>) -> Option<Arc<AccessRules>> {
+        let state = self.state.lock();
+        state.entry(namespace).map(|entry| entry.rules.clone())
+    }
+
     /// The rules of `namespace`: cached when fresh, else one shared review.
     pub(super) async fn get(&self, namespace: Option<&str>) -> OxiResult<Arc<AccessRules>> {
         let flight = {

@@ -113,9 +113,9 @@ mod testing;
 mod testing_posture;
 
 pub use actions::{
-    ActionContext, ActionState, DeleteError, DeleteFlow, DeletePlan, DeleteReport, ItemResult,
-    ItemStatus, ResolvedAction, RowAction, RowActionRegistry, RowActionSpec, RowActions,
-    object_label,
+    ActionAccess, ActionContext, ActionState, DeleteError, DeleteFlow, DeletePlan, DeleteReport,
+    ItemResult, ItemStatus, ResolvedAction, RowAction, RowActionRegistry, RowActionSpec,
+    RowActions, object_label,
 };
 pub use apply::{
     ApplyError, ApplyMethod, ApplyPreview, ApplyReport, ApplyRequest, ApplyService, BatchCounts,

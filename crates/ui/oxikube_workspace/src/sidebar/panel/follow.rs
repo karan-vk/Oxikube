@@ -96,9 +96,15 @@ impl SidebarPanel {
             return;
         };
         let selection = session.namespace_selection().clone();
+        let visibility = self.deps.visibility.clone();
+        let cluster = self.cluster.clone();
         self.review_task = Some(cx.spawn(async move |this: WeakEntity<Self>, cx| {
             let outcome = spawn_kube(cx, async move {
-                review_access(access.as_ref(), &selection).await
+                let outcome = review_access(access.as_ref(), &selection).await;
+                // The per-kind hook reads its own cache of the same reviews: fill it before the
+                // rows are rebuilt.
+                visibility.refresh(&cluster, &selection).await;
+                outcome
             })
             .await
             .unwrap_or_else(|error| AccessOutcome::Failed {
@@ -213,6 +219,7 @@ impl SidebarPanel {
             open: &self.open,
             custom_query: &self.custom_query,
             gate: Some(gate),
+            show_restricted: self.show_restricted,
         });
         self.apply_count_states(&mut rows);
         if rows != self.rows {

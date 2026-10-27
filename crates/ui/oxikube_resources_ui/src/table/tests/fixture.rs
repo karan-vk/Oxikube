@@ -321,6 +321,8 @@ pub(crate) struct Fixture {
     pub(crate) views: Entity<ResourceViews>,
     pub(crate) sessions: ClusterSessionManager,
     pub(crate) connector: Arc<FakeClusterConnectorPort>,
+    /// The access services behind the greyed-out actions.
+    pub(crate) access: oxikube_app::access::AccessRegistry,
     pub(crate) state: Arc<FakeStatePort>,
     /// Where "save YAML" writes.
     pub(crate) fs: Arc<FakeFsPort>,
@@ -422,6 +424,9 @@ impl Fixture {
         let clock_port: Arc<dyn ClockPort> = clock.clone();
         let drain = Arc::new(FakeDrainPort::new());
         let forward = (rig == Rig::Forward).then(|| ForwardRig::new(clock_port.clone()));
+        // The cached access reviews behind the greyed actions (E17-S03): tests fill them.
+        let access = oxikube_app::access::AccessRegistry::new(clock_port.clone());
+        let rig_access = access.clone();
         // One object at a time: scripted responses then follow the selection's order.
         let actions = (rig != Rig::None).then(|| {
             actions_rig(
@@ -436,6 +441,7 @@ impl Fixture {
                 forward.as_ref(),
             )
             .with_concurrency(1)
+            .with_access(rig_access)
         });
         let deps = vcx.update(|_, cx| ResourceTableDeps {
             sessions: sessions.clone(),
@@ -486,6 +492,7 @@ impl Fixture {
             views,
             sessions,
             connector,
+            access,
             state,
             fs,
             clock,

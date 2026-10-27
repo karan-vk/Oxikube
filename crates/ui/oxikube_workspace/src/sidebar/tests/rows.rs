@@ -30,6 +30,7 @@ fn rows_for(
         crd_watch_forbidden: false,
         open,
         custom_query: "",
+        show_restricted: false,
         gate: None,
     })
 }

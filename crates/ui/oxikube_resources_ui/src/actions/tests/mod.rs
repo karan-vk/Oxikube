@@ -1,6 +1,7 @@
 //! Tests of the row actions in a real table, over a real `CommandBus` and `MutationGuard` on
 //! testkit fakes (the table fixture's window, sessions and stores; no cluster, no threads).
 
+mod access;
 mod delete;
 mod menu;
 

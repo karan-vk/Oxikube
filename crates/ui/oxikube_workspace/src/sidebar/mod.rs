@@ -56,8 +56,8 @@ pub use core::{ORDER_STEP, core_sections, register_core_sections};
 pub use panel::{DEFAULT_WIDTH, SidebarDeps, SidebarEvent, SidebarPanel};
 pub use registry::SidebarRegistry;
 pub use rows::{
-    AccessState, DEFINITIONS_ENTRY, EntryRow, GroupRow, NoticeKind, NoticeRow, Row, RowInputs,
-    SEARCH_ROW, SearchRow, SectionRow, build_rows,
+    AccessState, DEFINITIONS_ENTRY, EntryRow, GroupRow, NO_LIST_PERMISSION, NoticeAction,
+    NoticeKind, NoticeRow, Row, RowInputs, SEARCH_ROW, SearchRow, SectionRow, build_rows,
 };
 pub use section::{SectionBody, SidebarEntry, SidebarKind, SidebarSection, SidebarTarget};
 pub use store::{SIDEBAR_TABLE, SIDEBAR_VERSION, SavedSidebar, SidebarStore};

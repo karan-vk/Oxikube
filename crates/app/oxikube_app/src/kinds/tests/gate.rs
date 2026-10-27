@@ -171,3 +171,44 @@ fn served_kinds_ignore_the_version() {
     assert!(!served.is_empty());
     assert!(served.len() >= 30);
 }
+
+/// Records the plural the gate hands the hook.
+struct Plurals(parking_lot::Mutex<Vec<Option<String>>>);
+
+impl KindVisibility for Plurals {
+    fn is_listable_resource(
+        &self,
+        _: &ClusterId,
+        _: &Gvk,
+        plural: Option<&str>,
+        _: Option<&str>,
+    ) -> Option<bool> {
+        self.0.lock().push(plural.map(str::to_owned));
+        Some(false)
+    }
+}
+
+#[test]
+fn the_gate_hands_the_hook_the_plural_discovery_served() {
+    let cluster = cluster();
+    let selection = NamespaceSelection::All;
+    let core = ServedKinds::from_kinds(&discovery_sets::core());
+    let hook = Plurals(Default::default());
+    let pods = Gvk::new("", "v1", "Pod");
+    let gate = |served| KindGate {
+        cluster: &cluster,
+        served,
+        visibility: &hook,
+        namespaces: &selection,
+    };
+
+    assert_eq!(
+        gate(Some(&core)).judge(&pods, Scope::Namespaced),
+        Shown::NotListable
+    );
+    assert_eq!(
+        gate(None).judge(&pods, Scope::Namespaced),
+        Shown::NotListable
+    );
+    assert_eq!(*hook.0.lock(), [Some("pods".to_owned()), None]);
+}

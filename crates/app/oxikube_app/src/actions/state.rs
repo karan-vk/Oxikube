@@ -98,6 +98,12 @@ pub enum DisabledReason {
     /// The cluster is read-only and shells into pods are not allowed there
     /// (`exec_in_read_only`).
     ExecReadOnly,
+    /// The access review says the user may not do what the action needs on this kind
+    /// (E17-S03). A soft gate: the guard and the API server still decide.
+    NoPermission {
+        /// The RBAC verb that was denied (`delete`, `patch`, ...).
+        verb: &'static str,
+    },
 }
 
 impl fmt::Display for DisabledReason {
@@ -107,6 +113,9 @@ impl fmt::Display for DisabledReason {
             DisabledReason::ExecReadOnly => f.write_str(
                 "This cluster is read-only: shells are blocked (set exec_in_read_only to allow them)",
             ),
+            DisabledReason::NoPermission { verb } => {
+                write!(f, "You have no {verb} permission for this kind")
+            }
         }
     }
 }

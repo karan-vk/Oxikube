@@ -1,7 +1,9 @@
 //! Which kinds a cluster's sidebar shows: what discovery serves ([`ServedKinds`]) and what the
 //! visibility hook allows ([`KindVisibility`]), joined by [`KindGate`].
 
-use std::collections::HashSet;
+use std::collections::HashMap;
+
+use futures::future::BoxFuture;
 
 use oxikube_domain::ids::{ClusterId, Gvk, Scope};
 use oxikube_domain::kinds::ResourceKind;
@@ -13,20 +15,29 @@ use super::meta::GroupKind;
 /// VolumeSnapshots, VPA) appear only on clusters that have them.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ServedKinds {
-    kinds: HashSet<GroupKind>,
+    /// Each served kind with its plural resource name (what RBAC rules name it by).
+    kinds: HashMap<GroupKind, String>,
 }
 
 impl ServedKinds {
     /// The kinds of a discovery answer.
     pub fn from_kinds<'a>(kinds: impl IntoIterator<Item = &'a ResourceKind>) -> Self {
         Self {
-            kinds: kinds.into_iter().map(|k| GroupKind::of(&k.gvk)).collect(),
+            kinds: kinds
+                .into_iter()
+                .map(|k| (GroupKind::of(&k.gvk), k.plural.clone()))
+                .collect(),
         }
+    }
+
+    /// The plural resource name `gvk` is served as (`None` when it is not served).
+    pub fn plural(&self, gvk: &Gvk) -> Option<&str> {
+        self.kinds.get(&GroupKind::of(gvk)).map(String::as_str)
     }
 
     /// Whether the cluster serves `gvk` at some version.
     pub fn serves(&self, gvk: &Gvk) -> bool {
-        self.kinds.contains(&GroupKind::of(gvk))
+        self.kinds.contains_key(&GroupKind::of(gvk))
     }
 
     /// How many kinds the cluster serves.
@@ -53,6 +64,32 @@ pub trait KindVisibility: Send + Sync {
     fn is_listable(&self, cluster: &ClusterId, gvk: &Gvk, namespace: Option<&str>) -> Option<bool> {
         let _ = (cluster, gvk, namespace);
         None
+    }
+
+    /// [`is_listable`](Self::is_listable) for an implementation that asks RBAC, which names a
+    /// kind by its plural resource name (`plural`, from discovery; `None` when discovery has not
+    /// answered). The gate calls this one; it defaults to [`is_listable`](Self::is_listable).
+    fn is_listable_resource(
+        &self,
+        cluster: &ClusterId,
+        gvk: &Gvk,
+        plural: Option<&str>,
+        namespace: Option<&str>,
+    ) -> Option<bool> {
+        let _ = plural;
+        self.is_listable(cluster, gvk, namespace)
+    }
+
+    /// Loads what [`is_listable`](Self::is_listable) answers from, for `cluster` and the
+    /// selected `namespaces`: the sidebar awaits it (off the UI thread) after connect and on every
+    /// namespace change, then rebuilds. The default has nothing to load.
+    fn refresh<'a>(
+        &'a self,
+        cluster: &'a ClusterId,
+        namespaces: &'a NamespaceSelection,
+    ) -> BoxFuture<'a, ()> {
+        let _ = (cluster, namespaces);
+        Box::pin(std::future::ready(()))
     }
 }
 
@@ -93,9 +130,10 @@ impl KindGate<'_> {
         if self.served.is_some_and(|served| !served.serves(gvk)) {
             return Shown::NotServed;
         }
+        let plural = self.served.and_then(|served| served.plural(gvk));
         let listable = |namespace: Option<&str>| {
             self.visibility
-                .is_listable(self.cluster, gvk, namespace)
+                .is_listable_resource(self.cluster, gvk, plural, namespace)
                 .unwrap_or(true)
         };
         let allowed = if scope.is_namespaced() && !self.namespaces.is_all() {

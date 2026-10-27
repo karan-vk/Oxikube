@@ -17,7 +17,7 @@ use super::section::{SidebarSection, SidebarTarget};
 mod custom;
 mod sections;
 
-use sections::{Shown, integration_rows, section_rows};
+use sections::{Restricted, Shown, integration_rows, section_rows};
 
 /// The id of the "Definitions" entry at the top of Custom Resources: the list of the cluster's
 /// CustomResourceDefinitions (E07-S07).
@@ -94,6 +94,9 @@ pub struct SectionRow {
     pub count: Option<CountState>,
     /// Where the heading goes when it is not expandable.
     pub target: Option<SidebarTarget>,
+    /// The user may not list anything in it (E17-S03): drawn greyed, with "no list permission"
+    /// on hover. Only present while the sidebar shows restricted entries.
+    pub restricted: bool,
 }
 
 /// An API group inside Custom Resources.
@@ -123,6 +126,9 @@ pub struct EntryRow {
     /// What the `ResourceStore` says about the kind's count; `None` for entries that list no
     /// built-in kind. Filled by [`apply_counts`](super::apply_counts), never by [`build_rows`].
     pub count: Option<CountState>,
+    /// The user may not list the kind (E17-S03): drawn greyed, with "no list permission" on
+    /// hover. Only present while the sidebar shows restricted entries.
+    pub restricted: bool,
 }
 
 /// How a notice is drawn.
@@ -143,6 +149,28 @@ pub struct NoticeRow {
     pub text: SharedString,
     /// How it is drawn.
     pub kind: NoticeKind,
+    /// A link drawn after the text.
+    pub action: Option<NoticeAction>,
+}
+
+/// What a notice's link does. Pure UI state of the sidebar (like its search field), not a
+/// cluster action.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NoticeAction {
+    /// Show the entries access hides, greyed out ("Show all").
+    ShowRestricted,
+    /// Hide them again.
+    HideRestricted,
+}
+
+impl NoticeAction {
+    /// The link's label.
+    pub fn label(self) -> &'static str {
+        match self {
+            NoticeAction::ShowRestricted => "Show all",
+            NoticeAction::HideRestricted => "Hide",
+        }
+    }
 }
 
 impl Row {
@@ -183,6 +211,9 @@ pub struct RowInputs<'a> {
     /// The kind registry's per-cluster rule for entries that list a kind (discovery presence and
     /// the visibility hook, E12-S01); `None` gates nothing.
     pub gate: Option<KindGate<'a>>,
+    /// Keep the entries the user may not list, greyed out, instead of hiding them (the
+    /// "show all" of the restricted indicator, E17-S03).
+    pub show_restricted: bool,
 }
 
 /// Whether row `id` is open: the user's choice, else `default`.
@@ -200,13 +231,14 @@ pub fn build_rows(input: &RowInputs<'_>) -> Vec<Row> {
             id: "access-warning",
             text: format!("Could not check your access ({reason}); showing every section.").into(),
             kind: NoticeKind::Warning,
+            action: None,
         }));
     }
-    let mut hidden = 0usize;
+    let mut restricted = Restricted::default();
     for section in input.sections {
-        match section_rows(section, input) {
+        match section_rows(section, input, &mut restricted) {
             Shown::Rows(section_rows) => rows.extend(section_rows),
-            Shown::Denied => hidden += 1,
+            Shown::Denied => restricted.sections += 1,
             Shown::Absent => {}
         }
     }
@@ -218,6 +250,7 @@ pub fn build_rows(input: &RowInputs<'_>) -> Vec<Row> {
             id: "crd-watch-forbidden",
             text: CRD_WATCH_FORBIDDEN.into(),
             kind: NoticeKind::Muted,
+            action: None,
         }));
     }
     match input.access {
@@ -225,13 +258,13 @@ pub fn build_rows(input: &RowInputs<'_>) -> Vec<Row> {
             id: "access-pending",
             text: "Checking access…".into(),
             kind: NoticeKind::Muted,
+            action: None,
         })),
-        AccessState::Known(AccessOutcome::Reviewed(_)) if hidden > 0 => {
-            rows.push(Row::Notice(NoticeRow {
-                id: "access-limited",
-                text: limited_access_text(hidden).into(),
-                kind: NoticeKind::Muted,
-            }));
+        AccessState::Known(_) if !restricted.is_empty() => {
+            rows.push(Row::Notice(restricted_notice(
+                restricted,
+                input.show_restricted,
+            )));
         }
         AccessState::Known(_) => {}
     }
@@ -242,7 +275,31 @@ pub fn build_rows(input: &RowInputs<'_>) -> Vec<Row> {
 const CRD_WATCH_FORBIDDEN: &str = "Custom resources may be out of date: you may not watch \
 CustomResourceDefinitions. New ones appear after a while or on reconnect.";
 
-fn limited_access_text(hidden: usize) -> String {
-    let what = if hidden == 1 { "section" } else { "sections" };
-    format!("Limited access: {hidden} {what} hidden")
+/// The "restricted" indicator: what access took away, and the link that shows or hides it.
+fn restricted_notice(restricted: Restricted, showing: bool) -> NoticeRow {
+    // One short phrase: the line shares a narrow dock with its link.
+    let what = match (restricted.sections, restricted.entries) {
+        (1, 0) => "1 section".to_owned(),
+        (sections, 0) => format!("{sections} sections"),
+        (0, 1) => "1 kind".to_owned(),
+        (0, entries) => format!("{entries} kinds"),
+        (sections, entries) => format!("{} items", sections + entries),
+    };
+    let (text, action) = if showing {
+        (format!("{what} greyed out"), NoticeAction::HideRestricted)
+    } else {
+        (
+            format!("Limited access: {what} hidden"),
+            NoticeAction::ShowRestricted,
+        )
+    };
+    NoticeRow {
+        id: "access-limited",
+        text: text.into(),
+        kind: NoticeKind::Muted,
+        action: Some(action),
+    }
 }
+
+/// What the tooltip of a greyed-out entry says.
+pub const NO_LIST_PERMISSION: &str = "no list permission";
