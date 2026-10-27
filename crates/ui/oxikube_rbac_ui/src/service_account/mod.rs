@@ -4,7 +4,8 @@
 //! |---|---|
 //! | `model` | [`ServiceAccountFacts`] (secrets, image pull secrets, automount from the object's JSON), [`BoundRoles`] / [`BoundRole`] (the roles bound to the account, read from the app's `SubjectIndex`) |
 //! | `panel` | [`ServiceAccountPanel`]: the detail panel above the Overview, and the poll that recomputes the bound roles on a background task when the index moved |
-//! | `render` | the drawing: sections of links, and the virtualised bound-roles list |
+//! | `render` | the drawing: sections of links |
+//! | `bound` | the virtualised bound-roles list |
 //! | `actions` | [`register_header_action`]: the header's extension point (E17-S09 adds "Generate kubeconfig") |
 //!
 //! The list columns (Name, Namespace, Secrets, Age, Labels) are the shared catalogue's
@@ -20,6 +21,7 @@
 //! released with it ([`PolicyHub`](oxikube_app::access::PolicyHub)).
 
 mod actions;
+mod bound;
 mod model;
 mod panel;
 mod render;
