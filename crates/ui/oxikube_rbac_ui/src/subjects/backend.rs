@@ -14,6 +14,8 @@ pub struct PolicyWatch {
     pub handle: PolicyHandle,
     /// The feeds filling it; `None` for a fixed policy (fixtures).
     pub feed: Option<PolicyFeed>,
+    /// The store the feeds subscribe to; `None` for a fixed policy.
+    pub store: Option<ResourceStore>,
 }
 
 /// The page's view of the app, bound to one cluster.
@@ -24,6 +26,12 @@ pub trait SubjectsBackend: 'static {
     /// Starts reading the policy; `None` while the cluster has no store (not connected). Called
     /// on the UI thread; it only subscribes (the store's feeds start on its own tasks).
     fn follow(&self) -> Option<PolicyWatch>;
+
+    /// The store the cluster has now, so an open page can tell that a connect or a reconnect
+    /// replaced the one it follows. `None` for a fixed policy or while disconnected.
+    fn current_store(&self) -> Option<ResourceStore> {
+        None
+    }
 }
 
 /// The cluster's store, looked up when the page opens (a reconnect builds a new one).
@@ -58,7 +66,12 @@ impl SubjectsBackend for StoreBackend {
         Some(PolicyWatch {
             handle,
             feed: Some(feed),
+            store: Some(store),
         })
+    }
+
+    fn current_store(&self) -> Option<ResourceStore> {
+        (self.store)(&self.cluster)
     }
 }
 
@@ -84,6 +97,7 @@ impl SubjectsBackend for StaticBackend {
         Some(PolicyWatch {
             handle: self.handle.clone(),
             feed: None,
+            store: None,
         })
     }
 }

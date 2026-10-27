@@ -213,6 +213,7 @@ impl SubjectsViews {
         self.deps.host.show(&cluster, window, cx);
         let view = self.open(&workspace, &cluster, window, cx);
         view.update(cx, |view, cx| {
+            view.refollow_if_stale(cx);
             match change {
                 Change::Users => view.show_users(window, cx),
                 Change::Groups => view.show_groups(window, cx),

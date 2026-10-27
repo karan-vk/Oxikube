@@ -169,3 +169,55 @@ fn a_cluster_that_is_not_connected_says_so(cx: &mut TestAppContext) {
         ));
     });
 }
+
+#[gpui::test]
+fn a_page_opened_while_offline_follows_the_policy_once_the_cluster_connects(
+    cx: &mut TestAppContext,
+) {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    use oxikube_app::rbac_subjects::PolicyHandle;
+    use oxikube_testkit::fixtures::rbac;
+
+    use crate::subjects::{Phase, PolicyWatch, SubjectsBackend};
+
+    struct Flaky {
+        online: Rc<Cell<bool>>,
+    }
+    impl SubjectsBackend for Flaky {
+        fn cluster(&self) -> &oxikube_domain::ids::ClusterId {
+            static CLUSTER: std::sync::OnceLock<oxikube_domain::ids::ClusterId> =
+                std::sync::OnceLock::new();
+            CLUSTER.get_or_init(cluster)
+        }
+        fn follow(&self) -> Option<PolicyWatch> {
+            self.online.get().then(|| PolicyWatch {
+                handle: PolicyHandle::fixed(&rbac::cluster()),
+                feed: None,
+                store: None,
+            })
+        }
+    }
+    let online = Rc::new(Cell::new(false));
+    let mut fx = Fx::on(
+        cx,
+        Rc::new(Flaky {
+            online: online.clone(),
+        }),
+    );
+    let view = fx.users();
+    fx.vcx.update(|_, cx| {
+        assert!(matches!(view.read(cx).phase(), Phase::Unavailable(_)));
+    });
+
+    online.set(true);
+    let again = fx.users();
+    fx.settle();
+    fx.vcx.update(|_, cx| {
+        assert_eq!(again.entity_id(), view.entity_id(), "the page is reused");
+        assert_eq!(view.read(cx).phase(), &Phase::Ready);
+        let names = view.read(cx).list().read(cx, |d| d.shown_names());
+        assert!(names.contains(&"fx-viewer".to_owned()), "{names:?}");
+    });
+}

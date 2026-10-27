@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 use std::sync::Arc;
+use std::task::Poll;
 use std::time::Duration;
 
 use futures::StreamExt as _;
@@ -13,6 +14,7 @@ use gpui::{
 use oxikube_app::rbac_subjects::{
     Inherit, MatrixColumn, PolicyHandle, PolicyStatus, Provenance, SubjectFilter, SubjectMatrix,
 };
+use oxikube_app::store::ResourceStore;
 use oxikube_domain::ids::ClusterId;
 use oxikube_domain::kinds::Verb;
 use oxikube_domain::rbac::{GrantScope, Subject};
@@ -73,6 +75,8 @@ pub struct SubjectsView {
     pub(super) read_task: Option<Task<()>>,
     pub(super) why_task: Option<Task<()>>,
     feed_task: Option<Task<()>>,
+    /// The store the feeds follow, to notice a reconnect.
+    followed: Option<ResourceStore>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -130,6 +134,7 @@ impl SubjectsView {
             read_task: None,
             why_task: None,
             feed_task: None,
+            followed: None,
             _subscriptions: Vec::new(),
         };
         this.wire(window, cx);
@@ -177,6 +182,8 @@ impl SubjectsView {
 
     /// Starts reading the policy and re-reads it whenever the feeds change.
     fn follow(&mut self, cx: &mut Context<Self>) {
+        self.feed_task = None;
+        self.followed = None;
         let Some(watch) = self.deps.backend.follow() else {
             self.policy = None;
             self.phase = Phase::Unavailable("The cluster is not connected.".to_owned());
@@ -185,6 +192,7 @@ impl SubjectsView {
             return;
         };
         self.policy = Some(watch.handle);
+        self.followed = watch.store;
         if let Some(mut feed) = watch.feed {
             let (tx, mut changes) = unbounded::<()>();
             // The feeds run on the runtime; the page learns of each change through the channel.
@@ -200,7 +208,7 @@ impl SubjectsView {
                 while changes.next().await.is_some() {
                     // One read for the burst: wait for it to settle, then drop what piled up.
                     cx.background_executor().timer(SETTLE).await;
-                    while futures::poll!(changes.next()).is_ready() {}
+                    while matches!(futures::poll!(changes.next()), Poll::Ready(Some(()))) {}
                     if this.update(cx, |this, cx| this.refresh(cx)).is_err() {
                         break;
                     }
@@ -208,6 +216,20 @@ impl SubjectsView {
             }));
         }
         self.refresh(cx);
+    }
+
+    /// Follows the policy again when the page has none (it opened while disconnected) or the
+    /// cluster's store was replaced (a reconnect). Called each time the page is asked to show.
+    pub(super) fn refollow_if_stale(&mut self, cx: &mut Context<Self>) {
+        let now = self.deps.backend.current_store();
+        let stale = match (&self.followed, &now) {
+            (Some(old), Some(new)) => !old.is_same(new),
+            (None, _) => self.policy.is_none() || now.is_some(),
+            (Some(_), None) => false,
+        };
+        if stale {
+            self.follow(cx);
+        }
     }
 
     pub(super) fn set_editing(&mut self, editing: bool, cx: &mut Context<Self>) {

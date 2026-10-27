@@ -28,11 +28,10 @@ pub fn mark(access: Access) -> &'static str {
     }
 }
 
-fn columns() -> Vec<Option<MatrixColumn>> {
-    [None, None]
-        .into_iter()
-        .chain(MatrixColumn::all().map(Some))
-        .collect()
+/// The column at `ix`: the two leading text columns are `None`, the rest follow
+/// [`MatrixColumn::all`].
+fn column_at(ix: usize) -> Option<MatrixColumn> {
+    ix.checked_sub(2).and_then(|ix| MatrixColumn::all().nth(ix))
 }
 
 /// The matrix table's delegate.
@@ -139,7 +138,7 @@ impl TableDelegate for MatrixDelegate {
     }
 
     fn column(&self, col_ix: usize, _: &App) -> TableColumn {
-        let (title, width) = match columns()[col_ix] {
+        let (title, width) = match column_at(col_ix) {
             None if col_ix == 0 => ("API GROUP", GROUP_WIDTH),
             None => ("RESOURCE", RESOURCE_WIDTH),
             Some(MatrixColumn::Extras) => ("EXTRAS", EXTRAS_WIDTH),
@@ -149,7 +148,7 @@ impl TableDelegate for MatrixDelegate {
             .width(px(width))
             .min_width(px(50.))
             .movable(false);
-        if matches!(columns()[col_ix], Some(MatrixColumn::Verb(_))) {
+        if matches!(column_at(col_ix), Some(MatrixColumn::Verb(_))) {
             spec = spec.center();
         }
         spec
@@ -166,7 +165,7 @@ impl TableDelegate for MatrixDelegate {
         let Some(line) = self.line(row_ix) else {
             return div().into_any_element();
         };
-        match columns()[col_ix] {
+        match column_at(col_ix) {
             Some(MatrixColumn::Verb(verb)) => {
                 let access = line.cell(verb);
                 let colour = match access {
@@ -198,7 +197,7 @@ impl TableDelegate for MatrixDelegate {
         _: &mut Window,
         cx: &mut App,
     ) -> Option<TextCell> {
-        if matches!(columns()[col_ix], Some(MatrixColumn::Verb(_))) {
+        if matches!(column_at(col_ix), Some(MatrixColumn::Verb(_))) {
             return None;
         }
         Some(TextCell::new(SharedString::from(
@@ -237,7 +236,7 @@ impl TableDelegate for MatrixDelegate {
         let Some(line) = self.line(row_ix) else {
             return String::new();
         };
-        match columns()[col_ix] {
+        match column_at(col_ix) {
             None if col_ix == 0 => line.group_label().to_owned(),
             None => line.resource.clone(),
             Some(column) => line.cell_text(column),

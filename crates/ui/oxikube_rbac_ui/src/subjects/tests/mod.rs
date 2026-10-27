@@ -21,8 +21,8 @@ use oxikube_workspace::test_support::open_workspace;
 use oxikube_workspace::{CommandDispatcher, Workspace};
 
 use super::{
-    RbacRequest, StaticBackend, SubjectsHost, SubjectsRequestSink, SubjectsView, SubjectsViews,
-    SubjectsViewsDeps,
+    RbacRequest, StaticBackend, SubjectsBackend, SubjectsHost, SubjectsRequestSink, SubjectsView,
+    SubjectsViews, SubjectsViewsDeps,
 };
 
 /// The namespace the fixtures' RoleBindings live in.
@@ -80,6 +80,11 @@ impl Fx {
     }
 
     pub(crate) fn over(cx: &mut TestAppContext, policy: PolicyHandle) -> Self {
+        Self::on(cx, Rc::new(StaticBackend::new(cluster(), policy)))
+    }
+
+    /// A window whose pages read from `backend`.
+    pub(crate) fn on(cx: &mut TestAppContext, backend: Rc<dyn SubjectsBackend>) -> Self {
         let (workspace, mut vcx) = open_workspace(cx);
         vcx.update(|_, cx| {
             oxikube_runtime::init_deterministic(cx);
@@ -90,7 +95,6 @@ impl Fx {
             sent: Rc::default(),
             sink,
         };
-        let backend = Rc::new(StaticBackend::new(cluster(), policy));
         let deps = SubjectsViewsDeps {
             backends: Rc::new(move |_| backend.clone()),
             dispatcher: Rc::new(dispatcher.clone()),

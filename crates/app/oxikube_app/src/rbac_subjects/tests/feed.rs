@@ -113,3 +113,31 @@ async fn a_new_binding_arrives_without_a_new_list() {
     assert_eq!(users.len(), 1);
     assert_eq!(&*users[0].name(), "newcomer");
 }
+
+/// A user who may not list the RBAC kinds gets a line per kind saying so, not a silent empty page.
+#[tokio::test(flavor = "current_thread")]
+async fn forbidden_feeds_say_what_the_page_is_missing() {
+    let clock = Arc::new(FakeClockPort::default());
+    let resources = Arc::new(FakeResourcePort::with_clock(clock.clone()));
+    for _ in 0..4 {
+        resources
+            .script()
+            .watch
+            .push_err(oxikube_domain::OxiError::forbidden("roles is forbidden"));
+    }
+    let store = store_on(&resources, &clock);
+    let (mut feed, handle) = PolicyFeed::open(&store);
+    let probe = handle.clone();
+    settled(&mut feed, move || probe.status().pending == 0).await;
+
+    let problems = handle.status().problems;
+    assert_eq!(problems.len(), 4, "{problems:?}");
+    for kind in ["Role", "ClusterRole", "RoleBinding", "ClusterRoleBinding"] {
+        assert!(
+            problems
+                .iter()
+                .any(|p| p.starts_with(&format!("You may not list {kind}s"))),
+            "{kind}: {problems:?}"
+        );
+    }
+}
