@@ -63,6 +63,14 @@ impl AccessService {
         self.cache.peek(check.namespace.as_deref())?.decide(check)
     }
 
+    /// [`peek`](Self::peek) that also uses a review past its TTL. For soft gates (the sidebar,
+    /// greyed actions): they keep the last known answer while a newer review is on its way.
+    pub fn peek_stale(&self, check: &AccessCheck) -> Option<AccessDecision> {
+        self.cache
+            .peek_stale(check.namespace.as_deref())?
+            .decide(check)
+    }
+
     /// Whether `check` is allowed: from the cached (or freshly reviewed) rules when they can
     /// decide, else one `SelfSubjectAccessReview`.
     ///

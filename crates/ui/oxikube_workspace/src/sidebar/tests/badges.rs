@@ -36,6 +36,7 @@ fn rows_with(access: &AccessState) -> Vec<Row> {
         access,
         open: &BTreeMap::new(),
         custom_query: "",
+        show_restricted: false,
         gate: None,
     })
 }

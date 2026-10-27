@@ -52,7 +52,7 @@ impl ResourceTable {
         let Some(actions) = &self.deps.actions else {
             return Vec::new();
         };
-        actions.entries(&self.cluster, &self.kind, self.action_targets(cx).len())
+        actions.entries_for(&self.cluster, &self.kind, &self.action_targets(cx))
     }
 
     /// Runs the action `command` on `targets` (objects of this table).
@@ -118,7 +118,7 @@ impl ResourceTable {
         let selected = targets.len();
         let cursor_target = self.cursor_target(command, &targets, cx);
         let targets = cursor_target.clone().map_or(targets, |target| vec![target]);
-        let entries = actions.entries(&self.cluster, &self.kind, targets.len());
+        let entries = actions.entries_for(&self.cluster, &self.kind, &targets);
         let Some(entry) = entries.into_iter().find(|entry| entry.command() == command) else {
             self.say_unavailable(&actions, command, selected, cx);
             return false;

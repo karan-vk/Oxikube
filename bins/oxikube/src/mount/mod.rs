@@ -507,6 +507,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
                         &logs::row_actions(),
                     )
                     .with_exec(exec_service)
+                    // Greys out the actions the cached access reviews say the user may not run.
+                    .with_access(services.namespaces.access().clone())
                     .with_drain(oxikube_app::nodes::DrainFlow::new(
                         bus.clone(),
                         nodes,

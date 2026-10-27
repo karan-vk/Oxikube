@@ -30,7 +30,7 @@ impl ResourceTable {
     ) -> bool {
         let gate = bulk.row_action(&self.kind);
         let selected = targets.len();
-        let entries = actions.entries(&self.cluster, &self.kind, selected);
+        let entries = actions.entries_for(&self.cluster, &self.kind, &targets);
         let Some(entry) = entries.into_iter().find(|entry| entry.command() == gate) else {
             self.say_unavailable(actions, gate, selected, cx);
             return false;

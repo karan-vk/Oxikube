@@ -13,6 +13,7 @@
 //! |---|---|
 //! | `registry` | [`RowActionRegistry`], [`RowActionSpec`], [`KindFilter`]: which commands are row actions |
 //! | `state` | [`ActionContext`], [`ActionState`], [`DisabledReason`]: what a session allows |
+//! | `gating` | [`ActionAccess`], [`required_access`]: the soft RBAC gate that greys a mutating action the user may not run (E17-S03) |
 //! | `snapshot` | [`RowActions`], [`RowAction`]: the cached list and [`RowActions::actions_for`] |
 //! | `delete` | the `resource::Delete` handler ([`register_commands`]) and [`DeleteFlow`] |
 //!
@@ -37,6 +38,7 @@
 //! [`run`](DeleteFlow::run) executes every object on its own and reports each result.
 
 mod delete;
+mod gating;
 mod registry;
 mod snapshot;
 mod state;
@@ -49,6 +51,7 @@ pub use delete::{
     PlannedDelete, object_label, register_commands,
 };
 pub(crate) use delete::{Deleted, delete_object};
+pub use gating::{ActionAccess, RequiredAccess, required_access};
 pub use registry::{DuplicateAction, KindFilter, RowActionRegistry, RowActionSpec};
 pub use snapshot::{ResolvedAction, RowAction, RowActions};
 pub use state::{ActionContext, ActionState, DisabledReason};

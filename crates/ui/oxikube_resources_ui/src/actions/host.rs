@@ -2,15 +2,16 @@
 
 use std::sync::Arc;
 
+use oxikube_app::access::AccessRegistry;
 use oxikube_app::namespaces::NamespaceCreator;
 use oxikube_app::{
-    ActionContext, ActionState, ClusterSessionManager, CommandBus, DebugRunner, DeleteFlow,
-    ExecService, RollbackRunner, RolloutService, RowAction, RowActionRegistry, RowActions,
-    ScaleRunner, SelectionFlow, SetImageRunner, WorkloadService,
+    ActionAccess, ActionContext, ActionState, ClusterSessionManager, CommandBus, DebugRunner,
+    DeleteFlow, ExecService, RollbackRunner, RolloutService, RowAction, RowActionRegistry,
+    RowActions, ScaleRunner, SelectionFlow, SetImageRunner, WorkloadService,
 };
 use oxikube_domain::Capabilities;
 use oxikube_domain::command::CommandId;
-use oxikube_domain::ids::ClusterId;
+use oxikube_domain::ids::{ClusterId, ResourceRef};
 use oxikube_domain::kinds::ResourceKind;
 
 use crate::kinds::storage::StorageFlows;
@@ -77,6 +78,9 @@ pub struct ResourceActions {
     /// Starts `portforward::Start` for the start dialog (E15-S04); `None` until the app has a
     /// port-forward manager.
     forward: Option<oxikube_app::ForwardStarter>,
+    /// The cached access reviews that grey out actions the user may not run (E17-S03); `None`
+    /// until the app gives them.
+    access: Option<AccessRegistry>,
 }
 
 impl ResourceActions {
@@ -131,7 +135,17 @@ impl ResourceActions {
             namespace_creator: NamespaceCreator::new(bus.clone(), who),
             drain: None,
             forward: None,
+            access: None,
         }
+    }
+
+    /// Greys out a mutating action the cached access reviews of `access` say the user may not
+    /// run ("You have no delete permission for this kind"). A soft gate: the guard and the API
+    /// server still decide. Without it only the cluster's read-only mode greys actions out.
+    #[must_use]
+    pub fn with_access(mut self, access: AccessRegistry) -> Self {
+        self.access = Some(access);
+        self
     }
 
     /// Lets the Forward buttons, `shift-f` and the palette open the start dialog over `starter`
@@ -267,15 +281,62 @@ impl ResourceActions {
     }
 
     /// The actions for `selected` objects of `kind` in `cluster`: what the context menu and the
-    /// palette show.
+    /// palette show. Without the objects' namespaces the RBAC gate judges by the namespaces the
+    /// session has selected; prefer [`entries_for`](Self::entries_for).
     pub fn entries(
         &self,
         cluster: &ClusterId,
         kind: &ResourceKind,
         selected: usize,
     ) -> Vec<ActionEntry> {
+        let namespaces = self
+            .sessions
+            .get(cluster)
+            .map(|session| {
+                session
+                    .namespace_selection()
+                    .names()
+                    .map(|name| Some(name.to_owned()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        self.entries_in(cluster, kind, selected, namespaces)
+    }
+
+    /// The actions for the objects `targets` of `kind`: [`entries`](Self::entries) with the RBAC
+    /// gate judging each object's own namespace.
+    pub fn entries_for(
+        &self,
+        cluster: &ClusterId,
+        kind: &ResourceKind,
+        targets: &[ResourceRef],
+    ) -> Vec<ActionEntry> {
+        let namespaces = targets
+            .iter()
+            .map(|target| target.namespace.as_deref().map(str::to_owned))
+            .collect();
+        self.entries_in(cluster, kind, targets.len(), namespaces)
+    }
+
+    fn entries_in(
+        &self,
+        cluster: &ClusterId,
+        kind: &ResourceKind,
+        selected: usize,
+        namespaces: Vec<Option<String>>,
+    ) -> Vec<ActionEntry> {
+        let session = self.sessions.get(cluster);
+        let ctx = session.as_ref().map(ActionContext::of).unwrap_or_default();
+        let access = match (&self.access, &session) {
+            (Some(registry), Some(session)) => registry
+                .for_session(cluster, session)
+                .map_or_else(ActionAccess::none, |service| {
+                    ActionAccess::new(service, namespaces)
+                }),
+            _ => ActionAccess::none(),
+        };
         self.actions
-            .resolve(kind, &self.context(cluster), selected)
+            .resolve_with(kind, &ctx, selected, &access)
             .into_iter()
             .map(|resolved| ActionEntry {
                 label: label(&resolved.action, selected),

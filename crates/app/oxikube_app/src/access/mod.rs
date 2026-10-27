@@ -31,6 +31,12 @@
 //! store's subscriptions, turned into normalised rules per subject (`oxikube_domain::rbac` reads and
 //! normalises; `index`, `objects` and `grant` index them). It is plain data with no port.
 //!
+//! * **Soft gates** (E17-S03): [`AccessVisibility`] implements the sidebar's
+//!   [`KindVisibility`](crate::kinds::KindVisibility) over the cached rules, and
+//!   [`ActionAccess`](crate::actions::ActionAccess) greys a row action the user may not run.
+//!   Both read [`AccessService::peek_stale`] (never waiting, keeping the last answer while a
+//!   newer review is on its way) and treat anything but a definite deny as allowed.
+//!
 //! Reviews are `POST`s that create nothing, so none of this goes through `MutationGuard`.
 //! Plain async Rust over a port: no gpui, no kube, nothing spawned.
 
@@ -41,6 +47,7 @@ mod namespaces;
 mod objects;
 mod registry;
 mod service;
+mod visibility;
 
 #[cfg(test)]
 mod tests;
@@ -50,3 +57,4 @@ pub use index::SubjectIndex;
 pub use namespaces::{AccessibleNamespaces, NamespaceOrigin, accessible_namespaces};
 pub use registry::AccessRegistry;
 pub use service::{AccessService, DEFAULT_TTL, MAX_IN_FLIGHT};
+pub use visibility::AccessVisibility;

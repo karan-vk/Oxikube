@@ -19,7 +19,9 @@ use crate::sidebar::actions::{
     Activate, Collapse, Expand, MoveDown, MoveUp, SIDEBAR_CONTEXT, SIDEBAR_SEARCH_CONTEXT,
 };
 use crate::sidebar::badges::badge_text;
-use crate::sidebar::rows::{EntryRow, GroupRow, NoticeKind, NoticeRow, Row, SectionRow};
+use crate::sidebar::rows::{
+    EntryRow, GroupRow, NO_LIST_PERMISSION, NoticeAction, NoticeKind, NoticeRow, Row, SectionRow,
+};
 
 /// Row height in unscaled pixels; the list is uniform.
 const ROW_HEIGHT: f32 = 28.;
@@ -85,7 +87,7 @@ impl SidebarPanel {
             Some(Row::Section(row)) => self.render_section(ix, row, cx),
             Some(Row::Group(row)) => self.render_group(ix, row, cx),
             Some(Row::Entry(row)) => self.render_entry(ix, row, cx),
-            Some(Row::Notice(row)) => render_notice(ix, row, cx),
+            Some(Row::Notice(row)) => self.render_notice(ix, row, cx),
             Some(Row::Search(_)) => self.render_search(ix, cx),
             None => div().into_any_element(),
         }
@@ -131,8 +133,14 @@ impl SidebarPanel {
     fn render_section(&self, ix: usize, row: &SectionRow, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.colors();
         let id = row.id.clone();
+        let disabled = colors.text_disabled;
         self.row_frame(ix, &id, 0., cx)
             .debug_selector(move || format!("sidebar-section-{id}"))
+            .when(row.restricted, |frame| {
+                frame
+                    .text_color(disabled)
+                    .tooltip(move |window, cx| Tooltip::new(NO_LIST_PERMISSION).build(window, cx))
+            })
             .child(disclosure(row.expandable, row.open, cx))
             .child(
                 Icon::new(row.icon)
@@ -168,8 +176,14 @@ impl SidebarPanel {
     fn render_entry(&self, ix: usize, row: &EntryRow, cx: &mut Context<Self>) -> AnyElement {
         let id = row.id.clone();
         let indent = INDENT * f32::from(row.depth) + 14.;
+        let disabled = cx.colors().text_disabled;
         self.row_frame(ix, &id, indent, cx)
             .debug_selector(move || format!("sidebar-entry-{id}"))
+            .when(row.restricted, |frame| {
+                frame
+                    .text_color(disabled)
+                    .tooltip(move |window, cx| Tooltip::new(NO_LIST_PERMISSION).build(window, cx))
+            })
             .child(div().flex_1().truncate().child(row.title.clone()))
             .when_some(row.count.as_ref(), |entry, state| {
                 entry.child(count_badge(&row.id, state, cx))
@@ -275,22 +289,40 @@ fn count_placeholder(
         })
 }
 
-fn render_notice(ix: usize, row: &NoticeRow, cx: &mut Context<SidebarPanel>) -> AnyElement {
-    let tokens = cx.tokens();
-    let colour = match row.kind {
-        NoticeKind::Muted => tokens.colors.text_muted,
-        NoticeKind::Warning => tokens.colors.warning,
-    };
-    let id = row.id;
-    h_flex()
-        .id(("cluster-sidebar-row", ix))
-        .debug_selector(move || format!("sidebar-notice-{id}"))
-        .w_full()
-        .h(u(px(ROW_HEIGHT)))
-        .px(u(tokens.spacing.md))
-        .items_center()
-        .text_size(u(tokens.font.small))
-        .text_color(colour)
-        .child(div().truncate().child(row.text.clone()))
-        .into_any_element()
+impl SidebarPanel {
+    /// A line of explanation; the restricted indicator's carries its "Show all" / "Hide" link.
+    fn render_notice(&self, ix: usize, row: &NoticeRow, cx: &mut Context<Self>) -> AnyElement {
+        let tokens = cx.tokens();
+        let colour = match row.kind {
+            NoticeKind::Muted => tokens.colors.text_muted,
+            NoticeKind::Warning => tokens.colors.warning,
+        };
+        let id = row.id;
+        let link = row.action.map(|action| {
+            let selector = format!("sidebar-notice-action-{id}");
+            div()
+                .id(SharedString::from(selector.clone()))
+                .debug_selector(move || selector)
+                .flex_none()
+                .cursor_pointer()
+                .text_color(tokens.colors.text)
+                .child(action.label())
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.set_show_restricted(action == NoticeAction::ShowRestricted, cx);
+                }))
+        });
+        h_flex()
+            .id(("cluster-sidebar-row", ix))
+            .debug_selector(move || format!("sidebar-notice-{id}"))
+            .w_full()
+            .h(u(px(ROW_HEIGHT)))
+            .px(u(tokens.spacing.md))
+            .gap(u(tokens.spacing.sm))
+            .items_center()
+            .text_size(u(tokens.font.small))
+            .text_color(colour)
+            .child(div().truncate().child(row.text.clone()))
+            .children(link)
+            .into_any_element()
+    }
 }

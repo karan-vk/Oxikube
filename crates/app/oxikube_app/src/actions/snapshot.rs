@@ -7,8 +7,9 @@ use oxikube_domain::command::{Command, CommandMeta};
 use oxikube_domain::ids::ResourceRef;
 use oxikube_domain::kinds::ResourceKind;
 
+use super::gating::{ActionAccess, required_access};
 use super::registry::{KindFilter, RowActionRegistry};
-use super::state::{ActionContext, ActionState};
+use super::state::{ActionContext, ActionState, DisabledReason};
 use crate::CommandBus;
 
 /// One row action: a registered command with its declared metadata.
@@ -106,14 +107,37 @@ impl RowActions {
         ctx: &ActionContext,
         selected: usize,
     ) -> Vec<ResolvedAction> {
+        self.resolve_with(kind, ctx, selected, &ActionAccess::none())
+    }
+
+    /// [`resolve`](Self::resolve) with the RBAC soft gate: a mutating action the cached access
+    /// review says the user may not run on `kind` is [`Disabled`](ActionState::Disabled) with
+    /// [`DisabledReason::NoPermission`]. The cluster's read-only mode is reported first.
+    pub fn resolve_with(
+        &self,
+        kind: &ResourceKind,
+        ctx: &ActionContext,
+        selected: usize,
+        access: &ActionAccess,
+    ) -> Vec<ResolvedAction> {
         self.actions
             .iter()
             .filter(|action| {
                 (selected <= 1 || action.bulk) && action.applies_to(kind, ctx.capabilities)
             })
-            .map(|action| ResolvedAction {
-                action: *action,
-                state: ctx.state_of(&action.meta),
+            .map(|action| {
+                let mut state = ctx.state_of(&action.meta);
+                if state.is_enabled()
+                    && action.meta.mutating
+                    && let Some(need) = required_access(action.meta.id)
+                    && access.denies(kind, need)
+                {
+                    state = ActionState::Disabled(DisabledReason::NoPermission { verb: need.verb });
+                }
+                ResolvedAction {
+                    action: *action,
+                    state,
+                }
             })
             .collect()
     }
