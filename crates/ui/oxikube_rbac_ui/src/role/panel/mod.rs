@@ -35,7 +35,7 @@ struct Source {
 /// The Role panel. See the module docs.
 pub struct RolePanel {
     detail: WeakEntity<DetailView>,
-    role: Option<Role>,
+    role: Option<Arc<Role>>,
     rows: Arc<[RuleRow]>,
     sources: Sources,
     built_from: Option<Source>,
@@ -74,7 +74,7 @@ impl RolePanel {
 
     /// The role, once read.
     pub fn role(&self) -> Option<&Role> {
-        self.role.as_ref()
+        self.role.as_deref()
     }
 
     /// The rows of the table.
@@ -117,7 +117,7 @@ impl RolePanel {
         self.rows = RuleRow::list(&role.rules).into();
         self.built_from = Some(source);
         self.read_sources(&role, &host, cx);
-        self.role = Some(role);
+        self.role = Some(Arc::new(role));
         cx.notify();
     }
 
