@@ -104,6 +104,11 @@ pub fn infer_json_indent_size(text: &str) -> usize {
 
 /// Pretty-print `value` with `indent_size` spaces per level, indenting every line after the
 /// first by `indent_prefix_len` extra spaces so it nests at the insertion point.
+///
+/// # Panics
+///
+/// Never in practice: serialising a `serde_json::Value` into memory cannot fail and always
+/// produces UTF-8; the `expect`s guard those invariants.
 pub fn to_pretty_json(
     value: &serde_json::Value,
     indent_size: usize,

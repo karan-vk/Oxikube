@@ -39,7 +39,10 @@
 //! `OXIKUBE_TEST_CONTEXT` set (`cargo xtask kind-up`); without it each test returns at once.
 #![cfg(feature = "integration")]
 // The run says which optional kinds it skipped and how long each section took.
-#![allow(clippy::print_stdout)]
+#![allow(
+    clippy::print_stdout,
+    reason = "the run reports skipped kinds and timings on stdout"
+)]
 
 #[path = "../kind_common/mod.rs"]
 mod kind_common;

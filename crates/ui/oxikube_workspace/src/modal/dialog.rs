@@ -85,6 +85,7 @@ impl DialogModal {
     /// Makes the user type `expected` before the dialog confirms (the guard's `TypeName` tier): the
     /// confirm button stays disabled, and Enter does nothing, until the field holds exactly that
     /// text. Needs the window the dialog opens in, for its text field.
+    #[must_use]
     pub fn require_typed(
         mut self,
         expected: impl Into<SharedString>,
@@ -157,36 +158,42 @@ impl DialogModal {
     }
 
     /// The explanatory text under the title.
+    #[must_use]
     pub fn message(mut self, message: impl Into<SharedString>) -> Self {
         self.message = Some(message.into());
         self
     }
 
     /// The confirm button's label.
+    #[must_use]
     pub fn confirm_label(mut self, label: impl Into<SharedString>) -> Self {
         self.confirm_label = label.into();
         self
     }
 
     /// The cancel button's label.
+    #[must_use]
     pub fn cancel_label(mut self, label: impl Into<SharedString>) -> Self {
         self.cancel_label = label.into();
         self
     }
 
     /// Draws the confirm button as a dangerous action.
+    #[must_use]
     pub fn destructive(mut self) -> Self {
         self.destructive = true;
         self
     }
 
     /// Runs when the user confirms; the dialog then closes.
+    #[must_use]
     pub fn on_confirm(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
         self.on_confirm = Some(Box::new(handler));
         self
     }
 
     /// Runs when the user cancels (button or Escape); the dialog then closes.
+    #[must_use]
     pub fn on_cancel(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
         self.on_cancel = Some(Box::new(handler));
         self

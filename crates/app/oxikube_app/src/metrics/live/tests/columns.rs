@@ -143,8 +143,10 @@ fn node_percent_cells_are_usage_over_allocatable_toned_by_the_thresholds() {
     assert_eq!(names, ["cool", "warm", "hot"]);
 
     // The setting moves the thresholds: the same 70 % is neutral under warn 75.
-    let mut thresholds = UsageThresholds::default();
-    thresholds.cpu = Threshold::new(75, 95);
+    let thresholds = UsageThresholds {
+        cpu: Threshold::new(75, 95),
+        ..Default::default()
+    };
     usage.set_thresholds(thresholds);
     assert_eq!(cpu(&warm).1, Tone::Neutral);
     assert_eq!(cpu(&hot).1, Tone::Warn);

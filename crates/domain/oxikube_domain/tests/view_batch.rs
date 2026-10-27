@@ -6,7 +6,7 @@ use oxikube_domain::{CronJobSummary, JobSummary, Resource, ViewError};
 use serde_json::{Value, json};
 
 fn ts(s: &str) -> Timestamp {
-    s.parse().unwrap()
+    s.parse().expect("test timestamp is RFC 3339")
 }
 
 fn job(spec: Value, status: Value) -> Resource {
@@ -16,7 +16,7 @@ fn job(spec: Value, status: Value) -> Resource {
                      "creationTimestamp": "2026-10-01T00:00:00Z"},
         "spec": spec, "status": status,
     }))
-    .unwrap()
+    .expect("a Job resource")
 }
 
 fn condition(kind: &str, status: &str) -> Value {

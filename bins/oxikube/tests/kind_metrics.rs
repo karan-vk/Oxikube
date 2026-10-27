@@ -117,10 +117,13 @@ fn deploy_prometheus(ns: &TestNamespace) {
     apply
         .stdin
         .take()
-        .unwrap()
+        .expect("stdin is piped")
         .write_all(manifest().as_bytes())
-        .unwrap();
-    assert!(apply.wait().unwrap().success(), "kubectl apply");
+        .expect("write the manifest to kubectl apply");
+    assert!(
+        apply.wait().expect("wait for kubectl apply").success(),
+        "kubectl apply"
+    );
     // The image may need pulling on a cluster that has not pre-pulled it.
     let ready = kubectl()
         .args([
@@ -130,7 +133,7 @@ fn deploy_prometheus(ns: &TestNamespace) {
             "--timeout=240s",
         ])
         .output()
-        .unwrap();
+        .expect("run kubectl wait");
     assert!(
         ready.status.success(),
         "prometheus pod not ready: {}\n{}",

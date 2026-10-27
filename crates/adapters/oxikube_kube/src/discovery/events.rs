@@ -35,7 +35,7 @@ impl KubeDiscovery {
         let initial = status.borrow_and_update().clone();
         let first = initial
             .is_forbidden()
-            .then(|| DiscoveryEvent::CrdWatch(initial));
+            .then_some(DiscoveryEvent::CrdWatch(initial));
         let follow = Follow {
             diffs,
             schemas,

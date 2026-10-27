@@ -119,7 +119,10 @@ pub fn classify_with(err: &kube::Error, refresh: CredentialRefresh) -> OxiError 
             OxiError::internal("the cluster sent a response that could not be decoded")
         }
         E::HttpError(_) | E::BuildRequest(_) => OxiError::internal("could not build the request"),
-        #[allow(unreachable_patterns)]
+        #[allow(
+            unreachable_patterns,
+            reason = "the client error enum is non-exhaustive, so the arm may be reachable"
+        )]
         _ => OxiError::internal(format!(
             "unexpected client error: {}",
             one_line(&redact(&err.to_string()))

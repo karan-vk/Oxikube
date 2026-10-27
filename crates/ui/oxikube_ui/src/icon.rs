@@ -32,12 +32,14 @@ impl Icon {
     }
 
     /// Square edge length.
+    #[must_use]
     pub fn size(mut self, size: Pixels) -> Self {
         self.size = Some(size);
         self
     }
 
     /// Stroke colour.
+    #[must_use]
     pub fn color(mut self, color: impl Into<Hsla>) -> Self {
         self.color = Some(color.into());
         self

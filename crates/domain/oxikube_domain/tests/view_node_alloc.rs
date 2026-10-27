@@ -11,7 +11,7 @@ fn node(labels: Value, spec: Value, status: Value) -> Resource {
         "metadata": {"name": "n1", "labels": labels},
         "spec": spec, "status": status
     }))
-    .unwrap()
+    .expect("a Node resource")
 }
 
 fn pod(spec: Value, phase: &str) -> Resource {
@@ -20,7 +20,7 @@ fn pod(spec: Value, phase: &str) -> Resource {
         "metadata": {"name": "p", "namespace": "ns"},
         "spec": spec, "status": {"phase": phase}
     }))
-    .unwrap()
+    .expect("a Pod resource")
 }
 
 fn container(requests: Value, limits: Value) -> Value {

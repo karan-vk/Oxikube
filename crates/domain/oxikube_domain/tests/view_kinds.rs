@@ -11,21 +11,21 @@ use proptest::prelude::*;
 use serde_json::{Value, json};
 
 fn ts(s: &str) -> Timestamp {
-    s.parse().unwrap()
+    s.parse().expect("test timestamp is RFC 3339")
 }
 
 fn res(api_version: &str, kind: &str, metadata: Value, spec: Value, status: Value) -> Resource {
     Resource::from_json(json!({
         "apiVersion": api_version, "kind": kind, "metadata": metadata, "spec": spec, "status": status
     }))
-    .unwrap()
+    .expect("a resource")
 }
 
 // --- nodes -------------------------------------------------------------------------------
 
 fn node(labels: Value, spec: Value, status: Value) -> NodeSummary {
     let meta = json!({"name": "n1", "labels": labels, "creationTimestamp": "2026-09-01T00:00:00Z"});
-    NodeSummary::from_resource(&res("v1", "Node", meta, spec, status)).unwrap()
+    NodeSummary::from_resource(&res("v1", "Node", meta, spec, status)).expect("a Node summary")
 }
 
 fn ready(status: &str) -> Value {
@@ -205,7 +205,8 @@ fn node_pressure_conditions_versions_and_addresses() {
 
 fn workload(kind: &str, spec: Value, status: Value) -> WorkloadSummary {
     let meta = json!({"name": "w", "namespace": "apps"});
-    WorkloadSummary::from_resource(&res("apps/v1", kind, meta, spec, status)).unwrap()
+    WorkloadSummary::from_resource(&res("apps/v1", kind, meta, spec, status))
+        .expect("a workload summary")
 }
 
 #[test]
@@ -351,7 +352,7 @@ fn job(spec: Value, status: Value, deleting: bool) -> JobSummary {
     if deleting {
         meta["deletionTimestamp"] = json!("2026-10-01T01:00:00Z");
     }
-    JobSummary::from_resource(&res("batch/v1", "Job", meta, spec, status)).unwrap()
+    JobSummary::from_resource(&res("batch/v1", "Job", meta, spec, status)).expect("a Job summary")
 }
 
 fn jc(kind: &str, status: &str) -> Value {

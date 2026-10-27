@@ -24,7 +24,7 @@ fn gateway_class() -> GatewayClassSummary {
             ]}
         }),
     ))
-    .unwrap()
+    .expect("a GatewayClass summary")
 }
 
 #[test]
@@ -83,7 +83,7 @@ fn gateway() -> GatewaySummary {
             }
         }),
     ))
-    .unwrap()
+    .expect("a Gateway summary")
 }
 
 #[test]
@@ -184,7 +184,7 @@ fn http_route() -> RouteSummary {
             ]}
         }),
     ))
-    .unwrap()
+    .expect("an HTTPRoute summary")
 }
 
 #[test]

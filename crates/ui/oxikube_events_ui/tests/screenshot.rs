@@ -10,7 +10,11 @@
 //! blank and, when a golden exists for this OS, that it matches within tolerance. Regenerate with
 //! `OXIKUBE_UPDATE_GOLDENS=1`.
 
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "a screenshot test reports on stdout and stderr"
+)]
 
 use std::path::Path;
 use std::process::ExitCode;
@@ -47,7 +51,9 @@ impl CommandDispatcher for Ignore {
 }
 
 fn now() -> Timestamp {
-    "2026-05-04T12:00:00Z".parse().unwrap()
+    "2026-05-04T12:00:00Z"
+        .parse()
+        .expect("the fixed clock is an RFC 3339 timestamp")
 }
 
 /// `(type, reason, namespace, kind/name, source, count, minutes ago, message)`.
@@ -180,7 +186,9 @@ fn events() -> Vec<Event> {
         .enumerate()
         .map(
             |(i, (kind, reason, ns, object, source, count, ago, message))| {
-                let (kind_name, name) = object.split_once('/').unwrap();
+                let (kind_name, name) = object
+                    .split_once('/')
+                    .expect("each fixture object is kind/name");
                 let scoped = (kind_name != "Node").then_some(*ns);
                 let mut e = event()
                     .uid(&format!("e{i}"))

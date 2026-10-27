@@ -95,7 +95,10 @@ mod imp {
         if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
             std::fs::create_dir_all(dir)?;
         }
-        std::fs::write(path, serde_json::to_string_pretty(summary)? + "\n")?;
+        std::fs::write(
+            path,
+            format!("{}\n", serde_json::to_string_pretty(summary)?),
+        )?;
         Ok(())
     }
 }

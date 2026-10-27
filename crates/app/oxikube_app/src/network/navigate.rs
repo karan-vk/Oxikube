@@ -16,6 +16,11 @@ use super::ServiceBackends;
 ///
 /// [`NoSelector`] when the Service selects no pods (ExternalName, or no `spec.selector`): there
 /// is no table to open, and the reason is for the user.
+///
+/// # Panics
+///
+/// When `service` has neither a pod selector nor a reason for lacking one, which
+/// [`ServiceSummary`] rules out.
 pub fn plan_show_pods(
     cluster: &ClusterId,
     service: &ServiceSummary,

@@ -20,7 +20,7 @@ fn a_drag_selects_cells(cx: &mut TestAppContext) {
         .simulate_mouse_up(Harness::at(0, 4), MouseButton::Left, Modifiers::none());
     let text = h
         .terminal
-        .read_with(&mut *h.window, |terminal, _| terminal.selection_text());
+        .read_with(&*h.window, |terminal, _| terminal.selection_text());
     assert_eq!(text.as_deref(), Some("hello"));
 }
 
@@ -37,7 +37,7 @@ fn the_wheel_scrolls_through_the_history(cx: &mut TestAppContext) {
     h.frame();
     let snapshot = h
         .terminal
-        .read_with(&mut *h.window, |terminal, _| terminal.snapshot());
+        .read_with(&*h.window, |terminal, _| terminal.snapshot());
     assert_eq!(snapshot.display_offset, 3);
     assert_eq!(snapshot.row_text(0), "line 18");
 }
@@ -73,9 +73,9 @@ fn on_the_alternate_screen_the_wheel_belongs_to_the_application(cx: &mut TestApp
 
     // Control: on the primary screen the same wheel event scrolls the terminal.
     wheel_lines(&mut h, 2.);
-    let offset = h.terminal.read_with(&mut *h.window, |terminal, _| {
-        terminal.snapshot().display_offset
-    });
+    let offset = h
+        .terminal
+        .read_with(&*h.window, |terminal, _| terminal.snapshot().display_offset);
     assert_eq!(offset, 2);
     assert!(notifies.get() > 0, "a primary-screen scroll notifies");
 

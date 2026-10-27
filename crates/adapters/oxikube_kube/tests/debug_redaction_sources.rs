@@ -35,7 +35,7 @@ fn assert_debug_clean(what: &str, value: &dyn std::fmt::Debug) {
 /// A kubeconfig with an inline token user and a `token-file` user, written under `dir`.
 fn write_kubeconfig(dir: &Path) -> PathBuf {
     let token_file = dir.join("token");
-    std::fs::write(&token_file, TOKEN_FILE_SECRET).unwrap();
+    std::fs::write(&token_file, TOKEN_FILE_SECRET).expect("write the token file into the temp dir");
     let yaml = format!(
         r#"
 apiVersion: v1
@@ -58,7 +58,7 @@ contexts:
         token_file.display()
     );
     let path = dir.join("config");
-    std::fs::write(&path, yaml).unwrap();
+    std::fs::write(&path, yaml).expect("write the kubeconfig into the temp dir");
     path
 }
 
@@ -167,7 +167,11 @@ fn plant_service_account(loaded: &mut LoadedKubeconfig, token_file: &Path) {
         .find(|named| named.name == IN_CLUSTER_CONTEXT)
         .and_then(|named| named.auth_info.as_mut())
         .expect("synthetic in-cluster user");
-    assert_eq!(user.token_file.as_deref(), Some(SERVICE_ACCOUNT_TOKEN_FILE));
+    assert_eq!(
+        user.token_file.as_deref(),
+        Some(SERVICE_ACCOUNT_TOKEN_FILE),
+        "the synthetic in-cluster user must read the mounted service-account token"
+    );
     user.token_file = Some(token_file.display().to_string());
     let cluster = loaded
         .merged

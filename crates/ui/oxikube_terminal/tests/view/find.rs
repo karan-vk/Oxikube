@@ -154,10 +154,7 @@ fn an_invalid_pattern_says_so_and_keeps_the_last_matches(cx: &mut TestAppContext
     h.vcx.simulate_keystrokes("backspace");
     h.frame();
     assert_eq!(status(&mut h, &view), good);
-    assert_eq!(
-        h.vcx.update(|_, cx| view.read(cx).search_error().is_none()),
-        true
-    );
+    assert!(h.vcx.update(|_, cx| view.read(cx).search_error().is_none()));
 }
 
 #[gpui::test]

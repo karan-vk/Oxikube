@@ -8,9 +8,9 @@
 //! - `kind-metrics-stack`  pinned kube-prometheus-stack and VictoriaMetrics in a kind TEST cluster, for the nightly metrics suite (E13-S13)
 //! - `load-pods`      create N pause pods (+ optional churn) for perf work (E01-S10)
 //! - `perf`           headless perf scenarios, report, baseline check (E01-S14); `--windowed`: the
-//!                    real-window scenarios of ADR 0016 (E01-P587)
+//!   real-window scenarios of ADR 0016 (E01-P587)
 //! - `gen-settings-schema`  write (or `--check`) settings.schema.json from the `oxikube` binary (E05-S06, E05-S06b)
-#![allow(clippy::print_stdout)]
+#![allow(clippy::print_stdout, reason = "a CLI tool reports on stdout")]
 
 mod check_gpui_pin;
 mod kind;

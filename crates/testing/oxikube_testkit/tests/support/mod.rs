@@ -5,7 +5,7 @@
 //! of `docs/testing-gpui.md`: the debounce `Task` is stored in a field and replaced from the
 //! outside, never cleared from inside itself.
 
-#![allow(dead_code)]
+#![allow(dead_code, reason = "each test binary uses a subset of these helpers")]
 
 use std::time::Duration;
 

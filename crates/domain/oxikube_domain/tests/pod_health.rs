@@ -10,8 +10,13 @@ const NOW: &str = "2026-01-01T00:00:00Z";
 fn pod(extra_meta: Value, spec: Value, status: Value) -> Resource {
     let mut meta = json!({"name": "p", "namespace": "d", "creationTimestamp": NOW});
     meta.as_object_mut()
-        .unwrap()
-        .extend(extra_meta.as_object().unwrap().clone());
+        .expect("json! of an object literal is an object")
+        .extend(
+            extra_meta
+                .as_object()
+                .expect("`extra_meta` is a JSON object")
+                .clone(),
+        );
     Resource::from_json(json!({
         "apiVersion": "v1", "kind": "Pod", "metadata": meta, "spec": spec, "status": status,
     }))

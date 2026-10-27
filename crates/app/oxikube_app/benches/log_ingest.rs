@@ -98,8 +98,16 @@ fn run(lines: usize, buffer_lines: usize) {
     );
 
     let (len, dropped) = session.read(|b, _| (b.len(), b.dropped()));
-    assert_eq!(len, buffer_lines.min(lines));
-    assert_eq!(dropped as usize, lines.saturating_sub(buffer_lines));
+    assert_eq!(
+        len,
+        buffer_lines.min(lines),
+        "the buffer keeps at most buffer_lines rows"
+    );
+    assert_eq!(
+        dropped as usize,
+        lines.saturating_sub(buffer_lines),
+        "every line past the cap is counted as dropped"
+    );
     // What a viewer pays per frame: the last 60 rows copied out under the lock.
     let view = Instant::now();
     let rows = session.read(|b, _| {
@@ -108,7 +116,11 @@ fn run(lines: usize, buffer_lines: usize) {
             .collect::<Vec<_>>()
     });
     let view = view.elapsed();
-    assert_eq!(rows.len(), 60.min(len));
+    assert_eq!(
+        rows.len(),
+        60.min(len),
+        "the view copies the last screen of rows"
+    );
 
     let batches = session.batches().max(1);
     let per_s = lines as f64 / elapsed.as_secs_f64();

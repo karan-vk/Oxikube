@@ -11,8 +11,8 @@ fn object(api_version: &str, kind: &str, rest: Value) -> Resource {
         "metadata": {"name": "x", "namespace": "d"}
     });
     json.as_object_mut()
-        .unwrap()
-        .extend(rest.as_object().unwrap().clone());
+        .expect("json! of an object literal is an object")
+        .extend(rest.as_object().expect("`rest` is a JSON object").clone());
     Resource::from_json(json).expect("a resource")
 }
 

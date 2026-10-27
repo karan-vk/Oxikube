@@ -11,11 +11,12 @@ const CR: &str = include_str!("fixtures/cr.json");
 const CLUSTER_CR: &str = include_str!("fixtures/clusterissuer.json");
 
 fn load(src: &str) -> Resource {
-    Resource::from_json(serde_json::from_str(src).unwrap()).unwrap()
+    Resource::from_json(serde_json::from_str(src).expect("fixture is valid JSON"))
+        .expect("fixture is a valid resource")
 }
 
 fn ts(s: &str) -> Option<jiff::Timestamp> {
-    Some(s.parse().unwrap())
+    Some(s.parse().expect("test timestamp is RFC 3339"))
 }
 
 // --- parsing ---------------------------------------------------------------

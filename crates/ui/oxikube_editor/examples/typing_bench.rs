@@ -10,7 +10,11 @@
 //! 0013 frame budget, which needs `oxikube --perf` in a real window. The validation itself runs
 //! on the background executor; its time is reported separately.
 
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "a benchmark reports on stdout and stderr"
+)]
 
 use std::rc::Rc;
 use std::sync::Arc;

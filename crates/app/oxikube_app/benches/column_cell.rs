@@ -49,7 +49,9 @@ fn bench(label: &str, samples: usize, mut call: impl FnMut()) {
 fn main() {
     let smoke = !std::env::args().any(|a| a == "--bench");
     let samples = if smoke { 3 } else { 200 };
-    let now: Timestamp = "2026-01-02T03:04:05Z".parse().unwrap();
+    let now: Timestamp = "2026-01-02T03:04:05Z"
+        .parse()
+        .expect("literal RFC 3339 timestamp parses");
     let provider = CoreColumns::new();
 
     // As a server sends it: a UID and a resource version (what the Pod provider's memo keys on).

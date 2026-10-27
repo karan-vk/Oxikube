@@ -35,10 +35,9 @@ fn resource_version_and_match_pass_through() {
     let p = list_params(&ListOptions::default().at("42", VersionMatch::Exact)).unwrap();
     assert_eq!(p.resource_version.as_deref(), Some("42"));
     assert!(p.version_match.is_some());
-    let any = list_params(&{
-        let mut o = ListOptions::default();
-        o.resource_version = Some("0".into());
-        o
+    let any = list_params(&ListOptions {
+        resource_version: Some("0".into()),
+        ..ListOptions::default()
     })
     .unwrap();
     assert_eq!(any.resource_version.as_deref(), Some("0"));
@@ -58,8 +57,10 @@ fn a_continue_token_drops_the_resource_version() {
 
 #[test]
 fn invalid_version_combinations_are_validation_errors() {
-    let mut no_rv = ListOptions::default();
-    no_rv.version_match = Some(VersionMatch::NotOlderThan);
+    let no_rv = ListOptions {
+        version_match: Some(VersionMatch::NotOlderThan),
+        ..ListOptions::default()
+    };
     assert_eq!(
         list_params(&no_rv).unwrap_err().kind(),
         ErrorKind::Validation

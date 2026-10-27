@@ -28,7 +28,11 @@
 //!
 //! Regenerate the goldens with `OXIKUBE_UPDATE_GOLDENS=1`.
 
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "a screenshot test reports on stdout and stderr"
+)]
 
 use std::path::Path;
 use std::process::ExitCode;
@@ -145,6 +149,10 @@ fn pod() -> Resource {
 /// Renders the view, wrapped or not, with or without timestamps, in the dark or `light` theme.
 /// With `json` the stream is [`json_log`], the `debug` chip is off and the failure line (seq 7)
 /// is expanded.
+#[expect(
+    clippy::fn_params_excessive_bools,
+    reason = "a screenshot fixture: each flag toggles one rendered variant at the call site"
+)]
 fn render(wrap: bool, timestamps: bool, light: bool, json: bool) -> anyhow::Result<RgbaImage> {
     render_with(wrap, timestamps, light, json, None, false, false, None)
 }
@@ -153,6 +161,10 @@ fn render(wrap: bool, timestamps: bool, light: bool, json: bool) -> anyhow::Resu
 /// being the current one; `picked` marks the failing line and selects three lines above it
 /// (E08-S06); `kubectl` is installed, so the toolbar offers "Tail in terminal (kubectl)"
 /// (E08-S08).
+#[expect(
+    clippy::fn_params_excessive_bools,
+    reason = "a screenshot fixture: each flag toggles one rendered variant at the call site"
+)]
 fn render_with(
     wrap: bool,
     timestamps: bool,
@@ -195,7 +207,14 @@ fn crash_looping_pod() -> Resource {
 }
 
 /// [`render_with`] over `pod`.
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "a test helper takes each scenario knob explicitly"
+)]
+#[expect(
+    clippy::fn_params_excessive_bools,
+    reason = "a screenshot fixture: each flag toggles one rendered variant at the call site"
+)]
 fn render_pod(
     pod: Resource,
     wrap: bool,

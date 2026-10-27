@@ -102,7 +102,7 @@ fn shift_page_keys_scroll_the_history_instead_of_being_sent(cx: &mut TestAppCont
     h.frame();
     let offset = |h: &mut super::Harness| {
         h.terminal
-            .read_with(&mut *h.window, |t, _| t.snapshot().display_offset)
+            .read_with(&*h.window, |t, _| t.snapshot().display_offset)
     };
     assert_eq!(offset(&mut h), 10, "one screen (10 rows) up");
     h.window.simulate_keystrokes("shift-pagedown");
@@ -128,12 +128,12 @@ fn typing_returns_to_the_live_screen(cx: &mut TestAppContext) {
     });
     assert!(
         h.terminal
-            .read_with(&mut *h.window, |t, _| t.is_scrolled_back())
+            .read_with(&*h.window, |t, _| t.is_scrolled_back())
     );
     h.window.simulate_input("x");
     assert!(
         !h.terminal
-            .read_with(&mut *h.window, |t, _| t.is_scrolled_back())
+            .read_with(&*h.window, |t, _| t.is_scrolled_back())
     );
 }
 
@@ -163,7 +163,7 @@ fn an_echo_is_painted_within_one_frame_of_the_key(cx: &mut TestAppContext) {
     h.window.draw_frame();
     let row = h
         .terminal
-        .read_with(&mut *h.window, |t, _| t.snapshot().row_text(0));
+        .read_with(&*h.window, |t, _| t.snapshot().row_text(0));
     assert_eq!(
         row, "k",
         "the echo is in the frame one interval after the key"
@@ -173,7 +173,7 @@ fn an_echo_is_painted_within_one_frame_of_the_key(cx: &mut TestAppContext) {
     h.frame();
     let column = h
         .terminal
-        .read_with(&mut *h.window, |t, _| t.snapshot().cursor.column);
+        .read_with(&*h.window, |t, _| t.snapshot().cursor.column);
     assert_eq!(column, 0);
 }
 

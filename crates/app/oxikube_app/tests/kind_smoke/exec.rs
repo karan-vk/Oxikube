@@ -76,18 +76,14 @@ fn pause_pod(name: &str) -> Pod {
 }
 
 async fn running(pods: &Api<Pod>, name: &str) {
-    crate::eventually(
-        "the pod to run",
-        || String::new(),
-        || async {
-            pods.get(name)
-                .await
-                .ok()
-                .and_then(|p| p.status)
-                .and_then(|s| s.phase)
-                .is_some_and(|phase| phase == "Running")
-        },
-    )
+    crate::eventually("the pod to run", String::new, || async {
+        pods.get(name)
+            .await
+            .ok()
+            .and_then(|p| p.status)
+            .and_then(|s| s.phase)
+            .is_some_and(|phase| phase == "Running")
+    })
     .await;
 }
 

@@ -22,7 +22,7 @@ fn pool_with_slow_plugin(dir: &Path, sleep_secs: f32, deadline: Duration) -> Cli
         dir.join("runs").display()
     );
     let plugin = dir.join("plugin.sh");
-    std::fs::write(&plugin, script).unwrap();
+    std::fs::write(&plugin, script).expect("write plugin.sh into the temp dir");
     let yaml = format!(
         r#"
 apiVersion: v1
@@ -49,7 +49,7 @@ contexts:
         ..PoolConfig::default()
     };
     ClientPool::with_parts(
-        Kubeconfig::from_yaml(&yaml).unwrap(),
+        Kubeconfig::from_yaml(&yaml).expect("the kubeconfig literal parses"),
         config,
         Arc::new(KubeClientFactory::new(ProxyEnv::default())),
         Arc::new(SystemClock),

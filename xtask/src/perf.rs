@@ -301,8 +301,11 @@ fn run_and_write(args: &Args, root: &Path, target: &Path) -> Result<Report> {
     if let Some(dir) = out.parent().filter(|d| !d.as_os_str().is_empty()) {
         std::fs::create_dir_all(dir)?;
     }
-    std::fs::write(&out, serde_json::to_string_pretty(&report)? + "\n")
-        .with_context(|| format!("writing {}", out.display()))?;
+    std::fs::write(
+        &out,
+        format!("{}\n", serde_json::to_string_pretty(&report)?),
+    )
+    .with_context(|| format!("writing {}", out.display()))?;
     print::print_report(&report);
     println!("\nreport: {}", out.display());
     Ok(report)

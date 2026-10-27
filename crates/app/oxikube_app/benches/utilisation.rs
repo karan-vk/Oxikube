@@ -53,7 +53,7 @@ fn pod_at(i: usize, namespace: &str, node: &str) -> Resource {
         },
         "status": {"phase": if i.is_multiple_of(20) { "Succeeded" } else { "Running" }},
     }))
-    .unwrap()
+    .expect("fixture pod JSON is a valid resource")
 }
 
 fn node(i: usize) -> Resource {
@@ -62,7 +62,7 @@ fn node(i: usize) -> Resource {
         "metadata": {"name": format!("node-{i}")},
         "status": {"allocatable": {"cpu": "32", "memory": "128Gi", "pods": "250"}},
     }))
-    .unwrap()
+    .expect("fixture node JSON is a valid resource")
 }
 
 fn report(label: &str, samples: &mut [Duration]) {
@@ -103,12 +103,16 @@ fn main() {
 
     println!("utilisation maths ({PODS} pods, {NODES} nodes, {NAMESPACES} namespaces)");
     time("pod: requests and limits", samples, 1000, || {
-        black_box(aggregate_pod_requests_limits(black_box(&pods[1]), &gpus).unwrap());
+        black_box(
+            aggregate_pod_requests_limits(black_box(&pods[1]), &gpus)
+                .expect("fixture pod quantities parse"),
+        );
     });
-    let resources = aggregate_pod_requests_limits(&pods[1], &gpus).unwrap();
+    let resources =
+        aggregate_pod_requests_limits(&pods[1], &gpus).expect("fixture pod quantities parse");
     let (cpu, mem) = (
         oxikube_domain::Quantity::from_milli(120),
-        oxikube_domain::Quantity::parse("90Mi").unwrap(),
+        oxikube_domain::Quantity::parse("90Mi").expect("literal quantity parses"),
     );
     time("pod: four percents from usage", samples, 1000, || {
         black_box(Utilisation::of(
@@ -121,7 +125,7 @@ fn main() {
         black_box(
             aggregator
                 .pod_resources(&cluster, black_box(&pods[1]))
-                .unwrap(),
+                .expect("fixture pod quantities parse"),
         );
     });
     time("nodes: allocation of 10k pods", samples, 1, || {
@@ -143,7 +147,7 @@ fn main() {
         "metadata": {"name": "q", "namespace": "ns-0"},
         "spec": {"hard": {"requests.cpu": "1000", "limits.cpu": "2000", "pods": "5000"}},
     }))
-    .unwrap();
+    .expect("fixture quota JSON is a valid resource");
     time("namespace panel: 2k pods, sums + view", samples, 1, || {
         let all = allocate_namespaces(&in_namespace, &gpus);
         let (caps, scoped) = QuotaCaps::tightest([&quota], &gpus);

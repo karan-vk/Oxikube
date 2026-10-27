@@ -108,10 +108,8 @@ fn run(
     let mut last: Option<UserThemes> = None;
     let mut pending = true;
     loop {
-        if !pending {
-            if rx.recv().is_err() || !settle(rx, debounce) {
-                return;
-            }
+        if !pending && (rx.recv().is_err() || !settle(rx, debounce)) {
+            return;
         }
         pending = false;
         let scan = scan_dir(dir);

@@ -19,7 +19,8 @@ pub(crate) fn clean(message: &str) -> String {
     let redacted = redact(message);
     let mut line = redacted.split_whitespace().collect::<Vec<_>>().join(" ");
     if line.chars().count() > MAX_MESSAGE_CHARS {
-        line = line.chars().take(MAX_MESSAGE_CHARS).collect::<String>() + "...";
+        line = line.chars().take(MAX_MESSAGE_CHARS).collect::<String>();
+        line.push_str("...");
     }
     line
 }

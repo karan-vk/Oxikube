@@ -88,7 +88,10 @@ fn bench(label: &str, text: &str, samples: usize, schema: &Arc<JsonSchema>) {
     let parsed: ParseResult = parse_shared(Arc::from(text));
     let for_pod = |_: &Gvk| Some(Arc::clone(schema));
 
-    let hover_at_offset = text.rfind("imagePullPolicy").unwrap() + 3;
+    let hover_at_offset = text
+        .rfind("imagePullPolicy")
+        .expect("the bench manifest has an imagePullPolicy field")
+        + 3;
     let hover = time(samples, || {
         black_box(hover_at(&parsed, for_pod, hover_at_offset));
     });

@@ -25,8 +25,11 @@ fn secret(value: &str) -> PromSecret {
 }
 
 async fn only_request(server: &MockServer) -> Request {
-    let mut requests = server.received_requests().await.unwrap();
-    assert_eq!(requests.len(), 1);
+    let mut requests = server
+        .received_requests()
+        .await
+        .expect("the mock server records requests");
+    assert_eq!(requests.len(), 1, "exactly one request: {requests:?}");
     requests.remove(0)
 }
 

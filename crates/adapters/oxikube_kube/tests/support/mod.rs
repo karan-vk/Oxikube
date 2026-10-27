@@ -3,7 +3,10 @@
 //! `Debug`, an error in any format, or the captured output.
 
 // Each test binary uses a different subset.
-#![allow(dead_code)]
+#![allow(
+    dead_code,
+    reason = "each test binary uses a different subset of these helpers"
+)]
 
 use std::io;
 use std::sync::{Arc, LazyLock, Mutex, Once};
@@ -18,7 +21,10 @@ struct Capture(Arc<Mutex<Vec<u8>>>);
 
 impl io::Write for Capture {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.0.lock().unwrap().extend_from_slice(buf);
+        self.0
+            .lock()
+            .expect("no writer panics while holding the capture lock")
+            .extend_from_slice(buf);
         Ok(buf.len())
     }
     fn flush(&mut self) -> io::Result<()> {
@@ -51,7 +57,13 @@ pub fn init_tracing() {
 
 /// Everything captured so far.
 pub fn captured() -> String {
-    String::from_utf8_lossy(&CAPTURE.0.lock().unwrap()).into_owned()
+    String::from_utf8_lossy(
+        &CAPTURE
+            .0
+            .lock()
+            .expect("no writer panics while holding the capture lock"),
+    )
+    .into_owned()
 }
 
 /// Fails if `text` contains any of `secrets`.

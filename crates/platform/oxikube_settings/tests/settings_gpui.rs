@@ -64,9 +64,10 @@ const USER: &str = "// mine\n{\n  \"terminal\": {\n    \"font_size\": 13, // kee
 
 /// Install the store over a temp config dir holding `user` and register both settings.
 fn setup(cx: &mut TestAppContext, user: Option<&str>) -> tempfile::TempDir {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().expect("create temp config dir");
     if let Some(user) = user {
-        std::fs::write(dir.path().join("settings.json"), user).unwrap();
+        std::fs::write(dir.path().join("settings.json"), user)
+            .expect("write settings.json fixture");
     }
     cx.update(|cx| {
         init_with_dir(dir.path(), cx);

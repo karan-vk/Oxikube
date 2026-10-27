@@ -13,7 +13,7 @@ fn text(bytes: Vec<u8>) -> String {
 
 fn selection(h: &mut Harness) -> Option<String> {
     h.terminal
-        .read_with(&mut *h.window, |terminal, _| terminal.selection_text())
+        .read_with(&*h.window, |terminal, _| terminal.selection_text())
 }
 
 #[gpui::test]
@@ -217,7 +217,7 @@ fn shift_wheel_scrolls_the_history_even_while_reporting(cx: &mut TestAppContext)
     wheel(&mut h, 2., shift);
     let offset = h
         .terminal
-        .read_with(&mut *h.window, |t, _| t.snapshot().display_offset);
+        .read_with(&*h.window, |t, _| t.snapshot().display_offset);
     assert_eq!(offset, 2);
     assert_eq!(h.written(), b"");
 }

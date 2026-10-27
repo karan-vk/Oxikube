@@ -46,7 +46,7 @@ pub(super) enum Fetch {
     /// Nothing asked yet.
     Idle,
     /// The one-time list is running.
-    Loading(#[allow(dead_code)] Task<()>),
+    Loading(#[allow(dead_code, reason = "held so dropping the state cancels the task")] Task<()>),
     /// It answered (its rows are in the panel's pods).
     Done,
     /// It failed: why.

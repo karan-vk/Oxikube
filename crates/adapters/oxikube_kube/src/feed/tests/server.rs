@@ -260,7 +260,7 @@ impl Service<Request<Body>> for FeedServer {
                 Some(Reply::Json(code, body)) => Ok(respond(code, body.to_string())),
                 Some(Reply::Events(events)) => {
                     let lines: Vec<String> = events.iter().map(Value::to_string).collect();
-                    Ok(respond(200, lines.join("\n") + "\n"))
+                    Ok(respond(200, format!("{}\n", lines.join("\n"))))
                 }
                 Some(Reply::Drop) => Err(Box::new(std::io::Error::new(
                     std::io::ErrorKind::ConnectionReset,

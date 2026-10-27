@@ -7,7 +7,7 @@
 //! painted within one frame interval, deterministic clock) is the `#[gpui::test]`
 //! `an_echo_is_painted_within_one_frame_of_the_key`; `tests/no_alloc.rs` proves the mapping does
 //! not allocate.
-#![allow(clippy::print_stdout)]
+#![allow(clippy::print_stdout, reason = "an example reports on stdout")]
 
 use std::hint::black_box;
 use std::time::Instant;

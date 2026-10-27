@@ -30,13 +30,14 @@ impl Harness {
 
 /// Settings (with `user` as settings.json) plus themes over the config dir's `themes/`.
 fn setup(cx: &mut TestAppContext, system: Appearance, user: Option<&str>) -> Harness {
-    let config = tempfile::tempdir().unwrap();
+    let config = tempfile::tempdir().expect("create temp config dir");
     if let Some(user) = user {
-        std::fs::write(config.path().join("settings.json"), user).unwrap();
+        std::fs::write(config.path().join("settings.json"), user)
+            .expect("write settings.json fixture");
     }
     let themes = themes_dir(config.path());
-    std::fs::create_dir_all(&themes).unwrap();
-    std::fs::write(themes.join("ayu.json"), AYU).unwrap();
+    std::fs::create_dir_all(&themes).expect("create themes dir");
+    std::fs::write(themes.join("ayu.json"), AYU).expect("write ayu.json fixture");
     let changes = Rc::new(Cell::new(0));
     let counter = changes.clone();
     let subscription = cx.update(|cx| {
@@ -59,7 +60,11 @@ fn active_name(cx: &TestAppContext) -> String {
 
 fn set_user_settings(cx: &mut TestAppContext, text: &str) {
     cx.update(|cx| {
-        SettingsStore::update_global(cx, |store, _| store.set_user_settings(text).unwrap())
+        SettingsStore::update_global(cx, |store, _| {
+            store
+                .set_user_settings(text)
+                .expect("test settings text parses")
+        })
     });
 }
 

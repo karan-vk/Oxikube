@@ -73,10 +73,10 @@ impl HttpBody for CountedBody {
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
         let polled = Pin::new(&mut self.inner).poll_frame(cx);
-        if let Poll::Ready(Some(Ok(frame))) = &polled {
-            if let Some(data) = frame.data_ref() {
-                self.bytes.add(data.len());
-            }
+        if let Poll::Ready(Some(Ok(frame))) = &polled
+            && let Some(data) = frame.data_ref()
+        {
+            self.bytes.add(data.len());
         }
         polled
     }

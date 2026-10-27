@@ -8,7 +8,7 @@
 //! - cluster env: the cost of cutting and writing the merged kubeconfig.
 //! - throughput: `yes` read for 2 seconds through the bounded output queue.
 
-#![allow(clippy::print_stdout)]
+#![allow(clippy::print_stdout, reason = "an example reports on stdout")]
 
 use std::time::{Duration, Instant};
 
@@ -40,9 +40,9 @@ async fn first_output(options: LocalPtyOptions) -> (Duration, Duration) {
 async fn main() {
     let shell = std::env::args().nth(1).unwrap_or_else(|| "/bin/sh".into());
     let dir = std::env::temp_dir().join(format!("oxikube-bench-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::create_dir_all(&dir).expect("create the bench temp dir");
     let file = dir.join("kubeconfig");
-    std::fs::write(&file, KUBECONFIG).unwrap();
+    std::fs::write(&file, KUBECONFIG).expect("write the bench kubeconfig");
     let cluster = || ClusterEnv::new(ContextName::new("bench"), vec![file.clone()]);
     let interactive = |cluster: Option<ClusterEnv>| LocalPtyOptions {
         shell: Some(shell.clone()),
@@ -72,7 +72,7 @@ async fn main() {
 
     let started = Instant::now();
     for _ in 0..100 {
-        cluster().prepare().unwrap();
+        cluster().prepare().expect("prepare the cluster env");
     }
     println!("cluster env prepare: {:?} each", started.elapsed() / 100);
 
@@ -81,7 +81,7 @@ async fn main() {
         args: vec!["-c".into(), "yes".into()],
         ..LocalPtyOptions::default()
     };
-    let pty = LocalPty::spawn(options).unwrap();
+    let pty = LocalPty::spawn(options).expect("spawn `sh -c yes`");
     let mut stream = pty.output_stream();
     let started = Instant::now();
     let (mut bytes, mut chunks) = (0usize, 0usize);
@@ -97,6 +97,6 @@ async fn main() {
         bytes as f64 / secs / 1048576.0,
         bytes as f64 / chunks as f64
     );
-    pty.kill().await.unwrap();
+    pty.kill().await.expect("kill the `yes` shell");
     std::fs::remove_dir_all(&dir).ok();
 }

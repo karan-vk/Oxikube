@@ -1,0 +1,12 @@
+# Clippy configuration. The lint levels live in `[workspace.lints.clippy]` in the root
+# Cargo.toml; this file only tunes lints. docs/STYLE.md (ADR 0018) has the rule behind each one.
+
+# Tests may unwrap, expect and panic freely (docs/STYLE.md, "Errors and panics").
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+
+disallowed-methods = [
+  # docs/STYLE.md, "Errors and panics": recovery from a panic is never part of the design.
+  { path = "std::panic::catch_unwind", reason = "first-party code does not catch panics (docs/STYLE.md)" },
+]

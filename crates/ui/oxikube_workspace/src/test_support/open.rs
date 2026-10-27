@@ -29,6 +29,11 @@ use crate::Workspace;
 /// ```
 ///
 /// Calling it again in the same test opens a second window in the same app.
+///
+/// # Panics
+///
+/// Panics if the window's root view is not built while the window opens, which gpui always does
+/// synchronously.
 pub fn open_workspace(cx: &mut TestAppContext) -> (Entity<Workspace>, VisualTestContext) {
     cx.update(|cx| {
         oxikube_ui::init(cx);

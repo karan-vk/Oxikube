@@ -101,7 +101,7 @@ fn a_one_namespace_scope_drops_the_namespace_column_and_widening_it_brings_it_ba
     );
 
     // Two namespaces: the column tells them apart again.
-    select(&mut f, NamespaceSelection::from_names(&["x", "y"]));
+    select(&mut f, NamespaceSelection::from_names(["x", "y"]));
     assert!(visible(&mut f, &table).contains(&"namespace".to_owned()));
     select(&mut f, NamespaceSelection::All);
     assert!(visible(&mut f, &table).contains(&"namespace".to_owned()));

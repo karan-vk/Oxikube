@@ -85,7 +85,9 @@ impl OsMotionProbe for Silent {
 
 /// The follower task, held for the life of the app. Dropping it drops the [`Watch`], which
 /// stops the OS-side subscription.
-struct Follower(#[allow(dead_code)] Task<()>);
+struct Follower(
+    #[allow(dead_code, reason = "held so dropping the global cancels the task")] Task<()>,
+);
 
 impl Global for Follower {}
 

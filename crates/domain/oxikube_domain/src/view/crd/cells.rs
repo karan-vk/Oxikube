@@ -79,10 +79,9 @@ fn parse_version(name: &str) -> Option<(u8, u32, u32)> {
     }
     let (stability, minor) = if let Some(m) = tail.strip_prefix("alpha") {
         (0, m)
-    } else if let Some(m) = tail.strip_prefix("beta") {
-        (1, m)
     } else {
-        return None;
+        let m = tail.strip_prefix("beta")?;
+        (1, m)
     };
     Some((stability, major, minor.parse().ok()?))
 }

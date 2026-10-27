@@ -11,7 +11,7 @@
 //!    time for 2 s through `TerminalState` (GPUI test clock, deterministic runtime): bytes parsed,
 //!    notifies delivered to the observer per second (frame-coalesced: about 120/s, never one per
 //!    chunk) and the wall time the pump spent.
-#![allow(clippy::print_stdout)]
+#![allow(clippy::print_stdout, reason = "an example reports on stdout")]
 
 use std::cell::Cell;
 use std::hint::black_box;
@@ -173,7 +173,7 @@ fn bridge(cx: &mut TestAppContext) {
         sent as f64 / wall.as_secs_f64() / 1e6
     );
     let row = terminal.read_with(cx, |terminal, _| terminal.snapshot().row_text(0));
-    assert_eq!(row, "y");
+    assert_eq!(row, "y", "the bridge parsed the `yes` stream into the grid");
 }
 
 fn main() {

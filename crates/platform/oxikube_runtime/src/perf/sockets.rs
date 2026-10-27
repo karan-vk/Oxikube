@@ -22,7 +22,10 @@ pub fn inet_socket_count() -> Option<usize> {
 
 /// Inodes of the IPv4/IPv6 sockets in one `/proc/net/{tcp,udp}[6]` table (column 10, after the
 /// header line).
-#[cfg_attr(not(any(target_os = "linux", test)), allow(dead_code))]
+#[cfg_attr(
+    not(any(target_os = "linux", test)),
+    allow(dead_code, reason = "only called on linux outside tests")
+)]
 pub(crate) fn parse_proc_net_inodes(text: &str) -> impl Iterator<Item = u64> + '_ {
     text.lines()
         .skip(1)
@@ -30,7 +33,10 @@ pub(crate) fn parse_proc_net_inodes(text: &str) -> impl Iterator<Item = u64> + '
 }
 
 /// The inode of a `/proc/self/fd/<n>` link target `socket:[inode]`.
-#[cfg_attr(not(any(target_os = "linux", test)), allow(dead_code))]
+#[cfg_attr(
+    not(any(target_os = "linux", test)),
+    allow(dead_code, reason = "only called on linux outside tests")
+)]
 pub(crate) fn socket_inode(link: &str) -> Option<u64> {
     link.strip_prefix("socket:[")?
         .strip_suffix(']')?

@@ -67,12 +67,14 @@ impl TestDelegate {
     }
 
     /// Makes matching `query` take `delay`.
+    #[must_use]
     pub fn slow(mut self, query: &str, delay: Duration) -> Self {
         self.delays.insert(query.to_owned(), delay);
         self
     }
 
     /// Makes the matches of these candidates impossible to select (headers, say).
+    #[must_use]
     pub fn unselectable(mut self, candidate_ids: impl IntoIterator<Item = usize>) -> Self {
         self.unselectable.extend(candidate_ids);
         self

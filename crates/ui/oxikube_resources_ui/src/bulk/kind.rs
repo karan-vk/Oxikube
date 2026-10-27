@@ -76,7 +76,7 @@ mod tests {
         ResourceKind {
             gvk: Gvk::new(group, "v1", name),
             preferred: true,
-            plural: name.to_lowercase() + "s",
+            plural: format!("{}s", name.to_lowercase()),
             singular: name.to_lowercase(),
             short_names: Vec::new(),
             categories: Vec::new(),

@@ -529,12 +529,12 @@ impl Quantity {
         if self.mantissa == 0 {
             return f.write_str("0");
         }
-        if self.format == QuantityFormat::BinarySI {
-            if let Some((v, k)) = self.binary_form() {
-                let sign = if self.mantissa < 0 { "-" } else { "" };
-                let suffix = if k == 0 { "" } else { BINARY_SUFFIXES[k - 1] };
-                return write!(f, "{sign}{v}{suffix}");
-            }
+        if self.format == QuantityFormat::BinarySI
+            && let Some((v, k)) = self.binary_form()
+        {
+            let sign = if self.mantissa < 0 { "-" } else { "" };
+            let suffix = if k == 0 { "" } else { BINARY_SUFFIXES[k - 1] };
+            return write!(f, "{sign}{v}{suffix}");
         }
         // apimachinery: strip factors of ten, then lower the exponent to a multiple of three.
         let e3 = self.exponent.div_euclid(3) * 3;

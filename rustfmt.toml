@@ -1,0 +1,4 @@
+# Google Rust Style Guide (docs/STYLE.md, ADR 0018). Its other options (`imports_granularity =
+# "Module"`, `hex_literal_case = "Lower"`, `format_macro_matchers = true`) are nightly-only and
+# enforced in review instead.
+max_width = 100

@@ -157,7 +157,7 @@ pub(super) fn register(cx: &mut App) {
     cx.on_action(|_: &ShowAll, cx| cx.unhide_other_apps());
     cx.on_action(|_: &Minimize, cx| with_active_window(cx, |window, _| window.minimize_window()));
     cx.on_action(|_: &Zoom, cx| with_active_window(cx, |window, _| window.zoom_window()));
-    cx.on_action(|_: &About, cx| with_active_window(cx, |window, cx| show_about(window, cx)));
+    cx.on_action(|_: &About, cx| with_active_window(cx, show_about));
     cx.on_action(|_: &OpenPreferences, cx| {
         with_active_window(cx, |window, cx| {
             window.push_notification(

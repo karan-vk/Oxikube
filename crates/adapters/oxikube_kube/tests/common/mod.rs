@@ -22,7 +22,10 @@
 //! `oxi-test-<rand>` namespace and go away with it.
 
 // Each test file uses a different subset of these helpers.
-#![allow(dead_code)]
+#![allow(
+    dead_code,
+    reason = "each test file uses a different subset of these helpers"
+)]
 
 pub mod exec;
 pub mod health;

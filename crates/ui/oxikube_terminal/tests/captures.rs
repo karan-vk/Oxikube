@@ -51,8 +51,8 @@ fn vim_draws_numbered_source_in_the_alternate_screen_with_syntax_colours() {
     );
     assert_eq!(rows[9], " 10 }", "`dd` removed the line holding `seen`");
     assert_eq!(rows[14], " 15 }");
-    for row in 15..23 {
-        assert_eq!(rows[row], "~", "the empty rows past the file end: {row}");
+    for (row, text) in rows.iter().enumerate().take(23).skip(15) {
+        assert_eq!(text, "~", "the empty rows past the file end: {row}");
     }
 
     // Syntax highlighting: the comment, the keyword and the identifier are three colours, none

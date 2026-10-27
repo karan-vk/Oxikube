@@ -11,6 +11,10 @@ const BEARER: &str = "s3cr3t-bearer-token-0123456789";
 static PREVIOUS_RAN: AtomicBool = AtomicBool::new(false);
 
 #[test]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "the test exercises the panic hook, so it must catch the panic it raises"
+)]
 fn a_panic_leaves_a_redacted_crash_file_and_calls_the_previous_hook() {
     let dir = tempfile::tempdir().unwrap();
     let crashes = dir.path().join("crashes");

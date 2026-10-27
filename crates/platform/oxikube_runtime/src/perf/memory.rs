@@ -45,7 +45,10 @@ pub fn ru_maxrss_bytes(raw: u64, unit: u64) -> u64 {
 /// Parses `/proc/self/status` text: `VmRSS:` and `VmHWM:` lines are in kB (KiB).
 ///
 /// `None` without a `VmRSS` line (kernel threads and zombies have none).
-#[cfg_attr(not(any(target_os = "linux", test)), allow(dead_code))]
+#[cfg_attr(
+    not(any(target_os = "linux", test)),
+    allow(dead_code, reason = "only called on linux outside tests")
+)]
 pub(crate) fn parse_proc_status(text: &str) -> Option<MemoryReading> {
     fn kib(text: &str, key: &str) -> Option<u64> {
         let rest = text
@@ -90,36 +93,38 @@ mod imp {
         })
     }
 
-    #[allow(deprecated)] // libc steers to `mach2`; one call is not worth another dependency
+    #[allow(
+        deprecated,
+        reason = "libc steers to `mach2`; one call is not worth another dependency"
+    )]
     fn current_rss_bytes() -> Option<u64> {
-        // SAFETY: `mach_task_basic_info` is plain integers, so all-zero is a valid value;
-        // `task_info` writes at most `count` natural_t words into it, and `count` is the size of
-        // that struct in natural_t words, which is what MACH_TASK_BASIC_INFO expects.
-        unsafe {
-            let mut info: libc::mach_task_basic_info = std::mem::zeroed();
-            let mut count = libc::MACH_TASK_BASIC_INFO_COUNT;
-            let status = libc::task_info(
-                libc::mach_task_self(),
+        // SAFETY: `mach_task_basic_info` is plain integers, so all-zero is a valid value.
+        let mut info: libc::mach_task_basic_info = unsafe { std::mem::zeroed() };
+        let mut count = libc::MACH_TASK_BASIC_INFO_COUNT;
+        // SAFETY: `mach_task_self` takes no arguments and returns this task's port name.
+        let task = unsafe { libc::mach_task_self() };
+        // SAFETY: `task_info` writes at most `count` natural_t words into `info`, and `count` is
+        // the size of that struct in natural_t words, which is what MACH_TASK_BASIC_INFO expects.
+        let status = unsafe {
+            libc::task_info(
+                task,
                 libc::MACH_TASK_BASIC_INFO,
                 (&raw mut info).cast::<libc::integer_t>(),
                 &mut count,
-            );
-            // The struct is `packed(4)`: copy the field out instead of referencing it.
-            let resident = info.resident_size;
-            (status == libc::KERN_SUCCESS).then_some(resident)
-        }
+            )
+        };
+        // The struct is `packed(4)`: copy the field out instead of referencing it.
+        let resident = info.resident_size;
+        (status == libc::KERN_SUCCESS).then_some(resident)
     }
 
     fn peak_rss_bytes() -> Option<u64> {
-        // SAFETY: `rusage` is plain integers (all-zero is valid); `getrusage` fills it for
-        // RUSAGE_SELF and returns 0 on success.
-        let usage = unsafe {
-            let mut usage: libc::rusage = std::mem::zeroed();
-            if libc::getrusage(libc::RUSAGE_SELF, &mut usage) != 0 {
-                return None;
-            }
-            usage
-        };
+        // SAFETY: `rusage` is plain integers, so all-zero is a valid value.
+        let mut usage: libc::rusage = unsafe { std::mem::zeroed() };
+        // SAFETY: `getrusage` fills the struct we own for RUSAGE_SELF and returns 0 on success.
+        if unsafe { libc::getrusage(libc::RUSAGE_SELF, &mut usage) } != 0 {
+            return None;
+        }
         // macOS reports ru_maxrss in bytes.
         Some(ru_maxrss_bytes(u64::try_from(usage.ru_maxrss).ok()?, 1))
     }

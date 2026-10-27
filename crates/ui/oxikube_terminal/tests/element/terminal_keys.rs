@@ -29,19 +29,17 @@ fn with_history(cx: &mut TestAppContext) -> Harness {
 
 fn selection(h: &mut Harness) -> Option<String> {
     h.terminal
-        .read_with(&mut *h.window, |terminal, _| terminal.selection_text())
+        .read_with(&*h.window, |terminal, _| terminal.selection_text())
 }
 
 fn history(h: &mut Harness) -> usize {
-    h.terminal.read_with(&mut *h.window, |terminal, _| {
-        terminal.snapshot().history_size
-    })
+    h.terminal
+        .read_with(&*h.window, |terminal, _| terminal.snapshot().history_size)
 }
 
 fn offset(h: &mut Harness) -> usize {
-    h.terminal.read_with(&mut *h.window, |terminal, _| {
-        terminal.snapshot().display_offset
-    })
+    h.terminal
+        .read_with(&*h.window, |terminal, _| terminal.snapshot().display_offset)
 }
 
 /// The chord of each platform for the terminal's own actions.

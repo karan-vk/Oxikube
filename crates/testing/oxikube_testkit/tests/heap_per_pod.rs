@@ -28,16 +28,22 @@ fn add(bytes: isize, blocks: isize) {
 unsafe impl GlobalAlloc for Counting {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         add(layout.size() as isize, 1);
+        // SAFETY: the caller upholds `GlobalAlloc::alloc`'s contract for `layout`, which is passed
+        // to the system allocator unchanged.
         unsafe { System.alloc(layout) }
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         add(-(layout.size() as isize), -1);
+        // SAFETY: every allocation goes through the system allocator, so `ptr` came from it with
+        // `layout`; the caller upholds `dealloc`'s contract and the call is forwarded unchanged.
         unsafe { System.dealloc(ptr, layout) }
     }
 
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
         add(new_size as isize - layout.size() as isize, 0);
+        // SAFETY: every allocation goes through the system allocator, so `ptr` came from it with
+        // `layout`; the caller upholds `realloc`'s contract and the call is forwarded unchanged.
         unsafe { System.realloc(ptr, layout, new_size) }
     }
 }

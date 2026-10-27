@@ -176,8 +176,8 @@ fn class(annotations: serde_json::Value, spec: serde_json::Value) -> IngressClas
         json!({"spec": spec}),
     );
     res.edit_json(|v| v["metadata"]["annotations"] = annotations);
-    let res = Resource::from_json(res.to_value()).unwrap();
-    IngressClassSummary::from_resource(&res).unwrap()
+    let res = Resource::from_json(res.to_value()).expect("the annotated class is still a resource");
+    IngressClassSummary::from_resource(&res).expect("an IngressClass summary")
 }
 
 #[test]

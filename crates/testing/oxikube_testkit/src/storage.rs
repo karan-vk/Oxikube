@@ -124,6 +124,10 @@ impl PvcBuilder {
     }
 
     /// Builds the [`Resource`].
+    ///
+    /// # Panics
+    ///
+    /// Only if the builder produced JSON that is not a valid claim (a testkit bug).
     pub fn build(&self) -> Resource {
         Resource::from_json(self.json()).expect("a valid claim")
     }
@@ -193,6 +197,10 @@ pub fn pod_mounting(name: &str, namespace: &str, claims: &[&str]) -> Resource {
 }
 
 /// [`pod_mounting`] with a given `status.phase` (`Succeeded` for a finished Pod).
+///
+/// # Panics
+///
+/// Only if the built JSON is not a valid Pod (a testkit bug).
 pub fn pod_mounting_in(name: &str, namespace: &str, claims: &[&str], phase: &str) -> Resource {
     let mut json = pod().name(name).namespace(namespace).json();
     let mut volumes: Vec<Value> = claims

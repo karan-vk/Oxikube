@@ -123,7 +123,8 @@ fn write_sample(sample: &ScenarioSample, report: Option<&Path>) -> Result<()> {
             if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
                 std::fs::create_dir_all(dir)?;
             }
-            std::fs::write(path, json + "\n").with_context(|| format!("writing {}", path.display()))
+            std::fs::write(path, format!("{json}\n"))
+                .with_context(|| format!("writing {}", path.display()))
         }
         None => writeln!(std::io::stdout().lock(), "{json}").context("writing stdout"),
     }

@@ -10,7 +10,11 @@
 //!
 //! Regenerate the goldens with `OXIKUBE_UPDATE_GOLDENS=1`.
 
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "a screenshot test reports on stdout and stderr"
+)]
 
 use std::{path::Path, process::ExitCode, rc::Rc, sync::Arc, time::Duration};
 

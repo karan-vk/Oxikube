@@ -41,6 +41,10 @@ impl fmt::Debug for CommandBus {
 
 impl CommandBus {
     /// A bus over every handler in `registry`, guarding mutations with `guard`.
+    ///
+    /// # Panics
+    ///
+    /// Never: the registry rejects a duplicate id, so the index sees each id once.
     pub fn new(registry: CommandRegistry, guard: MutationGuard) -> Self {
         // Ids are unique by construction: the registry rejects a duplicate.
         let index = CommandIndex::new(

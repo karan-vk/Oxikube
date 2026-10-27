@@ -16,7 +16,7 @@
 //! nothing new (p50), allocations per frame (median, counting global allocator; most are GPUI's
 //! own per-frame bookkeeping), the row cache's hit rate and the runs shaped per frame. Headless
 //! numbers are CPU and paint preparation only: no GPU time.
-#![allow(clippy::print_stdout)]
+#![allow(clippy::print_stdout, reason = "an example reports on stdout")]
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicU64, Ordering};

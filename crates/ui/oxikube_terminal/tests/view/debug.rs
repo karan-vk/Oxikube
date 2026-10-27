@@ -39,7 +39,7 @@ fn served_pod() -> Resource {
             {"name": "app", "ready": true, "restartCount": 0, "image": "gcr.io/distroless/static",
              "state": {"running": {"startedAt": "2026-10-01T00:00:00Z"}}}]},
     }))
-    .unwrap()
+    .expect("the served pod fixture is a valid object")
 }
 
 fn debug_command(image: &str) -> Command {
@@ -127,7 +127,11 @@ impl Debugging {
         else {
             panic!("a debug container must be confirmed first");
         };
-        assert_eq!(asked.tier, ConfirmTier::Simple);
+        assert_eq!(
+            asked.tier,
+            ConfirmTier::Simple,
+            "adding a debug container asks for a simple confirmation"
+        );
         block_on(self.bus.dispatch(
             command,
             Self::context().with_confirmation(oxikube_app::Confirmation::simple(asked.token)),

@@ -30,7 +30,7 @@ fn button(button: GpuiButton) -> Option<MouseButton> {
         GpuiButton::Left => Some(MouseButton::Left),
         GpuiButton::Middle => Some(MouseButton::Middle),
         GpuiButton::Right => Some(MouseButton::Right),
-        _ => None,
+        GpuiButton::Navigate(_) => None,
     }
 }
 

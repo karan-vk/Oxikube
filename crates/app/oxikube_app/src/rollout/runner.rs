@@ -89,7 +89,7 @@ impl RollbackRunner {
                     )
                     .await?
             }
-            done => done,
+            done @ Outcome::Completed(_) => done,
         };
         let Outcome::Completed(output) = outcome else {
             return Err(OxiError::conflict("the confirmation was not accepted"));

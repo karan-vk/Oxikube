@@ -11,9 +11,11 @@ use oxikube_ports::exec::ExitStatus;
 /// started.
 #[cfg(unix)]
 pub(super) fn kill_group(pid: u32) {
-    // SAFETY: plain syscalls with integer arguments; a stale pid at worst signals nothing.
-    unsafe {
-        if libc::killpg(pid as libc::pid_t, libc::SIGKILL) != 0 {
+    // SAFETY: a plain syscall with integer arguments; a stale pid at worst signals nothing.
+    let group = unsafe { libc::killpg(pid as libc::pid_t, libc::SIGKILL) };
+    if group != 0 {
+        // SAFETY: as above; the fallback signals just the child when its group is gone.
+        unsafe {
             libc::kill(pid as libc::pid_t, libc::SIGKILL);
         }
     }

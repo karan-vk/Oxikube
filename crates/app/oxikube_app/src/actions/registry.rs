@@ -117,6 +117,10 @@ impl RowActionRegistry {
     /// selection. A Namespace is deleted by `namespace::Delete` instead (E12-S16): the same
     /// type-the-name confirmation, with the warnings and counts of what goes with it, so the
     /// generic delete does not offer it.
+    ///
+    /// # Panics
+    ///
+    /// Never: the registry starts empty and gets one action, so it cannot be a duplicate.
     pub fn core() -> Self {
         let mut registry = Self::new();
         registry

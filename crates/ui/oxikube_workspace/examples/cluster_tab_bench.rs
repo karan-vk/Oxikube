@@ -9,7 +9,11 @@
 //! bench prints how many frames each tab's table rendered while hidden (it must be 0). It is a
 //! regression check, not the ADR 0013 frame budget (that needs `oxikube --perf` in a real window).
 
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "a benchmark reports on stdout and stderr"
+)]
 
 use std::{cell::Cell, rc::Rc, sync::Arc, time::Instant};
 

@@ -315,7 +315,7 @@ async fn trigger_suspend_and_resume_on_a_kind_cluster() {
         3,
         "a dry run, a trigger and the refused one: {audit:?}"
     );
-    assert_eq!(triggers[0].dry_run, true);
+    assert!(triggers[0].dry_run);
     assert_eq!(
         triggers[1].detail.as_deref(),
         Some(format!("job={job_name}").as_str())

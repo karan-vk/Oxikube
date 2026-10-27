@@ -258,7 +258,7 @@ impl HistoryPanel {
         let listed = snapshot.nodes_feed.is_listed();
         let capacity = (
             listed.then(|| snapshot.capacity.cpu_millis as f64 / 1000.0),
-            listed.then(|| snapshot.capacity.memory_bytes as f64),
+            listed.then_some(snapshot.capacity.memory_bytes as f64),
         );
         if capacity != self.capacity {
             self.capacity = capacity;

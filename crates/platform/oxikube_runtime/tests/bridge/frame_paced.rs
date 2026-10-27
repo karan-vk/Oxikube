@@ -56,7 +56,7 @@ impl Fixture {
                     FeedView { renders }
                 })
             })
-            .unwrap()
+            .expect("test window opens")
             .into()
         });
         cx.run_until_parked();
@@ -83,7 +83,7 @@ impl Fixture {
     fn frame(&self, cx: &mut TestAppContext) -> usize {
         let ran = cx
             .update_window(self.window, |_, window, cx| window.simulate_next_frame(cx))
-            .unwrap();
+            .expect("fixture window is still open");
         cx.run_until_parked();
         ran
     }

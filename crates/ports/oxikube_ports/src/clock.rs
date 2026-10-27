@@ -36,10 +36,10 @@ pub trait ClockPort: Send + Sync {
     /// already has.
     async fn sleep_until(&self, deadline: Timestamp) {
         let remaining = deadline.duration_since(self.now());
-        if let Ok(remaining) = Duration::try_from(remaining) {
-            if !remaining.is_zero() {
-                self.sleep(remaining).await;
-            }
+        if let Ok(remaining) = Duration::try_from(remaining)
+            && !remaining.is_zero()
+        {
+            self.sleep(remaining).await;
         }
     }
 }

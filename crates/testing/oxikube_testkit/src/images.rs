@@ -37,8 +37,11 @@ pub fn all() -> Vec<&'static str> {
 }
 
 /// The images in `text`: one per line, `#` comments and blank lines skipped, duplicates dropped.
-/// Panics on a line that is not a single image reference, so a typo cannot silently drop an
-/// image from the pre-pull.
+///
+/// # Panics
+///
+/// On a line that is not a single image reference, so a typo cannot silently drop an image
+/// from the pre-pull.
 pub fn parse(text: &'static str) -> Vec<&'static str> {
     let mut images: Vec<&'static str> = Vec::new();
     for (index, raw) in text.lines().enumerate() {

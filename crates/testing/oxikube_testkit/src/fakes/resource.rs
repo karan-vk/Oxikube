@@ -493,15 +493,15 @@ fn object_from_body(object: &Value, namespace: Option<&str>) -> OxiResult<Resour
         meta.insert("name".into(), Value::String(name));
     }
     let mut res = Resource::from_json(object)?;
-    if res.meta.namespace.is_none() {
-        if let Some(ns) = namespace {
-            res.meta.namespace = Some(Arc::from(ns));
-            res.edit_json(|json| {
-                if let Some(meta) = json.get_mut("metadata").and_then(Value::as_object_mut) {
-                    meta.insert("namespace".into(), Value::String(ns.to_owned()));
-                }
-            });
-        }
+    if res.meta.namespace.is_none()
+        && let Some(ns) = namespace
+    {
+        res.meta.namespace = Some(Arc::from(ns));
+        res.edit_json(|json| {
+            if let Some(meta) = json.get_mut("metadata").and_then(Value::as_object_mut) {
+                meta.insert("namespace".into(), Value::String(ns.to_owned()));
+            }
+        });
     }
     Ok(res)
 }
@@ -816,7 +816,7 @@ impl ResourceWriter for FakeResourcePort {
                 }
                 Ok(res)
             }
-            _ => Err(crate::script::unscripted(PORT, "patch")),
+            PatchKind::Json => Err(crate::script::unscripted(PORT, "patch")),
         })
     }
 
@@ -843,12 +843,12 @@ impl ResourceWriter for FakeResourcePort {
                 .preconditions
                 .as_ref()
                 .and_then(|p| p.uid.as_deref());
-            if let (Some(wanted), Some(found)) = (wanted, self.find(kind, namespace, name)) {
-                if found.meta.uid.as_deref() != Some(wanted) {
-                    return Err(OxiError::conflict(format!(
-                        "{kind} {name}: the UID precondition failed"
-                    )));
-                }
+            if let (Some(wanted), Some(found)) = (wanted, self.find(kind, namespace, name))
+                && found.meta.uid.as_deref() != Some(wanted)
+            {
+                return Err(OxiError::conflict(format!(
+                    "{kind} {name}: the UID precondition failed"
+                )));
             }
             if !options.dry_run {
                 self.store.lock().retain(|o| {

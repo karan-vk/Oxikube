@@ -40,7 +40,7 @@ const TABLE: [&str; 3] = [
 ];
 
 fn suppressed(cx: &mut TestAppContext, stack: &[&str]) -> Vec<SuppressedBinding> {
-    cx.read(|cx| suppressed_bindings(cx, &parse_stack(stack).unwrap()))
+    cx.read(|cx| suppressed_bindings(cx, &parse_stack(stack).expect("test context stack parses")))
 }
 
 #[gpui::test]

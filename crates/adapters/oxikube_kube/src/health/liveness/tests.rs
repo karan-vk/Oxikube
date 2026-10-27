@@ -171,7 +171,7 @@ async fn a_probe_that_never_answers_times_out() {
         probe_timeout: Duration::from_secs(5),
         ..quick()
     };
-    let (_live, mut rx) = Liveness::spawn(cfg, || std::future::pending::<OxiResult<String>>());
+    let (_live, mut rx) = Liveness::spawn(cfg, std::future::pending::<OxiResult<String>>);
     let started = Instant::now();
     match next(&mut rx).await {
         HealthEvent::Unhealthy { error, .. } => {

@@ -22,7 +22,7 @@ async fn instant(ep: &PromEndpoint) -> PromqlError {
     PromqlClient::new()
         .instant_query(ep, "up", None)
         .await
-        .unwrap_err()
+        .expect_err("every caller arranges for the query to fail")
 }
 
 fn json(status: u16, body: &str) -> ResponseTemplate {

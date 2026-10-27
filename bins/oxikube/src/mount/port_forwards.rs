@@ -30,7 +30,9 @@ use crate::app_state::{AppState, ClusterServices};
 
 /// Keeps the favourites' follower alive for the app: it restores a cluster's favourites when its
 /// session becomes `Ready` (E15-S06).
-struct FavouritesFollow(#[allow(dead_code)] Task<()>);
+struct FavouritesFollow(
+    #[allow(dead_code, reason = "held so dropping the global cancels the task")] Task<()>,
+);
 
 impl Global for FavouritesFollow {}
 
@@ -135,7 +137,10 @@ pub struct PanelMount {
 /// `portforward::TogglePanel`) and serves the panel's commands from `requests` (the bus
 /// handlers' queue). A user reaches it with `:pf`, `f` on a resource table, the palette's "Toggle
 /// Port Forwards" or `cmd-shift-f` / `ctrl-shift-f`.
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "mount wiring takes each service handle explicitly"
+)]
 pub fn mount_panel(
     workspace: &Entity<Workspace>,
     manager: PortForwardManager,

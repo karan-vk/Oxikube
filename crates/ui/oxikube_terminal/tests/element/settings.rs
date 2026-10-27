@@ -9,7 +9,7 @@ use super::{Harness, configure, harness_themed};
 fn cursor(h: &mut Harness) -> (CursorShape, bool) {
     let cursor = h
         .terminal
-        .read_with(&mut *h.window, |terminal, _| terminal.snapshot().cursor);
+        .read_with(&*h.window, |terminal, _| terminal.snapshot().cursor);
     (cursor.shape, cursor.blinking)
 }
 
@@ -33,7 +33,7 @@ fn a_font_size_change_lays_the_terminal_out_again_once(cx: &mut TestAppContext) 
     assert_eq!(idle.shaped_runs, relaid.shaped_runs);
     assert_eq!(
         h.terminal
-            .read_with(&mut *h.window, |t, _| t.snapshot().row_text(0)),
+            .read_with(&*h.window, |t, _| t.snapshot().row_text(0)),
         "hello",
         "the content survived the reflow"
     );

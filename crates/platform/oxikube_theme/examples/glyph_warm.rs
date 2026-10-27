@@ -13,7 +13,7 @@
 //! checks that every prepared bitmap is byte for byte the one the platform makes in the frame.
 //!
 //! `cargo run --release -p oxikube_theme --example glyph_warm`
-#![allow(clippy::print_stdout)]
+#![allow(clippy::print_stdout, reason = "an example reports on stdout")]
 
 use gpui::{
     Font, FontRun, PlatformTextSystem, RenderGlyphParams, SUBPIXEL_VARIANTS_X, font, point, px,

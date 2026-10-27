@@ -131,7 +131,7 @@ impl PodDetail {
             tolerations: scheduling::tolerations_of(spec),
             affinity: scheduling::affinity_of(spec),
             node: arc_of(spec, "nodeName"),
-            owners: pod.meta.owner_refs.to_vec(),
+            owners: pod.meta.owner_refs.clone(),
         })
     }
 

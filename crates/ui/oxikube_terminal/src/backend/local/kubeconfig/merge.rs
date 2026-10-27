@@ -121,14 +121,13 @@ fn absolutised(entry: &Value, key: &str, dir: &Path) -> Value {
             for part in parent.split('.') {
                 node = node.and_then(|n| n.get_mut(part));
             }
-            if let Some(node) = node {
-                if node
+            if let Some(node) = node
+                && node
                     .get(field)
                     .and_then(Value::as_str)
                     .is_some_and(|c| c.contains('/'))
-                {
-                    absolutise_field(node, field, dir);
-                }
+            {
+                absolutise_field(node, field, dir);
             }
         }
     }

@@ -41,6 +41,10 @@ pub struct KeymapConflict {
 
 impl KeymapConflict {
     /// The entry that is in effect.
+    ///
+    /// # Panics
+    ///
+    /// If `entries` is empty; every conflict the scan reports has at least two.
     pub fn winner(&self) -> &ConflictEntry {
         self.entries.last().expect("a conflict has two entries")
     }

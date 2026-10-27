@@ -164,10 +164,10 @@ impl PodInfo {
     /// The container a request without a name reads, resolved as the API server does:
     /// the default-container annotation, else the only regular container.
     pub(crate) fn default_container_name(&self) -> Option<&str> {
-        if let Some(name) = self.default_container.as_deref() {
-            if self.container(name).is_some() {
-                return Some(name);
-            }
+        if let Some(name) = self.default_container.as_deref()
+            && self.container(name).is_some()
+        {
+            return Some(name);
         }
         let mut regular = self.containers.iter().filter(|c| !c.init);
         match (regular.next(), regular.next()) {

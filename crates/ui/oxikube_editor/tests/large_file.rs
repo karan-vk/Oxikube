@@ -111,7 +111,13 @@ fn assert_not_stale(vcx: &mut VisualTestContext, editor: &Entity<ManifestEditor>
         }
         let problems = view.model().problems();
         if problems.errors + problems.warnings > 0 {
-            assert_eq!(view.model().shown_version(), Some(version));
+            assert_eq!(
+                view.model().shown_version(),
+                Some(version),
+                "{} errors / {} warnings counted but diagnostics not shown for version {version}",
+                problems.errors,
+                problems.warnings
+            );
         }
         let squiggles = code
             .state()

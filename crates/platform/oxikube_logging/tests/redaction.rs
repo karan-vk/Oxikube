@@ -34,13 +34,17 @@ struct Capture(Arc<Mutex<Vec<u8>>>);
 
 impl Capture {
     fn text(&self) -> String {
-        String::from_utf8(self.0.lock().unwrap().clone()).unwrap()
+        let bytes = self.0.lock().expect("capture lock not poisoned").clone();
+        String::from_utf8(bytes).expect("log output is UTF-8")
     }
 }
 
 impl Write for Capture {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.0.lock().unwrap().extend_from_slice(buf);
+        self.0
+            .lock()
+            .expect("capture lock not poisoned")
+            .extend_from_slice(buf);
         Ok(buf.len())
     }
     fn flush(&mut self) -> io::Result<()> {
@@ -57,7 +61,10 @@ impl<'a> MakeWriter<'a> for Capture {
 
 /// What a careless `#[derive(Debug)]` on a credential struct would print.
 #[derive(Debug)]
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "fields are only read through Debug output in assertions"
+)]
 struct FakeConfig {
     cluster_url: String,
     token: Option<String>,
@@ -423,7 +430,10 @@ fn json_layer_redacts_block_scalar_lines_under_string_data() {
 
 /// What a `{:#?}` dump of an object holding a Secret manifest would print.
 #[derive(Debug)]
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "fields are only read through Debug output in assertions"
+)]
 struct AppliedSpec {
     manifest: &'static str,
     replicas: u32,

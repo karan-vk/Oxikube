@@ -6,7 +6,7 @@
 //! when `--perf` is not passed); "on" is the same calls with a recorder installed, plus the frame
 //! push the `PerfRoot` hook does once per frame. The flush thread is not running here; it never
 //! shares a lock with these calls.
-#![allow(clippy::print_stdout)]
+#![allow(clippy::print_stdout, reason = "an example reports on stdout")]
 
 use oxikube_runtime::perf::{self, Recorder};
 use std::hint::black_box;

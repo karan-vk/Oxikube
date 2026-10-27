@@ -181,6 +181,11 @@ impl KubeEvents {
     /// `Validation` for an empty namespace list or an empty namespace; `Unsupported` when the
     /// cluster serves none of the configured APIs; resolution failures as for any request.
     /// Failures after that arrive on the feed.
+    ///
+    /// # Panics
+    ///
+    /// Never in practice: `stages` returns at least one stage or an error, and the first stage
+    /// is taken unconditionally.
     pub async fn watch(&self, scope: &WatchScope, options: &EventsOptions) -> OxiResult<EventFeed> {
         let namespaces = scope_namespaces(scope)?;
         let fallback = fallback_namespaces(scope, options)?;

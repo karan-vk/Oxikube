@@ -280,8 +280,8 @@ pub fn run(args: &Args) -> Result<()> {
 
     apply(context, &namespaces_manifest(prefix, *namespaces)).context("create namespaces")?;
     println!(
-        "context {context}: creating {count} pods over {namespaces} namespaces ({}), {}",
-        namespace_name(prefix, 0) + ", ...",
+        "context {context}: creating {count} pods over {namespaces} namespaces ({}, ...), {}",
+        namespace_name(prefix, 0),
         match scheduler {
             Some(name) => format!("unscheduled (schedulerName {name}: they stay Pending)"),
             None => "placed by the default scheduler".to_owned(),

@@ -41,7 +41,7 @@ fn pod(i: usize, phase: &str) -> Resource {
         },
         "status": {"phase": phase},
     }))
-    .unwrap()
+    .expect("fixture pod JSON is a valid resource")
 }
 
 fn node(i: usize) -> Resource {
@@ -54,7 +54,7 @@ fn node(i: usize) -> Resource {
             "conditions": [{"type": "Ready", "status": "True"}],
         },
     }))
-    .unwrap()
+    .expect("fixture node JSON is a valid resource")
 }
 
 fn time(label: &str, samples: usize, batch: usize, mut call: impl FnMut()) {

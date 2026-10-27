@@ -5,7 +5,7 @@
 //! `cargo run --release -p oxikube_theme --example theme_load` (budget: settings + keymap + theme
 //! < 30 ms combined on the main thread at startup, E05-S13; a theme switch is one `resolve` and
 //! one `ActiveTheme` write).
-#![allow(clippy::print_stdout)]
+#![allow(clippy::print_stdout, reason = "an example reports on stdout")]
 
 use oxikube_theme::watcher::{DEFAULT_DEBOUNCE, ThemeDirWatcher};
 use oxikube_theme::{Appearance, ThemeMode, ThemeRegistry, ThemeSelection, import_family};
@@ -23,7 +23,10 @@ fn measure(runs: usize, mut work: impl FnMut()) -> (Duration, Duration) {
         })
         .collect();
     times.sort();
-    (times[times.len() / 2], *times.last().unwrap())
+    (
+        times[times.len() / 2],
+        *times.last().expect("measure runs at least once"),
+    )
 }
 
 fn report(label: &str, (median, worst): (Duration, Duration)) {
@@ -44,11 +47,15 @@ fn main() {
     );
     report(
         "import Ayu (3 themes, 39 KB)",
-        measure(200, || drop(import_family(AYU).unwrap())),
+        measure(200, || {
+            drop(import_family(AYU).expect("bundled Ayu fixture imports"))
+        }),
     );
     report(
         "import Gruvbox (6 themes, 82 KB)",
-        measure(200, || drop(import_family(GRUVBOX).unwrap())),
+        measure(200, || {
+            drop(import_family(GRUVBOX).expect("bundled Gruvbox fixture imports"))
+        }),
     );
 
     // Starting the hot-reload watcher is the only syscall-heavy step `init` does on the main
@@ -57,7 +64,10 @@ fn main() {
     report(
         "ThemeDirWatcher::spawn (mkdir + watch)",
         measure(20, || {
-            drop(ThemeDirWatcher::spawn(dir.join("themes"), DEFAULT_DEBOUNCE, |_| true).unwrap());
+            drop(
+                ThemeDirWatcher::spawn(dir.join("themes"), DEFAULT_DEBOUNCE, |_| true)
+                    .expect("theme watcher starts on a temp dir"),
+            );
         }),
     );
     let _ = std::fs::remove_dir_all(&dir);

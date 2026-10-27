@@ -88,11 +88,9 @@ async fn get_logs_and_at_logs_read_live_pods_bounded_and_redacted() {
             .expect("create the pod");
     }
     for name in ["echo-a", "echo-b"] {
-        eventually(
-            "the pod to run",
-            || String::new(),
-            || async { running(&pods, name).await },
-        )
+        eventually("the pod to run", String::new, || async {
+            running(&pods, name).await
+        })
         .await;
     }
     // Let the pods write a few lines.

@@ -39,7 +39,7 @@ fn secret() -> Resource {
         "type": "Opaque",
         "data": {"password": PASSWORD_B64, "blob": "//4="}
     }))
-    .unwrap()
+    .expect("fixture Secret is a valid resource")
 }
 
 impl Fixture {
@@ -49,7 +49,7 @@ impl Fixture {
             .send(EditorRequest::OpenDecoded {
                 target: secret_ref(),
             })
-            .unwrap();
+            .expect("the editor request channel is open");
         self.vcx.run_until_parked();
         let editor = self.only_editor();
         self.vcx
@@ -369,7 +369,10 @@ fn capture_logs() -> Arc<Mutex<Vec<u8>>> {
     struct Sink(Arc<Mutex<Vec<u8>>>);
     impl Write for Sink {
         fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            self.0.lock().unwrap().extend_from_slice(buf);
+            self.0
+                .lock()
+                .expect("log buffer mutex is not poisoned")
+                .extend_from_slice(buf);
             Ok(buf.len())
         }
         fn flush(&mut self) -> std::io::Result<()> {
@@ -401,7 +404,7 @@ impl Fixture {
     fn create_dialog(&mut self) -> Entity<CreateSecretDialog> {
         self.sink
             .send(EditorRequest::CreateSecret { cluster: None })
-            .unwrap();
+            .expect("the editor request channel is open");
         self.vcx.run_until_parked();
         self.modal::<CreateSecretDialog>()
             .expect("the dialog opened")

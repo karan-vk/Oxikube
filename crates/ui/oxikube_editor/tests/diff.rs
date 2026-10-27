@@ -114,7 +114,7 @@ fn a_missing_object_shows_every_line_added() {
 }
 
 fn version(value: Value) -> Arc<ObjectVersion> {
-    let resource = Resource::from_json(value).unwrap();
+    let resource = Resource::from_json(value).expect("fixture value is a valid resource");
     Arc::new(ObjectVersion::new(resource, &default_renderer()))
 }
 
