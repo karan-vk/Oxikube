@@ -94,7 +94,7 @@ fn slow_adapter(dir: &TempDir) -> GcloudDiscovery {
         r#"
 case "$*" in
   "container clusters list --project p1 --format=json"|"container clusters list --project p2 --format=json")
-    sleep 1; touch "{}/done-$4"; echo '[]' ;;
+    sleep 1; touch "{}/done-$5"; echo '[]' ;;
   *) exit 2 ;;
 esac
 "#,
