@@ -2,18 +2,18 @@
 
 use std::rc::Rc;
 
-use oxikube_app::rbac_subjects::{PolicyFeed, PolicyHandle, SubjectsService};
+use oxikube_app::rbac_subjects::{PolicyChanges, PolicyHandle, SubjectsService};
 use oxikube_app::store::ResourceStore;
 use oxikube_domain::ids::ClusterId;
 use oxikube_domain::rbac::Subject;
 
-/// A running read of the policy: the index to query and, for a live source, the feed that keeps
-/// it current. The view drives the feed on the runtime and drops it with the page.
+/// A running read of the policy: the index to query and, for a live source, the changes that say
+/// when to read it again. The view drives the changes on the runtime and drops them with the page.
 pub struct PolicyWatch {
     /// The index the page reads.
     pub handle: PolicyHandle,
-    /// The feeds filling it; `None` for a fixed policy (fixtures).
-    pub feed: Option<PolicyFeed>,
+    /// When the shared feed behind it changed; `None` for a fixed policy (fixtures).
+    pub feed: Option<PolicyChanges>,
     /// The store the feeds subscribe to; `None` for a fixed policy.
     pub store: Option<ResourceStore>,
 }

@@ -93,6 +93,7 @@ impl BindingDialog {
                         .text_size(u(px(12.)))
                         .text_color(colors.text_muted)
                         .child(match self.kind {
+                            _ if self.choices_pending => "Reading the cluster's roles…",
                             BindingKind::ClusterRoleBinding => {
                                 "No ClusterRole matches (a ClusterRoleBinding can only grant a ClusterRole)"
                             }

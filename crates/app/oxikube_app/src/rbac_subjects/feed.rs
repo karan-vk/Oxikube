@@ -1,187 +1,206 @@
-//! [`PolicyFeed`]: the four RBAC kinds' store feeds, applied to a [`SubjectIndex`] that a view
-//! reads through a [`PolicyHandle`].
+//! [`PolicyHandle`]: the subject pages' view of the cluster's shared
+//! [`PolicyFeed`](crate::access::PolicyFeed), and [`PolicyChanges`], which tells a page when to
+//! read it again.
+//!
+//! The pages do not subscribe on their own: [`SubjectsService::open`](super::SubjectsService::open)
+//! takes the cluster's feed from the [`PolicyHub`](crate::access::PolicyHub), the same one the
+//! ServiceAccount panel reads, so a cluster holds one [`SubjectIndex`] however many RBAC views
+//! are open.
 
-use std::future::poll_fn;
-use std::pin::Pin;
+use std::collections::BTreeSet;
+use std::fmt;
 use std::sync::Arc;
-use std::task::Poll;
 
-use futures::Stream;
+use futures::StreamExt as _;
+use futures::channel::mpsc::UnboundedReceiver;
 use oxikube_domain::Resource;
 use oxikube_domain::ids::ClusterId;
-use oxikube_domain::rbac::RbacKind;
-use oxikube_domain::session::WatchScope;
-use parking_lot::{Mutex, RwLock};
+use oxikube_domain::rbac::{RbacKind, Subject};
 
 use super::service::Names;
-use crate::access::SubjectIndex;
-use crate::store::{
-    FeedState, ResourceStore, RowChange, StoreDelta, StoreObject, StoreQuery, Subscription,
-};
+use super::summary::{canonical, subject_name};
+use crate::access::{PolicyFeed, SubjectIndex};
+use crate::store::{FeedState, RowChange, StoreObject};
 
 /// How far the feeds are, and what went wrong, for the page's loading row and warnings.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct PolicyStatus {
+pub struct PolicyProgress {
     /// Feeds that have not listed yet (of four).
     pub pending: usize,
     /// Kinds that could not be read (forbidden, rejected credentials, a failed feed).
     pub problems: Vec<String>,
 }
 
-#[derive(Debug, Default)]
-struct Shared {
-    index: RwLock<SubjectIndex>,
-    status: Mutex<PolicyStatus>,
+impl PolicyProgress {
+    /// The progress the four feeds' `states` stand for.
+    pub fn of(states: &[(RbacKind, FeedState)]) -> Self {
+        Self {
+            pending: states
+                .iter()
+                .filter(|(_, state)| matches!(state, FeedState::Warming))
+                .count(),
+            problems: states
+                .iter()
+                .filter_map(|(kind, state)| problem(*kind, state))
+                .collect(),
+        }
+    }
 }
 
-/// A shared, read-mostly view of the index a [`PolicyFeed`] fills. Cheap to clone; reads take
-/// the index's read lock for the duration of the closure, so do the heavy work (a matrix) on a
-/// background task and keep the closure short.
-#[derive(Debug, Clone, Default)]
+/// A fixed policy: previews and tests.
+#[derive(Debug, Default)]
+struct Fixed {
+    index: SubjectIndex,
+    progress: PolicyProgress,
+}
+
+#[derive(Clone)]
+enum Source {
+    Live(Arc<PolicyFeed>),
+    Fixed(Arc<Fixed>),
+}
+
+/// A shared, read-mostly view of the policy index. Cheap to clone; reads take the index's read
+/// lock for the duration of the closure, so do the heavy work (a matrix) on a background task and
+/// keep the closure short. A live handle holds a lease on the cluster's shared feed.
+#[derive(Clone)]
 pub struct PolicyHandle {
-    shared: Arc<Shared>,
+    source: Source,
+}
+
+impl fmt::Debug for PolicyHandle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.source {
+            Source::Live(feed) => f.debug_tuple("PolicyHandle").field(feed).finish(),
+            Source::Fixed(_) => f.write_str("PolicyHandle(fixed)"),
+        }
+    }
+}
+
+impl Default for PolicyHandle {
+    fn default() -> Self {
+        Self::fixed(&[])
+    }
 }
 
 impl PolicyHandle {
     /// A handle on a fixed set of RBAC objects, nothing pending: for previews and tests.
     pub fn fixed(resources: &[Resource]) -> Self {
-        let handle = Self::default();
-        {
-            let mut index = handle.shared.index.write();
-            for kind in RbacKind::ALL {
-                let rows = resources
-                    .iter()
-                    .filter(|r| RbacKind::of(&r.kind) == Some(kind))
-                    .map(|r| Arc::new(StoreObject::Resource(r.clone())))
-                    .collect();
-                index.apply_rows(kind, &RowChange::Snapshot(rows));
-            }
+        let mut index = SubjectIndex::new();
+        for kind in RbacKind::ALL {
+            let rows = resources
+                .iter()
+                .filter(|r| RbacKind::of(&r.kind) == Some(kind))
+                .map(|r| Arc::new(StoreObject::Resource(r.clone())))
+                .collect();
+            index.apply_rows(kind, &RowChange::Snapshot(rows));
         }
-        handle
+        Self {
+            source: Source::Fixed(Arc::new(Fixed {
+                index,
+                progress: PolicyProgress::default(),
+            })),
+        }
     }
 
     /// A handle on an empty policy with `pending` feeds still to list: the loading state, for
     /// previews and tests.
     pub fn loading(pending: usize) -> Self {
-        let handle = Self::default();
-        handle.shared.status.lock().pending = pending;
-        handle
+        Self {
+            source: Source::Fixed(Arc::new(Fixed {
+                index: SubjectIndex::new(),
+                progress: PolicyProgress {
+                    pending,
+                    problems: Vec::new(),
+                },
+            })),
+        }
+    }
+
+    /// A handle on a running feed.
+    pub(super) fn live(feed: Arc<PolicyFeed>) -> Self {
+        Self {
+            source: Source::Live(feed),
+        }
     }
 
     /// Runs `read` on the index.
     pub fn read<R>(&self, read: impl FnOnce(&SubjectIndex) -> R) -> R {
-        read(&self.shared.index.read())
+        match &self.source {
+            Source::Live(feed) => feed.read(read),
+            Source::Fixed(fixed) => read(&fixed.index),
+        }
     }
 
     /// The feeds' progress and problems.
-    pub fn status(&self) -> PolicyStatus {
-        self.shared.status.lock().clone()
+    pub fn status(&self) -> PolicyProgress {
+        match &self.source {
+            Source::Live(feed) => PolicyProgress::of(&feed.states()),
+            Source::Fixed(fixed) => fixed.progress.clone(),
+        }
     }
 }
 
-/// The four subscriptions (Roles, ClusterRoles, RoleBindings, ClusterRoleBindings; all
-/// namespaces, whatever the tab's namespace selection) and the index they fill. Dropping it
-/// releases the store's feeds.
-pub struct PolicyFeed {
-    shared: Arc<Shared>,
-    feeds: Vec<(RbacKind, Subscription, FeedState)>,
+/// Tells a page when the policy changed, and publishes the subject names `:rbac` completes as it
+/// does. Holds a lease on the cluster's shared feed; dropping it (with the handles) releases the
+/// store's subscriptions once no other view holds them.
+pub struct PolicyChanges {
+    feed: Arc<PolicyFeed>,
+    changes: UnboundedReceiver<()>,
     names: Option<(ClusterId, Names)>,
     named_version: Option<u64>,
 }
 
-impl PolicyFeed {
-    /// Subscribes to the four kinds on `store`.
-    pub fn open(store: &ResourceStore) -> (Self, PolicyHandle) {
-        let shared = Arc::new(Shared::default());
-        let feeds = RbacKind::ALL
-            .into_iter()
-            .map(|kind| {
-                let query = StoreQuery::new(kind.gvk(), WatchScope::Cluster);
-                (kind, store.subscribe(query), FeedState::Warming)
-            })
-            .collect();
-        shared.status.lock().pending = RbacKind::ALL.len();
-        let handle = PolicyHandle {
-            shared: shared.clone(),
-        };
-        (
-            Self {
-                shared,
-                feeds,
-                names: None,
-                named_version: None,
-            },
-            handle,
-        )
+impl PolicyChanges {
+    pub(super) fn new(feed: Arc<PolicyFeed>, names: Option<(ClusterId, Names)>) -> Self {
+        Self {
+            changes: feed.changes(),
+            feed,
+            names,
+            named_version: None,
+        }
     }
 
-    pub(super) fn publish_names(&mut self, cluster: ClusterId, names: Names) {
-        self.names = Some((cluster, names));
-    }
-
-    /// Waits until a feed delivered something (rows or a state change), applies everything
-    /// pending, and returns. Always `true`: the feeds never end on their own.
+    /// Waits until the policy changed (the first call returns at once), folds whatever else
+    /// piled up, publishes the subject names when the bindings moved, and returns. `false` once
+    /// the feed stopped.
     pub async fn changed(&mut self) -> bool {
-        poll_fn(|cx| {
-            let mut any = false;
-            for (kind, subscription, state) in &mut self.feeds {
-                while let Poll::Ready(Some(delta)) = Pin::new(&mut *subscription).poll_next(cx) {
-                    any |= apply(&self.shared, *kind, state, &delta);
-                }
-            }
-            if any { Poll::Ready(()) } else { Poll::Pending }
-        })
-        .await;
-        self.refresh_status();
+        if self.changes.next().await.is_none() {
+            return false;
+        }
+        while self.changes.try_recv().is_ok() {}
         self.publish();
         true
     }
 
-    fn refresh_status(&self) {
-        let pending = self
-            .feeds
-            .iter()
-            .filter(|(_, _, state)| matches!(state, FeedState::Warming))
-            .count();
-        let problems = self
-            .feeds
-            .iter()
-            .filter_map(|(kind, _, state)| problem(*kind, state))
-            .collect();
-        *self.shared.status.lock() = PolicyStatus { pending, problems };
-    }
-
-    /// Publishes the subject names when the bindings changed since the last time.
+    /// Publishes the subject names when the index moved since the last time. A pass over the
+    /// index's subject keys, no counting of bindings or roles.
     fn publish(&mut self) {
         let Some((cluster, names)) = &self.names else {
             return;
         };
-        let index = self.shared.index.read();
-        if self.named_version == Some(index.version()) {
+        let version = self.feed.version();
+        if self.named_version == Some(version) {
             return;
         }
-        self.named_version = Some(index.version());
-        let all: Vec<Arc<str>> = super::summary::summaries(&index, super::SubjectList::Users)
-            .into_iter()
-            .chain(super::summary::summaries(
-                &index,
-                super::SubjectList::Groups,
-            ))
-            .map(|row| row.name())
-            .collect();
+        self.named_version = Some(version);
+        let all = self.feed.read(completion_names);
         names.write().insert(cluster.clone(), all.into());
     }
 }
 
-/// Applies one delta; whether anything the page shows changed.
-fn apply(shared: &Shared, kind: RbacKind, state: &mut FeedState, delta: &StoreDelta) -> bool {
-    let mut changed = false;
-    if *state != delta.state {
-        state.clone_from(&delta.state);
-        changed = true;
+/// The names the Users page lists, then those the Groups page lists, each sorted: what `:rbac`
+/// completes.
+fn completion_names(index: &SubjectIndex) -> Vec<Arc<str>> {
+    let mut users = BTreeSet::new();
+    let mut groups = BTreeSet::new();
+    for subject in index.subjects() {
+        match canonical(&subject) {
+            Subject::Group(name) => groups.insert(name),
+            other => users.insert(subject_name(&other)),
+        };
     }
-    changed |= shared.index.write().apply(kind, delta);
-    changed
+    users.into_iter().chain(groups).collect()
 }
 
 fn problem(kind: RbacKind, state: &FeedState) -> Option<String> {
@@ -197,6 +216,6 @@ fn problem(kind: RbacKind, state: &FeedState) -> Option<String> {
             "{}s could not be read ({message}), so {what}.",
             kind.as_str()
         )),
-        _ => None,
+        FeedState::Warming | FeedState::Ready | FeedState::Retrying { .. } => None,
     }
 }

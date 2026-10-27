@@ -202,15 +202,23 @@ fn compute(
     policy.read(|index| {
         let subject = resolve_subject(index, asked);
         let scopes = scopes_of(index, &subject, inherit);
-        let scope = picked.unwrap_or_else(|| {
-            // Cluster-wide when the subject has grants there; otherwise the first namespace.
-            let cluster = subject_matrix(index, &subject, &GrantScope::Cluster, inherit);
-            match scopes.get(1) {
-                Some(first) if cluster.grants == 0 => first.clone(),
-                _ => GrantScope::Cluster,
+        let (scope, matrix) = match picked {
+            Some(scope) => {
+                let matrix = subject_matrix(index, &subject, &scope, inherit);
+                (scope, matrix)
             }
-        });
-        let matrix = subject_matrix(index, &subject, &scope, inherit);
+            None => {
+                // Cluster-wide when the subject has grants there; otherwise the first namespace.
+                let cluster = subject_matrix(index, &subject, &GrantScope::Cluster, inherit);
+                match scopes.get(1) {
+                    Some(first) if cluster.grants == 0 => (
+                        first.clone(),
+                        subject_matrix(index, &subject, first, inherit),
+                    ),
+                    _ => (GrantScope::Cluster, cluster),
+                }
+            }
+        };
         Computed {
             subject,
             scopes,

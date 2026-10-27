@@ -3,7 +3,7 @@ use oxikube_domain::ids::Gvr;
 use oxikube_ports::{ContextScope, Mention};
 use serde_json::json;
 
-use super::{Harness, cluster, role_binding};
+use super::{Harness, cluster, object, role_binding};
 
 fn scope() -> ContextScope {
     ContextScope::new().with_cluster(cluster())
@@ -119,15 +119,12 @@ async fn verb_rows_list_allowed_denied_and_unknown_verbs_apart() {
     );
     h.access().set_decision(
         AccessCheck::new("*", Gvr::new("*", "", "*")).impersonating(sa),
-        AccessDecision::Allowed,
+        AccessDecision::Denied { reason: None },
     );
     let body = resolve(&h, "@rbac/sa/shop/bot", &scope())
         .await
         .expect("block");
-    assert!(
-        body.contains("* on *: allowed (cluster-admin level)"),
-        "{body}"
-    );
+    assert!(!body.contains("* on *"), "{body}");
     assert!(
         body.contains("pods: get patch delete (unknown: create)"),
         "{body}"
@@ -155,4 +152,90 @@ async fn a_user_subject_naming_the_service_account_is_a_binding() {
         .await
         .expect("block");
     assert!(body.contains("as-user -> Role editor"), "{body}");
+}
+
+/// Every ServiceAccount is in `system:authenticated`: a binding to that group applies to it, and
+/// the block lists it beside the verbs it explains.
+#[tokio::test]
+async fn a_binding_to_system_authenticated_is_listed() {
+    let h = Harness::connected().await;
+    h.objects().insert(object(json!({
+        "apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRoleBinding",
+        "metadata": {"name": "everyone-views"},
+        "roleRef": {"kind": "ClusterRole", "name": "view", "apiGroup": "rbac.authorization.k8s.io"},
+        "subjects": [{"kind": "Group", "name": "system:authenticated"}],
+    })));
+    h.objects().insert(object(json!({
+        "apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRoleBinding",
+        "metadata": {"name": "other-group"},
+        "roleRef": {"kind": "ClusterRole", "name": "edit", "apiGroup": "rbac.authorization.k8s.io"},
+        "subjects": [{"kind": "Group", "name": "devs"}],
+    })));
+    let body = resolve(&h, "@rbac/sa/shop/builder", &scope())
+        .await
+        .expect("block");
+    assert!(
+        body.contains(
+            "ClusterRoleBinding everyone-views -> ClusterRole view (via group system:authenticated)"
+        ),
+        "{body}"
+    );
+    assert!(!body.contains("other-group"), "{body}");
+    assert!(!body.contains("no binding names"), "{body}");
+}
+
+/// When the first review already answers for everything (refused, or cluster-admin), the other
+/// sixty are not sent.
+#[tokio::test]
+async fn a_refused_or_cluster_admin_first_review_sends_no_more() {
+    let h = Harness::connected().await;
+    h.access()
+        .script()
+        .can_i
+        .push_err(oxikube_domain::OxiError::forbidden(
+            "needs subjectaccessreviews",
+        ));
+    let body = resolve(&h, "@rbac/sa/shop/bot", &scope())
+        .await
+        .expect("block");
+    assert!(body.contains("(unavailable: needs subjectaccessreviews)"));
+    assert_eq!(h.access().can_i_calls(), 1, "one review, then stop");
+
+    let admin = Harness::connected().await;
+    let body = resolve(&admin, "@rbac/sa/shop/bot", &scope())
+        .await
+        .expect("block");
+    assert!(
+        body.contains("* on *: allowed (cluster-admin level)"),
+        "{body}"
+    );
+    assert!(
+        body.contains("pods: get list create patch delete"),
+        "{body}"
+    );
+    assert_eq!(
+        admin.access().can_i_calls(),
+        1,
+        "everything is allowed already"
+    );
+}
+
+/// A review that fails part-way stops the rest and says the summary is unavailable.
+#[tokio::test]
+async fn an_error_part_way_stops_the_remaining_reviews() {
+    let h = Harness::connected().await;
+    let access = h.access();
+    let script = &access.script().can_i;
+    // `*` on `*` is denied, the first resource review fails.
+    script.push_ok(AccessDecision::Denied { reason: None });
+    script.push_err(oxikube_domain::OxiError::network("connection reset"));
+    let body = resolve(&h, "@rbac/sa/shop/bot", &scope())
+        .await
+        .expect("block");
+    assert!(body.contains("(unavailable: connection reset)"), "{body}");
+    assert!(
+        h.access().can_i_calls() < 1 + 60,
+        "stopped early: {} reviews",
+        h.access().can_i_calls()
+    );
 }

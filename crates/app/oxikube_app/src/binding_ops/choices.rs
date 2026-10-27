@@ -6,8 +6,9 @@ use std::sync::Arc;
 use oxikube_domain::ids::{ClusterId, Gvk};
 use oxikube_domain::rbac::{Binding, RbacKind, Role, RoleId, RoleKind, Subject};
 use oxikube_domain::{OxiError, OxiResult};
+use oxikube_ports::ResourceReader;
 
-use crate::role_ops::list_all;
+use crate::role_ops::{list_all, list_all_metadata};
 use crate::session::ClusterSessionManager;
 
 /// What the dialog's pickers offer, read from the cluster.
@@ -33,6 +34,10 @@ pub struct BindingChoices {
 impl BindingChoices {
     /// Reads the lists through `sessions`. Run it off the UI thread (`spawn_kube`).
     ///
+    /// The five lists run at once, not one after another, and the Roles, ClusterRoles and
+    /// ServiceAccounts are read as metadata only (the pickers need their names); only the
+    /// bindings are read whole, for the subject names they use.
+    ///
     /// # Errors
     ///
     /// The cluster is not connected.
@@ -41,33 +46,49 @@ impl BindingChoices {
             .get(cluster)
             .and_then(|session| session.resources())
             .ok_or_else(|| OxiError::conflict("the cluster is not connected"))?;
+        Ok(Self::read_from(&reader).await)
+    }
+
+    /// Reads the lists through `reader`, all at once.
+    pub(crate) async fn read_from(reader: &Arc<dyn ResourceReader>) -> Self {
+        let (roles, cluster_roles, accounts, cluster_bindings, bindings) = futures::join!(
+            list_all_metadata(reader, RbacKind::Role.gvk(), None),
+            list_all_metadata(reader, RbacKind::ClusterRole.gvk(), None),
+            list_all_metadata(reader, Gvk::new("", "v1", "ServiceAccount"), None),
+            list_all(reader, RbacKind::ClusterRoleBinding.gvk(), None),
+            list_all(reader, RbacKind::RoleBinding.gvk(), None),
+        );
         let mut choices = Self::default();
-        match list_all(&reader, RbacKind::Role.gvk(), None).await {
+        match roles {
             Ok(items) => {
                 let mut roles: Vec<RoleId> = items
-                    .iter()
-                    .filter_map(|item| Role::from_resource(item).ok())
-                    .map(|role| role.id)
+                    .into_iter()
+                    .filter_map(|meta| {
+                        Some(RoleId {
+                            kind: RoleKind::Role,
+                            namespace: Some(meta.namespace?),
+                            name: meta.name,
+                        })
+                    })
                     .collect();
                 roles.sort();
                 choices.roles = roles;
             }
             Err(error) => choices.note("Roles", &error),
         }
-        match list_all(&reader, RbacKind::ClusterRole.gvk(), None).await {
+        match cluster_roles {
             Ok(items) => {
-                let mut names: Vec<Arc<str>> =
-                    items.iter().map(|item| item.meta.name.clone()).collect();
+                let mut names: Vec<Arc<str>> = items.into_iter().map(|meta| meta.name).collect();
                 names.sort();
                 choices.cluster_roles = names;
             }
             Err(error) => choices.note("ClusterRoles", &error),
         }
-        match list_all(&reader, Gvk::new("", "v1", "ServiceAccount"), None).await {
+        match accounts {
             Ok(items) => {
                 let mut accounts: Vec<(Arc<str>, Arc<str>)> = items
-                    .iter()
-                    .filter_map(|item| Some((item.meta.namespace.clone()?, item.meta.name.clone())))
+                    .into_iter()
+                    .filter_map(|meta| Some((meta.namespace?, meta.name)))
                     .collect();
                 accounts.sort();
                 choices.service_accounts = accounts;
@@ -75,8 +96,11 @@ impl BindingChoices {
             Err(error) => choices.note("ServiceAccounts", &error),
         }
         let (mut users, mut groups) = (BTreeSet::new(), BTreeSet::new());
-        for kind in [RbacKind::ClusterRoleBinding, RbacKind::RoleBinding] {
-            match list_all(&reader, kind.gvk(), None).await {
+        for (kind, listed) in [
+            (RbacKind::ClusterRoleBinding, cluster_bindings),
+            (RbacKind::RoleBinding, bindings),
+        ] {
+            match listed {
                 Ok(items) => {
                     for subject in items
                         .iter()
@@ -99,7 +123,7 @@ impl BindingChoices {
         }
         choices.users = users.into_iter().collect();
         choices.groups = groups.into_iter().collect();
-        Ok(choices)
+        choices
     }
 
     fn note(&mut self, what: &str, error: &OxiError) {

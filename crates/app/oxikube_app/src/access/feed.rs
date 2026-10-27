@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use futures::StreamExt as _;
+use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use oxikube_domain::rbac::RbacKind;
 use oxikube_domain::session::WatchScope;
 use parking_lot::{Mutex, RwLock};
@@ -29,6 +30,8 @@ struct Shared {
     states: Mutex<[FeedState; 4]>,
     /// Bumped whenever the index or a state changed.
     version: AtomicU64,
+    /// Told of every bump ([`PolicyFeed::changes`]); a closed receiver is dropped on the next.
+    listeners: Mutex<Vec<UnboundedSender<()>>>,
 }
 
 /// A running [`SubjectIndex`] over one store's Roles, ClusterRoles, RoleBindings and
@@ -38,8 +41,10 @@ struct Shared {
 /// shares; the watch budget decides as for any view). A binding in any namespace can name a
 /// ServiceAccount, so the namespace selection does not narrow them. Dropping the feed aborts the
 /// four tasks, which releases the subscriptions; a [`PolicyHub`](super::PolicyHub) shares one feed
-/// between the views that need it. Nothing here runs on the UI thread: readers take the index's
-/// read lock briefly ([`read`](Self::read)) and compute on a background executor.
+/// between the views that need it (the ServiceAccount panel and the Users, Groups and matrix
+/// pages of `rbac_subjects`), so a cluster holds one index however many of them are open.
+/// Nothing here runs on the UI thread: readers take the index's read lock briefly
+/// ([`read`](Self::read)) and compute on a background executor.
 pub struct PolicyFeed {
     shared: Arc<Shared>,
     store: ResourceStore,
@@ -61,6 +66,7 @@ impl PolicyFeed {
             index: RwLock::new(SubjectIndex::new()),
             states: Mutex::new(std::array::from_fn(|_| FeedState::Warming)),
             version: AtomicU64::new(0),
+            listeners: Mutex::new(Vec::new()),
         });
         let tasks = RbacKind::ALL
             .into_iter()
@@ -103,6 +109,26 @@ impl PolicyFeed {
         }
     }
 
+    /// Each kind's feed state, in [`RbacKind::ALL`] order: how far the lists are, and why a kind
+    /// is missing.
+    pub fn states(&self) -> Vec<(RbacKind, FeedState)> {
+        RbacKind::ALL
+            .into_iter()
+            .zip(self.shared.states.lock().iter().cloned())
+            .collect()
+    }
+
+    /// A stream that yields whenever [`version`](Self::version) moved, starting with one item at
+    /// once so a new reader reads the index as it is. Several changes may fold into one item;
+    /// drop the receiver to stop.
+    pub fn changes(&self) -> UnboundedReceiver<()> {
+        let (sender, receiver) = unbounded();
+        // Cannot fail: the receiver is alive.
+        let _ = sender.unbounded_send(());
+        self.shared.listeners.lock().push(sender);
+        receiver
+    }
+
     /// Whether this feed reads `store` (a reconnect builds a new store, and the old feed's
     /// objects are stale).
     pub fn reads(&self, store: &ResourceStore) -> bool {
@@ -126,6 +152,10 @@ async fn follow(store: ResourceStore, kind: RbacKind, shared: Arc<Shared>) {
         };
         if rows_changed || state_changed {
             shared.version.fetch_add(1, Ordering::AcqRel);
+            shared
+                .listeners
+                .lock()
+                .retain(|listener| listener.unbounded_send(()).is_ok());
         }
     }
 }

@@ -6,7 +6,7 @@ use oxikube_domain::ids::{ClusterId, Gvk};
 use oxikube_domain::rbac::{
     Binding, BindingKind, RbacKind, Role, RoleId, RoleKind, aggregated_from,
 };
-use oxikube_domain::{OxiError, OxiResult, Resource};
+use oxikube_domain::{ObjectMeta, OxiError, OxiResult, Resource};
 use oxikube_ports::{ListOptions, ResourceReader};
 
 use crate::session::ClusterSessionManager;
@@ -105,6 +105,28 @@ pub(crate) async fn list_all(
     let mut items = Vec::new();
     loop {
         let page = reader.list(&gvk, namespace, &options).await?;
+        items.extend(page.items);
+        match page.continue_token.filter(|token| !token.is_empty()) {
+            Some(token) => options = options.continue_from(token),
+            None => return Ok(items),
+        }
+    }
+}
+
+/// Every object of `gvk` (in `namespace`, or everywhere) as metadata only, page by page: for
+/// pickers that need names, not objects.
+pub(crate) async fn list_all_metadata(
+    reader: &Arc<dyn ResourceReader>,
+    gvk: Gvk,
+    namespace: Option<&str>,
+) -> OxiResult<Vec<ObjectMeta>> {
+    let mut options = ListOptions {
+        limit: Some(PAGE),
+        ..ListOptions::default()
+    };
+    let mut items = Vec::new();
+    loop {
+        let page = reader.list_metadata(&gvk, namespace, &options).await?;
         items.extend(page.items);
         match page.continue_token.filter(|token| !token.is_empty()) {
             Some(token) => options = options.continue_from(token),

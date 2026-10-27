@@ -36,7 +36,7 @@ mod tests;
 pub use handler::register_commands;
 pub use links::{RoleLinks, binds};
 
-pub(crate) use links::list_all;
+pub(crate) use links::{list_all, list_all_metadata};
 pub use manifest::RoleManifest;
 
 pub(crate) use spec::{audit_detail, audit_target, summary};

@@ -8,7 +8,8 @@ use oxikube_ports::{Delta, DeltaBatch};
 use oxikube_testkit::fixtures::rbac;
 use oxikube_testkit::{FakeClockPort, FakeResourcePort, FakeTableFeedPort, Timeline};
 
-use crate::rbac_subjects::{PolicyFeed, SubjectList, SubjectsService, summaries};
+use crate::access::PolicyHub;
+use crate::rbac_subjects::{PolicyChanges, SubjectList, SubjectsService, summaries};
 use crate::store::{ResourceStore, StoreOptions, StorePorts, StoreRuntime};
 use oxikube_domain::ids::{ClusterId, ContextName};
 
@@ -17,9 +18,17 @@ fn cluster() -> ClusterId {
 }
 
 fn store_on(resources: &Arc<FakeResourcePort>, clock: &Arc<FakeClockPort>) -> ResourceStore {
+    store_of(cluster(), resources, clock)
+}
+
+fn store_of(
+    cluster: ClusterId,
+    resources: &Arc<FakeResourcePort>,
+    clock: &Arc<FakeClockPort>,
+) -> ResourceStore {
     let tables = Arc::new(FakeTableFeedPort::with_clock(clock.clone()));
     ResourceStore::new(
-        cluster(),
+        cluster,
         StorePorts {
             resources: resources.clone(),
             tables,
@@ -35,7 +44,7 @@ fn store_on(resources: &Arc<FakeResourcePort>, clock: &Arc<FakeClockPort>) -> Re
     )
 }
 
-async fn settled(feed: &mut PolicyFeed, until: impl Fn() -> bool) {
+async fn settled(feed: &mut PolicyChanges, until: impl Fn() -> bool) {
     for _ in 0..50 {
         if until() {
             return;
@@ -101,7 +110,7 @@ async fn a_new_binding_arrives_without_a_new_list() {
         );
     }
     let store = store_on(&resources, &clock);
-    let (mut feed, handle) = PolicyFeed::open(&store);
+    let (mut feed, handle) = SubjectsService::new().open(&cluster(), &store);
     let probe = handle.clone();
     settled(&mut feed, move || probe.status().pending == 0).await;
     assert!(handle.read(|i| i.subjects().is_empty()));
@@ -126,7 +135,7 @@ async fn forbidden_feeds_say_what_the_page_is_missing() {
             .push_err(oxikube_domain::OxiError::forbidden("roles is forbidden"));
     }
     let store = store_on(&resources, &clock);
-    let (mut feed, handle) = PolicyFeed::open(&store);
+    let (mut feed, handle) = SubjectsService::new().open(&cluster(), &store);
     let probe = handle.clone();
     settled(&mut feed, move || probe.status().pending == 0).await;
 
@@ -140,4 +149,30 @@ async fn forbidden_feeds_say_what_the_page_is_missing() {
             "{kind}: {problems:?}"
         );
     }
+}
+
+/// The subject pages and the ServiceAccount panel read one index per cluster: the pages take the
+/// feed the hub shares instead of subscribing on their own.
+#[tokio::test(flavor = "current_thread")]
+async fn the_pages_share_the_clusters_feed_with_the_service_account_panel() {
+    let shared = ClusterId::new("test", &ContextName::from("shared-feed"));
+    let clock = Arc::new(FakeClockPort::default());
+    let resources =
+        Arc::new(FakeResourcePort::with_clock(clock.clone()).with_objects(rbac::cluster()));
+    let store = store_of(shared.clone(), &resources, &clock);
+    let hub = PolicyHub::shared();
+    assert_eq!(hub.live(&shared), 0);
+
+    let (mut changes, handle) = SubjectsService::new().open(&shared, &store);
+    let panel = hub.acquire(&store);
+    let (second_page, _) = SubjectsService::new().open(&shared, &store);
+    assert_eq!(hub.live(&shared), 1, "one feed, one index for the cluster");
+
+    let probe = handle.clone();
+    settled(&mut changes, move || probe.status().pending == 0).await;
+    let users = |index: &crate::access::SubjectIndex| index.subjects().len();
+    assert_eq!(handle.read(users), panel.read(users), "the same index");
+
+    drop((changes, handle, panel, second_page));
+    assert_eq!(hub.live(&shared), 0, "released with the last view");
 }

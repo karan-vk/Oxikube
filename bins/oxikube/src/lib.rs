@@ -9,6 +9,8 @@
 //! - [`app_state`]: [`app_state::AppState`], the typed dependency container (a GPUI global), the
 //!   [`app_state::AppPorts`] bundle and `AppState::test` (feature `test-support`).
 //!
+//! - [`access_follow`]: drops the access services (and the ports they pin) of closed and
+//!   disconnected clusters from the namespace service's `AccessRegistry` (E17 audit).
 //! - [`aliases`]: keeps the `:` jump bar's alias tables in step with the clusters' discovery and
 //!   the user's `aliases.json`, hot reloaded (E11-S04).
 //! - [`events`]: starts the app's `EventService` (its feeds on the Tokio bridge, its session
@@ -35,6 +37,7 @@
 //! Everything else (command line, the `--perf` session, screenshot and perf scenarios) stays
 //! private to the binary.
 
+pub mod access_follow;
 pub mod aliases;
 pub mod app_state;
 pub mod cluster_prefs;

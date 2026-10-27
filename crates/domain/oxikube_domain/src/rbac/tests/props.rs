@@ -4,7 +4,7 @@
 use proptest::prelude::*;
 use proptest::sample::subsequence;
 
-use super::super::{NormalisedRules, PolicyRule};
+use super::super::{MATRIX_VERBS, NormalisedRules, PolicyMatrix, PolicyRule};
 use crate::access::{AccessRules, non_resource_url_matches};
 
 const VERBS: &[&str] = &[
@@ -134,6 +134,23 @@ proptest! {
             prop_assert!(rule.resource_names.len() <= 1);
             prop_assert!(rule.verbs.windows(2).all(|pair| pair[0] < pair[1]), "sorted, unique");
             prop_assert!(rule.verbs.len() == 1 || !rule.verbs.iter().any(|v| v == "*"));
+        }
+    }
+
+    #[test]
+    fn every_matrix_cell_is_what_the_whole_set_answers(
+        rules in prop::collection::vec(rule(), 0..8),
+    ) {
+        let normalised = NormalisedRules::from_policy(&rules);
+        let matrix = PolicyMatrix::from_rules(&normalised);
+        for row in &matrix.rows {
+            for (verb, cell) in MATRIX_VERBS.iter().zip(row.cells) {
+                prop_assert_eq!(
+                    cell,
+                    normalised.level(verb.as_str(), &row.api_group, &row.resource, None),
+                    "{} {}/{}", verb.as_str(), row.api_group, row.resource
+                );
+            }
         }
     }
 }

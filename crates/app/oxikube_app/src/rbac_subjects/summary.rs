@@ -51,7 +51,7 @@ pub fn subject_name(subject: &Subject) -> Arc<str> {
 }
 
 /// `User system:serviceaccount:ns:name` is the ServiceAccount `ns/name`.
-fn canonical(subject: &Subject) -> Subject {
+pub(super) fn canonical(subject: &Subject) -> Subject {
     match subject {
         Subject::User(name) => Subject::from_username(name),
         other => other.clone(),

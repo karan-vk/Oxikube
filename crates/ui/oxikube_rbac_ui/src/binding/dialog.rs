@@ -53,12 +53,6 @@ pub struct BindingDialogDeps {
     pub cluster: ClusterId,
 }
 
-/// What the off-thread reads bring back.
-struct Loaded {
-    live: Option<Resource>,
-    choices: BindingChoices,
-}
-
 /// The binding dialog. See the module docs.
 pub struct BindingDialog {
     pub(super) deps: BindingDialogDeps,
@@ -75,6 +69,8 @@ pub struct BindingDialog {
     pub(super) subjects: Vec<SubjectEditor>,
     pub(super) base: Option<serde_json::Value>,
     pub(super) choices: BindingChoices,
+    /// The pickers' lists are still being read (the form is usable meanwhile).
+    pub(super) choices_pending: bool,
     /// The subject whose name suggestions are shown.
     pub(super) picking: Option<usize>,
     /// The user tried to save: errors show.
@@ -82,6 +78,7 @@ pub struct BindingDialog {
     pub(super) focus: FocusHandle,
     _subscriptions: Vec<Subscription>,
     _load: Task<()>,
+    _choices: Task<()>,
 }
 
 impl EventEmitter<DismissEvent> for BindingDialog {}
@@ -131,11 +128,14 @@ impl BindingDialog {
             cx.subscribe_in(&role_query, window, Self::on_input),
         ];
         let load = Self::start_load(&deps, &mode, cx);
+        let choices = Self::start_choices(&deps, cx);
+        let editing = matches!(mode, DialogMode::Edit(_));
         let mut dialog = Self {
             deps,
             mode,
             kind,
-            load: Load::Loading,
+            // A new binding is ready at once; an edit waits for the live object only.
+            load: if editing { Load::Loading } else { Load::Ready },
             name,
             namespace: namespace_input,
             role: None,
@@ -144,40 +144,35 @@ impl BindingDialog {
             subjects: Vec::new(),
             base: None,
             choices: BindingChoices::default(),
+            choices_pending: true,
             picking: None,
             attempted: false,
             focus: cx.focus_handle(),
             _subscriptions: subscriptions,
             _load: load,
+            _choices: choices,
         };
         dialog.add_subject(&SubjectDraft::default(), window, cx);
         dialog
     }
 
-    /// Reads the live binding (editing) and the pickers' choices, off the UI thread.
+    /// Reads the live binding (editing) off the UI thread; the form shows it as soon as it
+    /// arrives, without waiting for the pickers' lists.
     fn start_load(deps: &BindingDialogDeps, mode: &DialogMode, cx: &mut Context<Self>) -> Task<()> {
+        let DialogMode::Edit(target) = mode else {
+            return Task::ready(());
+        };
+        let target = target.clone();
         let reader = deps
             .sessions
             .get(&deps.cluster)
             .and_then(|session| session.resources());
-        let target = match mode {
-            DialogMode::Edit(target) => Some(target.clone()),
-            DialogMode::New { .. } => None,
-        };
-        let sessions = deps.sessions.clone();
-        let cluster = deps.cluster.clone();
         let read = spawn_kube(cx, async move {
-            let live = match (&target, reader) {
-                (Some(target), Some(reader)) => Some(
-                    reader
-                        .get(&target.gvk, target.namespace(), &target.name)
-                        .await?,
-                ),
-                (Some(_), None) => return Err(OxiError::conflict("the cluster is not connected")),
-                (None, _) => None,
-            };
-            let choices = BindingChoices::read(&sessions, &cluster).await?;
-            Ok(Loaded { live, choices })
+            let reader =
+                reader.ok_or_else(|| OxiError::conflict("the cluster is not connected"))?;
+            reader
+                .get(&target.gvk, target.namespace(), &target.name)
+                .await
         });
         cx.spawn(async move |this, cx| {
             let result = match read.await {
@@ -189,18 +184,40 @@ impl BindingDialog {
         })
     }
 
-    fn loaded(&mut self, result: OxiResult<Loaded>, window: &mut Window, cx: &mut Context<Self>) {
+    /// Reads the pickers' choices off the UI thread (five lists at once).
+    fn start_choices(deps: &BindingDialogDeps, cx: &mut Context<Self>) -> Task<()> {
+        let sessions = deps.sessions.clone();
+        let cluster = deps.cluster.clone();
+        let read = spawn_kube(cx, async move {
+            BindingChoices::read(&sessions, &cluster).await
+        });
+        cx.spawn(async move |this, cx| {
+            let result = match read.await {
+                Ok(result) => result,
+                Err(error) => Err(OxiError::internal(error.to_string())),
+            };
+            this.update(cx, |this, cx| this.choices_read(result, cx))
+                .ok();
+        })
+    }
+
+    fn loaded(&mut self, result: OxiResult<Resource>, window: &mut Window, cx: &mut Context<Self>) {
         match result {
             Err(error) => self.load = Load::Failed(error.message().to_owned().into()),
-            Ok(loaded) => {
-                self.choices = loaded.choices;
-                if let Some(live) = loaded.live {
-                    self.fill_from(&live, window, cx);
-                }
-                if self.load != Load::Ready && !matches!(self.load, Load::Failed(_)) {
-                    self.load = Load::Ready;
-                }
+            Ok(live) => {
+                self.load = Load::Ready;
+                self.fill_from(&live, window, cx);
             }
+        }
+        cx.notify();
+    }
+
+    fn choices_read(&mut self, result: OxiResult<BindingChoices>, cx: &mut Context<Self>) {
+        self.choices_pending = false;
+        match result {
+            Ok(choices) => self.choices = choices,
+            // Only a cluster that is not connected fails as a whole: nothing can be saved then.
+            Err(error) => self.load = Load::Failed(error.message().to_owned().into()),
         }
         cx.notify();
     }

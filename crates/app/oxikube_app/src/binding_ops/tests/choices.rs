@@ -1,8 +1,17 @@
 //! [`BindingChoices`] and [`role_of`] over the fakes.
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+use async_trait::async_trait;
 use futures::FutureExt as _;
+use oxikube_domain::ids::Gvk;
 use oxikube_domain::rbac::{Binding, RoleKind};
-use oxikube_domain::{OxiError, Resource};
+use oxikube_domain::{ObjectMeta, OxiError, OxiResult, Resource};
+use oxikube_ports::{
+    ListOptions, ListPage, ResourceReader, Scale, Subresource, WatchFeed, WatchOptions,
+};
+use oxikube_testkit::FakeResourcePort;
 use serde_json::json;
 
 use super::role_binding;
@@ -111,5 +120,122 @@ fn the_role_a_binding_names_is_read_and_a_missing_one_is_none() {
             .expect("at once")
             .expect("read")
             .is_none()
+    );
+}
+
+/// A reader that counts the lists in flight: each list yields once before it answers, so lists
+/// run one after another never overlap.
+struct Overlap {
+    inner: Arc<FakeResourcePort>,
+    in_flight: AtomicUsize,
+    peak: AtomicUsize,
+    full_lists: AtomicUsize,
+}
+
+impl Overlap {
+    async fn enter(&self) {
+        let now = self.in_flight.fetch_add(1, Ordering::SeqCst) + 1;
+        self.peak.fetch_max(now, Ordering::SeqCst);
+        let mut yielded = false;
+        std::future::poll_fn(|cx| {
+            if yielded {
+                std::task::Poll::Ready(())
+            } else {
+                yielded = true;
+                cx.waker().wake_by_ref();
+                std::task::Poll::Pending
+            }
+        })
+        .await;
+        self.in_flight.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+#[async_trait]
+impl ResourceReader for Overlap {
+    async fn list(
+        &self,
+        kind: &Gvk,
+        namespace: Option<&str>,
+        options: &ListOptions,
+    ) -> OxiResult<ListPage<Resource>> {
+        self.full_lists.fetch_add(1, Ordering::SeqCst);
+        self.enter().await;
+        self.inner.list(kind, namespace, options).await
+    }
+
+    async fn list_metadata(
+        &self,
+        kind: &Gvk,
+        namespace: Option<&str>,
+        options: &ListOptions,
+    ) -> OxiResult<ListPage<ObjectMeta>> {
+        self.enter().await;
+        self.inner.list_metadata(kind, namespace, options).await
+    }
+
+    async fn get(&self, kind: &Gvk, namespace: Option<&str>, name: &str) -> OxiResult<Resource> {
+        self.inner.get(kind, namespace, name).await
+    }
+
+    async fn get_opt(
+        &self,
+        kind: &Gvk,
+        namespace: Option<&str>,
+        name: &str,
+    ) -> OxiResult<Option<Resource>> {
+        self.inner.get_opt(kind, namespace, name).await
+    }
+
+    async fn watch(
+        &self,
+        kind: &Gvk,
+        namespace: Option<&str>,
+        options: &WatchOptions,
+    ) -> OxiResult<WatchFeed<Resource>> {
+        self.inner.watch(kind, namespace, options).await
+    }
+
+    async fn get_scale(&self, kind: &Gvk, namespace: Option<&str>, name: &str) -> OxiResult<Scale> {
+        self.inner.get_scale(kind, namespace, name).await
+    }
+
+    async fn get_subresource(
+        &self,
+        kind: &Gvk,
+        namespace: Option<&str>,
+        name: &str,
+        subresource: &Subresource,
+    ) -> OxiResult<serde_json::Value> {
+        self.inner
+            .get_subresource(kind, namespace, name, subresource)
+            .await
+    }
+}
+
+/// The dialog's five lists run at once, and only the bindings are read as whole objects.
+#[test]
+fn the_lists_run_concurrently_and_names_come_from_metadata() {
+    let h = seeded();
+    let overlap = Arc::new(Overlap {
+        inner: h.resources("a"),
+        in_flight: Default::default(),
+        peak: Default::default(),
+        full_lists: Default::default(),
+    });
+    let reader: Arc<dyn ResourceReader> = overlap.clone();
+    let choices = futures::executor::block_on(BindingChoices::read_from(&reader));
+    assert_eq!(choices.roles.len(), 2);
+    assert_eq!(choices.cluster_roles.len(), 1);
+    assert_eq!(choices.service_accounts.len(), 1);
+    assert_eq!(
+        overlap.peak.load(Ordering::SeqCst),
+        5,
+        "all five lists in flight together"
+    );
+    assert_eq!(
+        overlap.full_lists.load(Ordering::SeqCst),
+        2,
+        "only the two binding kinds are read whole"
     );
 }

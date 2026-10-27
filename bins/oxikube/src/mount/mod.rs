@@ -617,6 +617,9 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         cx,
     );
 
+    // The access registry drops the services of closed and disconnected clusters (once per app).
+    crate::access_follow::start(&services.namespaces, cx);
+
     // The notification centre (E14-S05): the app's service follows the sessions (once per app),
     // and this window gets the panel, the status-bar bell and the toasts.
     crate::notification_centre::start(&services.notifications, &services.os_notifications, cx);

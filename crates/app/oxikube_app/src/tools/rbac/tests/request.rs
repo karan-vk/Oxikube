@@ -117,3 +117,33 @@ async fn prefill_spells_the_selected_object_as_kubectl_does() {
         ("delete", "deployments.apps")
     );
 }
+
+/// `kubectl auth can-i --as jane` impersonates, and impersonation puts every non-anonymous user
+/// in `system:authenticated`; a review sent without it would deny what kubectl allows.
+#[test]
+fn a_user_or_group_is_asked_with_the_groups_kubectl_impersonation_adds() {
+    let authenticated = "system:authenticated";
+    let user = CanISubject::User("jane".into())
+        .impersonation()
+        .expect("asked as jane");
+    assert_eq!(user.user, "jane");
+    assert_eq!(user.groups, [authenticated]);
+    let group = CanISubject::Group("devs".into())
+        .impersonation()
+        .expect("asked as a member of devs");
+    assert!(group.user.is_empty());
+    assert_eq!(group.groups, ["devs", authenticated]);
+}
+
+#[test]
+fn the_kubectl_flags_are_ones_kubectl_accepts() {
+    assert_eq!(
+        CanISubject::User("jane".into()).kubectl_flags(),
+        " --as jane"
+    );
+    let group = CanISubject::Group("devs".into()).kubectl_flags();
+    assert!(
+        group.starts_with(" --as ") && group.ends_with(" --as-group devs"),
+        "kubectl takes --as-group only with --as: {group}"
+    );
+}

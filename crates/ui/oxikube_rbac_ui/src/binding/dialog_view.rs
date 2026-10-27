@@ -94,7 +94,7 @@ impl Render for BindingDialog {
             Load::Loading => div()
                 .debug_selector(|| "binding-dialog-loading".into())
                 .text_color(colors.text_muted)
-                .child("Reading the cluster's roles and ServiceAccounts…")
+                .child("Reading the binding…")
                 .into_any_element(),
             Load::Failed(why) => div()
                 .debug_selector(|| "binding-dialog-failed".into())
