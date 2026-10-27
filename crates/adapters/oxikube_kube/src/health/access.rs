@@ -8,34 +8,53 @@
 //! docs](super) for why `MutationGuard` does not apply.
 
 use k8s_openapi::api::authorization::v1::{
-    ResourceAttributes, SelfSubjectAccessReview, SelfSubjectAccessReviewSpec,
-    SubjectAccessReviewStatus,
+    ResourceAttributes, SelfSubjectAccessReview, SelfSubjectAccessReviewSpec, SubjectAccessReview,
+    SubjectAccessReviewSpec, SubjectAccessReviewStatus,
 };
 use kube::api::PostParams;
 use kube::{Api, Client};
-use oxikube_domain::access::{AccessCheck, AccessDecision};
-use oxikube_domain::{OxiError, OxiResult};
+use oxikube_domain::access::{AccessCheck, AccessDecision, Impersonate};
+use oxikube_domain::{ErrorKind, OxiError, OxiResult};
 
 use crate::auth::{CredentialRefresh, classify_with};
 
+/// The resource attributes of `check`, as both review kinds carry them.
+fn attributes(check: &AccessCheck) -> ResourceAttributes {
+    let non_empty = |s: &str| (!s.is_empty()).then(|| s.to_owned());
+    ResourceAttributes {
+        verb: Some(check.verb.clone()),
+        // The core group is the empty string, which the API reads as "".
+        group: Some(check.gvr.group.to_string()),
+        version: non_empty(&check.gvr.version),
+        resource: Some(check.gvr.resource.to_string()),
+        subresource: check.subresource.clone(),
+        namespace: check.namespace.clone(),
+        name: check.name.clone(),
+        ..Default::default()
+    }
+}
+
 /// The `SelfSubjectAccessReview` for `check`.
 fn to_review(check: &AccessCheck) -> SelfSubjectAccessReview {
-    let non_empty = |s: &str| (!s.is_empty()).then(|| s.to_owned());
     SelfSubjectAccessReview {
         metadata: Default::default(),
         spec: SelfSubjectAccessReviewSpec {
             non_resource_attributes: None,
-            resource_attributes: Some(ResourceAttributes {
-                verb: Some(check.verb.clone()),
-                // The core group is the empty string, which the API reads as "".
-                group: Some(check.gvr.group.to_string()),
-                version: non_empty(&check.gvr.version),
-                resource: Some(check.gvr.resource.to_string()),
-                subresource: check.subresource.clone(),
-                namespace: check.namespace.clone(),
-                name: check.name.clone(),
-                ..Default::default()
-            }),
+            resource_attributes: Some(attributes(check)),
+        },
+        status: None,
+    }
+}
+
+/// The `SubjectAccessReview` that asks `check` as `identity` (`kubectl auth can-i --as`).
+fn to_subject_review(check: &AccessCheck, identity: &Impersonate) -> SubjectAccessReview {
+    SubjectAccessReview {
+        metadata: Default::default(),
+        spec: SubjectAccessReviewSpec {
+            user: (!identity.user.is_empty()).then(|| identity.user.clone()),
+            groups: (!identity.groups.is_empty()).then(|| identity.groups.clone()),
+            resource_attributes: Some(attributes(check)),
+            ..Default::default()
         },
         status: None,
     }
@@ -67,17 +86,32 @@ fn decision_from_status(status: Option<&SubjectAccessReviewStatus>) -> AccessDec
 ///
 /// # Errors
 ///
-/// The classified request failure (`Auth`, `Network`, ...); `Unsupported` for an impersonated
-/// check. A "no" is not an error: it is [`AccessDecision::Denied`].
+/// The classified request failure (`Auth`, `Network`, ...). An impersonated check is a
+/// `SubjectAccessReview`, which needs `create` on `subjectaccessreviews.authorization.k8s.io`:
+/// without it the error is `Forbidden` and says so. A "no" is not an error: it is
+/// [`AccessDecision::Denied`].
 pub async fn can_i(
     client: &Client,
     check: &AccessCheck,
     refresh: CredentialRefresh,
 ) -> OxiResult<AccessDecision> {
-    if check.impersonate.is_some() {
-        return Err(OxiError::unsupported(
-            "checking as another identity is not supported yet",
-        ));
+    if let Some(identity) = &check.impersonate {
+        let api: Api<SubjectAccessReview> = Api::all(client.clone());
+        let answer = api
+            .create(&PostParams::default(), &to_subject_review(check, identity))
+            .await
+            .map_err(|e| {
+                let error = classify_with(&e, refresh);
+                if error.kind() == ErrorKind::Forbidden {
+                    OxiError::forbidden(
+                        "checking as another identity needs permission to create \
+                         subjectaccessreviews.authorization.k8s.io, which this user lacks",
+                    )
+                } else {
+                    error
+                }
+            })?;
+        return Ok(decision_from_status(answer.status.as_ref()));
     }
     let api: Api<SelfSubjectAccessReview> = Api::all(client.clone());
     let answer = api
@@ -123,6 +157,42 @@ mod tests {
         let attrs = to_review(&q).spec.resource_attributes.unwrap();
         assert_eq!(attrs.namespace, None);
         assert_eq!(attrs.name, None);
+    }
+
+    #[test]
+    fn subject_review_carries_the_identity_and_the_attributes() {
+        let q = AccessCheck::new("delete", Gvr::new("", "v1", "pods")).namespace("demo");
+        let who = Impersonate {
+            user: "system:serviceaccount:demo:bot".into(),
+            groups: vec!["system:serviceaccounts".into()],
+        };
+        let review = to_subject_review(&q, &who);
+        assert_eq!(
+            review.spec.user.as_deref(),
+            Some("system:serviceaccount:demo:bot")
+        );
+        assert_eq!(
+            review.spec.groups.as_deref(),
+            Some(&["system:serviceaccounts".to_owned()][..])
+        );
+        let attrs = review.spec.resource_attributes.expect("attributes");
+        assert_eq!(attrs.verb.as_deref(), Some("delete"));
+        assert_eq!(attrs.namespace.as_deref(), Some("demo"));
+    }
+
+    #[test]
+    fn subject_review_leaves_empty_user_and_groups_unset() {
+        let q = AccessCheck::new("get", Gvr::new("", "v1", "pods"));
+        let who = Impersonate {
+            user: String::new(),
+            groups: vec!["devs".into()],
+        };
+        let review = to_subject_review(&q, &who);
+        assert_eq!(review.spec.user, None);
+        assert_eq!(
+            review.spec.groups.as_deref(),
+            Some(&["devs".to_owned()][..])
+        );
     }
 
     #[test]

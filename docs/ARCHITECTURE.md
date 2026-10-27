@@ -1031,6 +1031,14 @@ crate's `README.md` for its allowed dependencies. Highlights:
   and suggestion and a reconnect its attempt and next retry. `portforward::TogglePanel` (`:pf`, `f` in a resource table, the
   palette, `cmd-shift-f`), `portforward::CopyUrl` and `portforward::OpenInBrowser` (reads, tools `k8s.portforward_*`) are queued
   to the window (`mount::port_forwards`); `Stop`, `Restart` and `Remove` are the app's.
+- `oxikube_rbac_ui::can_i` (E17-S08) — the can-i dialog (`rbac::CanI`, palette "RBAC: Can I?", tool stub `k8s.rbac_can_i`):
+  `CanIDialog`, a modal of the cluster's tab prefilled from the selected object (`commands_for` supplies `target`), with verb
+  (buttons + free text), resource (`kubectl` spelling, resolved through the alias table), namespace, name and a subject
+  (Me / User / Group / ServiceAccount, impersonated, held in `SessionMemory` for the session only, never persisted). The answer
+  (`Allowed` / `Denied` / `Unknown`), the API's reason and the review that gave it (`SelfSubjectAccessReview` or
+  `SubjectAccessReview`) are copyable with the equivalent `kubectl auth can-i`; a new ask aborts the review in flight
+  (`spawn_kube`). The same `oxikube_app::tools::rbac::CanIService` backs the read-only agent tool `k8s.can_i` and the
+  `@rbac/sa/<ns>/<name>` context provider (bindings + a `SubjectAccessReview` verb summary, size-bounded).
 - `oxikube_events_ui` (E14-S03) — the cluster's events view (`:ev` / `:event` / `:events`, the sidebar's Events heading, the
   palette's "Show Events"; `events::Open`, tool `k8s.events_open`): `EventsView`, a workspace item of the cluster's tab (key
   `events`, key context `EventsView`) with a virtualised table (Type, Reason, Namespace, Object, Source, Count, Age, Last seen,

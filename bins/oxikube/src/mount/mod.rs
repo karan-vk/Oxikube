@@ -241,6 +241,8 @@ pub struct Wiring {
     _notification_clicks: Task<()>,
     /// Opens the events views and applies the `events::*` requests (E14-S03).
     _events_views: Entity<oxikube_events_ui::EventsViews>,
+    /// Opens the can-i dialog for `rbac::CanI` (E17-S08).
+    _can_i_dialogs: gpui::Task<()>,
     /// The notification centre: panel, status-bar bell and toasts (E14-S05).
     _notification_centre: Rc<notifications::CentreMount>,
     /// The Port Forwards panel of the bottom dock and the task serving its commands (E15-S05).
@@ -295,12 +297,22 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         aliases: services.aliases.clone(),
         clock: ports.clusters.clock.clone(),
     };
+    let can_i_service = oxikube_app::tools::rbac::CanIService::new(
+        services.sessions.clone(),
+        services.aliases.clone(),
+        ports.clusters.clock.clone(),
+    );
+    let can_i_agent = oxikube_app::tools::rbac::CanIDeps {
+        sessions: services.sessions.clone(),
+        service: can_i_service.clone(),
+    };
     let agent = logs::install_agent_hooks(
         &state,
         services.sessions.clone(),
         log_service.clone(),
         &metrics_agent,
         &events_agent,
+        &can_i_agent,
     );
 
     // Shells, attaches and commands in pod containers (E09-S08): one service per app, so the
@@ -411,6 +423,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (pulses_sink, pulses_rx) = oxikube_overview_ui::pulses::PulsesRequestSink::channel();
     let (overview_sink, overview_rx) = oxikube_overview_ui::OverviewRequestSink::channel();
     let (events_sink, events_rx) = oxikube_events_ui::EventsCommandSink::channel();
+    let (can_i_sink, can_i_rx) = oxikube_rbac_ui::can_i::CanIRequestSink::channel();
     let (panel_sink, panel_rx) = oxikube_workspace::notifications::NotificationPanelSink::channel();
     let (port_forward_sink, port_forward_rx) = oxikube_portforward_ui::PortForwardUiSink::channel();
     let (port_forwards, port_forward_favourites) =
@@ -467,6 +480,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         os_notification_settings: Arc::new(
             crate::os_notifications::SettingsOsNotificationWriter::new(cx),
         ),
+        can_i_dialogs: can_i_sink,
         events_views: events_sink,
         notifications: services.notifications.clone(),
         notification_panel: panel_sink,
@@ -803,6 +817,17 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         window,
         cx,
     );
+    // The can-i dialog (E17-S08): `rbac::CanI` (palette "RBAC: Can I?", prefilled from the selected
+    // object) opens it in the cluster tab.
+    let can_i_dialogs = oxikube_rbac_ui::can_i::CanIViews::start(
+        oxikube_rbac_ui::can_i::CanIViewsDeps {
+            service: can_i_service,
+            tabs: tabs.downgrade(),
+        },
+        can_i_rx,
+        window,
+        cx,
+    );
     let wiring = cx.new(|_| Wiring {
         tabs,
         bus,
@@ -838,6 +863,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _follow_overviews: follow_overviews,
         _notification_clicks: notification_clicks,
         _events_views: events_views,
+        _can_i_dialogs: can_i_dialogs,
         _notification_centre: centre,
         _port_forward_panel: port_forward_panel,
     });

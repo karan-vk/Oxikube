@@ -91,6 +91,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::HelmShowValues { cluster, .. }
         | Command::HelmShowManifest { cluster, .. }
         | Command::HelmRevealValues { cluster, .. }
+        | Command::RbacCanI { cluster, .. }
         | Command::EventsOpen { cluster, .. }
         | Command::EventsToggleFaults { cluster }
         | Command::EventsTogglePause { cluster }

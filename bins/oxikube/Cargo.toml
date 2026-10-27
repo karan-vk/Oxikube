@@ -49,6 +49,7 @@ oxikube_portforward_ui.workspace = true
 oxikube_logs_ui.workspace = true
 # The cluster overview (E13-S09): the cluster tab's landing page and `cluster::ShowOverview`.
 oxikube_overview_ui.workspace = true
+oxikube_rbac_ui.workspace = true
 oxikube_logging.workspace = true
 oxikube_notify_os.workspace = true
 # The `?` help overlay (E11-S10); `kind_exec` also reads the container picker's matches through
@@ -57,7 +58,6 @@ oxikube_palette.workspace = true
 oxikube_ports.workspace = true
 # History metrics (E13-S05): provider detection and the per-cluster PromQL port.
 oxikube_prometheus.workspace = true
-oxikube_rbac_ui.workspace = true
 oxikube_resources_ui.workspace = true
 oxikube_runtime.workspace = true
 # The cluster metrics page (E13-S05).

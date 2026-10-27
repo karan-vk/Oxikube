@@ -58,7 +58,8 @@ pub trait AccessReviewPort: Send + Sync {
     ///
     /// A "no" is [`AccessDecision::Denied`], not an error; an evaluation error without an
     /// explicit deny is [`AccessDecision::Unknown`]. A check that asks as another identity
-    /// ([`AccessCheck::impersonate`]) is `Unsupported` until an adapter implements it.
+    /// ([`AccessCheck::impersonate`]) is a `SubjectAccessReview`; it needs permission to create one
+    /// and fails `Forbidden` without it.
     async fn can_i(&self, check: &AccessCheck) -> OxiResult<AccessDecision>;
 
     /// Forgets any rules review the adapter itself cached for `namespace` (`None`: the

@@ -124,6 +124,8 @@ impl CommandId {
     pub const EVENTS_COPY_ROW_JSON: CommandId = CommandId::new("events::CopyRowJson");
     /// `events::ExportJson`: write the events the events view lists to a JSON file.
     pub const EVENTS_EXPORT_JSON: CommandId = CommandId::new("events::ExportJson");
+    /// `rbac::CanI`: open the can-i panel (`rbac: can-i`).
+    pub const RBAC_CAN_I: CommandId = CommandId::new("rbac::CanI");
     /// `events::Open`: open a cluster's events view (`:ev`).
     pub const EVENTS_OPEN: CommandId = CommandId::new("events::Open");
     /// `events::ToggleFaults`: show only `Warning` events in the events view, or every event.
@@ -1664,6 +1666,14 @@ pub static COMMANDS: &[CommandMeta] = &[
     // detail drawer does not have, and the palette must not offer it on other kinds.
     .in_views(TABLE_VIEW)
     .selecting(SelectionKind::core("PersistentVolumeClaim")),
+    // Opens the can-i panel; asking is a SelfSubjectAccessReview / SubjectAccessReview, which
+    // creates nothing, so it is read-only and needs no confirmation (E17-S08).
+    CommandMeta::read(
+        CommandId::RBAC_CAN_I,
+        "RBAC: Can I?",
+        CommandScope::Cluster,
+        NONE,
+    ),
     // The manifest editor runs it through its own flow (E10-S08): a server dry run, the diff
     // preview (which is the confirmation, hence `Low`), then the apply. Agents call it directly;
     // the guard and the handler's own dry run apply to them alike.

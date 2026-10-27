@@ -254,6 +254,11 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         },
         "helm::RepoUpdate" => Command::HelmRepoUpdate { names: Vec::new() },
         "cluster::ShowPulses" => Command::ClusterShowPulses { cluster },
+        "rbac::CanI" => Command::RbacCanI {
+            cluster,
+            target: None,
+            verb: None,
+        },
         "events::Open" => Command::EventsOpen {
             cluster,
             namespace: None,

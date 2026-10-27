@@ -414,6 +414,22 @@ pub enum Command {
         /// The cluster whose pulses open.
         cluster: ClusterId,
     },
+    /// Open the can-i panel (E17-S08, `rbac: can-i`): ask whether the current user, or an
+    /// impersonated User, Group or ServiceAccount, may perform a verb on a resource. Read-only:
+    /// the answer comes from a `SelfSubjectAccessReview` or `SubjectAccessReview`, which store
+    /// nothing. `target` prefills the resource, namespace and name from the selection; the
+    /// subject is typed in the panel and never travels in a command or is persisted.
+    #[serde(rename = "rbac::CanI")]
+    RbacCanI {
+        /// The cluster the question is asked of.
+        cluster: ClusterId,
+        /// The object to prefill the resource, namespace and name from.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<ResourceRef>,
+        /// The verb to prefill (`get` when absent).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        verb: Option<String>,
+    },
     /// Open the cluster's events view (E14-S03, `:ev`): every event the app's one events feed of
     /// the cluster holds, live, filterable by type, reason, kind, namespace and text, newest
     /// first. Reads only what the `EventService` holds; opening it again shows the open view
@@ -1823,6 +1839,7 @@ impl Command {
             Command::HelmRepoRemove { .. } => CommandId::HELM_REPO_REMOVE,
             Command::HelmRepoUpdate { .. } => CommandId::HELM_REPO_UPDATE,
             Command::ClusterShowPulses { .. } => CommandId::CLUSTER_SHOW_PULSES,
+            Command::RbacCanI { .. } => CommandId::RBAC_CAN_I,
             Command::EventsOpen { .. } => CommandId::EVENTS_OPEN,
             Command::EventsToggleFaults { .. } => CommandId::EVENTS_TOGGLE_FAULTS,
             Command::EventsTogglePause { .. } => CommandId::EVENTS_TOGGLE_PAUSE,
@@ -2376,6 +2393,21 @@ mod tests {
                 names: vec!["bitnami".into()],
             },
             Command::ClusterShowPulses { cluster: cluster() },
+            Command::RbacCanI {
+                cluster: cluster(),
+                target: None,
+                verb: None,
+            },
+            Command::RbacCanI {
+                cluster: cluster(),
+                target: Some(ResourceRef::namespaced(
+                    cluster(),
+                    Gvk::new("", "v1", "Pod"),
+                    "shop",
+                    "web-0",
+                )),
+                verb: Some("delete".into()),
+            },
             Command::EventsOpen {
                 cluster: cluster(),
                 namespace: None,
@@ -3124,6 +3156,7 @@ mod tests {
                     | Command::HelmRepoRemove { .. }
                     | Command::HelmRepoUpdate { .. }
                     | Command::ClusterShowPulses { .. }
+                    | Command::RbacCanI { .. }
                     | Command::EventsOpen { .. }
                     | Command::EventsToggleFaults { .. }
                     | Command::EventsTogglePause { .. }
