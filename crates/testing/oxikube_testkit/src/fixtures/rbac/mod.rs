@@ -7,13 +7,22 @@
 //! - [`reviews`]: per subject and namespace, who the API server took the subject for
 //!   (`kubectl auth whoami --as`), the `SelfSubjectRulesReview` status `kubectl auth can-i --list
 //!   --as` reads, and the rows it printed.
+//! - [`printed_rules`]: `kubectl auth can-i --list` rows read back as rules, for comparing a live
+//!   cluster's answer with the app's (E17-S10).
+//! - [`RbacScenario`]: the restricted ServiceAccount of the kind suites (E17-S10), as objects.
+
+mod printed;
+mod scenario;
+
+pub use printed::{printed_rule, printed_rules};
+pub use scenario::{ACCOUNT, POD_READER, POD_VERBS, RbacScenario, VIEW_BINDING};
 
 use oxikube_domain::Resource;
 use oxikube_domain::rbac::Subject;
 use serde_json::Value;
 
-const CLUSTER: &str = include_str!("../../fixtures/rbac/cluster.json");
-const REVIEWS: &str = include_str!("../../fixtures/rbac/reviews.json");
+const CLUSTER: &str = include_str!("../../../fixtures/rbac/cluster.json");
+const REVIEWS: &str = include_str!("../../../fixtures/rbac/reviews.json");
 
 /// One recorded rules review.
 #[derive(Debug, Clone, PartialEq)]

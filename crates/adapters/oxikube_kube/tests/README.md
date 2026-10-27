@@ -151,3 +151,21 @@ from the replacement pod becoming Ready (polled on the API server) to the manage
 | an auto-start favourite comes back after a restart over the same SQLite file once the session is Ready | `oxikube_app/tests/kind_smoke/portforward/favourites.rs` |
 | a closed remote port, a missing pod, a busy local port (with its suggestion) through the manager | `oxikube_app/tests/kind_smoke/portforward/errors.rs` |
 | 50 concurrent forwards to one Service, each answering | `oxikube_app/tests/kind_smoke/portforward/concurrent.rs` |
+
+## Epic E17 acceptance items (RBAC and access tooling, E17-S10)
+
+The scenario is `oxikube_testkit::fixtures::rbac::RbacScenario`, applied per test with
+`oxikube_testkit::integration::rbac::AppliedScenario`: two `oxi-test-<rand>-home` / `-other`
+namespaces and, in `home`, the ServiceAccount `limited`, which may read pods there and nothing else
+of its own. `kubectl auth can-i --list` rows are read back with
+`oxikube_testkit::fixtures::rbac::printed_rules`; a mismatch saves both sides with
+`integration::rbac::save_diagnostic` (rules and kubectl output only). The same objects drive the
+offline `oxikube_app` test `access::tests::scenario`, so a fixture that drifts fails without kind.
+
+| "Done when" | Test |
+|---|---|
+| (1) the sidebar hides what the user may not list, with a "restricted" indicator | `oxikube_app/tests/kind_smoke/rbac/gating.rs` (the sidebar's review and `AccessVisibility` over the account's generated kubeconfig), `bins/oxikube/tests/kind_rbac.rs` (the running app's sidebar: Pods shown, Config / Nodes hidden, "Limited access" line) |
+| (2) the can-i matrix matches `kubectl auth can-i --list` | `rbac::rules_review_lists_what_kubectl_auth_can_i_list_prints` (the adapter's rules review), `oxikube_app/tests/kind_smoke/rbac/matrix.rs` (the subject index and its per-verb matrix, before and after a binding) |
+| (3) the create-binding dialog produces valid objects | `bins/oxikube/tests/kind_rbac.rs` (`BindingDraft` saved through `binding::Create`), `oxikube_app/tests/kind_smoke/rbac/matrix.rs` (the aggregated `view` then allowed by the account's own review), `oxikube_app/tests/kind_smoke/bindings.rs` (E17-S06) |
+| (4) the ServiceAccount kubeconfig works with kubectl | `oxikube_app/tests/kind_smoke/rbac/token.rs` (`kubectl --kubeconfig` as the account; the expiry the server reports), `oxikube_app/tests/kind_smoke/sa_kubeconfig.rs` (E17-S09), `token_request` |
+| (5) the accessible-namespaces fallback when listing namespaces is forbidden | `oxikube_app/tests/kind_smoke/rbac/gating.rs` (`NamespaceService::catalog`: `Forbidden`, only `home` offered) |

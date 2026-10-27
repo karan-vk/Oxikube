@@ -1,6 +1,7 @@
 //! Kind integration: a restricted service account gets `Forbidden`, not a crash, and the
 //! capabilities probe reports its limited rights (E03-S09; error classification from
-//! E03-S04, capabilities from E03-S05). Needs `cargo xtask kind-up` and
+//! E03-S04, capabilities from E03-S05). Its rules review matches `kubectl auth can-i --list`
+//! (E17-S10). Needs `cargo xtask kind-up` and
 //! `OXIKUBE_TEST_CONTEXT`; skips cleanly otherwise.
 #![cfg(feature = "integration")]
 
@@ -14,6 +15,7 @@ use kube::api::ListParams;
 use kube::{Api, Client};
 use oxikube_domain::access::{Access, AccessCheck, AccessDecision, AccessRequirement, Impersonate};
 use oxikube_domain::ids::{ContextName, Gvr};
+use oxikube_domain::rbac::{NormalisedRules, PolicyRule as PolicyRuleModel, Subject};
 use oxikube_domain::{Capability, ErrorKind};
 use oxikube_kube::auth::{CredentialRefresh, classify};
 use oxikube_kube::health::{
@@ -22,7 +24,9 @@ use oxikube_kube::health::{
 };
 use oxikube_kube::{ClientPool, CrdWatchConfig, KubeDiscovery};
 use oxikube_ports::{CrdWatchStatus, DiscoveryEvent, DiscoveryPort};
+use oxikube_testkit::fixtures::rbac::printed_rules;
 use oxikube_testkit::integration::TestNamespace;
+use oxikube_testkit::integration::rbac::{can_i_list, save_diagnostic};
 
 use common::{DEADLINE, Kind, TestServiceAccount, wait_until, whoami};
 
@@ -391,4 +395,61 @@ async fn subject_access_review_answers_for_another_identity() {
         "{}",
         error.message()
     );
+}
+
+fn strs(list: &[String]) -> Vec<&str> {
+    list.iter().map(String::as_str).collect()
+}
+
+/// E17-S10: the rules review the app gates on lists what `kubectl auth can-i --list` prints for
+/// the same account and namespace (the resource rows; the adapter keeps no non-resource URLs):
+/// the Role's pods rule in its own namespace, only the defaults every account gets elsewhere.
+#[tokio::test]
+async fn rules_review_lists_what_kubectl_auth_can_i_list_prints() {
+    let Some(kind) = common::kind().await else {
+        return;
+    };
+    let restricted = Restricted::create(&kind).await;
+    let refresh = CredentialRefresh::Static;
+    let cache = RulesCache::default();
+    let account = Subject::from_username(&restricted.account.username);
+
+    for namespace in [restricted.namespace(), "kube-system"] {
+        let ours = rules_for_context(
+            &restricted.pool,
+            &cache,
+            &restricted.context,
+            namespace,
+            refresh,
+        )
+        .await
+        .expect("rules review");
+        let ours: Vec<PolicyRuleModel> = ours
+            .rules
+            .iter()
+            .map(|rule| {
+                PolicyRuleModel::resource(
+                    &strs(&rule.verbs),
+                    &strs(&rule.api_groups),
+                    &strs(&rule.resources),
+                    &strs(&rule.resource_names),
+                )
+            })
+            .collect();
+        let ours = NormalisedRules::from_policy(&ours);
+        let printed = can_i_list(kind.context.as_str(), &account, namespace).expect("kubectl");
+        let theirs = NormalisedRules::from_policy(&printed_rules(&printed));
+        let ours: Vec<_> = ours.resource_rules().collect();
+        let theirs: Vec<_> = theirs.resource_rules().collect();
+        if ours != theirs {
+            save_diagnostic(
+                &format!("adapter-rules-{namespace}.txt"),
+                &format!(
+                    "adapter:\n{ours:#?}\nkubectl auth can-i --list:\n{}",
+                    printed.join("\n")
+                ),
+            );
+        }
+        assert_eq!(ours, theirs, "in {namespace}");
+    }
 }

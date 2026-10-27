@@ -289,13 +289,25 @@ pub fn is_cluster_scoped(group: &str, resource: &str) -> bool {
             | ("networking.k8s.io", "ingressclasses")
             | ("apiextensions.k8s.io", "customresourcedefinitions")
             | ("apiregistration.k8s.io", "apiservices")
-            | ("certificates.k8s.io", "certificatesigningrequests")
+            | (
+                "certificates.k8s.io",
+                "certificatesigningrequests" | "clustertrustbundles"
+            )
+            | ("networking.k8s.io", "ipaddresses" | "servicecidrs")
+            | ("resource.k8s.io", "deviceclasses" | "resourceslices")
+            | ("storage.k8s.io", "volumeattributesclasses")
+            | (
+                "flowcontrol.apiserver.k8s.io",
+                "flowschemas" | "prioritylevelconfigurations"
+            )
             | (
                 "admissionregistration.k8s.io",
                 "mutatingwebhookconfigurations"
                     | "validatingwebhookconfigurations"
                     | "validatingadmissionpolicies"
                     | "validatingadmissionpolicybindings"
+                    | "mutatingadmissionpolicies"
+                    | "mutatingadmissionpolicybindings"
             )
     )
 }
@@ -443,6 +455,31 @@ mod tests {
             "monitoring.coreos.com",
         ] {
             assert!(!is_builtin_api_group(custom), "{custom}");
+        }
+    }
+
+    /// Every authenticated user may read `clustertrustbundles` (kind v1.37's defaults): taken
+    /// for a namespaced grant, it made every namespace look readable to the accessible-namespaces
+    /// fallback (found by the E17-S10 kind suite).
+    #[test]
+    fn cluster_scoped_builtins_include_the_default_grants_of_every_user() {
+        for (group, resource) in [
+            ("", "nodes"),
+            ("certificates.k8s.io", "clustertrustbundles"),
+            ("networking.k8s.io", "servicecidrs"),
+            ("resource.k8s.io", "deviceclasses"),
+            ("flowcontrol.apiserver.k8s.io", "flowschemas"),
+            ("storage.k8s.io", "volumeattributesclasses"),
+        ] {
+            assert!(is_cluster_scoped(group, resource), "{group}/{resource}");
+        }
+        for (group, resource) in [
+            ("", "pods"),
+            ("", "configmaps"),
+            ("resource.k8s.io", "resourceclaims"),
+            ("networking.k8s.io", "ingresses"),
+        ] {
+            assert!(!is_cluster_scoped(group, resource), "{group}/{resource}");
         }
     }
 
