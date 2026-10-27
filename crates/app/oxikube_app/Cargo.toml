@@ -15,6 +15,8 @@ doctest = false
 async-trait.workspace = true
 # `Bytes` in `BackendEvent::Output` (the notice line of a terminal).
 bytes.workspace = true
+# The CA in a generated kubeconfig is embedded base64 (`sa_kubeconfig`, E17-S09).
+base64.workspace = true
 futures.workspace = true
 indexmap.workspace = true
 jiff.workspace = true
@@ -63,8 +65,6 @@ oxikube_state_sqlite.workspace = true
 tempfile.workspace = true
 # Self-signed certificates for the Secret tests (made at run time; no key material in the repository).
 rcgen.workspace = true
-# Base64 in the Secret summary tests.
-base64.workspace = true
 
 # `cargo bench -p oxikube_app --bench store_apply` (E07-S01): a 500-event batch into a 10k cache.
 [[bench]]

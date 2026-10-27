@@ -5,9 +5,10 @@ use futures::StreamExt as _;
 use futures::channel::mpsc;
 use futures::stream::BoxStream;
 use oxikube_domain::OxiResult;
+use oxikube_domain::ids::ClusterId;
 use oxikube_ports::{
-    ClusterContext, ClusterSource, ClusterSourcePort, SourceDiagnostic, SourceStatus,
-    SourcesChanged, UserSource, UserSourceKind,
+    ClusterContext, ClusterEndpoint, ClusterSource, ClusterSourcePort, SourceDiagnostic,
+    SourceStatus, SourcesChanged, UserSource, UserSourceKind,
 };
 
 use super::{KubeconfigSources, pasted};
@@ -67,5 +68,10 @@ impl ClusterSourcePort for KubeconfigSources {
 
     async fn validate_kubeconfig(&self, text: &str) -> OxiResult<usize> {
         pasted::parse(text).map(|config| config.contexts.len())
+    }
+
+    async fn cluster_endpoint(&self, cluster: &ClusterId) -> OxiResult<ClusterEndpoint> {
+        let snapshot = self.inner.snapshot().await?;
+        super::endpoint::endpoint_of(&snapshot.loaded, cluster).await
     }
 }

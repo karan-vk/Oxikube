@@ -1,6 +1,7 @@
 //! ServiceAccount panel tests: the facts and bound roles as data (`model`), and the panel drawn
 //! over fixed data in a test window (`panel`).
 
+mod kubeconfig;
 mod model;
 mod panel;
 

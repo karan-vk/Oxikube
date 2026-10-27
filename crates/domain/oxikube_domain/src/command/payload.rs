@@ -1094,6 +1094,26 @@ pub enum Command {
         /// The object to show the users of.
         target: ResourceRef,
     },
+    /// Request a token for a ServiceAccount and build a kubeconfig from it (E17-S09). **Mutating**
+    /// (risk low): it creates a credential, so it is blocked on a read-only cluster, confirmed once
+    /// and audited with the account and the lifetime, never the token. The result stays in memory
+    /// (`oxikube_app::sa_kubeconfig::KubeconfigVault`); the output carries only a message and the
+    /// expiry.
+    #[serde(rename = "serviceaccount::GenerateKubeconfig")]
+    ServiceAccountGenerateKubeconfig {
+        /// The ServiceAccount.
+        target: ResourceRef,
+        /// The token's lifetime in seconds (the server may shorten it); one hour when absent.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        expiration_seconds: Option<u32>,
+        /// The token's audiences; the API server's own when empty.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        audiences: Vec<String>,
+        /// On a cluster without `TokenRequest`, allow reading or creating a long-lived token
+        /// Secret. Without it such a cluster is refused with an explanation.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        allow_legacy_token: bool,
+    },
     /// Focus the filter bar of a kind's resource table (`/` in a table): the next keys type a
     /// filter (`/text`, `/!text`, `/-l selector`, `/-f fuzzy`).
     #[serde(rename = "table::FocusFilter")]
@@ -2152,6 +2172,9 @@ impl Command {
             Command::JobSuspend { .. } => CommandId::JOB_SUSPEND,
             Command::JobResume { .. } => CommandId::JOB_RESUME,
             Command::PvcResize { .. } => CommandId::PVC_RESIZE,
+            Command::ServiceAccountGenerateKubeconfig { .. } => {
+                CommandId::SERVICEACCOUNT_GENERATE_KUBECONFIG
+            }
             Command::StorageClassSetDefault { .. } => CommandId::STORAGECLASS_SET_DEFAULT,
             Command::RoleOpenDialog { .. } => CommandId::ROLE_OPEN_DIALOG,
             Command::RoleCreate { .. } => CommandId::ROLE_CREATE,
@@ -2276,6 +2299,7 @@ impl Command {
             | Command::JobResume { target }
             | Command::PvcResize { target, .. }
             | Command::RoleDelete { target, .. }
+            | Command::ServiceAccountGenerateKubeconfig { target, .. }
             | Command::StorageClassSetDefault { target, .. } => Some(target),
             Command::RoleOpenDialog { target, .. } => target.as_ref(),
             _ => None,
@@ -3001,6 +3025,17 @@ mod tests {
             Command::StorageClassSetDefault {
                 target: storage_class(),
                 clear_previous: true,
+            },
+            Command::ServiceAccountGenerateKubeconfig {
+                target: ResourceRef::namespaced(
+                    cluster(),
+                    Gvk::new("", "v1", "ServiceAccount"),
+                    "demo",
+                    "deployer",
+                ),
+                expiration_seconds: Some(3600),
+                audiences: vec!["https://example.com".into()],
+                allow_legacy_token: true,
             },
         ]
     }

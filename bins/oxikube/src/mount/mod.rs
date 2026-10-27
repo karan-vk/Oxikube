@@ -453,6 +453,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let helm_releases = helm_releases::service(helm_release_source.clone());
     let (helm_releases_sink, helm_releases_rx) =
         oxikube_helm_ui::releases::HelmReleasesRequestSink::channel();
+    // The ServiceAccount panel's kubeconfig section saves through the app's filesystem (E17-S09).
+    oxikube_rbac_ui::install(cx, ports.clusters.fs.clone());
     let registry = bus::build_registry(bus::BusParts {
         events_agent,
         agent_pending: agent.pending.clone(),
@@ -462,6 +464,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         sources: sources.clone(),
         cloud: cloud.clone(),
         sessions: services.sessions.clone(),
+        cluster_source: ports.clusters.source.clone(),
         prefs: Arc::new(SettingsPrefsWriter::new(cx)),
         tabs: sink.clone(),
         views: views_tx,

@@ -4,10 +4,11 @@ use async_trait::async_trait;
 use futures::StreamExt;
 use futures::channel::mpsc;
 use futures::stream::BoxStream;
+use oxikube_domain::ids::ClusterId;
 use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::{
-    ClusterContext, ClusterSource, ClusterSourcePort, SourceDiagnostic, SourceState, SourceStatus,
-    SourcesChanged, UserSource,
+    ClusterContext, ClusterEndpoint, ClusterSource, ClusterSourcePort, SourceDiagnostic,
+    SourceState, SourceStatus, SourcesChanged, UserSource,
 };
 use parking_lot::Mutex;
 
@@ -32,6 +33,8 @@ pub struct ClusterSourceScripts {
     pub source_diagnostics: Script<Vec<SourceDiagnostic>>,
     /// `validate_kubeconfig`.
     pub validate_kubeconfig: Script<usize>,
+    /// `cluster_endpoint`.
+    pub cluster_endpoint: Script<ClusterEndpoint>,
 }
 
 /// One call made on a [`FakeClusterSourcePort`].
@@ -56,6 +59,8 @@ pub enum ClusterSourceCall {
     /// `validate_kubeconfig(text)`. The text is kept, so tests can check what was parsed; it
     /// is test data, never a real credential.
     ValidateKubeconfig(String),
+    /// `cluster_endpoint(cluster)`.
+    ClusterEndpoint(ClusterId),
 }
 
 #[derive(Default)]
@@ -78,6 +83,7 @@ struct FakeSources {
 /// source counting the contexts that name it. `validate_kubeconfig` accepts text with a
 /// `contexts:` line and counts its `- context:` entries; anything else is a `Validation`
 /// error (a stand-in for the real parser, which the adapter tests cover).
+/// `cluster_endpoint` answers with the configured context's server and no CA.
 /// `source_diagnostics` returns the configured list ([`with_diagnostics`](Self::with_diagnostics),
 /// empty by default); [`set_diagnostics`](Self::set_diagnostics) replaces it and pushes the new
 /// list to every `subscribe_diagnostics` stream when it differs, as the adapter does.
@@ -298,6 +304,28 @@ impl ClusterSourcePort for FakeClusterSourcePort {
                 .lines()
                 .filter(|line| line.trim_start().starts_with("- context:"))
                 .count())
+        })
+    }
+
+    async fn cluster_endpoint(&self, cluster: &ClusterId) -> OxiResult<ClusterEndpoint> {
+        self.calls
+            .record(ClusterSourceCall::ClusterEndpoint(cluster.clone()));
+        self.script.cluster_endpoint.next_or_else(|| {
+            let state = self.state.lock();
+            let server = state
+                .contexts
+                .iter()
+                .find(|context| &context.cluster == cluster)
+                .ok_or_else(|| OxiError::not_found("the catalog has no such cluster"))?
+                .server
+                .clone()
+                .ok_or_else(|| OxiError::validation("the cluster names no server"))?;
+            Ok(ClusterEndpoint {
+                server,
+                certificate_authority_pem: None,
+                insecure_skip_tls_verify: false,
+                tls_server_name: None,
+            })
         })
     }
 }

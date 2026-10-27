@@ -16,12 +16,13 @@ use async_trait::async_trait;
 use futures::StreamExt as _;
 use futures::channel::mpsc;
 use futures::stream::BoxStream;
+use oxikube_domain::ids::ClusterId;
 use oxikube_domain::{OxiError, OxiResult};
 use oxikube_kube::kubeconfig::{Env, LoadedKubeconfig};
 use oxikube_kube::sources::{KubeconfigSources, SourcesConfig};
 use oxikube_ports::{
-    ClusterContext, ClusterSource, ClusterSourcePort, SecretStorePort, SourceDiagnostic,
-    SourceStatus, SourcesChanged, UserSource, UserSourceKind,
+    ClusterContext, ClusterEndpoint, ClusterSource, ClusterSourcePort, SecretStorePort,
+    SourceDiagnostic, SourceStatus, SourcesChanged, UserSource, UserSourceKind,
 };
 use parking_lot::Mutex;
 use tokio::sync::OnceCell;
@@ -179,6 +180,10 @@ impl ClusterSourcePort for LazyKubeSources {
 
     async fn validate_kubeconfig(&self, text: &str) -> OxiResult<usize> {
         self.adapter().await?.validate_kubeconfig(text).await
+    }
+
+    async fn cluster_endpoint(&self, cluster: &ClusterId) -> OxiResult<ClusterEndpoint> {
+        self.adapter().await?.cluster_endpoint(cluster).await
     }
 }
 

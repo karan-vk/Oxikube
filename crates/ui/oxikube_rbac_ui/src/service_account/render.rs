@@ -36,6 +36,7 @@ impl Render for ServiceAccountPanel {
             .child(self.header(&facts, cx))
             .child(self.secrets(&tokens, &facts, &cluster, cx))
             .child(self.automount(&tokens, &facts))
+            .child(self.kubeconfig_section(&tokens, cx))
             .child(self.bound_roles(&tokens, &cluster, cx))
             .into_any_element()
     }

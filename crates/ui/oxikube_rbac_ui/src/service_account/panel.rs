@@ -13,6 +13,7 @@ use oxikube_domain::ids::{ClusterId, ResourceRef};
 use oxikube_resources_ui::detail::DetailView;
 use oxikube_workspace::CommandDispatcher;
 
+use super::kubeconfig::KubeconfigState;
 use super::model::{BoundRoles, ServiceAccountFacts};
 
 /// How often the panel looks at the index while the Role and binding feeds are being listed.
@@ -55,6 +56,10 @@ pub struct ServiceAccountPanel {
     seen: u64,
     poll: Option<Task<()>>,
     compute: Option<Task<()>>,
+    /// The kubeconfig section's choices and result (E17-S09).
+    pub(super) kubeconfig: KubeconfigState,
+    /// A save of the kubeconfig in progress; dropping the panel abandons it.
+    pub(super) kubeconfig_save: Option<Task<()>>,
     _detail: Option<Subscription>,
 }
 
@@ -69,7 +74,16 @@ impl ServiceAccountPanel {
         });
         let mut panel = Self::bare(Source::Detail(detail));
         panel._detail = subscription;
-        panel.read_facts(cx);
+        // The detail view builds its panel while it renders, so it is being updated and cannot be
+        // read now: take the facts as soon as the render is over.
+        let this = cx.entity().downgrade();
+        cx.defer(move |cx| {
+            this.update(cx, |panel, cx| {
+                panel.read_facts(cx);
+                cx.notify();
+            })
+            .ok();
+        });
         panel.start_polling(cx);
         panel
     }
@@ -129,6 +143,8 @@ impl ServiceAccountPanel {
             seen: u64::MAX,
             poll: None,
             compute: None,
+            kubeconfig: KubeconfigState::default(),
+            kubeconfig_save: None,
             _detail: None,
         }
     }
@@ -189,6 +205,8 @@ impl ServiceAccountPanel {
     /// One look at the feed: takes the lease on (or moves it to) the session's current store, and
     /// recomputes when the index moved. How long to wait before the next look.
     fn look(&mut self, cx: &mut Context<Self>) -> Duration {
+        // A kubeconfig being generated is looked for quickly; otherwise the same cadence as below.
+        let requesting = self.refresh_kubeconfig(cx);
         let (target, store) = match &self.source {
             Source::Detail(detail) => {
                 let Some(detail) = detail.upgrade() else {
@@ -216,7 +234,7 @@ impl ServiceAccountPanel {
             self.seen = version;
             self.recompute(feed, target, cx);
         }
-        if matches!(self.bound, BoundRoles::Loading) {
+        if requesting || matches!(self.bound, BoundRoles::Loading) {
             WARMING_POLL
         } else {
             STEADY_POLL

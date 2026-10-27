@@ -45,6 +45,7 @@
 //! | `oxikube_app::helm_charts` | `helm::SearchCharts`, `helm::ShowChart` (search the configured repositories, print a chart's metadata, README or default values through the `helm` CLI; read-only) and `helm::InstallChart` (hands a chart to the install tab; opens a tab, installs nothing; E16-S08) |
 //! | `oxikube_rbac_ui::role` | `role::OpenDialog` (the Role / ClusterRole rule dialog, new or editing one, in a cluster tab; E17-S05) |
 //! | `oxikube_app::role_ops` | `role::Create`, `role::Edit`, `role::Delete` (a Role or ClusterRole through the server's dry run; mutating, risk medium: a simple confirmation, blocked on read-only clusters, audited with a rule count; E17-S05) |
+//! | `oxikube_app::sa_kubeconfig` | `serviceaccount::GenerateKubeconfig` (request a ServiceAccount token and build a kubeconfig from it, kept in memory for the account's panel; mutating, risk low: one confirmation; blocked on read-only clusters; audited without the token; E17-S09) |
 //! | `oxikube_app::helm_ops` | `helm::Rollback`, `helm::Uninstall` (roll a release back to a revision / remove it through the `helm` CLI; mutating, risk medium / high: a simple confirmation / the release name typed; blocked on read-only clusters; audited without values; E16-S06) |
 //! | `oxikube_app::helm_install` | `helm::Install` (install a chart as a release through the `helm` CLI; mutating, risk low: one confirmation after the preview, which is its dry run; blocked on read-only clusters; audited without the values; E16-S09) |
 //! | `oxikube_app::helm_upgrade` | `helm::Upgrade` (upgrade a release to a chart version through the `helm` CLI; mutating, risk medium: one confirmation after the preview, which is its dry run; blocked on read-only clusters; audited with the chart versions and `--reuse-values`, never the values) and `helm::UpgradeRelease` (opens the upgrade tab of a release, or the release picker; E16-S10) |
@@ -120,6 +121,9 @@ pub struct BusParts {
     pub cloud: oxikube_app::CloudDiscoveryService,
     /// The sessions the posture commands change.
     pub sessions: ClusterSessionManager,
+    /// Where `serviceaccount::GenerateKubeconfig` reads a cluster's server address and CA
+    /// (E17-S09).
+    pub cluster_source: Arc<dyn oxikube_ports::ClusterSourcePort>,
     /// Where the posture commands persist (`settings.json`).
     pub prefs: Arc<dyn PrefsWriter>,
     /// The cluster tab controller's queue.
@@ -270,6 +274,16 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     // `pvc::Resize` and `storageclass::SetDefault` (E12-S15): guarded mutations over the sessions.
     registry.install("oxikube_app::storage", |r| {
         oxikube_app::storage::register_commands(r, parts.sessions.clone())
+    })?;
+    // `serviceaccount::GenerateKubeconfig` (E17-S09): a guarded TokenRequest turned into a kubeconfig
+    // that waits in the process's in-memory vault for the ServiceAccount panel.
+    registry.install("oxikube_app::sa_kubeconfig", |r| {
+        oxikube_app::sa_kubeconfig::register_commands(
+            r,
+            parts.sessions.clone(),
+            parts.cluster_source.clone(),
+            oxikube_app::sa_kubeconfig::KubeconfigVault::shared(),
+        )
     })?;
     registry.install("oxikube_app::posture", |r| {
         oxikube_app::guard::register_commands(r, parts.sessions, parts.prefs)
