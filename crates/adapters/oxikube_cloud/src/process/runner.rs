@@ -17,7 +17,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use oxikube_domain::redact::redact;
 use std::sync::{PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
-use tokio::process::Command;
+use tokio::process::{Child, Command};
 
 use tokio::sync::{OnceCell, Semaphore};
 
@@ -149,8 +149,8 @@ impl CliRunner {
             .envs(cli.quiet_env().iter().copied())
             .envs(opts.env.iter().map(|(name, value)| (name, value)))
             .kill_on_drop(true);
-        let child = command
-            .spawn()
+        let child = spawn(&mut command)
+            .await
             .map_err(|error| spawn_error(invocation, &error))?;
         let after = opts
             .timeout
@@ -196,6 +196,30 @@ fn write<T>(lock: &RwLock<T>) -> RwLockWriteGuard<'_, T> {
 impl Default for CliRunner {
     fn default() -> Self {
         Self::new(CliRunnerConfig::default())
+    }
+}
+
+/// How often [`spawn`] retries a binary that is still open for writing.
+const BUSY_RETRIES: u32 = 5;
+
+/// Spawns `command`, retrying while the binary is "text file busy" (`ETXTBSY`).
+///
+/// Linux refuses to exec a file that some process holds open for writing. That happens while a
+/// CLI is being installed or upgraded, and when another thread forks between writing a script
+/// and closing it: the child holds the write descriptor until it execs. Both clear within
+/// milliseconds, so a few short retries turn a spurious failure into a run.
+async fn spawn(command: &mut Command) -> io::Result<Child> {
+    let mut attempt = 0;
+    loop {
+        match command.spawn() {
+            Err(error)
+                if error.kind() == io::ErrorKind::ExecutableFileBusy && attempt < BUSY_RETRIES =>
+            {
+                attempt += 1;
+                tokio::time::sleep(Duration::from_millis(5 * u64::from(attempt))).await;
+            }
+            result => return result,
+        }
     }
 }
 
