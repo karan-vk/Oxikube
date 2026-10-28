@@ -35,7 +35,7 @@ Options:
                           Run a scripted scenario in the real window over synthetic clusters,
                           measured against ADR 0016, and exit: pods-table, table-filter,
                           namespaces, detail-drawer, tabs-panes, theme, catalog, sidebar, nodes-table,
-                          overview, logs, terminal, idle (implies --perf; needs --features perf-window; use
+                          overview, overview-graphs, logs, terminal, idle (implies --perf; needs --features perf-window; use
                           `cargo xtask perf --windowed`)
   --perf-exec <CONTEXT>/<NAMESPACE>/<POD>
                           With --perf-scenario-window terminal: the shell runs in this pod (a real

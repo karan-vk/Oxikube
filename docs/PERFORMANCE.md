@@ -360,6 +360,7 @@ another Space): the run then stops after 5 s without a refresh and says so.
 | `sidebar` | 10 000 pods churning, the cluster's first screen (the cluster overview since E13-S09: its feed tallies every pod delta off the UI thread) with the sidebar's count badges | `churn` (30 s, every refresh watched, nothing driven) |
 | `nodes-table` (E12-S09) | 10 000 pods churning on the synthetic cluster's nodes, the Nodes table open and nothing else: its Pods column leases the cluster-wide Pod feed and turns the pods-by-node index on | `churn` (30 s, every refresh watched, nothing driven; fails unless Pod deltas reached the store through the lease) |
 | `overview` (E13-S09) | 100 nodes and 3 000 pods in 8 namespaces, 1 % recycled every 5 s; the cluster overview (the first screen) and nothing else, with no metrics-server or Prometheus in the synthetic world (the `metrics unavailable` state; the charts' repaint is the headless `charts` scenario) | `churn` (30 s, every refresh watched, nothing driven; fails unless the churn reached the overview's numbers) |
+| `overview-graphs` (E13-S09-F1) | the same cluster, with a metrics-server and a Prometheus-compatible endpoint in the synthetic world: the usage bars, the top consumers and the last hour of CPU and memory as graphs | `churn` (30 s, every refresh watched, nothing driven; fails unless the usage and the graphs are on screen and the churn reached the overview's numbers) |
 | `logs` | a pod writing 5 000 lines/s (the mixed JSON / plain stream of the headless `logs-stream`) | `stream-json` (10 s, JSON mode, the default), `type-search` (10 s: `logs::Find`, then `slow` typed and erased), `stream-raw` (10 s, `logs::ToggleJsonMode` off) |
 | `terminal` | a real shell: `LocalPty` running `/bin/sh` (`SHELL=/bin/sh` from xtask), or `pod::Shell` in a busybox pod on kind | `yes-flood` (until a 50 MB `yes` ends), `redraw-60hz` (8 s: an `awk` script rewriting every row in colour 60 times a second), `resize` (8 s, the window swept every refresh during the redraw) |
 | `idle` | two clusters, 1 000 pods each, no churn, both pods tables open | `idle` (30 s): the idle CPU and idle memory (< 150 MB, judged on the run's peak RSS) budgets |
@@ -440,6 +441,36 @@ refreshes with no frame of ours near it, the machine was busy), 22 to 24 coalesc
 (0.8 per second against 60 deltas per second), at most 1 per view per frame (2 per frame across the
 sidebar badges and the tiles), peak RSS 178.7 / 179.2 MiB, CPU 0.74 / 0.90 %. The pre-bars first
 baseline above has the same scenario at 3.60 ms max and 1 notify per view per frame.
+
+**Cluster overview with live metrics and graphs (E13-S09-F1).** The `overview-graphs` scenario is the
+`overview` scenario's world with a metrics-server and a Prometheus-compatible endpoint in it (the
+synthetic world answers node and pod metrics, and the query catalogue's overview queries with an
+hour of samples), so the page draws its usage bars, its top consumers and the last hour of CPU and
+memory as graphs. The runs below are **not measurements**: the agent's machine had another
+full-screen app in front, so the window had to be raised by a script every second and every run is
+marked `valid: false` (the window was not the active one for 5 to 25 of its 2 500 refreshes). The
+absolute figures are therefore inflated and the five quiet runs ADR 0016 asks for have to replace
+them; what the runs do show is the difference between the two variants, measured the same way, and
+the cause of it.
+
+| Scenario | frames | p50 ms | p95 ms | p99 ms | max ms | over 8.33 ms | notifies / 30 s | at most per frame / per view | peak RSS MiB | CPU % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `overview` (no metrics-server, no Prometheus) | 68 to 81 | 4.86 to 6.23 | 6.01 to 7.47 | 6.92 to 13.03 | 6.92 to 13.03 | 1 to 2 | 71 to 72 | 11 to 12 / 2 to 10 | 168 to 170 | 2.8 to 3.1 |
+| `overview-graphs` (metrics-server and Prometheus) | 60 to 85 | 12.15 to 12.62 | 14.04 to 14.05 | 16.87 to 23.84 | 16.87 to 23.84 | 55 | 71 to 72 | 11 to 12 / 10 | 184 | 3.8 |
+
+**The finding: the top consumers card, not the graphs.** The graphs are not the cost: with the
+metrics-server but without the Prometheus the frame times are the same (p50 12.15 ms), and the
+profile of a run puts the time in Taffy's flexbox layout and in GPUI's text layout
+(`TextSystem::line_wrapper`), not in the chart's paint. The cost is the top consumers card, which
+the `overview` scenario never had populated (it has no metrics-server, so the card is empty):
+its four lists of five rows add about 7 ms to a frame that took about 5 ms without them. Two
+measurements place it: dropping the card from the page took the frame from 12.5 ms to 5.5 ms, and
+dropping only the `.truncate()` of the twenty row labels took it from 12.5 ms to 9.6 ms. The
+labels are the reason: GPUI's text-layout cache is only used for a run that is **not** truncated
+(`truncate_width.is_none()` in `gpui`'s text element), so a truncated label is re-wrapped and
+re-shaped on every layout pass, and the card's twenty of them are laid out in a `flex_wrap` row,
+which measures them twice. The fix is E13-S09's card, not this story's scenario: it is filed as
+follow-up #712.
 
 **Over-budget frames and their causes.** Each was placed by its phase and time in the summary
 (`over_budget`), against the script's input times and the 5 s churn period, and the drawer's by a
@@ -1557,12 +1588,19 @@ preparation, no present and no GPU time):
 | `slow_frame_pct` | 0 % | 0 % | | |
 | `peak_rss_mib` | 174 MiB | | | |
 
-**Baseline.** `editor-5mb` is seeded for `linux` in [`docs/perf/baseline.json`](perf/baseline.json)
-from nightly run 38096579563 on the story branch (only that scenario was taken from the report, so
-the other scenarios keep their E08-F520 numbers). The runner measured `open_ms` p50 318 ms,
+**Baseline.** `editor-5mb` is seeded for both `linux` and `macos` in
+[`docs/perf/baseline.json`](perf/baseline.json). Only that scenario was taken from each report, so
+the other scenarios keep their E08-F520 numbers. The Linux seed is from nightly run 38096579563
+on the E10-S11 story branch. The runner measured `open_ms` p50 318 ms,
 `validation_ms` 346 ms, `draw_ms` p95 0.64 ms, `scroll_frame_ms` p95 1.53 ms, `slow_frame_pct` 0 and
-`peak_rss_mib` 229. The `macos` seed waits for the macOS perf smoke tests to pass again (#592; seed:
-#643). Until then the advisory macOS check reports the scenario as `MISSING`.
+`peak_rss_mib` 229. The macOS seed (E10-F153, #643) is from
+[nightly run 39346156417](https://github.com/karan-vk/Oxikube/actions/runs/39346156417), whose macOS
+perf smoke tests passed. Across seven launches it measured `open_ms` p50 269 ms (p95 296 ms),
+`validation_ms` p50 596 ms, `draw_ms` p95 1.17 ms, `scroll_frame_ms` p95 3.12 ms,
+`slow_frame_pct` 0 and `peak_rss_mib` 182. All four editor budgets pass. The advisory macOS
+comparison now has a baseline for the scenario. Baselines store the median of each per-launch
+percentile summary; the cold-open p95 above comes from the report's separate across-launch
+statistics.
 
 Before this story the same open took 220 to 340 ms in a headless probe (unchanged code path: the
 rope and the display map; the spread is the machine), a keystroke 0.4 to 1.7 ms, and every pause

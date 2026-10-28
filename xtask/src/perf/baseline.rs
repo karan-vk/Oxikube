@@ -733,36 +733,37 @@ mod tests {
         }
     }
 
-    /// E10-S11: `editor-5mb` is baselined on the Linux runner (the nightly gate), every budgeted
-    /// metric and `validation_ms` (no absolute budget, so only the baseline gates it) included.
-    /// macOS follows once its perf smoke tests run again (#592, macOS seed: #643).
+    /// E10-S11 / E10-F153: `editor-5mb` is baselined on both runners, every budgeted metric and
+    /// `validation_ms` (no absolute budget, so only the baseline checks it) included.
     #[test]
     fn committed_baseline_covers_the_editor_5mb_scenario() {
         let b: Baseline =
             serde_json::from_str(include_str!("../../../docs/perf/baseline.json")).unwrap();
-        let editor = b.os["linux"]
-            .scenarios
-            .get("editor-5mb")
-            .expect("no editor-5mb baseline for linux");
-        assert!(
-            editor.contains_key("validation_ms"),
-            "validation_ms is gated"
-        );
-        for budget in super::super::budget::BUDGETS
-            .iter()
-            .filter(|budget| budget.scenario == "editor-5mb")
-        {
-            let seeded = editor
-                .get(budget.metric)
-                .unwrap_or_else(|| panic!("linux editor-5mb baseline lacks {}", budget.metric));
+        for os in ["linux", "macos"] {
+            let editor = b.os[os]
+                .scenarios
+                .get("editor-5mb")
+                .unwrap_or_else(|| panic!("no editor-5mb baseline for {os}"));
             assert!(
-                seeded.p95 <= budget.limit,
-                "linux {} p95 {} is over its {} budget",
-                budget.metric,
-                seeded.p95,
-                budget.limit
+                editor.contains_key("validation_ms"),
+                "{os}: validation_ms is checked"
             );
+            for budget in super::super::budget::BUDGETS
+                .iter()
+                .filter(|budget| budget.scenario == "editor-5mb")
+            {
+                let seeded = editor
+                    .get(budget.metric)
+                    .unwrap_or_else(|| panic!("{os} editor-5mb baseline lacks {}", budget.metric));
+                assert!(
+                    seeded.p95 <= budget.limit,
+                    "{os} {} p95 {} is over its {} budget",
+                    budget.metric,
+                    seeded.p95,
+                    budget.limit
+                );
+            }
+            assert!(b.os[os].source.contains("editor-5mb from nightly run"));
         }
-        assert!(b.os["linux"].source.contains("editor-5mb from nightly run"));
     }
 }

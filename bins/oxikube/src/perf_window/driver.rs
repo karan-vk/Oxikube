@@ -124,6 +124,13 @@ impl<'a> Driver<'a> {
         self.cx.background_executor().timer(scaled(duration)).await;
     }
 
+    /// Whether the app has a Tokio runtime. The synthetic world's churn runs on it, so without
+    /// one (the deterministic test platform) nothing churns and a scenario cannot wait for the
+    /// churn to reach the stores.
+    pub fn churns(&mut self) -> bool {
+        self.cx.update(|cx| oxikube_runtime::handle(cx).is_some())
+    }
+
     /// A scripted phase: `step` on every display refresh for `duration` (see `windowed::drive`).
     pub async fn phase(
         &mut self,
