@@ -180,6 +180,10 @@ impl DeleteFlow {
     ///
     /// [`DeleteError::Empty`] for no targets, [`DeleteError::MixedClusters`] for targets of more
     /// than one cluster.
+    ///
+    /// # Panics
+    ///
+    /// When the delete builder returns a command not declared in `oxikube_domain::command`.
     pub fn plan(
         &self,
         targets: &[ResourceRef],

@@ -9,6 +9,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{App, AppContext as _, Entity, WeakEntity, Window};
+use oxikube_app::access::AccessVisibility;
 use oxikube_app::session::namespaces::NamespaceService;
 use oxikube_app::{
     ClusterSession, ClusterSessionManager, IntegrationRegistry, RecentWarnings, ResourceStores,
@@ -64,9 +65,12 @@ pub fn tab_setup(
         integrations: deps.integrations.clone(),
         state: deps.state.clone(),
         stores: Some(deps.stores.clone()),
-        // The per-kind RBAC gate is E17's; until then every registered kind is offered (the
-        // sidebar's rules review still hides what the user may not list).
-        visibility: Arc::new(oxikube_app::kinds::AllowAll),
+        // The per-kind RBAC gate (E17-S03): kinds the cached rules reviews say the user may not
+        // list are hidden (or greyed under "Show all"); anything not known yet is offered.
+        visibility: Arc::new(AccessVisibility::new(
+            deps.sessions.clone(),
+            deps.namespaces.access().clone(),
+        )),
     });
     let sources = deps.dispatcher.clone();
     let terminals = deps.dispatcher.clone();
@@ -102,6 +106,7 @@ pub fn tab_setup(
         super::pulses::install_tab(tab, session, &deps, window, cx);
         crate::events::install_tab(tab, session, &deps.events, cx);
         super::events::install_tab(tab, session, &deps, window, cx);
+        super::rbac::install_tab(tab, session, &deps, window, cx);
     }
 }
 

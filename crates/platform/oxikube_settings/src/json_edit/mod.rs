@@ -116,6 +116,11 @@ fn contains_inclusive(range: &Range<usize>, other: &Range<usize>) -> bool {
 ///
 /// Returns the byte range to replace and its replacement. Missing intermediate objects are
 /// created. When `replace_key` is `Some`, an exact match also renames the key.
+///
+/// # Panics
+///
+/// Never in practice: the bundled grammar matches the linked tree-sitter, the pair query is a
+/// constant over it, and the parser has no timeout or cancellation flag, so no `expect` fires.
 pub fn replace_value_in_json_text<T: AsRef<str>>(
     text: &str,
     key_path: &[T],
@@ -200,11 +205,10 @@ pub fn replace_value_in_json_text<T: AsRef<str>>(
         if let Some(new_value) = new_value {
             let new_val = to_pretty_json(new_value, tab_size, tab_size * depth);
             if let Some(replace_key) = replace_key.and_then(|str| serde_json::to_string(str).ok()) {
-                let new_key = format!("{}: ", replace_key);
                 if let Some(key_start) = matched_key_start {
                     existing_value_range.start = key_start;
                 }
-                (existing_value_range, new_key + &new_val)
+                (existing_value_range, format!("{replace_key}: {new_val}"))
             } else {
                 (existing_value_range, new_val)
             }

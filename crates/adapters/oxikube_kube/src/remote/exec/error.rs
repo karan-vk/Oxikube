@@ -71,12 +71,12 @@ pub(super) fn refine(target: &Target<'_>, shape: Option<&PodShape>) -> OxiError 
     let Some(shape) = shape else {
         return OxiError::not_found(format!("pod {namespace}/{pod} not found"));
     };
-    if let Some(name) = container {
-        if !shape.containers.iter().any(|c| c == name) {
-            return OxiError::not_found(format!(
-                "container {name} not found in pod {namespace}/{pod}"
-            ));
-        }
+    if let Some(name) = container
+        && !shape.containers.iter().any(|c| c == name)
+    {
+        return OxiError::not_found(format!(
+            "container {name} not found in pod {namespace}/{pod}"
+        ));
     }
     if shape.deleting || !matches!(shape.phase.as_str(), "Running" | "Pending") {
         return OxiError::conflict(format!(

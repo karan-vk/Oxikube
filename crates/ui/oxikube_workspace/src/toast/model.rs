@@ -99,30 +99,35 @@ impl Toast {
     /// Deduplication key: showing a toast whose key matches a visible or waiting toast replaces
     /// that toast's content in place (and restarts its timeout) instead of stacking a copy.
     /// Use a stable key per cause, such as `"connect/prod-eu"`.
+    #[must_use]
     pub fn key(mut self, key: impl Into<SharedString>) -> Self {
         self.key = Some(key.into());
         self
     }
 
     /// A bold line above the message.
+    #[must_use]
     pub fn title(mut self, title: impl Into<SharedString>) -> Self {
         self.title = Some(title.into());
         self
     }
 
     /// Adds an action button.
+    #[must_use]
     pub fn action(mut self, action: ToastAction) -> Self {
         self.actions.push(action);
         self
     }
 
     /// Dismisses itself after `timeout`.
+    #[must_use]
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.timeout = Some(timeout);
         self
     }
 
     /// Stays until the user (or code) dismisses it.
+    #[must_use]
     pub fn persistent(mut self) -> Self {
         self.timeout = None;
         self

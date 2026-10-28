@@ -23,12 +23,12 @@ pub enum CommandCategory {
     /// Views, zoom, the palette, the jump bar, the key-binding help and the keymap file
     /// (`view::*`, `palette::*`, `jump::*`, `help::*`, `keymap::*`, `charts::*`).
     View,
-    /// Clusters and kubeconfig sources (`cluster::*`, `kubeconfig::*`).
+    /// Clusters, kubeconfig sources and cloud discovery (`cluster::*`, `kubeconfig::*`, `cloud::*`).
     Cluster,
     /// Namespace selection (`namespace::*`).
     Namespace,
     /// Resources, tables and custom resources (`resource::*`, `table::*`, `crd::*`,
-    /// `ingressclass::*`, `secret::*`, `selection::*`).
+    /// `ingressclass::*`, `role::*`, `binding::*`, `secret::*`, `selection::*`).
     Resource,
     /// Workloads (`workload::*`, `cronjob::*`, `job::*`).
     Workload,
@@ -52,13 +52,15 @@ pub enum CommandCategory {
     Events,
     /// Helm releases, charts and repositories (`helm::*`).
     Helm,
+    /// Access reviews and RBAC tooling (`rbac::*`).
+    Rbac,
     /// A namespace no category claims (an extension's command, until it declares one).
     Other,
 }
 
 impl CommandCategory {
     /// Every category, in display order.
-    pub const ALL: [CommandCategory; 18] = [
+    pub const ALL: [CommandCategory; 19] = [
         CommandCategory::App,
         CommandCategory::Window,
         CommandCategory::View,
@@ -76,12 +78,13 @@ impl CommandCategory {
         CommandCategory::Editor,
         CommandCategory::Events,
         CommandCategory::Helm,
+        CommandCategory::Rbac,
         CommandCategory::Other,
     ];
 
     /// The category of the command `id`, from its namespace.
     pub const fn of(id: CommandId) -> Self {
-        const NAMESPACES: [(&str, CommandCategory); 32] = [
+        const NAMESPACES: [(&str, CommandCategory); 37] = [
             ("app", CommandCategory::App),
             ("notifications", CommandCategory::App),
             ("window", CommandCategory::Window),
@@ -93,13 +96,17 @@ impl CommandCategory {
             ("charts", CommandCategory::View),
             ("cluster", CommandCategory::Cluster),
             ("kubeconfig", CommandCategory::Cluster),
+            ("cloud", CommandCategory::Cluster),
             ("namespace", CommandCategory::Namespace),
             ("resource", CommandCategory::Resource),
             ("table", CommandCategory::Resource),
             ("crd", CommandCategory::Resource),
             ("ingressclass", CommandCategory::Resource),
+            ("role", CommandCategory::Resource),
+            ("binding", CommandCategory::Resource),
             ("secret", CommandCategory::Resource),
             ("selection", CommandCategory::Resource),
+            ("serviceaccount", CommandCategory::Resource),
             ("workload", CommandCategory::Workload),
             ("cronjob", CommandCategory::Workload),
             ("job", CommandCategory::Workload),
@@ -114,6 +121,7 @@ impl CommandCategory {
             ("editor", CommandCategory::Editor),
             ("events", CommandCategory::Events),
             ("helm", CommandCategory::Helm),
+            ("rbac", CommandCategory::Rbac),
         ];
         let mut i = 0;
         while i < NAMESPACES.len() {
@@ -145,6 +153,7 @@ impl CommandCategory {
             CommandCategory::Editor => "Editor",
             CommandCategory::Events => "Events",
             CommandCategory::Helm => "Helm",
+            CommandCategory::Rbac => "RBAC",
             CommandCategory::Other => "Other",
         }
     }

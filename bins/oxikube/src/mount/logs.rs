@@ -26,6 +26,7 @@ use oxikube_app::logs::{LogConfig, LogService};
 use oxikube_app::tools::events::EventsAgentDeps;
 use oxikube_app::tools::k8s::{GetLogsTool, GetSecretTool};
 use oxikube_app::tools::metrics::MetricsAgentDeps;
+use oxikube_app::tools::rbac::CanIDeps;
 use oxikube_logs_ui::{
     LogRequest, LogViewDeps, LogViews, LogViewsDeps, LogsSettings, follow_settings,
     log_row_actions, log_runtime,
@@ -74,13 +75,15 @@ pub fn install(state: &AppState, clock: Arc<dyn ClockPort>, cx: &mut App) -> Arc
 /// with `@logs` in the context registry and `k8s.get_logs` and `k8s.get_secret` (E12-S11) in the
 /// tool registry, all reading through `sessions` (the logs on the `service`); and (E13-S12)
 /// `@metrics` with `k8s.top_pods`, `k8s.top_nodes` and `k8s.query_promql`, reading through
-/// `metrics`; and (E14-S08) `@events` with `k8s.get_events`, reading through `events`.
+/// `metrics`; (E14-S08) `@events` with `k8s.get_events`, reading through `events`; and (E17-S08)
+/// `@rbac/sa/<ns>/<name>` with `k8s.can_i`, reading through `can_i`.
 pub fn install_agent_hooks(
     state: &AppState,
     sessions: ClusterSessionManager,
     service: Arc<LogService>,
     metrics: &MetricsAgentDeps,
     events: &EventsAgentDeps,
+    can_i: &CanIDeps,
 ) -> AgentHooks {
     if let Some(hooks) = state.agent_hooks() {
         return hooks.clone();
@@ -109,6 +112,10 @@ pub fn install_agent_hooks(
     // The events tool and `@events` (E14-S08): read-only, an empty buffer is their answer.
     if let Err(error) = oxikube_app::tools::events::install(&hooks.tools, &hooks.contexts, events) {
         tracing::error!(%error, "the events tool could not be registered");
+    }
+    // `k8s.can_i` and `@rbac` (E17-S08): read-only access reviews.
+    if let Err(error) = oxikube_app::tools::rbac::install(&hooks.tools, &hooks.contexts, can_i) {
+        tracing::error!(%error, "the can-i tool could not be registered");
     }
     if !state.set_agent_hooks(hooks.clone()) {
         // Another window set them first: use those, so every window shares the queue.
@@ -158,7 +165,7 @@ pub fn start_views(
 /// Browser" on Services, E12-S13; "Set as default" on IngressClasses, E12-S14; "Resize…" on
 /// claims and "Set as Default" on storage classes, E12-S15; "Use namespace", "Toggle favourite",
 /// "New namespace…" and "Delete" on Namespaces, E12-S16; "Cordon" and "Uncordon" on nodes, E12-S09; "Reveal Values" and "Edit Decoded" on Secrets,
-/// E12-S11).
+/// E12-S11; "Edit Rules…" on Roles and ClusterRoles, E17-S05; "Edit Binding…" on RoleBindings and ClusterRoleBindings, E17-S06).
 pub fn row_actions() -> RowActionRegistry {
     let mut registry = RowActionRegistry::core();
     let specs = oxikube_resources_ui::crds::crd_row_actions()
@@ -171,7 +178,11 @@ pub fn row_actions() -> RowActionRegistry {
         .chain(oxikube_editor::open::editor_row_actions())
         .chain(oxikube_resources_ui::kinds::namespace::namespace_row_actions())
         .chain(oxikube_resources_ui::kinds::node::node_row_actions())
-        .chain(oxikube_resources_ui::kinds::secret_row_actions());
+        .chain(oxikube_resources_ui::kinds::secret_row_actions())
+        .chain(oxikube_rbac_ui::role::role_row_actions())
+        // "Generate Kubeconfig" on ServiceAccounts (E17-S09).
+        .chain(oxikube_rbac_ui::row_actions())
+        .chain(oxikube_rbac_ui::binding::binding_row_actions());
     for spec in specs {
         if let Err(error) = registry.register(spec) {
             // A wiring bug (one command offered twice); the tests catch it.

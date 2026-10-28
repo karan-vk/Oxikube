@@ -113,11 +113,9 @@ async fn a_deployments_pods_are_merged_in_timestamp_order_and_a_new_pod_is_annou
         .await
         .expect("create the deployment");
     let pods = Api::<Pod>::namespaced(client.clone(), ns.name());
-    eventually(
-        "three running pods",
-        || String::new(),
-        || async { running_pods(&pods).await == 3 },
-    )
+    eventually("three running pods", String::new, || async {
+        running_pods(&pods).await == 3
+    })
     .await;
 
     let resources = KubeResources::new(client.clone(), KubeDiscovery::new(client.clone()));

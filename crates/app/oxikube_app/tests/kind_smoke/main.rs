@@ -19,6 +19,7 @@ mod aliases;
 mod allocation;
 mod auth_required;
 mod auto_reconnect;
+mod bindings;
 mod clock;
 mod cluster;
 mod columns;
@@ -45,8 +46,11 @@ mod node_shell;
 mod nodes;
 mod pods;
 mod portforward;
+mod rbac;
+mod roles;
 mod rollback;
 mod rollout;
+mod sa_kubeconfig;
 mod scale;
 mod scoped_feeds;
 mod selection;
@@ -64,6 +68,10 @@ pub const DEADLINE: Duration = Duration::from_secs(30);
 
 /// Polls `check` every 50 ms until it holds, failing the test after [`DEADLINE`] with
 /// `diagnostics` (session states, feed list, counters) in the message.
+///
+/// # Panics
+///
+/// When `check` still fails after [`DEADLINE`].
 pub async fn eventually<F, Fut>(what: &str, diagnostics: impl Fn() -> String, mut check: F)
 where
     F: FnMut() -> Fut,

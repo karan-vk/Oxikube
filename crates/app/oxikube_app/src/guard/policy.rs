@@ -88,9 +88,14 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ClusterShowMetricsSettings { cluster }
         | Command::ClusterShowPulses { cluster }
         | Command::HelmOpenReleases { cluster }
+        | Command::RbacOpenUsers { cluster }
+        | Command::RbacOpenGroups { cluster }
+        | Command::RbacShowSubject { cluster, .. }
+        | Command::RbacCopyMatrix { cluster }
         | Command::HelmShowValues { cluster, .. }
         | Command::HelmShowManifest { cluster, .. }
         | Command::HelmRevealValues { cluster, .. }
+        | Command::RbacCanI { cluster, .. }
         | Command::EventsOpen { cluster, .. }
         | Command::EventsToggleFaults { cluster }
         | Command::EventsTogglePause { cluster }
@@ -117,7 +122,19 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::HelmUpgrade { cluster, .. }
         | Command::HelmRollback { cluster, .. }
         | Command::HelmUninstall { cluster, .. }
+        | Command::RoleCreate { cluster, .. }
+        | Command::RoleEdit { cluster, .. }
+        | Command::BindingCreate { cluster, .. }
+        | Command::BindingEdit { cluster, .. }
         | Command::ResourceApply { cluster, .. } => Some(cluster),
+        Command::RoleOpenDialog {
+            cluster, target, ..
+        }
+        | Command::BindingOpenDialog {
+            cluster, target, ..
+        } => cluster
+            .as_ref()
+            .or_else(|| target.as_ref().map(|target| &target.cluster)),
         Command::TerminalNew { cluster }
         | Command::EditorNewManifest { cluster }
         | Command::SecretCreate { cluster }
@@ -202,6 +219,9 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::JobSuspend { target }
         | Command::JobResume { target }
         | Command::PvcResize { target, .. }
+        | Command::RoleDelete { target, .. }
+        | Command::ServiceAccountGenerateKubeconfig { target, .. }
+        | Command::BindingDelete { target }
         | Command::StorageClassSetDefault { target, .. } => Some(&target.cluster),
         Command::ClusterNextTab
         | Command::ClusterPreviousTab
@@ -209,6 +229,10 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::KubeconfigAddSource { .. }
         | Command::KubeconfigRemoveSource { .. }
         | Command::KubeconfigReload
+        | Command::CloudRefresh { .. }
+        | Command::CloudCancel { .. }
+        | Command::CloudAdd { .. }
+        | Command::CloudRemove { .. }
         | Command::ViewOpen { .. }
         | Command::PaletteToggle
         | Command::PaletteClearRecents
@@ -307,6 +331,12 @@ pub fn audit_target(command: &Command, cluster: &ClusterId) -> ResourceRef {
     if let Some(release) = crate::helm_ops::audit_target(command, cluster) {
         return release;
     }
+    if let Some(role) = crate::role_ops::audit_target(command, cluster) {
+        return role;
+    }
+    if let Some(binding) = crate::binding_ops::audit_target(command, cluster) {
+        return binding;
+    }
     // A create names the object it will make.
     if let Command::NamespaceCreate { name, .. } = command {
         return ResourceRef::cluster_scoped(cluster.clone(), Gvk::namespace(), &**name);
@@ -355,6 +385,15 @@ pub fn summary(meta: &CommandMeta, command: &Command, context: &str) -> String {
         return summary;
     }
     if let Some(summary) = crate::helm_ops::summary(command, context) {
+        return summary;
+    }
+    if let Some(summary) = crate::role_ops::summary(command, context) {
+        return summary;
+    }
+    if let Some(summary) = crate::sa_kubeconfig::summary(command, context) {
+        return summary;
+    }
+    if let Some(summary) = crate::binding_ops::summary(command, context) {
         return summary;
     }
     if let Command::WorkloadScale { target, replicas } = command {
@@ -488,6 +527,15 @@ pub fn audit_detail(command: &Command) -> Option<String> {
         return Some(detail);
     }
     if let Some(detail) = crate::helm_ops::audit_detail(command) {
+        return Some(detail);
+    }
+    if let Some(detail) = crate::role_ops::audit_detail(command) {
+        return Some(detail);
+    }
+    if let Some(detail) = crate::sa_kubeconfig::audit_detail(command) {
+        return Some(detail);
+    }
+    if let Some(detail) = crate::binding_ops::audit_detail(command) {
         return Some(detail);
     }
     match command {

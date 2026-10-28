@@ -70,6 +70,15 @@ impl SidebarPanel {
         cx.notify();
     }
 
+    /// Shows the entries access hides, greyed out with "no list permission" on hover, or hides
+    /// them again (the restricted indicator's link). Pure UI state, not saved.
+    pub fn set_show_restricted(&mut self, show: bool, cx: &mut Context<Self>) {
+        if self.show_restricted != show {
+            self.show_restricted = show;
+            self.rebuild(cx);
+        }
+    }
+
     /// Moves the highlight by `delta` interactive rows, stopping at the ends.
     pub fn move_highlight(&mut self, delta: isize, cx: &mut Context<Self>) {
         let rows: Vec<usize> = self

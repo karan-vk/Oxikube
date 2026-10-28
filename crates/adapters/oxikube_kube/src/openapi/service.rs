@@ -223,20 +223,20 @@ impl OpenApiSchemas {
             .get(&group_version)
             .filter(|(hash, _)| *hash == entry.hash)
             .map(|(_, bytes)| bytes.clone());
-        if let Some(bytes) = held {
-            if let Ok(root) = flatten_root(bytes, gvk).await {
-                return root.ok_or_else(|| no_schema(gvk));
-            }
+        if let Some(bytes) = held
+            && let Ok(root) = flatten_root(bytes, gvk).await
+        {
+            return root.ok_or_else(|| no_schema(gvk));
         }
-        if let Some(disk) = &self.disk {
-            if let Some(bytes) = disk.read(&self.cluster, &key).await {
-                match flatten_root(Arc::new(bytes), gvk).await {
-                    Ok(root) => {
-                        debug!(kind = %gvk, "openapi: group document from disk cache");
-                        return root.ok_or_else(|| no_schema(gvk));
-                    }
-                    Err(_) => warn!(kind = %gvk, "openapi: unreadable disk cache entry ignored"),
+        if let Some(disk) = &self.disk
+            && let Some(bytes) = disk.read(&self.cluster, &key).await
+        {
+            match flatten_root(Arc::new(bytes), gvk).await {
+                Ok(root) => {
+                    debug!(kind = %gvk, "openapi: group document from disk cache");
+                    return root.ok_or_else(|| no_schema(gvk));
                 }
+                Err(_) => warn!(kind = %gvk, "openapi: unreadable disk cache entry ignored"),
             }
         }
         let text = fetch_document(&self.client, &entry.url, self.config.request_timeout).await?;

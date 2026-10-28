@@ -71,7 +71,11 @@ pub fn init(cx: &mut App) {
         "Service Accounts",
         Scope::Namespaced,
     )
-    .with_actions([CommandId::RESOURCE_SHOW_USED_BY]);
+    .with_actions([
+        CommandId::RESOURCE_SHOW_USED_BY,
+        // E17-S09: the rbac panel's row action; the command is the app's.
+        CommandId::SERVICEACCOUNT_GENERATE_KUBECONFIG,
+    ]);
     if let Err(error) = KindSpecs::register(cx, KindSpec::new(meta)) {
         tracing::error!(%error, "the ServiceAccount kind was not registered");
     }

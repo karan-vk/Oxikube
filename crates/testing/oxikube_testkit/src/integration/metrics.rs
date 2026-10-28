@@ -92,7 +92,11 @@ impl MetricsTier {
 
 /// The kind context to run `tier` against, or `None` (after a skip notice) when the cluster or
 /// the tier is not there. A stack tier prints the pinned chart versions first, so the run's log
-/// records what it ran against. Panics on a context that is not a kind one.
+/// records what it ran against.
+///
+/// # Panics
+///
+/// When the test context is not a kind one.
 pub fn tier_context(tier: MetricsTier) -> Option<String> {
     let context = test_context()?;
     ensure_kind_context(&context).expect("a kind context");
@@ -242,6 +246,10 @@ pub fn namespace_diagnostics(context: &str, namespace: &str) -> String {
 /// Asserts that `values` (one series' samples) hold at least one finite reading and that every
 /// finite reading is non-negative: CPU, memory and network are never below zero. Names `what` in
 /// the failure.
+///
+/// # Panics
+///
+/// When there is no finite reading or a finite reading is negative.
 pub fn assert_samples(what: &str, values: impl IntoIterator<Item = f64>) {
     let values: Vec<f64> = values.into_iter().collect();
     let finite: Vec<f64> = values.iter().copied().filter(|v| v.is_finite()).collect();
@@ -259,6 +267,10 @@ pub fn assert_samples(what: &str, values: impl IntoIterator<Item = f64>) {
 /// Asserts that the answer to `query` has at least one series and that every series holds
 /// readings ([`assert_samples`]). The failure message carries the query, so a nightly failure
 /// shows which PromQL broke.
+///
+/// # Panics
+///
+/// When there is no series or a series fails [`assert_samples`].
 pub fn assert_series(what: &str, query: &str, series: &[PromqlSeries]) {
     assert!(!series.is_empty(), "{what}: no series for `{query}`");
     for one in series {

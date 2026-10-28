@@ -1,5 +1,5 @@
 //! Shared fixtures: test actions and a probe view that records the actions it receives.
-#![allow(dead_code)]
+#![allow(dead_code, reason = "each test binary uses a subset of these helpers")]
 
 use std::cell::RefCell;
 use std::rc::Rc;

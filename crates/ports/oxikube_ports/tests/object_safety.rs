@@ -297,7 +297,11 @@ fn pod() -> Gvk {
 
 fn assert_unsupported<T>(result: OxiResult<T>) {
     match result {
-        Err(e) => assert_eq!(e.kind(), ErrorKind::Unsupported),
+        Err(e) => assert_eq!(
+            e.kind(),
+            ErrorKind::Unsupported,
+            "stub must refuse with Unsupported, got {e:?}"
+        ),
         Ok(_) => panic!("stub returned Ok"),
     }
 }

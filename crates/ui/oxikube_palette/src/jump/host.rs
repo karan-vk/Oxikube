@@ -155,6 +155,7 @@ impl JumpHost {
     /// Remembers the lines run in the bar between runs: they are recorded in `recents` (written
     /// behind a pause by the app) and the stored ones of the shown cluster are read when the bar
     /// opens, so `[` reaches the lines of the last run.
+    #[must_use]
     pub fn persist(self, recents: Arc<JumpRecents>) -> Self {
         *self.shared.persisted.borrow_mut() = Some(recents);
         self

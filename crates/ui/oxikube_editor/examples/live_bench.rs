@@ -9,7 +9,11 @@
 //! object's rendering, the normalising and the diff run on the background executor; their time
 //! is reported separately for a large object (a Deployment with 400 env entries).
 
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "a benchmark reports on stdout and stderr"
+)]
 
 use std::rc::Rc;
 use std::sync::Arc;

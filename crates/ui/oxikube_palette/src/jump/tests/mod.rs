@@ -197,6 +197,7 @@ impl Fixture {
             catalog,
             aliases: aliases.clone(),
             namespaces,
+            rbac_subjects: Default::default(),
         };
         let recents = Arc::new(JumpRecents::new(state.clone()));
         let host =

@@ -200,7 +200,7 @@ impl Harness {
     fn grid(&mut self) -> (u16, u16) {
         let size = self
             .terminal
-            .read_with(&mut *self.window, |terminal, _| terminal.size());
+            .read_with(&*self.window, |terminal, _| terminal.size());
         (size.width, size.height)
     }
 

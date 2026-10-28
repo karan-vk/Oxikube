@@ -6,8 +6,11 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use futures::future::{BoxFuture, FutureExt};
-use oxikube_domain::command::{Command, CommandId, KubeconfigSourceRef, NewKubeconfigSource};
-use oxikube_domain::ids::{ClusterId, Gvk, ResourceRef};
+use oxikube_domain::cloud::CloudProvider;
+use oxikube_domain::command::{
+    CloudRefreshMode, Command, CommandId, KubeconfigSourceRef, NewKubeconfigSource,
+};
+use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
 use oxikube_domain::{ClusterColour, ClusterPreset, ErrorKind, OxiError, OxiResult};
 use oxikube_ports::{ClusterPrefs, ClusterPrefsTable};
 use parking_lot::Mutex;
@@ -15,6 +18,12 @@ use parking_lot::Mutex;
 use crate::guard::{PrefsPatch, PrefsWriter};
 use crate::session::ClusterSessionManager;
 use crate::testing::{id, node, pod};
+
+/// A ClusterRole the posture samples of `role::Create` and `role::Edit` carry.
+const ROLE_MANIFEST: &str = r#"{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"ClusterRole","metadata":{"name":"reader"},"rules":[{"apiGroups":[""],"resources":["pods"],"verbs":["get"]}]}"#;
+
+/// A RoleBinding the posture samples of `binding::Create` and `binding::Edit` carry.
+const BINDING_MANIFEST: &str = r#"{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"ClusterRoleBinding","metadata":{"name":"readers"},"roleRef":{"apiGroup":"rbac.authorization.k8s.io","kind":"ClusterRole","name":"view"},"subjects":[{"apiGroup":"rbac.authorization.k8s.io","kind":"User","name":"ana"}]}"#;
 
 /// A fake settings store.
 pub(crate) struct FakePrefsWriter {
@@ -168,6 +177,13 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "cluster::ShowMetricsSettings" => Command::ClusterShowMetricsSettings { cluster },
         "helm::ShowRepos" => Command::HelmShowRepos,
         "helm::OpenReleases" => Command::HelmOpenReleases { cluster },
+        "rbac::OpenUsers" => Command::RbacOpenUsers { cluster },
+        "rbac::OpenGroups" => Command::RbacOpenGroups { cluster },
+        "rbac::ShowSubject" => Command::RbacShowSubject {
+            cluster,
+            subject: "system:serviceaccount:default:builder".to_owned(),
+        },
+        "rbac::CopyMatrix" => Command::RbacCopyMatrix { cluster },
         "helm::ShowValues" => Command::HelmShowValues {
             cluster,
             namespace: "apps".to_owned(),
@@ -230,6 +246,48 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             wait: false,
             timeout_secs: None,
         },
+        "binding::OpenDialog" => Command::BindingOpenDialog {
+            cluster: Some(cluster),
+            cluster_binding: false,
+            target: None,
+        },
+        "binding::Create" => Command::BindingCreate {
+            cluster,
+            manifest: BINDING_MANIFEST.to_owned(),
+        },
+        "binding::Edit" => Command::BindingEdit {
+            cluster,
+            manifest: BINDING_MANIFEST.to_owned(),
+            previous: None,
+        },
+        "binding::Delete" => Command::BindingDelete {
+            target: ResourceRef::cluster_scoped(
+                cluster,
+                oxikube_domain::rbac::RbacKind::ClusterRoleBinding.gvk(),
+                "readers",
+            ),
+        },
+        "role::OpenDialog" => Command::RoleOpenDialog {
+            cluster: Some(cluster),
+            cluster_role: false,
+            target: None,
+        },
+        "role::Create" => Command::RoleCreate {
+            cluster,
+            manifest: ROLE_MANIFEST.to_owned(),
+        },
+        "role::Edit" => Command::RoleEdit {
+            cluster,
+            manifest: ROLE_MANIFEST.to_owned(),
+        },
+        "role::Delete" => Command::RoleDelete {
+            target: ResourceRef::cluster_scoped(
+                cluster,
+                oxikube_domain::rbac::RbacKind::ClusterRole.gvk(),
+                "reader",
+            ),
+            bindings: None,
+        },
         "helm::Rollback" => Command::HelmRollback {
             cluster,
             namespace: "default".to_owned(),
@@ -254,6 +312,11 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         },
         "helm::RepoUpdate" => Command::HelmRepoUpdate { names: Vec::new() },
         "cluster::ShowPulses" => Command::ClusterShowPulses { cluster },
+        "rbac::CanI" => Command::RbacCanI {
+            cluster,
+            target: None,
+            verb: None,
+        },
         "events::Open" => Command::EventsOpen {
             cluster,
             namespace: None,
@@ -269,6 +332,19 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             cluster,
             target: None,
             events: Vec::new(),
+        },
+        "cloud::Add" => Command::CloudAdd {
+            provider: CloudProvider::Aws,
+            cluster: "aws/p/eu-west-1/c".into(),
+        },
+        "cloud::Cancel" => Command::CloudCancel { provider: None },
+        "cloud::Refresh" => Command::CloudRefresh {
+            provider: None,
+            mode: CloudRefreshMode::Force,
+        },
+        "cloud::Remove" => Command::CloudRemove {
+            provider: CloudProvider::Aws,
+            context: ContextName::new("eks-p-eu-west-1-c"),
         },
         "cluster::SwitchTab" => Command::ClusterSwitchTab { index: 1 },
         "cluster::ToggleFavourite" => Command::ClusterToggleFavourite {
@@ -390,6 +466,17 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
             ),
             size: "20Gi".into(),
             from: Some("10Gi".into()),
+        },
+        "serviceaccount::GenerateKubeconfig" => Command::ServiceAccountGenerateKubeconfig {
+            target: ResourceRef::namespaced(
+                cluster,
+                Gvk::new("", "v1", "ServiceAccount"),
+                "default",
+                "deployer",
+            ),
+            expiration_seconds: Some(3600),
+            audiences: Vec::new(),
+            allow_legacy_token: false,
         },
         "storageclass::SetDefault" => Command::StorageClassSetDefault {
             target: ResourceRef::cluster_scoped(

@@ -55,7 +55,10 @@ fn rejection(err: &rustls::Error) -> Option<OxiError> {
 
 /// The variant name and a fixed hint. The `*Context` variants carry times, names and
 /// algorithm ids; they are folded into their plain variant and none of the data is used.
-#[allow(deprecated)] // `UnsupportedSignatureAlgorithm` is deprecated but still constructible.
+#[allow(
+    deprecated,
+    reason = "`UnsupportedSignatureAlgorithm` is deprecated but still constructible"
+)]
 fn certificate_reason(err: &CertificateError) -> (&'static str, &'static str) {
     use CertificateError as C;
     match err {

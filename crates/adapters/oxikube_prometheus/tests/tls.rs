@@ -18,12 +18,13 @@ const BODY: &str = r#"{"status":"success","data":{"resultType":"vector","result"
 /// Starts an HTTPS server for `localhost` with a fresh self-signed certificate. Returns its port
 /// and the certificate as PEM.
 async fn https_server() -> (u16, String) {
-    let certified = rcgen::generate_simple_self_signed(vec!["localhost".to_owned()]).unwrap();
+    let certified = rcgen::generate_simple_self_signed(vec!["localhost".to_owned()])
+        .expect("generate a self-signed localhost certificate");
     let pem = certified.cert.pem();
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let config = rustls::ServerConfig::builder_with_provider(provider)
         .with_safe_default_protocol_versions()
-        .unwrap()
+        .expect("ring supports the default protocol versions")
         .with_no_client_auth()
         .with_single_cert(
             vec![certified.cert.der().clone()],
@@ -31,10 +32,15 @@ async fn https_server() -> (u16, String) {
                 certified.signing_key.serialize_der(),
             )),
         )
-        .unwrap();
+        .expect("the generated certificate and key form a valid server identity");
     let acceptor = TlsAcceptor::from(Arc::new(config));
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let port = listener.local_addr().unwrap().port();
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind a loopback port");
+    let port = listener
+        .local_addr()
+        .expect("a bound listener has an address")
+        .port();
     tokio::spawn(async move {
         loop {
             let Ok((tcp, _)) = listener.accept().await else {

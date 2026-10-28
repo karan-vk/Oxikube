@@ -165,7 +165,9 @@ impl Selection {
     /// batch) stays selected.
     pub fn apply_ops(&mut self, rows: &mut Vec<Arc<StoreObject>>, ops: &[RowOp]) {
         if self.is_unset() {
-            ops.iter().for_each(|op| op.apply(rows));
+            for op in ops {
+                op.apply(rows);
+            }
             return;
         }
         let mut removed = Vec::new();

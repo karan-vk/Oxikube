@@ -93,6 +93,15 @@
     }
   },
   {
+    // The catalog's Cloud section (E18-S06): refresh the providers now, or stop the running
+    // discovery.
+    "context": "CatalogCloud",
+    "bindings": {
+      "cmd-r": "cloud::Refresh",
+      "escape": "cloud::Cancel"
+    }
+  },
+  {
     // Pickers (E11-S02): the command palette, the container chooser of a pod shell and every
     // other list with a query field. Up / down (and ctrl-p / ctrl-n) move the selection and wrap,
     // home / end and page up / page down jump to the first / last match, enter confirms, cmd-enter
@@ -615,6 +624,41 @@
     "context": "HelmReleases && Editing",
     "bindings": {
       "escape": "helm_releases::FocusTable"
+    }
+  },
+  {
+    // The RBAC subject pages (E17-S07): the cursor, the filter, the verb column whose granting
+    // bindings the detail lists (`h` / `l`), the scope (`s`), the implicit groups (`i`) and the
+    // copy. `enter` opens the subject under the cursor; `escape` goes back to the list.
+    "context": "RbacSubjects && !Editing",
+    "bindings": {
+      "up": "rbac_subjects::SelectPrevious",
+      "k": "rbac_subjects::SelectPrevious",
+      "down": "rbac_subjects::SelectNext",
+      "j": "rbac_subjects::SelectNext",
+      "home": "rbac_subjects::SelectFirst",
+      "g": "rbac_subjects::SelectFirst",
+      "end": "rbac_subjects::SelectLast",
+      "shift-g": "rbac_subjects::SelectLast",
+      "enter": "rbac_subjects::OpenSelected",
+      "/": "rbac_subjects::FocusFilter",
+      "h": "rbac_subjects::PreviousColumn",
+      "l": "rbac_subjects::NextColumn",
+      "s": "rbac_subjects::NextScope",
+      "i": "rbac_subjects::ToggleImplicitGroups",
+      "y": "rbac_subjects::CopyMatrix"
+    }
+  },
+  {
+    "context": "RbacSubjects",
+    "bindings": {
+      "escape": "rbac_subjects::Back"
+    }
+  },
+  {
+    "context": "RbacSubjects && Editing",
+    "bindings": {
+      "escape": "rbac_subjects::FocusTable"
     }
   },
   {

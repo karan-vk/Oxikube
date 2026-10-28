@@ -81,6 +81,12 @@ impl NamespaceService {
             *number += 1;
             (changed, *number)
         };
+        if session_changed {
+            // A newly selected namespace is reviewed afresh (E17-S02).
+            self.shared
+                .access
+                .invalidate_namespaces(cluster, selection.names());
+        }
         let this = self.clone();
         let cluster = cluster.clone();
         let remember = Box::pin(async move {

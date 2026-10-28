@@ -88,6 +88,13 @@ pub enum JumpCommand {
     Pulses,
     /// `:helm`: the shown cluster's Helm releases (E16-S05).
     Helm,
+    /// `:usr`: the cluster's RBAC users and ServiceAccounts (E17-S07).
+    Users,
+    /// `:grp`: the cluster's RBAC groups (E17-S07).
+    Groups,
+    /// `:rbac <subject>`: what one subject may do, as a per-verb matrix (E17-S07). The subject
+    /// is a user name, `system:serviceaccount:<ns>:<name>` or a group name.
+    Rbac(Spanned<String>),
     /// `:pf`: the Port Forwards panel (E15-S05). Not tied to a cluster: it lists every cluster's
     /// forwards.
     PortForwards,
@@ -126,6 +133,9 @@ impl fmt::Display for JumpCommand {
             Self::Ns(Some(name)) => write!(f, "ns {}", name.value),
             Self::Pulses => f.write_str("pulses"),
             Self::Helm => f.write_str("helm"),
+            Self::Users => f.write_str("usr"),
+            Self::Groups => f.write_str("grp"),
+            Self::Rbac(subject) => write!(f, "rbac {}", subject.value),
             Self::PortForwards => f.write_str("pf"),
             Self::Quit => f.write_str("q"),
             Self::History(step) => f.write_str(step.symbol()),

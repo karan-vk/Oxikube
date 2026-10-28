@@ -6,7 +6,8 @@
 //! * `capabilities`: a pure reduction of RBAC rules to a [`CapabilityReport`] (granted,
 //!   restricted to named objects, unknown, denied).
 //! * `rules`: `SelfSubjectRulesReview` per (context, namespace) behind a TTL cache.
-//! * `access`: [`can_i`], a single `SelfSubjectAccessReview`.
+//! * `access`: [`can_i`], a single `SelfSubjectAccessReview` (its question and answer types,
+//!   `AccessCheck` and `AccessDecision`, live in `oxikube_domain::access`).
 //! * `pooled`: [`probe_context`], [`capabilities_for_context`] and [`pooled_probe`], which
 //!   run the probes through the `ClientPool` and rebuild the client once after a
 //!   retryable auth failure.
@@ -50,10 +51,12 @@ mod rules;
 #[cfg(test)]
 mod tests;
 
-pub use access::{AccessDecision, AccessQuery, can_i};
+pub use access::can_i;
 pub use capabilities::{
     AccessLevel, AccessRule, CapabilityReport, RBAC_DERIVED, RulesSnapshot, capabilities_from_rules,
 };
 pub use liveness::{HealthEvent, Liveness, LivenessConfig, MIN_INTERVAL, probe_apiserver_version};
-pub use pooled::{capabilities_for_context, pooled_probe, probe_context, rules_for_context};
+pub use pooled::{
+    can_i_for_context, capabilities_for_context, pooled_probe, probe_context, rules_for_context,
+};
 pub use rules::{DEFAULT_RULES_TTL, RulesCache, fetch_rules, probe_capabilities};

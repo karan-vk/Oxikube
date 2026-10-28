@@ -17,7 +17,7 @@ crates/ui/oxikube_*              GPUI views; gpui-component ONLY via oxikube_ui
 crates/testing/oxikube_testkit   fakes for every port, fixtures, gpui test helpers
 bins/oxikube                     wires everything; init order
 xtask                            lint-deps, check-gpui-pin, kind-up/down, load-pods, screenshots
-docs/                            ARCHITECTURE.md, CONTEXT.md, PERFORMANCE.md, adr/, research/,
+docs/                            ARCHITECTURE.md, CONTEXT.md, PERFORMANCE.md, STYLE.md, adr/, research/,
                                  PLAN.md, DEPENDENCIES.md (matrix, waves, critical path)
 ```
 Dependency direction: `domain <- ports <- app <- ui/bins`; adapters implement ports and

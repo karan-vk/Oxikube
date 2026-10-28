@@ -30,6 +30,7 @@ fn rows_for(
         crd_watch_forbidden: false,
         open,
         custom_query: "",
+        show_restricted: false,
         gate: None,
     })
 }
@@ -395,4 +396,43 @@ fn the_definitions_entry_needs_list_on_customresourcedefinitions() {
         both.iter()
             .any(|r| r.id() == "custom-resources/definitions")
     );
+}
+
+/// The Users and Groups entries of Access Control (E17-S07) open the `rbac::*` commands and show
+/// only to a user who may list a kind of binding.
+#[test]
+fn access_control_offers_users_and_groups_to_whoever_may_list_the_bindings() {
+    let entry_of = |rows: &[Row], id: &str| {
+        rows.iter().find_map(|row| match row {
+            Row::Entry(entry) if &*entry.id == id => Some(entry.clone()),
+            _ => None,
+        })
+    };
+    let mut open = BTreeMap::new();
+    open.insert("access-control".to_owned(), true);
+    let rows = rows_for(&known(AccessRules::all_access()), None, &open, &[]);
+    let users = entry_of(&rows, "access-control/rbac-users").expect("the Users entry");
+    assert_eq!(users.title.as_ref(), "Users");
+    assert_eq!(
+        users.target,
+        Some(SidebarTarget::Command(CommandId::RBAC_OPEN_USERS))
+    );
+    let groups = entry_of(&rows, "access-control/rbac-groups").expect("the Groups entry");
+    assert_eq!(
+        groups.target,
+        Some(SidebarTarget::Command(CommandId::RBAC_OPEN_GROUPS))
+    );
+    assert_eq!(
+        users.count, None,
+        "a count of bindings is not a count of users"
+    );
+
+    // Either kind of binding is enough (the page says which list was refused); neither hides both.
+    let one_kind = known(can_list(&[("rbac.authorization.k8s.io", "rolebindings")]));
+    let rows = rows_for(&one_kind, None, &open, &[]);
+    assert!(entry_of(&rows, "access-control/rbac-users").is_some());
+    let neither = known(can_list(&[("rbac.authorization.k8s.io", "roles")]));
+    let rows = rows_for(&neither, None, &open, &[]);
+    assert!(entry_of(&rows, "access-control/rbac-users").is_none());
+    assert!(entry_of(&rows, "access-control/rbac-groups").is_none());
 }

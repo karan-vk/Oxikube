@@ -25,7 +25,7 @@ impl Render for Screen {
 fn open_window(cx: &mut TestAppContext) -> AnyWindowHandle {
     let window = cx.update(|cx| {
         cx.open_window(Default::default(), |_, cx| cx.new(|_| Screen))
-            .unwrap()
+            .expect("the test platform opens a window")
             .into()
     });
     cx.run_until_parked();
@@ -34,7 +34,7 @@ fn open_window(cx: &mut TestAppContext) -> AnyWindowHandle {
 
 fn frame(window: AnyWindowHandle, cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| window.simulate_next_frame(cx))
-        .unwrap();
+        .expect("the test window is still open");
     cx.run_until_parked();
 }
 

@@ -9,6 +9,13 @@ Two independent sets live here:
 - **Recorded Table responses** (`tables/`): what the API server answered the Table feed for a kind of the
   kind fixtures (`tables/widgets.json`: `kubectl get widgets -n oxikube-fixtures`, v1.37), verbatim but for
   `managedFields` and annotations. Listed in `fixtures::tables` (a test checks the set and the shape).
+- **Recorded RBAC** (`rbac/`, E17-S01): `cluster.json` (the Roles, ClusterRoles and bindings of a v1.37 kind
+  cluster that `reviews.json` depends on: built-in `view`, `edit`, `admin`, `cluster-admin` and their aggregation
+  sources, the `system:*` roles of every authenticated user, and the objects of `fixture.yaml`) and `reviews.json`
+  (per subject and namespace: `kubectl auth whoami --as`, the `SelfSubjectRulesReview` status and the rows
+  `kubectl auth can-i --list --as` printed). `record.sh [context]` applies `fixture.yaml` (objects named `oxi-rbac-fx*`
+  only), records and deletes it again. Read through `fixtures::rbac`; `oxikube_app`'s access tests compare the
+  subject index with every review.
 - **Cluster fixtures** (`cluster/`, `metrics-server/`), described below.
 - **Metrics stack** (`metrics-stack/`): the nightly's tier-2 metrics fixtures, described at the end.
 

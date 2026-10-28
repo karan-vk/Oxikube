@@ -46,7 +46,7 @@ async fn create_config_map(api: &Api<ConfigMap>, name: &str) {
         "metadata": {"name": name, "labels": {"oxikube.test/budget": "yes"}},
         "data": {"key": "value"},
     }))
-    .unwrap();
+    .expect("the ConfigMap literal deserializes");
     api.create(&PostParams::default(), &cm)
         .await
         .expect("create a config map");

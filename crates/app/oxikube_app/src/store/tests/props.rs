@@ -112,7 +112,9 @@ proptest! {
             }
             let mut ops: Vec<RowOp> = Vec::new();
             index.apply(&removed, &upserted, Some(&mut ops));
-            ops.iter().for_each(|op| op.apply(&mut mirror));
+            for op in &ops {
+                op.apply(&mut mirror);
+            }
             let want = expected(&model, &filter, &sort);
             prop_assert_eq!(names(&index.snapshot()), want.clone());
             prop_assert_eq!(names(&mirror), want);

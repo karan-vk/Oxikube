@@ -25,6 +25,11 @@ use crate::app_state::AppState;
 /// The risk of every mutating command (docs/CONTEXT.md, "Risk / ConfirmTier"): low and medium
 /// confirm with one click, high and irreversible with the name typed.
 const RISKS: &[(CommandId, Risk)] = &[
+    // RoleBindings and ClusterRoleBindings (E17-S06): the binding dialog's save and the detail
+    // panel's delete; a binding hands out privileges, so risk medium.
+    (CommandId::BINDING_CREATE, Risk::Medium),
+    (CommandId::BINDING_DELETE, Risk::Medium),
+    (CommandId::BINDING_EDIT, Risk::Medium),
     (CommandId::CRONJOB_RESUME, Risk::Low),
     (CommandId::CRONJOB_SUSPEND, Risk::Low),
     (CommandId::CRONJOB_TRIGGER, Risk::Low),
@@ -54,10 +59,18 @@ const RISKS: &[(CommandId, Risk)] = &[
     // The manifest editor's apply (E10); a Secret's "Edit decoded" applies through it.
     (CommandId::RESOURCE_APPLY, Risk::Low),
     (CommandId::RESOURCE_DELETE, Risk::Medium),
+    // Roles and ClusterRoles (E17-S05): the rule dialog's save and the detail panel's delete (which
+    // counts the bindings first, so it is not a row action); an RBAC change is risk medium.
+    (CommandId::ROLE_CREATE, Risk::Medium),
+    (CommandId::ROLE_DELETE, Risk::Medium),
+    (CommandId::ROLE_EDIT, Risk::Medium),
     // The bulk actions on a table's selection (E12-S19); a one-row selection is the row action.
     (CommandId::SELECTION_DELETE, Risk::Medium),
     (CommandId::SELECTION_LABEL, Risk::Medium),
     (CommandId::SELECTION_RESTART, Risk::Low),
+    // A TokenRequest turned into a kubeconfig (E17-S09): the ServiceAccount panel's Kubeconfig
+    // section and the row menu; the result stays in memory.
+    (CommandId::SERVICEACCOUNT_GENERATE_KUBECONFIG, Risk::Low),
     (CommandId::STORAGECLASS_SET_DEFAULT, Risk::Low),
     (CommandId::WORKLOAD_RESTART, Risk::Low),
     (CommandId::WORKLOAD_ROLLBACK, Risk::Medium),

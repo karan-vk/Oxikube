@@ -233,6 +233,24 @@ impl ClusterContext {
     }
 }
 
+/// How a client reaches a cluster's API server: the public half of a kubeconfig `cluster` entry
+/// (E17-S09 builds a ServiceAccount's kubeconfig from it).
+///
+/// It holds no credential: the server URL and the certificate authority are public, and the
+/// user's own tokens, certificates and exec plugins stay inside the adapter.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClusterEndpoint {
+    /// The API server URL (`https://host:6443`).
+    pub server: String,
+    /// The certificate authority as PEM text, with a kubeconfig's `certificate-authority-data`
+    /// decoded or its `certificate-authority` file read. `None` when the cluster names none.
+    pub certificate_authority_pem: Option<String>,
+    /// The cluster skips TLS verification (`insecure-skip-tls-verify`).
+    pub insecure_skip_tls_verify: bool,
+    /// The name to verify the server certificate against (`tls-server-name`), if set.
+    pub tls_server_name: Option<String>,
+}
+
 /// The difference between two snapshots of the catalog, keyed by [`ClusterId`].
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SourcesChanged {
@@ -334,6 +352,23 @@ pub trait ClusterSourcePort: Send + Sync {
     /// kubeconfig. The message is fixed wording and never quotes the text, which may hold
     /// credentials.
     async fn validate_kubeconfig(&self, text: &str) -> OxiResult<usize>;
+
+    /// The API server address and certificate authority of `cluster`, read from its kubeconfig
+    /// entry (a CA file is read and returned inline). Local: no cluster is contacted.
+    ///
+    /// # Errors
+    ///
+    /// [`NotFound`](oxikube_domain::ErrorKind::NotFound) for a cluster the catalog does not
+    /// have, [`Validation`](oxikube_domain::ErrorKind::Validation) for an entry without a server
+    /// or with a CA that cannot be read, and
+    /// [`Unsupported`](oxikube_domain::ErrorKind::Unsupported) from a source that cannot say
+    /// (the default).
+    async fn cluster_endpoint(&self, cluster: &ClusterId) -> OxiResult<ClusterEndpoint> {
+        let _ = cluster;
+        Err(oxikube_domain::OxiError::unsupported(
+            "this cluster source cannot report a cluster's server address",
+        ))
+    }
 }
 
 #[cfg(test)]

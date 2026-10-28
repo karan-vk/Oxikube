@@ -36,6 +36,10 @@ pub struct StartPortForwardTool {
 
 impl StartPortForwardTool {
     /// The tool over `manager`, asking `permission` before any listener opens.
+    ///
+    /// # Panics
+    ///
+    /// Never: [`START_PORT_FORWARD`] is a constant, well-formed tool name.
     pub fn new(manager: PortForwardManager, permission: Arc<dyn ForwardPermission>) -> Self {
         let def = ToolDef::read_only(
             ToolName::new(START_PORT_FORWARD).expect("a well-formed name"),

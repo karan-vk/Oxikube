@@ -20,7 +20,7 @@ fn crd(spec: Value, status: Value) -> Resource {
         "spec": spec,
         "status": status,
     }))
-    .unwrap()
+    .expect("a CRD resource")
 }
 
 /// Three versions (alpha not served, beta deprecated, v1 storage with printer columns), a

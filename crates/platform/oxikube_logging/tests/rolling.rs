@@ -17,8 +17,8 @@ fn config(dir: &Path) -> LogConfig {
 
 fn log_files(dir: &Path) -> Vec<std::path::PathBuf> {
     let mut files: Vec<_> = std::fs::read_dir(dir)
-        .unwrap()
-        .map(|e| e.unwrap().path())
+        .expect("log dir is readable")
+        .map(|e| e.expect("log dir entry is readable").path())
         .collect();
     files.sort();
     files
@@ -27,7 +27,7 @@ fn log_files(dir: &Path) -> Vec<std::path::PathBuf> {
 fn all_text(dir: &Path) -> String {
     log_files(dir)
         .iter()
-        .map(|f| std::fs::read_to_string(f).unwrap())
+        .map(|f| std::fs::read_to_string(f).expect("log file is readable UTF-8"))
         .collect()
 }
 
@@ -70,6 +70,9 @@ fn old_files_are_pruned_to_the_configured_count() {
             "old",
         )
         .unwrap();
+        // The appender prunes by creation time; filesystem timestamps are coarse (a few ms on
+        // Linux), so without a gap the fixtures tie and the oldest is not reliably the one removed.
+        std::thread::sleep(std::time::Duration::from_millis(30));
     }
     let mut config = config(dir.path());
     config.max_files = 3;

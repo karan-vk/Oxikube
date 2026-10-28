@@ -12,7 +12,7 @@ use crate::fake_api::{FakeApi, status_body};
 fn available(outcome: MetricsOutcome) -> Vec<oxikube_domain::metrics::MetricsSample> {
     match outcome {
         MetricsOutcome::Available(samples) => samples,
-        other => panic!("expected samples, got {other:?}"),
+        other @ MetricsOutcome::Unavailable(_) => panic!("expected samples, got {other:?}"),
     }
 }
 
@@ -301,7 +301,10 @@ async fn two_thousand_pods_cost_one_request() {
         (400_000..1_200_000).contains(&bytes),
         "payload of {bytes} bytes drifted from the 'well under 1 MB' the docs quote"
     );
-    #[allow(clippy::print_stdout)]
+    #[allow(
+        clippy::print_stdout,
+        reason = "the test reports its measurement on stdout"
+    )]
     {
         println!("2000 pods: 1 request, {bytes} bytes, fetched and converted in {elapsed:?}");
     }

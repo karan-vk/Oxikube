@@ -16,6 +16,15 @@ impl CatalogView {
         self.deps.dispatcher.clone().dispatch(command, cx);
     }
 
+    /// Asks for the Cloud section: `view::Open` with [`CLOUD_VIEW`](crate::cloud::CLOUD_VIEW),
+    /// which the host registers on the bus.
+    pub fn open_cloud(&mut self, cx: &mut Context<Self>) {
+        let command = Command::ViewOpen {
+            view: crate::cloud::CLOUD_VIEW.to_owned(),
+        };
+        self.deps.dispatcher.clone().dispatch(command, cx);
+    }
+
     /// Moves the keyboard focus to the search field.
     pub fn focus_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.search

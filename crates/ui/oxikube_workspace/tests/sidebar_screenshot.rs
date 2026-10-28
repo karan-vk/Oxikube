@@ -2,7 +2,8 @@
 //!
 //! The admin sees all eleven sections (the cluster has a CRD, so Custom Resources shows); the
 //! restricted user, who may only list pods and services, sees Cluster, Workloads and Network and a
-//! muted "limited access" line. Every section but Workloads is collapsed so one frame shows the
+//! muted "limited access" line with its "Show all" link (and, after it, the hidden sections greyed
+//! out, E17-S03). Every section but Workloads is collapsed so one frame shows the
 //! whole list.
 //!
 //! Same harness and gate as `screenshot.rs` (`harness = false`, needs a GPU device, feature
@@ -10,7 +11,11 @@
 //! sidebar_screenshot`. Goldens live in `tests/goldens/<os>/sidebar_*.png`; regenerate with
 //! `OXIKUBE_UPDATE_GOLDENS=1`.
 
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "a screenshot test reports on stdout and stderr"
+)]
 
 use std::{path::Path, process::ExitCode, sync::Arc};
 
@@ -63,7 +68,12 @@ fn rules_for(restricted: bool) -> AccessRules {
     }
 }
 
-fn render(tokens: Tokens, restricted: bool, zoom: f32) -> anyhow::Result<RgbaImage> {
+fn render(
+    tokens: Tokens,
+    restricted: bool,
+    show_all: bool,
+    zoom: f32,
+) -> anyhow::Result<RgbaImage> {
     let context = ClusterContext::new(
         CLUSTER.parse()?,
         ContextName::new("prod-eu"),
@@ -122,6 +132,8 @@ fn render(tokens: Tokens, restricted: bool, zoom: f32) -> anyhow::Result<RgbaIma
     let panel = shown.expect("the window was built");
     cx.update(|cx| {
         panel.update(cx, |panel, cx| {
+            // The restricted indicator's "Show all" (E17-S03): hidden entries come back greyed.
+            panel.set_show_restricted(show_all, cx);
             for id in COLLAPSED {
                 panel.set_open(id, false, cx);
             }
@@ -167,28 +179,39 @@ fn check(name: &str, image: RgbaImage, zoom: f32) -> anyhow::Result<()> {
 fn run() -> anyhow::Result<()> {
     check(
         "sidebar_admin_dark",
-        render(Tokens::dark(), false, 1.0)?,
+        render(Tokens::dark(), false, false, 1.0)?,
         1.0,
     )?;
     check(
         "sidebar_admin_light",
-        render(Tokens::light(), false, 1.0)?,
+        render(Tokens::light(), false, false, 1.0)?,
         1.0,
     )?;
     check(
         "sidebar_restricted_dark",
-        render(Tokens::dark(), true, 1.0)?,
+        render(Tokens::dark(), true, false, 1.0)?,
         1.0,
     )?;
     check(
         "sidebar_restricted_light",
-        render(Tokens::light(), true, 1.0)?,
+        render(Tokens::light(), true, false, 1.0)?,
+        1.0,
+    )?;
+    // The same restricted user after "Show all": the hidden sections return greyed.
+    check(
+        "sidebar_restricted_show_all_dark",
+        render(Tokens::dark(), true, true, 1.0)?,
+        1.0,
+    )?;
+    check(
+        "sidebar_restricted_show_all_light",
+        render(Tokens::light(), true, true, 1.0)?,
         1.0,
     )?;
     // ui_scale 1.5 (E05-U557): labels, count badges and rows all grow together.
     check(
         "sidebar_admin_dark_scale1_5",
-        render(Tokens::dark(), false, 1.5)?,
+        render(Tokens::dark(), false, false, 1.5)?,
         1.5,
     )
 }

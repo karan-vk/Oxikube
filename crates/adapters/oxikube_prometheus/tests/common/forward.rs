@@ -20,7 +20,7 @@ impl PortForward {
             .stderr(Stdio::null())
             .spawn()
             .expect("kubectl port-forward");
-        let mut stdout = BufReader::new(child.stdout.take().unwrap());
+        let mut stdout = BufReader::new(child.stdout.take().expect("stdout is piped"));
         let mut line = String::new();
         stdout.read_line(&mut line).expect("port-forward output");
         // "Forwarding from 127.0.0.1:54321 -> 9090"

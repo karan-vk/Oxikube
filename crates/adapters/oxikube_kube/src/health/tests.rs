@@ -11,6 +11,7 @@ use http::Method;
 use kube::Client;
 use kube::config::Kubeconfig;
 
+use oxikube_domain::access::{AccessCheck, AccessDecision};
 use oxikube_domain::ids::{ContextName, Gvr};
 use oxikube_domain::{Capability, ErrorKind, OxiError};
 use serde_json::Value;
@@ -181,7 +182,7 @@ async fn a_rejected_rules_review_is_a_classified_auth_error() {
 async fn can_i_posts_the_attributes_and_reads_the_recorded_answer() {
     let server = FakeApi::new();
     server.reply(ACCESS_PATH, 201, json(ACCESS_REVIEW));
-    let query = AccessQuery::new("create", Gvr::new("", "v1", "pods"))
+    let query = AccessCheck::new("create", Gvr::new("", "v1", "pods"))
         .subresource("exec")
         .namespace("default");
     let decision = can_i(&server.client(), &query, CredentialRefresh::Unknown)
@@ -206,7 +207,7 @@ async fn can_i_reads_an_allowed_answer() {
     let mut answer = json(ACCESS_REVIEW);
     answer["status"]["allowed"] = Value::Bool(true);
     server.reply(ACCESS_PATH, 201, answer);
-    let query = AccessQuery::new("list", Gvr::new("", "v1", "pods")).namespace("default");
+    let query = AccessCheck::new("list", Gvr::new("", "v1", "pods")).namespace("default");
     let decision = can_i(&server.client(), &query, CredentialRefresh::Unknown)
         .await
         .expect("decision");

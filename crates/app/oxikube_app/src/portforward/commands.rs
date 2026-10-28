@@ -37,6 +37,10 @@ pub const COMMANDS: [CommandId; 5] = [
 /// # Errors
 ///
 /// A [`RegisterError`] when one of the ids is already taken.
+///
+/// # Panics
+///
+/// When one of the ids is not declared in `oxikube_domain::command`, a bug in this module.
 pub fn register_commands(
     registry: &mut CommandRegistry,
     manager: PortForwardManager,

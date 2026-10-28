@@ -70,12 +70,14 @@ impl AppPorts {
     }
 
     /// Replaces the notifier (tests pass a `FakeNotifierPort`).
+    #[must_use]
     pub fn with_notifier(mut self, notifier: Arc<dyn NotifierPort>) -> Self {
         self.notifier = notifier;
         self
     }
 
     /// Adds the secret store.
+    #[must_use]
     pub fn with_secrets(mut self, secrets: Arc<dyn SecretStorePort>) -> Self {
         self.secrets = Some(secrets);
         self

@@ -50,18 +50,21 @@ impl TabContent {
     }
 
     /// Sets the icon.
+    #[must_use]
     pub fn icon(mut self, icon: IconName) -> Self {
         self.icon = Some(icon);
         self
     }
 
     /// Sets the cluster mark (colour dot and read-only lock).
+    #[must_use]
     pub fn cluster(mut self, mark: ClusterMark) -> Self {
         self.cluster = Some(mark);
         self
     }
 
     /// Sets the dirty flag.
+    #[must_use]
     pub fn dirty(mut self, dirty: bool) -> Self {
         self.dirty = dirty;
         self
@@ -92,7 +95,10 @@ pub enum ItemEvent {
 /// Every method but [`Item::tab_content`] has a default, so a minimal item is a view plus a
 /// title. Methods that take `&self` and an `&App` must be cheap: they run while the tab bar
 /// renders.
-#[allow(unused_variables)]
+#[allow(
+    unused_variables,
+    reason = "default method bodies ignore their arguments"
+)]
 pub trait Item: Focusable + EventEmitter<ItemEvent> + Render + Sized {
     /// Title, icon and dirty flag of the tab.
     fn tab_content(&self, cx: &App) -> TabContent;

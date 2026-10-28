@@ -246,7 +246,7 @@ fn pasting_scrolls_back_to_the_live_screen(cx: &mut TestAppContext) {
     h.window.dispatch_action(oxikube_terminal::input::Paste);
     assert!(
         !h.terminal
-            .read_with(&mut *h.window, |t, _| t.is_scrolled_back())
+            .read_with(&*h.window, |t, _| t.is_scrolled_back())
     );
 }
 

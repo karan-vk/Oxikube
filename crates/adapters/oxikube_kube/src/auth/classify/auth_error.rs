@@ -84,7 +84,10 @@ pub(super) fn classify_auth(err: &AuthError) -> OxiError {
         A::NoValidNativeRootCA(_) => {
             OxiError::internal("no valid native root CA certificates were found")
         }
-        #[allow(unreachable_patterns)]
+        #[allow(
+            unreachable_patterns,
+            reason = "the client error enum is non-exhaustive, so the arm may be reachable"
+        )]
         _ => OxiError::auth("authentication failed", false),
     }
 }

@@ -50,7 +50,7 @@ impl MetricScope {
     /// provider: a PVC has disk but no CPU, an ingress has traffic only, a container has no
     /// network of its own (cAdvisor counts it per pod), and a pod count of one pod is one.
     pub const fn supports(self, kind: MetricKind) -> bool {
-        use MetricKind::*;
+        use MetricKind::{DiskCapacity, DiskUsage, NetworkRx, NetworkTx, PodCount};
         match self {
             MetricScope::Cluster | MetricScope::Node | MetricScope::Namespace => true,
             MetricScope::Pod => !matches!(kind, DiskCapacity | PodCount),

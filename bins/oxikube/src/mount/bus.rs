@@ -43,13 +43,20 @@
 //! | `oxikube_app::helm_releases` | `helm::ShowValues`, `helm::ShowManifest` (a release's values and manifest, credential-looking values and Secret data masked) and `helm::RevealValues` (the user's switch to show them in the release view; replies with a count, never a value); read-only, native, no `helm` binary (E16-S05) |
 //! | `oxikube_helm_ui::charts` | `helm::OpenCharts` (the Helm charts catalog, a tab of the active cluster's tab; E16-S08) |
 //! | `oxikube_app::helm_charts` | `helm::SearchCharts`, `helm::ShowChart` (search the configured repositories, print a chart's metadata, README or default values through the `helm` CLI; read-only) and `helm::InstallChart` (hands a chart to the install tab; opens a tab, installs nothing; E16-S08) |
+//! | `oxikube_rbac_ui::role` | `role::OpenDialog` (the Role / ClusterRole rule dialog, new or editing one, in a cluster tab; E17-S05) |
+//! | `oxikube_rbac_ui::binding` | `binding::OpenDialog` (the RoleBinding / ClusterRoleBinding dialog, new or editing one, in a cluster tab; E17-S06) |
+//! | `oxikube_app::binding_ops` | `binding::Create`, `binding::Edit`, `binding::Delete` (a RoleBinding or ClusterRoleBinding through the server's dry run; mutating, risk medium: a simple confirmation that calls out `cluster-admin` and everybody-groups, blocked on read-only clusters, audited with the role and a subject count; a new roleRef is a delete and a create as one step; E17-S06) |
+//! | `oxikube_app::role_ops` | `role::Create`, `role::Edit`, `role::Delete` (a Role or ClusterRole through the server's dry run; mutating, risk medium: a simple confirmation, blocked on read-only clusters, audited with a rule count; E17-S05) |
+//! | `oxikube_app::sa_kubeconfig` | `serviceaccount::GenerateKubeconfig` (request a ServiceAccount token and build a kubeconfig from it, kept in memory for the account's panel; mutating, risk low: one confirmation; blocked on read-only clusters; audited without the token; E17-S09) |
 //! | `oxikube_app::helm_ops` | `helm::Rollback`, `helm::Uninstall` (roll a release back to a revision / remove it through the `helm` CLI; mutating, risk medium / high: a simple confirmation / the release name typed; blocked on read-only clusters; audited without values; E16-S06) |
 //! | `oxikube_app::helm_install` | `helm::Install` (install a chart as a release through the `helm` CLI; mutating, risk low: one confirmation after the preview, which is its dry run; blocked on read-only clusters; audited without the values; E16-S09) |
 //! | `oxikube_app::helm_upgrade` | `helm::Upgrade` (upgrade a release to a chart version through the `helm` CLI; mutating, risk medium: one confirmation after the preview, which is its dry run; blocked on read-only clusters; audited with the chart versions and `--reuse-values`, never the values) and `helm::UpgradeRelease` (opens the upgrade tab of a release, or the release picker; E16-S10) |
 //! | `oxikube_app::helm_repos` | `helm::RepoAdd`, `RepoRemove`, `RepoUpdate` (the chart repositories in Helm's own configuration through the `helm` CLI; local configuration, not a cluster mutation; an agent's add needs permission; E16-S07) |
 //! | `oxikube_overview_ui` | `cluster::ShowPulses` (the cluster's pulses page, `:pulses`; E13-S10) |
 //! | `oxikube_overview_ui` | `cluster::ShowOverview` (the cluster's overview, a tab of its tab; reads only; E13-S09) |
+//! | `oxikube_rbac_ui` | `rbac::CanI` (the can-i dialog, prefilled from the selection; asks a `SelfSubjectAccessReview` or `SubjectAccessReview`, which create nothing; E17-S08) |
 //! | `oxikube_events_ui` | `events::Open` (the cluster's events view, `:ev`, the sidebar's Events heading), `events::ToggleFaults`, `TogglePause`, `CopyRow`, `CopyRowJson`, `ExportJson` (the open view's; read the app's `EventService`, never the cluster; E14-S03) |
+//! | `oxikube_rbac_ui::subjects` | `rbac::OpenUsers` (`:usr`, the sidebar's Access Control > Users), `rbac::OpenGroups` (`:grp`, Groups), `rbac::ShowSubject` (`:rbac <subject>`: the per-verb policy matrix of a user, group or ServiceAccount, each cell traced to its bindings and roles) and `rbac::CopyMatrix` (the open matrix as tab-separated text); read the Roles and bindings through the cluster's store, never change a cluster (E17-S07) |
 //! | `oxikube_editor` | `editor::NewManifest` (an empty manifest editor in the shown cluster's tab, its YAML checked against that cluster's schemas), `resource::Create` (the "Create resource" picker, or one template, opened in a new editor with the cluster's selected namespace filled in; E10-S09: it writes nothing, the objects are made by `resource::Apply`, one per document), `editor::ToggleReadOnly`, `editor::ToggleSoftWrap` (the focused editor's view toggles; E10-S04), `editor::TriggerCompletion` / `editor::ShowHover` (the focused editor's completion menu and field docs at the cursor, from the cluster's schema; E10-S05), `resource::Edit`, `resource::ViewYamlInEditor` (a `kind/name` editor tab on a freshly read object, E10-S06), `editor::ToggleManagedFields`, `editor::ToggleSecretMask` (E10-S06), `editor::ConvertToJson`, `editor::ConvertToYaml` (the buffer as the other language, one undo step), `editor::UseJson`, `editor::UseYaml` (the language the buffer is read as; E10-S10), `secret::EditDecoded` (a Secret in an editor tab with its values as text, base64-encoded again by `resource::Apply`; E12-S11), `secret::Create` (the "Create secret" dialog: Opaque, Docker registry or TLS, validated before an editor tab opens with the manifest; E12-S11), `editor::ShowDiff` / `ToggleDiffLayout` / `ReloadFromServer` / `MergeFromServer` / `KeepMine` / `TakeMine` / `TakeServer` / `AcceptMerge` (diff vs live and the changed-on-server banner of the focused editor: read the object, change the buffer only; E10-S07) |
 //! | `oxikube_terminal` | `terminal::OpenLink` (a terminal link's cmd/ctrl-click: a URL or local path, opened on the UI thread, E09-S05), `terminal::Copy` / `terminal::Paste` (dispatched to the focused terminal, E09-S06), `terminal::SelectAll` / `Clear` / `ScrollPageUp` / `ScrollPageDown` / `ScrollLineUp` / `ScrollLineDown` / `Search` / `SearchNext` / `SearchPrevious` / `SearchClose` (the same path, E09-S11), `terminal::New` / `Split` / `Close` (the window's terminal views: a shell in the shown cluster's bottom dock, a split, close the focused one; E09-S07) |
 //!
@@ -78,6 +85,7 @@ use oxikube_app::{
     ClusterCommands, ClusterSessionManager, ExecService, KubeconfigSourcesService, PrefsWriter,
 };
 use oxikube_catalog_ui::catalog::CATALOG_VIEW;
+use oxikube_catalog_ui::cloud::CLOUD_VIEW;
 use oxikube_catalog_ui::sources::SOURCES_VIEW;
 use oxikube_domain::OxiError;
 use oxikube_domain::command::{self, Command, CommandId};
@@ -97,7 +105,7 @@ use oxikube_workspace::{ClusterCommandRunner, CommandDispatcher};
 use serde_json::json;
 
 /// The views `view::Open` opens in the main window.
-pub const VIEWS: [&str; 3] = [CATALOG_VIEW, SOURCES_VIEW, CHART_GALLERY_VIEW];
+pub const VIEWS: [&str; 4] = [CATALOG_VIEW, SOURCES_VIEW, CLOUD_VIEW, CHART_GALLERY_VIEW];
 
 /// What the registry's handlers run on.
 pub struct BusParts {
@@ -111,8 +119,13 @@ pub struct BusParts {
     pub namespaces: NamespaceService,
     /// The kubeconfig sources service.
     pub sources: KubeconfigSourcesService,
+    /// Cloud discovery behind the `cloud::*` commands (E18-S06).
+    pub cloud: oxikube_app::CloudDiscoveryService,
     /// The sessions the posture commands change.
     pub sessions: ClusterSessionManager,
+    /// Where `serviceaccount::GenerateKubeconfig` reads a cluster's server address and CA
+    /// (E17-S09).
+    pub cluster_source: Arc<dyn oxikube_ports::ClusterSourcePort>,
     /// Where the posture commands persist (`settings.json`).
     pub prefs: Arc<dyn PrefsWriter>,
     /// The cluster tab controller's queue.
@@ -166,6 +179,10 @@ pub struct BusParts {
     /// Where `cluster::ShowMetricsSettings` sends the cluster whose page to open (applied on the UI
     /// thread).
     pub metrics_pages: oxikube_settings_ui::metrics::MetricsRequestSink,
+    /// Where `role::OpenDialog` sends its request (E17-S05).
+    pub role_dialogs: oxikube_rbac_ui::role::RoleRequestSink,
+    /// Opens the RoleBinding / ClusterRoleBinding dialog (E17-S06).
+    pub binding_dialogs: oxikube_rbac_ui::binding::BindingRequestSink,
     /// The Helm repositories service (`helm::RepoAdd`, `RepoRemove`, `RepoUpdate`; E16-S07).
     pub helm_repos: oxikube_app::HelmReposService,
     /// Where `helm::ShowRepos` sends its request (E16-S07).
@@ -195,8 +212,12 @@ pub struct BusParts {
     pub os_notifications: oxikube_app::OsNotificationService,
     /// Where `app::ToggleOsNotifications` persists (`settings.json`).
     pub os_notification_settings: Arc<dyn oxikube_app::os_notifications::OsNotificationSettings>,
+    /// Where `rbac::CanI` sends the dialog to open (applied on the UI thread; E17-S08).
+    pub can_i_dialogs: oxikube_rbac_ui::can_i::CanIRequestSink,
     /// Where the `events::*` commands send their requests (applied on the UI thread; E14-S03).
     pub events_views: oxikube_events_ui::EventsCommandSink,
+    /// Where the `rbac::*` commands send their requests (applied on the UI thread; E17-S07).
+    pub rbac_views: oxikube_rbac_ui::subjects::SubjectsRequestSink,
     /// The notification centre (`notifications::MarkRead`, `MarkAllRead`, `MuteCluster`,
     /// `UnmuteCluster`; E14-S05).
     pub notifications: oxikube_app::NotificationService,
@@ -235,6 +256,9 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     registry.install("oxikube_app::sources", |r| {
         oxikube_app::sources::register_commands(r, &parts.sources)
     })?;
+    registry.install("oxikube_app::cloud", |r| {
+        oxikube_app::cloud::register_commands(r, &parts.cloud)
+    })?;
     registry.install("oxikube_app::apply", |r| {
         oxikube_app::apply::register_commands(r, parts.sessions.clone())
     })?;
@@ -254,6 +278,16 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     // `pvc::Resize` and `storageclass::SetDefault` (E12-S15): guarded mutations over the sessions.
     registry.install("oxikube_app::storage", |r| {
         oxikube_app::storage::register_commands(r, parts.sessions.clone())
+    })?;
+    // `serviceaccount::GenerateKubeconfig` (E17-S09): a guarded TokenRequest turned into a kubeconfig
+    // that waits in the process's in-memory vault for the ServiceAccount panel.
+    registry.install("oxikube_app::sa_kubeconfig", |r| {
+        oxikube_app::sa_kubeconfig::register_commands(
+            r,
+            parts.sessions.clone(),
+            parts.cluster_source.clone(),
+            oxikube_app::sa_kubeconfig::KubeconfigVault::shared(),
+        )
     })?;
     registry.install("oxikube_app::posture", |r| {
         oxikube_app::guard::register_commands(r, parts.sessions, parts.prefs)
@@ -330,6 +364,18 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     registry.install("oxikube_settings_ui", |r| {
         oxikube_settings_ui::metrics::register_commands(r, parts.metrics_pages)
     })?;
+    registry.install("oxikube_rbac_ui::role", |r| {
+        oxikube_rbac_ui::role::register_commands(r, parts.role_dialogs)
+    })?;
+    registry.install("oxikube_rbac_ui::binding", |r| {
+        oxikube_rbac_ui::binding::register_commands(r, parts.binding_dialogs)
+    })?;
+    registry.install("oxikube_app::binding_ops", |r| {
+        oxikube_app::binding_ops::register_commands(r)
+    })?;
+    registry.install("oxikube_app::role_ops", |r| {
+        oxikube_app::role_ops::register_commands(r)
+    })?;
     registry.install("oxikube_settings_ui::helm_repos", |r| {
         oxikube_settings_ui::helm_repos::register_commands(r, parts.helm_repos_pages)
     })?;
@@ -378,8 +424,14 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     registry.install("oxikube_app::tools::events", |r| {
         oxikube_app::tools::events::register_commands(r, &parts.events_agent, parts.agent_pending)
     })?;
+    registry.install("oxikube_rbac_ui", |r| {
+        oxikube_rbac_ui::can_i::register_commands(r, parts.can_i_dialogs)
+    })?;
     registry.install("oxikube_events_ui", |r| {
         oxikube_events_ui::register_commands(r, parts.events_views)
+    })?;
+    registry.install("oxikube_rbac_ui", |r| {
+        oxikube_rbac_ui::subjects::register_commands(r, parts.rbac_views)
     })?;
     registry.install("oxikube_editor", |r| {
         oxikube_editor::view::register_commands(r, parts.editors)

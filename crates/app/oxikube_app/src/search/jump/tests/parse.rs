@@ -1,6 +1,6 @@
 //! The grammar: every form parses, every mistake says where.
 
-use super::super::{HistoryStep, JumpCommand, ParseErrorKind, ResourceJump, parse};
+use super::super::{HistoryStep, JumpCommand, ParseErrorKind, ResourceJump, Span, parse};
 
 fn resource(line: &str) -> ResourceJump {
     match parse(line) {
@@ -291,4 +291,31 @@ fn a_cluster_scoped_word_typed_as_a_namespace_is_still_a_namespace_to_the_parser
         resource("nodes kube-system").namespace.unwrap().value,
         "kube-system"
     );
+}
+
+#[test]
+fn usr_and_grp_list_the_subjects_and_take_no_arguments() {
+    for line in ["usr", "users", ":USR"] {
+        assert_eq!(parse(line), Ok(JumpCommand::Users), "{line}");
+    }
+    for line in ["grp", "groups"] {
+        assert_eq!(parse(line), Ok(JumpCommand::Groups), "{line}");
+    }
+    assert!(parse("usr kube-system").is_err());
+    assert!(parse("grp @prod").is_err());
+}
+
+#[test]
+fn rbac_takes_exactly_one_subject() {
+    let JumpCommand::Rbac(subject) = parse("rbac system:serviceaccount:default:foo").unwrap()
+    else {
+        panic!("not an rbac command");
+    };
+    assert_eq!(subject.value, "system:serviceaccount:default:foo");
+    assert_eq!(subject.span, Span::new(5, 38));
+    // No subject: the error sits where it should have been typed.
+    let none = parse("rbac").unwrap_err();
+    assert_eq!(none.span, Span::new(4, 4));
+    assert!(none.message.contains("subject"), "{}", none.message);
+    assert!(parse("rbac a b").is_err());
 }

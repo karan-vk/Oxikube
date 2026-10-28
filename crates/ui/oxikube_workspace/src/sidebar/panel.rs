@@ -57,7 +57,8 @@ pub struct SidebarDeps {
     /// The per-cluster resource stores the count badges read (E07-S11). `None`: no badges.
     pub stores: Option<Arc<ResourceStores>>,
     /// Whether the user may list a kind of the registry (E12-S01): the hook E17 implements over
-    /// `SelfSubjectRulesReview`. [`AllowAll`](oxikube_app::kinds::AllowAll) until then.
+    /// `SelfSubjectRulesReview` (`AccessVisibility`, E17-S03). [`AllowAll`](oxikube_app::kinds::AllowAll)
+    /// allows everything.
     pub visibility: Arc<dyn KindVisibility>,
 }
 
@@ -89,6 +90,9 @@ pub struct SidebarPanel {
     /// Whether the session says the CRD watch was refused (`Forbidden`).
     crd_watch_forbidden: bool,
     access: AccessState,
+    /// Whether the entries the user may not list are drawn greyed instead of hidden (the
+    /// restricted indicator's "Show all", E17-S03). Not saved.
+    show_restricted: bool,
     /// The user's explicit open and closed choices by row id.
     open: BTreeMap<String, bool>,
     /// What the Custom Resources search field holds; not saved.
@@ -138,6 +142,11 @@ impl SidebarPanel {
     /// What the sidebar knows about the user's access.
     pub fn access(&self) -> &AccessState {
         &self.access
+    }
+
+    /// Whether the entries access hides are drawn greyed out.
+    pub fn shows_restricted(&self) -> bool {
+        self.show_restricted
     }
 
     /// The row with `id`.
@@ -232,6 +241,7 @@ impl SidebarPanel {
                 served: None,
                 crd_watch_forbidden: false,
                 access: AccessState::Pending,
+                show_restricted: false,
                 open: BTreeMap::new(),
                 custom_query: String::new(),
                 custom_search: None,

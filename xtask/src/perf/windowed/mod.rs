@@ -164,8 +164,11 @@ pub fn run(options: &Options<'_>, root: &Path, target: &Path) -> Result<()> {
         },
         Path::to_owned,
     );
-    std::fs::write(&out, serde_json::to_string_pretty(&report)? + "\n")
-        .with_context(|| format!("writing {}", out.display()))?;
+    std::fs::write(
+        &out,
+        format!("{}\n", serde_json::to_string_pretty(&report)?),
+    )
+    .with_context(|| format!("writing {}", out.display()))?;
     print::table(&report);
     println!("\nreport: {}", out.display());
     let over: Vec<&String> = report

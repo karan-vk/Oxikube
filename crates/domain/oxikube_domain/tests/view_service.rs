@@ -15,8 +15,8 @@ fn service(spec: Value, status: Value) -> ServiceSummary {
         "metadata": {"name": "web", "namespace": "demo"},
         "spec": spec, "status": status,
     }))
-    .unwrap();
-    ServiceSummary::from_resource(&res).unwrap()
+    .expect("a Service resource");
+    ServiceSummary::from_resource(&res).expect("a Service summary")
 }
 
 #[test]
@@ -260,7 +260,7 @@ fn pod_with_ports(containers: Value, init: Value) -> Resource {
         "metadata": {"name": "p", "namespace": "demo"},
         "spec": {"containers": containers, "initContainers": init},
     }))
-    .unwrap()
+    .expect("a Pod resource")
 }
 
 #[test]
@@ -324,7 +324,7 @@ fn slice(name: &str, endpoints: Value) -> Resource {
         "ports": [{"name": "http", "port": 8080, "protocol": "TCP"}, {"port": 9090}],
         "endpoints": endpoints,
     }))
-    .unwrap()
+    .expect("an EndpointSlice resource")
 }
 
 #[test]

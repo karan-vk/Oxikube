@@ -54,6 +54,7 @@ impl Population {
     }
 
     /// The same pods placed round-robin over `nodes` nodes (the fixed objects' `worker-<n>`).
+    #[must_use]
     pub fn with_nodes(mut self, nodes: usize) -> Self {
         let nodes = nodes.max(1);
         if nodes == self.nodes {
@@ -79,6 +80,11 @@ impl Population {
     /// Number of pods.
     pub fn len(&self) -> usize {
         self.pods.len()
+    }
+
+    /// Whether there are no pods.
+    pub fn is_empty(&self) -> bool {
+        self.pods.is_empty()
     }
 
     /// The namespaces the pods are in.

@@ -124,6 +124,10 @@ impl SelectionFlow {
     ///
     /// [`SelectionError::Empty`] for no objects, [`SelectionError::MixedClusters`] for objects of
     /// more than one cluster.
+    ///
+    /// # Panics
+    ///
+    /// When `command` is not declared in `oxikube_domain::command`.
     pub fn plan(&self, command: Command) -> Result<SelectionPlan, SelectionError> {
         let targets = command.targets();
         let first = targets.first().ok_or(SelectionError::Empty)?;
@@ -229,7 +233,7 @@ impl SelectionFlow {
                     .await
                     .map_err(refused)?
             }
-            done => done,
+            done @ Outcome::Completed(_) => done,
         };
         let Outcome::Completed(output) = outcome else {
             return Err(SelectionError::Refused(OxiError::conflict(

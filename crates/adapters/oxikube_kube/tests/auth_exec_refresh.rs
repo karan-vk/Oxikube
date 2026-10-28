@@ -25,8 +25,13 @@ const VERSION: &str = r#"{"major":"1","minor":"30","gitVersion":"v1.30.0","gitCo
 
 /// Serves `/version` on a free port and records each request's `Authorization` header.
 async fn serve() -> (u16, Arc<Mutex<Vec<String>>>) {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let port = listener.local_addr().unwrap().port();
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind a loopback port");
+    let port = listener
+        .local_addr()
+        .expect("a bound listener has an address")
+        .port();
     let seen = Arc::new(Mutex::new(Vec::new()));
     let log = seen.clone();
     tokio::spawn(async move {
@@ -52,7 +57,13 @@ async fn serve() -> (u16, Arc<Mutex<Vec<String>>>) {
                             .starts_with("authorization:")
                             .then(|| l.to_owned())
                     })
-                    .map(|l| l.split_once(':').unwrap().1.trim().to_owned())
+                    .map(|l| {
+                        l.split_once(':')
+                            .expect("the line starts with `authorization:`")
+                            .1
+                            .trim()
+                            .to_owned()
+                    })
                     .unwrap_or_default();
                 log.lock().push(auth);
                 let reply = format!(
@@ -83,8 +94,12 @@ printf '{{"apiVersion":"client.authentication.k8s.io/v1","kind":"ExecCredential"
         runs = dir.join("runs").display()
     );
     let path = dir.join("plugin.sh");
-    std::fs::write(&path, script).unwrap();
-    let mut config = Config::new(format!("http://127.0.0.1:{port}").parse().unwrap());
+    std::fs::write(&path, script).expect("write plugin.sh into the temp dir");
+    let mut config = Config::new(
+        format!("http://127.0.0.1:{port}")
+            .parse()
+            .expect("a loopback URI parses"),
+    );
     config.auth_info.exec = Some(ExecConfig {
         api_version: Some("client.authentication.k8s.io/v1".into()),
         command: Some("sh".into()),

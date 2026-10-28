@@ -97,12 +97,14 @@ impl TestItem {
     }
 
     /// Sets the dedup key.
+    #[must_use]
     pub fn with_key(mut self, key: impl Into<SharedString>) -> Self {
         self.key = Some(key.into());
         self
     }
 
     /// Gives the tab a cluster badge.
+    #[must_use]
     pub fn with_cluster(mut self, mark: crate::cluster::ClusterMark) -> Self {
         self.cluster = Some(mark);
         self
@@ -110,6 +112,7 @@ impl TestItem {
 
     /// Makes the item ask before it closes ([`Item::intercepts_close`]); it keeps its tab
     /// (`deferred`) or lets itself be closed when asked.
+    #[must_use]
     pub fn intercepting(mut self, deferred: bool) -> Self {
         self.intercepts = true;
         self.deferred = deferred;
@@ -117,12 +120,14 @@ impl TestItem {
     }
 
     /// Lets the item live in a dock ([`Item::can_dock`]); it is saved and rebuilt as dockable.
+    #[must_use]
     pub fn dockable(mut self) -> Self {
         self.dockable = true;
         self
     }
 
     /// Makes [`Item::clone_on_split`] copy the item.
+    #[must_use]
     pub fn cloneable(mut self) -> Self {
         self.cloneable = true;
         self

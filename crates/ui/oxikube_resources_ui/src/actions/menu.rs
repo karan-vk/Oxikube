@@ -43,7 +43,7 @@ impl ActionSource {
     ) -> PopupMenu {
         let entries = self
             .actions
-            .entries(&self.cluster, &self.kind, targets.len());
+            .entries_for(&self.cluster, &self.kind, &targets);
         if entries.is_empty() {
             return menu;
         }

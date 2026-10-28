@@ -108,6 +108,7 @@ fn rows(found: &[CustomResourceGroup], open: &BTreeMap<String, bool>, query: &st
         crd_watch_forbidden: false,
         open,
         custom_query: query,
+        show_restricted: false,
         gate: None,
     })
 }

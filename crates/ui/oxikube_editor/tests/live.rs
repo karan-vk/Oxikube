@@ -41,7 +41,7 @@ fn config_map(rv: &str, a: &str, b: &str) -> Resource {
         "metadata": {"name": "web", "namespace": "shop", "resourceVersion": rv, "uid": "u-1"},
         "data": {"a": a, "b": b, "c": "3", "d": "4", "e": "5"}
     }))
-    .unwrap()
+    .expect("fixture ConfigMap is a valid resource")
 }
 
 const NAMES_WEB: &str =

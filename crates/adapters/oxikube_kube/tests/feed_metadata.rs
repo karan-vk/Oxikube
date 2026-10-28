@@ -38,7 +38,8 @@ async fn create_owned_pods(client: &Client, namespace: &str, count: usize) -> St
     let owner = owners
         .create(
             &PostParams::default(),
-            &serde_json::from_value(json!({"metadata": {"name": "owner"}})).unwrap(),
+            &serde_json::from_value(json!({"metadata": {"name": "owner"}}))
+                .expect("the owner ConfigMap literal deserializes"),
         )
         .await
         .expect("create the owner");
@@ -51,7 +52,7 @@ async fn create_owned_pods(client: &Client, namespace: &str, count: usize) -> St
                     "apiVersion": "v1", "kind": "ConfigMap", "name": "owner",
                     "uid": uid, "controller": true,
                 }))
-                .unwrap(),
+                .expect("the owner reference literal deserializes"),
             ]);
             pod
         })

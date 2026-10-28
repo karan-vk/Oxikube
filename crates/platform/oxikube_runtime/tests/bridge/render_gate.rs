@@ -53,7 +53,7 @@ fn observed<T: 'static>(entity: &Entity<T>, cx: &mut TestAppContext) -> Rc<Cell<
 /// One frame of `window` (its next-frame callbacks, then the draw when dirty).
 fn frame(window: AnyWindowHandle, cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| window.simulate_next_frame(cx))
-        .unwrap();
+        .expect("test window is still open");
     cx.run_until_parked();
 }
 

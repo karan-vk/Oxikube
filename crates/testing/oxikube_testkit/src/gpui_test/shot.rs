@@ -163,7 +163,11 @@ fn check_case(goldens: &Path, case: &GoldenCase, tolerance: Tolerance) -> Result
 /// each, and exits non-zero when any failed. A failing case does not stop the others, so one run
 /// (a nightly leg) reports every broken golden. `crate_dir` is `env!("CARGO_MANIFEST_DIR")`;
 /// goldens live in `<crate_dir>/tests/goldens/<os>/`.
-#[allow(clippy::print_stdout, clippy::print_stderr)]
+#[allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "a golden runner reports results on stdout and stderr"
+)]
 pub fn run_golden_cases(crate_dir: &str, cases: &[GoldenCase]) -> ExitCode {
     let goldens = Path::new(crate_dir).join("tests/goldens");
     let mut failed = 0;

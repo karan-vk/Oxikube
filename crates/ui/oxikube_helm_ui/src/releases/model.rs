@@ -51,11 +51,13 @@ impl Tab {
     }
 
     /// The tab after this one (wrapping).
+    #[must_use]
     pub fn next(self) -> Tab {
         Self::ALL[(self as usize + 1) % Self::ALL.len()]
     }
 
     /// The tab before this one (wrapping).
+    #[must_use]
     pub fn previous(self) -> Tab {
         Self::ALL[(self as usize + Self::ALL.len() - 1) % Self::ALL.len()]
     }
@@ -78,6 +80,7 @@ impl ValuesMode {
     }
 
     /// The other mode.
+    #[must_use]
     pub const fn toggled(self) -> Self {
         match self {
             Self::User => Self::All,

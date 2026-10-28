@@ -57,6 +57,7 @@ pub(super) fn custom_rows(section: &SidebarSection, open: bool, input: &RowInput
         expandable: true,
         count: None,
         target: None,
+        restricted: false,
     })];
     if !open {
         return Shown::Rows(rows);
@@ -69,6 +70,7 @@ pub(super) fn custom_rows(section: &SidebarSection, open: bool, input: &RowInput
             depth: 1,
             target: Some(SidebarTarget::Command(CommandId::CRD_OPEN_LIST)),
             count: None,
+            restricted: false,
         }));
     }
     if groups.is_empty() {
@@ -100,6 +102,7 @@ pub(super) fn custom_rows(section: &SidebarSection, open: bool, input: &RowInput
                         kind.plural.clone(),
                     )),
                     count: None,
+                    restricted: false,
                 })
             }));
         }
@@ -109,6 +112,7 @@ pub(super) fn custom_rows(section: &SidebarSection, open: bool, input: &RowInput
             id: "custom-resources-no-match",
             text: format!("No custom resources match \u{201c}{query}\u{201d}").into(),
             kind: NoticeKind::Muted,
+            action: None,
         }));
     }
     Shown::Rows(rows)

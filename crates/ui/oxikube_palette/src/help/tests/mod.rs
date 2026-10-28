@@ -31,7 +31,7 @@ use crate::picker::{Picker, PickerDelegate as _};
 // The actions the shipped keymaps name, declared under their real names (the crates that own them
 // are not linked into this test), so their bindings are live as in the app.
 // Only the registration matters (each action's name); the types are never named.
-#[allow(dead_code)]
+#[allow(dead_code, reason = "the actions are declared only to register them")]
 mod declared {
     use gpui::actions;
 
@@ -311,7 +311,9 @@ impl Fixture {
     }
 }
 
-struct KeepHost(#[allow(dead_code)] std::rc::Rc<HelpHost>);
+struct KeepHost(
+    #[allow(dead_code, reason = "held only to keep the host alive")] std::rc::Rc<HelpHost>,
+);
 
 impl gpui::Global for KeepHost {}
 

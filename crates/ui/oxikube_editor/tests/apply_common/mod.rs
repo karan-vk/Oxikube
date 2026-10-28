@@ -236,7 +236,7 @@ impl Fixture {
     pub fn editor_with(&mut self, text: &str) -> Entity<ManifestEditor> {
         self.sink
             .send(EditorRequest::New { cluster: None })
-            .unwrap();
+            .expect("the editor request channel is open");
         self.vcx.run_until_parked();
         let editor = self
             .vcx

@@ -237,7 +237,7 @@ impl FsPort for StdFs {
                 entries.push(DirEntry {
                     path: entry.path(),
                     kind,
-                    size: (kind == EntryKind::File).then(|| meta.len()),
+                    size: (kind == EntryKind::File).then_some(meta.len()),
                 });
             }
             entries.sort_by(|a, b| a.path.cmp(&b.path));

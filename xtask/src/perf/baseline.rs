@@ -61,7 +61,7 @@ impl Baseline {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        let text = serde_json::to_string_pretty(self)? + "\n";
+        let text = format!("{}\n", serde_json::to_string_pretty(self)?);
         std::fs::write(path, text).with_context(|| format!("writing {}", path.display()))
     }
 

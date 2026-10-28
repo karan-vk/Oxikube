@@ -34,6 +34,8 @@
 
 ## Quality
 - [ ] fmt, clippy -D warnings, deny, doc build clean.
+- [ ] Follows `docs/STYLE.md`, including the review-only rules (one module per `use`, no
+      unclear abbreviations, enums over unclear bools); lints silenced per item with `#[expect(.., reason)]`, any `#[allow]` has a `reason`.
 - [ ] Public items documented; glossary terms from `docs/CONTEXT.md` used.
 - [ ] Vendored code has licence headers + THIRD_PARTY_NOTICES entry.
 - [ ] Project `Status` is `In Review`.

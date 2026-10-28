@@ -139,3 +139,10 @@ proptest! {
 fn history_words_are_one_command_each() {
     assert!(matches!(parse("-"), Ok(JumpCommand::History(_))));
 }
+
+#[test]
+fn the_subject_commands_print_in_their_short_form() {
+    assert_eq!(canonical("users"), "usr");
+    assert_eq!(canonical("groups"), "grp");
+    assert_eq!(canonical("rbac   alice"), "rbac alice");
+}

@@ -5,13 +5,15 @@ use std::net::IpAddr;
 
 use serde::{Deserialize, Serialize};
 
+use super::cloud::CloudRefreshMode;
 use super::id::CommandId;
 use super::image::ImageChange;
 use super::kubeconfig::{KubeconfigSourceRef, NewKubeconfigSource};
 use super::meta::CommandMeta;
 use super::registry;
+use crate::cloud::CloudProvider;
 use crate::colour::ClusterColour;
-use crate::ids::{ClusterId, Gvk, ResourceRef};
+use crate::ids::{ClusterId, ContextName, Gvk, ResourceRef};
 use crate::log::{LevelChip, LogRange, LogSaveScope};
 use crate::portforward::ForwardPort;
 use crate::preset::ClusterPreset;
@@ -162,6 +164,38 @@ pub enum Command {
     #[serde(rename = "helm::OpenReleases")]
     HelmOpenReleases {
         /// The cluster whose releases open.
+        cluster: ClusterId,
+    },
+    /// Open the users page of the cluster's RBAC (E17-S07, `:usr`): one row per user and
+    /// ServiceAccount named by any RoleBinding or ClusterRoleBinding, with how many bindings and
+    /// roles reach it. Reads only the bindings and roles.
+    #[serde(rename = "rbac::OpenUsers")]
+    RbacOpenUsers {
+        /// The cluster whose users open.
+        cluster: ClusterId,
+    },
+    /// Open the groups page of the cluster's RBAC (E17-S07, `:grp`): one row per group named by
+    /// any binding. The API cannot list a group's members, so the page lists none.
+    #[serde(rename = "rbac::OpenGroups")]
+    RbacOpenGroups {
+        /// The cluster whose groups open.
+        cluster: ClusterId,
+    },
+    /// Show what a subject may do (E17-S07, `:rbac <subject>`): a per-verb matrix by API group
+    /// and resource, each cell traced to the bindings and roles that grant it. Reads only the
+    /// bindings and roles.
+    #[serde(rename = "rbac::ShowSubject")]
+    RbacShowSubject {
+        /// The cluster whose policy is read.
+        cluster: ClusterId,
+        /// The subject: a user name, `system:serviceaccount:<ns>:<name>`, or a group name.
+        subject: String,
+    },
+    /// Copy the open subject matrix to the clipboard as tab-separated text (E17-S07), for a
+    /// ticket.
+    #[serde(rename = "rbac::CopyMatrix")]
+    RbacCopyMatrix {
+        /// The cluster whose matrix view to copy from.
         cluster: ClusterId,
     },
     /// Print a release's values (E16-S05), the user-supplied ones or with `all` the chart defaults
@@ -414,6 +448,22 @@ pub enum Command {
         /// The cluster whose pulses open.
         cluster: ClusterId,
     },
+    /// Open the can-i panel (E17-S08, `rbac: can-i`): ask whether the current user, or an
+    /// impersonated User, Group or ServiceAccount, may perform a verb on a resource. Read-only:
+    /// the answer comes from a `SelfSubjectAccessReview` or `SubjectAccessReview`, which store
+    /// nothing. `target` prefills the resource, namespace and name from the selection; the
+    /// subject is typed in the panel and never travels in a command or is persisted.
+    #[serde(rename = "rbac::CanI")]
+    RbacCanI {
+        /// The cluster the question is asked of.
+        cluster: ClusterId,
+        /// The object to prefill the resource, namespace and name from.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<ResourceRef>,
+        /// The verb to prefill (`get` when absent).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        verb: Option<String>,
+    },
     /// Open the cluster's events view (E14-S03, `:ev`): every event the app's one events feed of
     /// the cluster holds, live, filterable by type, reason, kind, namespace and text, newest
     /// first. Reads only what the `EventService` holds; opening it again shows the open view
@@ -588,6 +638,42 @@ pub enum Command {
     /// Re-read every kubeconfig source now.
     #[serde(rename = "kubeconfig::Reload")]
     KubeconfigReload,
+    /// Discover the managed clusters of a cloud provider with its CLI (`aws`, `gcloud`, `az`), or
+    /// of every provider. Reads from the provider and caches the listing; changes nothing.
+    #[serde(rename = "cloud::Refresh")]
+    CloudRefresh {
+        /// The provider; `None` refreshes all of them.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        provider: Option<CloudProvider>,
+        /// Whether a fresh cache may answer.
+        #[serde(default)]
+        mode: CloudRefreshMode,
+    },
+    /// Stop a running cloud discovery (its CLI processes are killed).
+    #[serde(rename = "cloud::Cancel")]
+    CloudCancel {
+        /// The provider; `None` stops all of them.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        provider: Option<CloudProvider>,
+    },
+    /// Add a discovered cloud cluster to the catalog: an exec-auth entry in Oxikube's own managed
+    /// kubeconfig for the provider (no token is written; the user's kubeconfig is not touched).
+    #[serde(rename = "cloud::Add")]
+    CloudAdd {
+        /// The provider.
+        provider: CloudProvider,
+        /// The discovered cluster's key (`aws/prod/eu-west-1/prod-eu`), from the last listing.
+        cluster: String,
+    },
+    /// Remove a cloud cluster that was added: its managed kubeconfig entry goes and an open
+    /// session of it is disconnected.
+    #[serde(rename = "cloud::Remove")]
+    CloudRemove {
+        /// The provider.
+        provider: CloudProvider,
+        /// The context name of the added cluster.
+        context: ContextName,
+    },
     /// Open a registered view (overview, events, ...) by id.
     #[serde(rename = "view::Open")]
     ViewOpen {
@@ -1007,6 +1093,26 @@ pub enum Command {
     ResourceShowUsedBy {
         /// The object to show the users of.
         target: ResourceRef,
+    },
+    /// Request a token for a ServiceAccount and build a kubeconfig from it (E17-S09). **Mutating**
+    /// (risk low): it creates a credential, so it is blocked on a read-only cluster, confirmed once
+    /// and audited with the account and the lifetime, never the token. The result stays in memory
+    /// (`oxikube_app::sa_kubeconfig::KubeconfigVault`); the output carries only a message and the
+    /// expiry.
+    #[serde(rename = "serviceaccount::GenerateKubeconfig")]
+    ServiceAccountGenerateKubeconfig {
+        /// The ServiceAccount.
+        target: ResourceRef,
+        /// The token's lifetime in seconds (the server may shorten it); one hour when absent.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        expiration_seconds: Option<u32>,
+        /// The token's audiences; the API server's own when empty.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        audiences: Vec<String>,
+        /// On a cluster without `TokenRequest`, allow reading or creating a long-lived token
+        /// Secret. Without it such a cluster is refused with an explanation.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        allow_legacy_token: bool,
     },
     /// Focus the filter bar of a kind's resource table (`/` in a table): the next keys type a
     /// filter (`/text`, `/!text`, `/-l selector`, `/-f fuzzy`).
@@ -1786,6 +1892,105 @@ pub enum Command {
         #[serde(default = "default_clear_previous")]
         clear_previous: bool,
     },
+    /// Open the Role / ClusterRole rule dialog (E17-S05): a new Role, a new ClusterRole, or the
+    /// rules of the existing `target`. Changes nothing; the dialog's save is [`RoleCreate`] or
+    /// [`RoleEdit`].
+    ///
+    /// [`RoleCreate`]: Command::RoleCreate
+    /// [`RoleEdit`]: Command::RoleEdit
+    #[serde(rename = "role::OpenDialog")]
+    RoleOpenDialog {
+        /// The cluster whose tab gets the dialog; the shown one when `None`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cluster: Option<ClusterId>,
+        /// A new ClusterRole instead of a new Role (ignored when `target` is set).
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        cluster_role: bool,
+        /// The existing Role or ClusterRole to edit; a new one when `None`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<ResourceRef>,
+    },
+    /// Create a Role or ClusterRole (E17-S05). **Mutating** (risk medium): blocked on a read-only
+    /// cluster, one confirmation, a server dry run first, audited. Any other kind is refused.
+    #[serde(rename = "role::Create")]
+    RoleCreate {
+        /// The cluster to create it in.
+        cluster: ClusterId,
+        /// The object as JSON text (`apiVersion: rbac.authorization.k8s.io/v1`).
+        manifest: String,
+    },
+    /// Replace a Role or ClusterRole with an edited manifest (E17-S05). **Mutating** (risk
+    /// medium). The manifest carries `metadata.resourceVersion`, so a change made since the
+    /// dialog opened fails with a conflict instead of being overwritten.
+    #[serde(rename = "role::Edit")]
+    RoleEdit {
+        /// The cluster the role is in.
+        cluster: ClusterId,
+        /// The whole object as JSON text, with its `resourceVersion`.
+        manifest: String,
+    },
+    /// Delete a Role or ClusterRole (E17-S05). **Mutating** (risk medium).
+    #[serde(rename = "role::Delete")]
+    RoleDelete {
+        /// The Role or ClusterRole.
+        target: ResourceRef,
+        /// How many bindings name it, when the caller counted them: the confirmation warns that
+        /// they will be left pointing at nothing.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        bindings: Option<u32>,
+    },
+    /// Open the RoleBinding / ClusterRoleBinding dialog (E17-S06): a new binding, or the
+    /// subjects and role of the existing `target`. Changes nothing; the dialog's save is
+    /// [`BindingCreate`] or [`BindingEdit`].
+    ///
+    /// [`BindingCreate`]: Command::BindingCreate
+    /// [`BindingEdit`]: Command::BindingEdit
+    #[serde(rename = "binding::OpenDialog")]
+    BindingOpenDialog {
+        /// The cluster whose tab gets the dialog; the shown one when `None`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cluster: Option<ClusterId>,
+        /// A new ClusterRoleBinding instead of a new RoleBinding (ignored when `target` is set).
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        cluster_binding: bool,
+        /// The existing binding to edit; a new one when `None`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<ResourceRef>,
+    },
+    /// Create a RoleBinding or ClusterRoleBinding (E17-S06). **Mutating** (risk medium): blocked
+    /// on a read-only cluster, one confirmation (a binding to `cluster-admin` or to everybody is
+    /// called out), a server dry run first, audited. Any other kind is refused.
+    #[serde(rename = "binding::Create")]
+    BindingCreate {
+        /// The cluster to create it in.
+        cluster: ClusterId,
+        /// The object as JSON text (`apiVersion: rbac.authorization.k8s.io/v1`).
+        manifest: String,
+    },
+    /// Change a RoleBinding or ClusterRoleBinding (E17-S06). **Mutating** (risk medium).
+    ///
+    /// Without `previous` the manifest replaces the binding in place (its `roleRef` must be
+    /// unchanged: the API refuses to change it, and `metadata.resourceVersion` makes a change
+    /// made since the dialog opened fail with a conflict). With `previous` (the binding as it
+    /// was) the `roleRef` changes, which the API only allows by making a new object: the old
+    /// binding is deleted and the new one created as one audited intent, and the old one is put
+    /// back if the new one is refused.
+    #[serde(rename = "binding::Edit")]
+    BindingEdit {
+        /// The cluster the binding is in.
+        cluster: ClusterId,
+        /// The whole new object as JSON text.
+        manifest: String,
+        /// The binding as it was, as JSON text, when the `roleRef` changes.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        previous: Option<String>,
+    },
+    /// Delete a RoleBinding or ClusterRoleBinding (E17-S06). **Mutating** (risk medium).
+    #[serde(rename = "binding::Delete")]
+    BindingDelete {
+        /// The binding.
+        target: ResourceRef,
+    },
 }
 
 impl Command {
@@ -1807,6 +2012,10 @@ impl Command {
             Command::ClusterShowMetricsSettings { .. } => CommandId::CLUSTER_SHOW_METRICS_SETTINGS,
             Command::HelmShowRepos => CommandId::HELM_SHOW_REPOS,
             Command::HelmOpenReleases { .. } => CommandId::HELM_OPEN_RELEASES,
+            Command::RbacOpenUsers { .. } => CommandId::RBAC_OPEN_USERS,
+            Command::RbacOpenGroups { .. } => CommandId::RBAC_OPEN_GROUPS,
+            Command::RbacShowSubject { .. } => CommandId::RBAC_SHOW_SUBJECT,
+            Command::RbacCopyMatrix { .. } => CommandId::RBAC_COPY_MATRIX,
             Command::HelmShowValues { .. } => CommandId::HELM_SHOW_VALUES,
             Command::HelmShowManifest { .. } => CommandId::HELM_SHOW_MANIFEST,
             Command::HelmRevealValues { .. } => CommandId::HELM_REVEAL_VALUES,
@@ -1823,6 +2032,7 @@ impl Command {
             Command::HelmRepoRemove { .. } => CommandId::HELM_REPO_REMOVE,
             Command::HelmRepoUpdate { .. } => CommandId::HELM_REPO_UPDATE,
             Command::ClusterShowPulses { .. } => CommandId::CLUSTER_SHOW_PULSES,
+            Command::RbacCanI { .. } => CommandId::RBAC_CAN_I,
             Command::EventsOpen { .. } => CommandId::EVENTS_OPEN,
             Command::EventsToggleFaults { .. } => CommandId::EVENTS_TOGGLE_FAULTS,
             Command::EventsTogglePause { .. } => CommandId::EVENTS_TOGGLE_PAUSE,
@@ -1842,6 +2052,10 @@ impl Command {
             Command::KubeconfigAddSource { .. } => CommandId::KUBECONFIG_ADD_SOURCE,
             Command::KubeconfigRemoveSource { .. } => CommandId::KUBECONFIG_REMOVE_SOURCE,
             Command::KubeconfigReload => CommandId::KUBECONFIG_RELOAD,
+            Command::CloudRefresh { .. } => CommandId::CLOUD_REFRESH,
+            Command::CloudCancel { .. } => CommandId::CLOUD_CANCEL,
+            Command::CloudAdd { .. } => CommandId::CLOUD_ADD,
+            Command::CloudRemove { .. } => CommandId::CLOUD_REMOVE,
             Command::ViewOpen { .. } => CommandId::VIEW_OPEN,
             Command::PaletteToggle => CommandId::PALETTE_TOGGLE,
             Command::PaletteClearRecents => CommandId::PALETTE_CLEAR_RECENTS,
@@ -2010,7 +2224,18 @@ impl Command {
             Command::JobSuspend { .. } => CommandId::JOB_SUSPEND,
             Command::JobResume { .. } => CommandId::JOB_RESUME,
             Command::PvcResize { .. } => CommandId::PVC_RESIZE,
+            Command::ServiceAccountGenerateKubeconfig { .. } => {
+                CommandId::SERVICEACCOUNT_GENERATE_KUBECONFIG
+            }
             Command::StorageClassSetDefault { .. } => CommandId::STORAGECLASS_SET_DEFAULT,
+            Command::RoleOpenDialog { .. } => CommandId::ROLE_OPEN_DIALOG,
+            Command::RoleCreate { .. } => CommandId::ROLE_CREATE,
+            Command::RoleEdit { .. } => CommandId::ROLE_EDIT,
+            Command::RoleDelete { .. } => CommandId::ROLE_DELETE,
+            Command::BindingOpenDialog { .. } => CommandId::BINDING_OPEN_DIALOG,
+            Command::BindingCreate { .. } => CommandId::BINDING_CREATE,
+            Command::BindingEdit { .. } => CommandId::BINDING_EDIT,
+            Command::BindingDelete { .. } => CommandId::BINDING_DELETE,
             Command::NodeDrain { .. } => CommandId::NODE_DRAIN,
         }
     }
@@ -2129,7 +2354,13 @@ impl Command {
             | Command::JobSuspend { target }
             | Command::JobResume { target }
             | Command::PvcResize { target, .. }
+            | Command::RoleDelete { target, .. }
+            | Command::ServiceAccountGenerateKubeconfig { target, .. }
+            | Command::BindingDelete { target }
             | Command::StorageClassSetDefault { target, .. } => Some(target),
+            Command::RoleOpenDialog { target, .. } | Command::BindingOpenDialog { target, .. } => {
+                target.as_ref()
+            }
             _ => None,
         }
     }
@@ -2376,6 +2607,21 @@ mod tests {
                 names: vec!["bitnami".into()],
             },
             Command::ClusterShowPulses { cluster: cluster() },
+            Command::RbacCanI {
+                cluster: cluster(),
+                target: None,
+                verb: None,
+            },
+            Command::RbacCanI {
+                cluster: cluster(),
+                target: Some(ResourceRef::namespaced(
+                    cluster(),
+                    Gvk::new("", "v1", "Pod"),
+                    "shop",
+                    "web-0",
+                )),
+                verb: Some("delete".into()),
+            },
             Command::EventsOpen {
                 cluster: cluster(),
                 namespace: None,
@@ -2386,6 +2632,13 @@ mod tests {
                 namespace: Some("kube-system".into()),
                 filter: Some("BackOff".into()),
             },
+            Command::RbacOpenUsers { cluster: cluster() },
+            Command::RbacOpenGroups { cluster: cluster() },
+            Command::RbacShowSubject {
+                cluster: cluster(),
+                subject: "system:serviceaccount:default:builder".into(),
+            },
+            Command::RbacCopyMatrix { cluster: cluster() },
             Command::EventsToggleFaults { cluster: cluster() },
             Command::EventsTogglePause { cluster: cluster() },
             Command::EventsCopyRow { cluster: cluster() },
@@ -2457,6 +2710,19 @@ mod tests {
                 },
             },
             Command::KubeconfigReload,
+            Command::CloudRefresh {
+                provider: Some(CloudProvider::Aws),
+                mode: CloudRefreshMode::Force,
+            },
+            Command::CloudCancel { provider: None },
+            Command::CloudAdd {
+                provider: CloudProvider::Gcp,
+                cluster: "gcp/p/europe-west1/c".into(),
+            },
+            Command::CloudRemove {
+                provider: CloudProvider::Azure,
+                context: ContextName::new("aks-sub-westeurope-c"),
+            },
             Command::ViewOpen {
                 view: "overview".into(),
             },
@@ -2603,6 +2869,38 @@ mod tests {
             Command::SecretEditDecoded { target: pod() },
             Command::SecretCreate {
                 cluster: Some(cluster()),
+            },
+            Command::RoleOpenDialog {
+                cluster: Some(cluster()),
+                cluster_role: true,
+                target: None,
+            },
+            Command::BindingOpenDialog {
+                cluster: Some(cluster()),
+                cluster_binding: true,
+                target: None,
+            },
+            Command::BindingCreate {
+                cluster: cluster(),
+                manifest: "{}".into(),
+            },
+            Command::BindingEdit {
+                cluster: cluster(),
+                manifest: "{}".into(),
+                previous: Some("{}".into()),
+            },
+            Command::BindingDelete { target: pod() },
+            Command::RoleCreate {
+                cluster: cluster(),
+                manifest: "{}".into(),
+            },
+            Command::RoleEdit {
+                cluster: cluster(),
+                manifest: "{}".into(),
+            },
+            Command::RoleDelete {
+                target: pod(),
+                bindings: Some(2),
             },
             Command::TableToggleWide {
                 cluster: cluster(),
@@ -2801,6 +3099,17 @@ mod tests {
             Command::StorageClassSetDefault {
                 target: storage_class(),
                 clear_previous: true,
+            },
+            Command::ServiceAccountGenerateKubeconfig {
+                target: ResourceRef::namespaced(
+                    cluster(),
+                    Gvk::new("", "v1", "ServiceAccount"),
+                    "demo",
+                    "deployer",
+                ),
+                expiration_seconds: Some(3600),
+                audiences: vec!["https://example.com".into()],
+                allow_legacy_token: true,
             },
         ]
     }
@@ -3078,6 +3387,8 @@ mod tests {
                     | Command::SecretReveal { .. }
                     | Command::SecretEditDecoded { .. }
                     | Command::SecretCreate { .. }
+                    | Command::RoleOpenDialog { .. }
+                    | Command::BindingOpenDialog { .. }
                     | Command::TableToggleWide { .. }
                     | Command::LogsClear { .. }
                     | Command::LogsCopy { .. }
@@ -3112,6 +3423,10 @@ mod tests {
                     | Command::ClusterShowMetricsSettings { .. }
                     | Command::HelmShowRepos
                     | Command::HelmOpenReleases { .. }
+                    | Command::RbacOpenUsers { .. }
+                    | Command::RbacOpenGroups { .. }
+                    | Command::RbacShowSubject { .. }
+                    | Command::RbacCopyMatrix { .. }
                     | Command::HelmShowValues { .. }
                     | Command::HelmShowManifest { .. }
                     | Command::HelmRevealValues { .. }
@@ -3124,6 +3439,7 @@ mod tests {
                     | Command::HelmRepoRemove { .. }
                     | Command::HelmRepoUpdate { .. }
                     | Command::ClusterShowPulses { .. }
+                    | Command::RbacCanI { .. }
                     | Command::EventsOpen { .. }
                     | Command::EventsToggleFaults { .. }
                     | Command::EventsTogglePause { .. }
@@ -3195,6 +3511,43 @@ mod kubeconfig_tests {
         let shown = format!("{command:?} {again:#?}");
         assert!(!shown.contains("s3cr3t"), "{shown}");
         assert!(shown.contains("bytes"), "{shown}");
+    }
+
+    #[test]
+    fn cloud_commands_are_flat_json_app_tools_without_a_guard_tier() {
+        let command: Command = serde_json::from_value(json!({
+            "type": "cloud::Refresh",
+            "provider": "gcp",
+        }))
+        .unwrap();
+        assert_eq!(
+            command,
+            Command::CloudRefresh {
+                provider: Some(CloudProvider::Gcp),
+                mode: CloudRefreshMode::IfStale,
+            }
+        );
+        assert_eq!(command.id().tool_name(), "app.cloud_refresh");
+        assert_eq!(
+            serde_json::to_value(Command::CloudCancel { provider: None }).unwrap(),
+            json!({ "type": "cloud::Cancel" })
+        );
+        for command in [
+            command,
+            Command::CloudCancel { provider: None },
+            Command::CloudAdd {
+                provider: CloudProvider::Aws,
+                cluster: "aws/p/eu-west-1/c".into(),
+            },
+            Command::CloudRemove {
+                provider: CloudProvider::Aws,
+                context: ContextName::new("eks-p-eu-west-1-c"),
+            },
+        ] {
+            let meta = command.meta();
+            assert!(!meta.mutating && !meta.privileged, "{}", meta.id);
+            assert_eq!(meta.confirm, crate::safety::ConfirmTier::None);
+        }
     }
 
     #[test]

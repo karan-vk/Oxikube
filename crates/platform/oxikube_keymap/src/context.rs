@@ -23,6 +23,7 @@
 //! | `Help` | the help overlay (E11-S10); its search field is `Help > Picker > Input` | `empty` while the field is empty |
 //! | `Modal` | a dialog or sheet | |
 //! | `Catalog` | the cluster catalog home (E06-S03) | `Editing` while its search field has focus |
+//! | `RbacSubjects` | the RBAC Users, Groups and subject matrix pages (E17-S07) | `Editing` while its filter field has focus |
 //! | `HelmReleases` | the cluster's Helm releases page (E16-S05) | `Editing` while its filter field has focus |
 //! | `EventsView` | the cluster's events view (E14-S03) | `Editing` while a filter field has focus, `faults`, `paused` |
 //!
@@ -95,10 +96,16 @@ pub mod contexts {
     pub const MODAL: &str = "Modal";
     /// The cluster catalog home.
     pub const CATALOG: &str = "Catalog";
+    /// The catalog's Cloud section (E18-S06): refresh, cancel and add; carries `Loading` while a
+    /// discovery runs.
+    pub const CATALOG_CLOUD: &str = "CatalogCloud";
     /// The pulses page (E13-S10): a grid of gauges, one tile selected.
     pub const PULSES: &str = "Pulses";
     /// The cluster's events view (E14-S03); carries `Editing`, `faults` and `paused`.
     pub const EVENTS: &str = "EventsView";
+    /// The RBAC subject pages (E17-S07): Users, Groups and a subject's matrix; carries `Editing`
+    /// while its filter field has focus.
+    pub const RBAC_SUBJECTS: &str = "RbacSubjects";
     /// The Port Forwards panel (E15-S05); carries `Editing` while its filter field has the focus.
     pub const PORT_FORWARDS: &str = "PortForwards";
     /// The Helm releases page (E16-S05); carries `Editing` while its filter field has the focus.

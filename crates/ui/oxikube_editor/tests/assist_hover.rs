@@ -7,7 +7,7 @@ use common::*;
 use oxikube_editor::yaml::JsonPath;
 
 fn path(text: &str) -> JsonPath {
-    text.parse().unwrap()
+    text.parse().expect("test JSON path parses")
 }
 
 #[test]

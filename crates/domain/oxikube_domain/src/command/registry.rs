@@ -27,6 +27,14 @@ impl CommandId {
     /// `charts::OpenGallery`: open the chart gallery, every chart state on one page (a reference
     /// page for the metrics views and their reviewers).
     pub const CHARTS_OPEN_GALLERY: CommandId = CommandId::new("charts::OpenGallery");
+    /// `cloud::Add`: add a discovered cloud cluster to the catalog (a managed kubeconfig entry).
+    pub const CLOUD_ADD: CommandId = CommandId::new("cloud::Add");
+    /// `cloud::Cancel`: stop a running cloud discovery.
+    pub const CLOUD_CANCEL: CommandId = CommandId::new("cloud::Cancel");
+    /// `cloud::Refresh`: discover the clusters of a cloud provider (or of all of them).
+    pub const CLOUD_REFRESH: CommandId = CommandId::new("cloud::Refresh");
+    /// `cloud::Remove`: remove a cloud cluster that was added from the catalog.
+    pub const CLOUD_REMOVE: CommandId = CommandId::new("cloud::Remove");
     /// `cluster::ApplyPreset`: give a cluster a prod / staging / dev / none posture.
     pub const CLUSTER_APPLY_PRESET: CommandId = CommandId::new("cluster::ApplyPreset");
     /// `cluster::CancelConnect`: cancel a connection attempt that is still in flight.
@@ -124,6 +132,8 @@ impl CommandId {
     pub const EVENTS_COPY_ROW_JSON: CommandId = CommandId::new("events::CopyRowJson");
     /// `events::ExportJson`: write the events the events view lists to a JSON file.
     pub const EVENTS_EXPORT_JSON: CommandId = CommandId::new("events::ExportJson");
+    /// `rbac::CanI`: open the can-i panel (`rbac: can-i`).
+    pub const RBAC_CAN_I: CommandId = CommandId::new("rbac::CanI");
     /// `events::Open`: open a cluster's events view (`:ev`).
     pub const EVENTS_OPEN: CommandId = CommandId::new("events::Open");
     /// `events::ToggleFaults`: show only `Warning` events in the events view, or every event.
@@ -134,6 +144,14 @@ impl CommandId {
     pub const HELP_SHOW: CommandId = CommandId::new("help::Show");
     /// `ingressclass::SetDefault`: make an IngressClass the cluster's default (annotation patch).
     pub const INGRESS_CLASS_SET_DEFAULT: CommandId = CommandId::new("ingressclass::SetDefault");
+    /// `rbac::OpenUsers`: the users of a cluster's RBAC bindings (E17-S07, `:usr`).
+    pub const RBAC_OPEN_USERS: CommandId = CommandId::new("rbac::OpenUsers");
+    /// `rbac::OpenGroups`: the groups of a cluster's RBAC bindings (E17-S07, `:grp`).
+    pub const RBAC_OPEN_GROUPS: CommandId = CommandId::new("rbac::OpenGroups");
+    /// `rbac::ShowSubject`: what one subject may do, as a matrix (E17-S07, `:rbac <subject>`).
+    pub const RBAC_SHOW_SUBJECT: CommandId = CommandId::new("rbac::ShowSubject");
+    /// `rbac::CopyMatrix`: copy the open subject matrix as text (E17-S07).
+    pub const RBAC_COPY_MATRIX: CommandId = CommandId::new("rbac::CopyMatrix");
     /// `helm::OpenReleases`: open a cluster's Helm releases (E16-S05, `:helm`).
     pub const HELM_OPEN_RELEASES: CommandId = CommandId::new("helm::OpenReleases");
     /// `helm::ShowValues`: print a release's values, credential-looking ones masked (E16-S05).
@@ -397,6 +415,32 @@ impl CommandId {
     /// `resource::ShowUsedBy`: open a ServiceAccount, ConfigMap, Secret, claim or PriorityClass on
     /// its "Used by" tab (k9s `u`).
     pub const RESOURCE_SHOW_USED_BY: CommandId = CommandId::new("resource::ShowUsedBy");
+    /// `binding::Create`: create a RoleBinding or ClusterRoleBinding from a manifest, through the
+    /// mutation guard (E17-S06).
+    pub const BINDING_CREATE: CommandId = CommandId::new("binding::Create");
+    /// `binding::Delete`: delete a RoleBinding or ClusterRoleBinding, through the mutation guard
+    /// (E17-S06).
+    pub const BINDING_DELETE: CommandId = CommandId::new("binding::Delete");
+    /// `binding::Edit`: change a RoleBinding or ClusterRoleBinding (a new `roleRef` is a delete
+    /// and a create as one intent), through the mutation guard (E17-S06).
+    pub const BINDING_EDIT: CommandId = CommandId::new("binding::Edit");
+    /// `binding::OpenDialog`: open the RoleBinding / ClusterRoleBinding dialog, new or editing one
+    /// (E17-S06).
+    pub const BINDING_OPEN_DIALOG: CommandId = CommandId::new("binding::OpenDialog");
+    /// `role::Create`: create a Role or ClusterRole from a manifest, through the mutation guard
+    /// (E17-S05).
+    pub const ROLE_CREATE: CommandId = CommandId::new("role::Create");
+    /// `role::Delete`: delete a Role or ClusterRole, through the mutation guard (E17-S05).
+    pub const ROLE_DELETE: CommandId = CommandId::new("role::Delete");
+    /// `role::Edit`: replace a Role or ClusterRole with an edited manifest, through the mutation
+    /// guard (E17-S05).
+    pub const ROLE_EDIT: CommandId = CommandId::new("role::Edit");
+    /// `role::OpenDialog`: open the Role / ClusterRole rule dialog, new or editing one (E17-S05).
+    pub const ROLE_OPEN_DIALOG: CommandId = CommandId::new("role::OpenDialog");
+    /// `serviceaccount::GenerateKubeconfig`: request a token for a ServiceAccount and build a
+    /// kubeconfig from it (E17-S09).
+    pub const SERVICEACCOUNT_GENERATE_KUBECONFIG: CommandId =
+        CommandId::new("serviceaccount::GenerateKubeconfig");
     /// `secret::Create`: open the "Create secret" dialog (Opaque, Docker registry, TLS).
     pub const SECRET_CREATE: CommandId = CommandId::new("secret::Create");
     /// `secret::EditDecoded`: open a Secret in the manifest editor with its values decoded.
@@ -479,6 +523,18 @@ impl CommandId {
 
 const NONE: Capabilities = Capabilities::empty();
 
+/// The kinds `role::Delete` acts on.
+const ROLE_KINDS: &[(&str, &str)] = &[
+    ("rbac.authorization.k8s.io", "Role"),
+    ("rbac.authorization.k8s.io", "ClusterRole"),
+];
+
+/// The kinds `binding::Delete` acts on.
+const BINDING_KINDS: &[(&str, &str)] = &[
+    ("rbac.authorization.k8s.io", "RoleBinding"),
+    ("rbac.authorization.k8s.io", "ClusterRoleBinding"),
+];
+
 /// The views a selection of resources is acted on from: a table row or the detail view of one.
 const TABLE_VIEWS: &[ViewContext] = &[ViewContext::Table, ViewContext::Detail];
 /// The kinds a restart rolls: the pod-template workloads whose controller replaces pods when the
@@ -529,11 +585,72 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Global,
         NONE,
     ),
+    // A binding is where RBAC privileges are handed out (E17-S06): risk medium like the roles, one
+    // simple confirmation (a binding to cluster-admin or to everybody is called out in its text), a
+    // server dry run first, blocked on a read-only cluster, audited with the role and a subject
+    // count only. The handlers write RoleBindings and ClusterRoleBindings and nothing else.
+    CommandMeta::mutation(
+        CommandId::BINDING_CREATE,
+        "Add Binding",
+        CommandScope::Cluster,
+        Risk::Medium,
+        NONE,
+    ),
+    CommandMeta::mutation(
+        CommandId::BINDING_DELETE,
+        "Delete Binding",
+        CommandScope::Selection,
+        Risk::Medium,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::AnyOf(BINDING_KINDS)),
+    CommandMeta::mutation(
+        CommandId::BINDING_EDIT,
+        "Edit Binding",
+        CommandScope::Cluster,
+        Risk::Medium,
+        NONE,
+    ),
+    // Opens the binding dialog; the change reaches the cluster only through `binding::Create` and
+    // `binding::Edit`, which are guarded.
+    CommandMeta::read(
+        CommandId::BINDING_OPEN_DIALOG,
+        "Binding: New or Edit Subjects…",
+        CommandScope::Cluster,
+        NONE,
+    ),
     // Opens the chart gallery (a page of every chart state) as a tab; reads nothing from a
     // cluster and changes nothing.
     CommandMeta::read(
         CommandId::CHARTS_OPEN_GALLERY,
         "Open Chart Gallery",
+        CommandScope::Global,
+        NONE,
+    ),
+    // The cloud commands (E18-S06) run the provider CLIs read-only and edit Oxikube's own managed
+    // kubeconfigs, never a cluster and never the user's kubeconfig: not `mutating`, no guard tier.
+    CommandMeta::read(
+        CommandId::CLOUD_ADD,
+        "Add Cloud Cluster",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::CLOUD_CANCEL,
+        "Cancel Cloud Discovery",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::CLOUD_REFRESH,
+        "Refresh Cloud Clusters",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::CLOUD_REMOVE,
+        "Remove Cloud Cluster",
         CommandScope::Global,
         NONE,
     ),
@@ -1664,6 +1781,40 @@ pub static COMMANDS: &[CommandMeta] = &[
     // detail drawer does not have, and the palette must not offer it on other kinds.
     .in_views(TABLE_VIEW)
     .selecting(SelectionKind::core("PersistentVolumeClaim")),
+    // Opens the can-i panel; asking is a SelfSubjectAccessReview / SubjectAccessReview, which
+    // creates nothing, so it is read-only and needs no confirmation (E17-S08).
+    CommandMeta::read(
+        CommandId::RBAC_CAN_I,
+        "RBAC: Can I?",
+        CommandScope::Cluster,
+        NONE,
+    ),
+    // The subject views (E17-S07) read the Roles and bindings through the resource port, which
+    // changes nothing in any cluster; copying writes only the clipboard.
+    CommandMeta::read(
+        CommandId::RBAC_COPY_MATRIX,
+        "RBAC: Copy Matrix",
+        CommandScope::Cluster,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::RBAC_OPEN_GROUPS,
+        "RBAC: Groups",
+        CommandScope::Cluster,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::RBAC_OPEN_USERS,
+        "RBAC: Users",
+        CommandScope::Cluster,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::RBAC_SHOW_SUBJECT,
+        "RBAC: Show Subject",
+        CommandScope::Cluster,
+        NONE,
+    ),
     // The manifest editor runs it through its own flow (E10-S08): a server dry run, the diff
     // preview (which is the confirmation, hence `Low`), then the apply. Agents call it directly;
     // the guard and the handler's own dry run apply to them alike.
@@ -1880,6 +2031,41 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::One),
+    // Changing RBAC can hand out real privileges (E17-S05): risk medium, one simple confirmation
+    // naming the role and the cluster, a server dry run first, blocked on a read-only cluster,
+    // audited with a rule count only. The handler writes Roles and ClusterRoles and nothing else,
+    // so an agent cannot use these to write any other kind.
+    CommandMeta::mutation(
+        CommandId::ROLE_CREATE,
+        "Create Role",
+        CommandScope::Cluster,
+        Risk::Medium,
+        NONE,
+    ),
+    CommandMeta::mutation(
+        CommandId::ROLE_DELETE,
+        "Delete Role",
+        CommandScope::Selection,
+        Risk::Medium,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::AnyOf(ROLE_KINDS)),
+    CommandMeta::mutation(
+        CommandId::ROLE_EDIT,
+        "Edit Role",
+        CommandScope::Cluster,
+        Risk::Medium,
+        NONE,
+    ),
+    // Opens the rule dialog; the change reaches the cluster only through `role::Create` and
+    // `role::Edit`, which are guarded.
+    CommandMeta::read(
+        CommandId::ROLE_OPEN_DIALOG,
+        "Role: New or Edit Rules…",
+        CommandScope::Cluster,
+        NONE,
+    ),
     // Opens a dialog that builds a Secret manifest in an editor tab (E12-S11); like
     // `resource::Create` it changes nothing in a cluster. The object is made by `resource::Apply`
     // (risk low, the dry-run diff with the values masked is the confirmation, blocked read-only).
@@ -1968,6 +2154,18 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::core("Service")),
+    // Creates a credential (a TokenRequest, or a legacy token Secret after consent): risk low (medium when the legacy token Secret fallback is allowed,
+    // `Command::effective_risk`), one confirmation, blocked on a read-only cluster, audited with the account and the lifetime and
+    // never the token (E17-S09).
+    CommandMeta::mutation(
+        CommandId::SERVICEACCOUNT_GENERATE_KUBECONFIG,
+        "Generate ServiceAccount Kubeconfig",
+        CommandScope::Selection,
+        Risk::Low,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::core("ServiceAccount")),
     // One annotation on one StorageClass (and the previous default's, when asked): reversible by
     // setting another class, hence `Low`; the per-session skip of low-risk confirms is E19's.
     CommandMeta::mutation(
@@ -2524,6 +2722,7 @@ mod tests {
                 .all(|m| m.tool_risk() == m.risk
                     || m.id == CommandId::RESOURCE_DELETE
                     || m.id == CommandId::SELECTION_DELETE
+                    || m.id == CommandId::SERVICEACCOUNT_GENERATE_KUBECONFIG
                     || m.id == CommandId::WORKLOAD_SCALE)
         );
     }

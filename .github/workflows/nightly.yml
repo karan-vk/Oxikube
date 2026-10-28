@@ -92,6 +92,7 @@ jobs:
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_catalog_ui --features screenshot --test screenshot --profile "$CARGO_PROFILE"
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_catalog_ui --features screenshot --test catalog_screenshot --profile "$CARGO_PROFILE"
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_catalog_ui --features screenshot --test sources_screenshot --profile "$CARGO_PROFILE"
+          ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_catalog_ui --features screenshot --test cloud_screenshot --profile "$CARGO_PROFILE"
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_catalog_ui --features screenshot --test cluster_tabs_screenshot --profile "$CARGO_PROFILE"
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_catalog_ui --features screenshot --test connect_screenshot --profile "$CARGO_PROFILE"
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_settings_ui --features screenshot --test metrics_screenshot --profile "$CARGO_PROFILE"
@@ -114,6 +115,10 @@ jobs:
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_helm_ui --features screenshot --test charts_screenshot --profile "$CARGO_PROFILE"
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_helm_ui --features screenshot --test releases_screenshot --profile "$CARGO_PROFILE"
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_helm_ui --features screenshot --test upgrade_screenshot --profile "$CARGO_PROFILE"
+          ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_rbac_ui --features screenshot --test dialog_screenshot --profile "$CARGO_PROFILE"
+          ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_rbac_ui --features screenshot --test binding_screenshot --profile "$CARGO_PROFILE"
+          ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_rbac_ui --features screenshot --test panel_screenshot --profile "$CARGO_PROFILE"
+          ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_rbac_ui --features screenshot --test subjects_screenshot --profile "$CARGO_PROFILE"
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_terminal --features screenshot --test screenshot --profile "$CARGO_PROFILE"
           ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} cargo test -p oxikube_terminal --features screenshot --test screenshot_programs --profile "$CARGO_PROFILE"
           exit $failed

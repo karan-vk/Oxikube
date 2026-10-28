@@ -7,7 +7,7 @@
 //! Real I/O wakes GPUI tasks from Tokio threads, so a test that uses this allows parking
 //! (`cx.executor().allow_parking()`) and waits with [`wait`], which polls with short real-time
 //! sleeps.
-#![allow(dead_code)]
+#![allow(dead_code, reason = "each test binary uses a subset of these helpers")]
 
 pub mod editor;
 
@@ -66,7 +66,7 @@ pub fn launch(cx: &mut TestAppContext, context: &str) -> Launched {
 pub fn launch_with(cx: &mut TestAppContext, context: &str, extra: serde_json::Value) -> Launched {
     let dir = tempfile::tempdir().expect("a temp dir");
     let config = dir.path().join("config");
-    std::fs::create_dir_all(&config).unwrap();
+    std::fs::create_dir_all(&config).expect("create the temp config dir");
     std::fs::write(config.join("settings.json"), {
         let mut settings =
             serde_json::json!({ "kubeconfig": { "sources": [{ "kind": "default" }] } });
@@ -75,7 +75,7 @@ pub fn launch_with(cx: &mut TestAppContext, context: &str, extra: serde_json::Va
         }
         settings.to_string()
     })
-    .unwrap();
+    .expect("write the test settings.json");
     let env = StartupEnv {
         config: ConfigSource::Dir(config),
         runtime: RuntimeChoice::Tokio,
@@ -89,26 +89,7 @@ pub fn launch_with(cx: &mut TestAppContext, context: &str, extra: serde_json::Va
         .update(|cx| window::open_main_window(cx, |content, _| content))
         .expect("the main window opens");
     let mut vcx = VisualTestContext::from_window(handle.into(), cx);
-    let workspace = workspace(&mut vcx);
-    let catalog = vcx.update(|_, cx| workspace.read(cx).items_of_type::<CatalogView>()[0].clone());
-    wait(&mut vcx, "the catalog lists the kind context", |vcx| {
-        vcx.update(|_, cx| {
-            let model = catalog.read(cx).model();
-            (0..model.visible_len())
-                .filter_map(|ix| model.row(ix))
-                .any(|row| row.entry().context.context.as_str() == context)
-        })
-    });
-    vcx.update(|window, cx| {
-        catalog.update(cx, |view, cx| {
-            view.set_search(context, window, cx);
-            view.focus_search(window, cx);
-        });
-    });
-    vcx.run_until_parked();
-    vcx.simulate_keystrokes("enter");
-    let cluster = wait_ready(&mut vcx, context);
-    let tab = tab_of(&mut vcx, &workspace, &cluster);
+    let (cluster, tab) = connect(&mut vcx, context);
     let table = open_pods_table(&mut vcx, &tab);
     Launched {
         vcx,
@@ -117,6 +98,36 @@ pub fn launch_with(cx: &mut TestAppContext, context: &str, extra: serde_json::Va
         table,
         dir,
     }
+}
+
+/// Connects `context` the way a user does: waits for the catalog to list it, searches for it and
+/// presses Enter. Returns the cluster once its session is `Ready`, and its tab.
+pub fn connect(vcx: &mut VisualTestContext, context: &str) -> (ClusterId, Entity<ClusterTab>) {
+    let workspace = workspace(vcx);
+    let catalog = vcx.update(|_, cx| workspace.read(cx).items_of_type::<CatalogView>()[0].clone());
+    wait(vcx, &format!("the catalog to list {context}"), |vcx| {
+        vcx.update(|_, cx| {
+            let model = catalog.read(cx).model();
+            (0..model.visible_len())
+                .filter_map(|ix| model.row(ix))
+                .any(|row| row.entry().context.context.as_str() == context)
+        })
+    });
+    vcx.update(|window, cx| {
+        // The catalog may be behind a cluster tab connected earlier.
+        workspace.update(cx, |workspace, cx| {
+            workspace.activate_item(catalog.entity_id(), true, window, cx);
+        });
+        catalog.update(cx, |view, cx| {
+            view.set_search(context, window, cx);
+            view.focus_search(window, cx);
+        });
+    });
+    vcx.run_until_parked();
+    vcx.simulate_keystrokes("enter");
+    let cluster = wait_ready(vcx, context);
+    let tab = tab_of(vcx, &workspace, &cluster);
+    (cluster, tab)
 }
 
 /// Runs `call` against a client of the kind `context`, on a runtime of its own (the test's thread

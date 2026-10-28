@@ -57,6 +57,12 @@ impl Command {
                 .unwrap_or(declared),
             // Scaling up or down is low; scaling to zero stops every pod of the workload.
             Command::WorkloadScale { replicas: 0, .. } => declared.max(Risk::Medium),
+            // Allowing the legacy fallback may create a never-expiring token Secret: a persistent
+            // credential, so it confirms at medium (E17-S09). The TokenRequest path stays low.
+            Command::ServiceAccountGenerateKubeconfig {
+                allow_legacy_token: true,
+                ..
+            } => declared.max(Risk::Medium),
             // A grace period of 0 skips the kubelet's shutdown: a force delete, whichever command
             // spells it (E12-S03).
             Command::PodDelete {
@@ -85,6 +91,9 @@ impl CommandMeta {
         Some(
             if self.id == CommandId::RESOURCE_DELETE || self.id == CommandId::SELECTION_DELETE {
                 declared.max(Risk::Irreversible)
+            } else if self.id == CommandId::SERVICEACCOUNT_GENERATE_KUBECONFIG {
+                // The worst case is the legacy token Secret fallback.
+                declared.max(Risk::Medium)
             } else if self.id == CommandId::WORKLOAD_SCALE {
                 // The worst case is a scale to zero.
                 declared.max(Risk::Medium)
@@ -102,6 +111,26 @@ mod tests {
 
     fn gvk(group: &str, kind: &str) -> Gvk {
         Gvk::new(group, "v1", kind)
+    }
+
+    #[test]
+    fn the_legacy_token_fallback_raises_the_kubeconfig_command_to_medium() {
+        let kubeconfig = |allow_legacy_token| Command::ServiceAccountGenerateKubeconfig {
+            target: ResourceRef::namespaced(
+                ClusterId::new("/k", &ContextName::new("kind")),
+                gvk("", "ServiceAccount"),
+                "demo",
+                "deployer",
+            ),
+            expiration_seconds: None,
+            audiences: Vec::new(),
+            allow_legacy_token,
+        };
+        assert_eq!(kubeconfig(false).effective_risk(), Some(Risk::Low));
+        assert_eq!(kubeconfig(true).effective_risk(), Some(Risk::Medium));
+        let meta = crate::command::lookup(CommandId::SERVICEACCOUNT_GENERATE_KUBECONFIG)
+            .expect("declared");
+        assert_eq!(meta.tool_risk(), Some(Risk::Medium));
     }
 
     #[test]

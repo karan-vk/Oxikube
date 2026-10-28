@@ -172,13 +172,14 @@ impl EventRow {
         if let Some(slot) = column.fixed_slot() {
             return self.text[slot].clone();
         }
-        let fresh = matches!(&self.relative, Some((at, _)) if *at == epoch);
-        if !fresh {
-            let age = since(self.event.first_seen.or(self.event.last_seen), now);
-            let last = since(self.event.last_seen.or(self.event.first_seen), now);
-            self.relative = Some((epoch, [age, last]));
-        }
-        let (_, cells) = self.relative.as_ref().expect("filled above");
+        let cells = match &mut self.relative {
+            Some((at, cells)) if *at == epoch => cells,
+            slot => {
+                let age = since(self.event.first_seen.or(self.event.last_seen), now);
+                let last = since(self.event.last_seen.or(self.event.first_seen), now);
+                &slot.insert((epoch, [age, last])).1
+            }
+        };
         match column {
             EventColumn::Age => cells[0].clone(),
             _ => cells[1].clone(),

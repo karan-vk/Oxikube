@@ -1,0 +1,16 @@
+{
+  "aadProfile": {
+    "managed": true,
+    "tenantId": "11111111-1111-1111-1111-111111111111"
+  },
+  "currentKubernetesVersion": "1.29.4",
+  "fqdn": "idle-dns-789.hcp.westeurope.azmk8s.io",
+  "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-aad/providers/Microsoft.ContainerService/managedClusters/idle",
+  "location": "westeurope",
+  "name": "idle",
+  "powerState": {
+    "code": "Stopped"
+  },
+  "provisioningState": "Succeeded",
+  "resourceGroup": "rg-aad"
+}

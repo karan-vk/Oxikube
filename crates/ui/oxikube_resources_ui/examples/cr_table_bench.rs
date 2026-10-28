@@ -11,7 +11,11 @@
 //! alone, p50 / p95 / p99 / max. `OXIKUBE_BENCH_ROWS`, `OXIKUBE_BENCH_FRAMES`,
 //! `OXIKUBE_BENCH_CHURN` and `OXIKUBE_BENCH_STEP` override the defaults.
 
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "a benchmark reports on stdout and stderr"
+)]
 
 use std::rc::Rc;
 use std::sync::Arc;

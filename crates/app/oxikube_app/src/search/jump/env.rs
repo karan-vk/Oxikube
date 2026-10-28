@@ -36,6 +36,12 @@ pub trait JumpEnv {
     /// The alias table of `cluster` (built-in, discovered and the user's aliases).
     fn aliases(&self, cluster: &ClusterId) -> AliasTable;
 
+    /// The RBAC subject names `cluster`'s bindings mention, for `:rbac` completion (E17-S07).
+    /// Known once the cluster's subject pages have been opened; empty before.
+    fn rbac_subjects(&self, _cluster: &ClusterId) -> Arc<[Arc<str>]> {
+        Arc::default()
+    }
+
     /// The namespaces `cluster` has, when they are known yet. A catalog that is not the
     /// cluster's own list (RBAC forbade it, the list failed) accepts any valid name.
     fn namespaces(&self, cluster: &ClusterId) -> Option<NamespaceCatalog>;

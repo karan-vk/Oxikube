@@ -31,15 +31,13 @@ mod imp {
     use std::time::Duration;
 
     pub fn process_time() -> Option<Duration> {
-        // SAFETY: `getrusage` writes one `rusage` into the zeroed struct we own; RUSAGE_SELF is a
-        // valid `who` on every Unix, and the struct outlives the call.
-        let usage = unsafe {
-            let mut usage: libc::rusage = std::mem::zeroed();
-            if libc::getrusage(libc::RUSAGE_SELF, &mut usage) != 0 {
-                return None;
-            }
-            usage
-        };
+        // SAFETY: `rusage` is plain integers, so all-zero is a valid value.
+        let mut usage: libc::rusage = unsafe { std::mem::zeroed() };
+        // SAFETY: `getrusage` writes one `rusage` into the struct we own; RUSAGE_SELF is a valid
+        // `who` on every Unix, and the struct outlives the call.
+        if unsafe { libc::getrusage(libc::RUSAGE_SELF, &mut usage) } != 0 {
+            return None;
+        }
         Some(timeval(usage.ru_utime)? + timeval(usage.ru_stime)?)
     }
 
@@ -81,7 +79,9 @@ mod tests {
     #[test]
     fn busy_work_moves_the_reading() {
         let Some(before) = process_time() else {
-            assert!(!cfg!(unix), "Unix has a reader");
+            if cfg!(unix) {
+                panic!("Unix has a reader");
+            }
             return;
         };
         let started = std::time::Instant::now();

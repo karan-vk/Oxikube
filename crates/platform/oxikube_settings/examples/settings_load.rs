@@ -4,7 +4,7 @@
 //!
 //! `cargo run --release -p oxikube_settings --example settings_load` (budget: < 30 ms on the
 //! main thread at startup, E05-S13).
-#![allow(clippy::print_stdout)]
+#![allow(clippy::print_stdout, reason = "an example reports on stdout")]
 
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
@@ -29,7 +29,7 @@ struct SectionContent {
 macro_rules! sections {
     ($($name:ident = $key:literal),+ $(,)?) => {$(
         #[derive(PartialEq)]
-        #[allow(dead_code)]
+        #[allow(dead_code, reason = "the fields exist only to size the value")]
         struct $name(f32, u32, usize);
 
         impl Settings for $name {
@@ -120,15 +120,20 @@ fn main() {
     let mut reload = Vec::new();
     for i in 0..200 {
         let started = Instant::now();
-        let mut store = SettingsStore::without_registered(&defaults).unwrap();
+        let mut store =
+            SettingsStore::without_registered(&defaults).expect("bundled defaults parse");
         register_all(&mut store);
-        store.set_user_settings(&user).unwrap();
+        store
+            .set_user_settings(&user)
+            .expect("sample user settings parse");
         startup.push(started.elapsed());
         assert!(store.diagnostics().is_empty(), "{:?}", store.diagnostics());
 
         let edited = user.replace("\"limit\": 5", &format!("\"limit\": {}", 6 + i));
         let started = Instant::now();
-        store.set_user_settings(&edited).unwrap();
+        store
+            .set_user_settings(&edited)
+            .expect("edited sample user settings parse");
         reload.push(started.elapsed());
     }
     println!("startup (parse + resolve): {}", stats(startup));
@@ -141,9 +146,9 @@ fn main() {
     let mut watch = Vec::new();
     for i in 0..50 {
         let dir = root.join(i.to_string());
-        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::create_dir_all(&dir).expect("create temp settings dir");
         let path = dir.join("settings.json");
-        std::fs::write(&path, &user).unwrap();
+        std::fs::write(&path, &user).expect("write temp settings.json");
         let started = Instant::now();
         let watcher = oxikube_settings::watcher::SettingsFileWatcher::spawn(
             path,
@@ -151,7 +156,7 @@ fn main() {
             oxikube_settings::watcher::DEFAULT_DEBOUNCE,
             |_| true,
         )
-        .unwrap();
+        .expect("settings watcher starts on a temp file");
         watch.push(started.elapsed());
         drop(watcher);
     }

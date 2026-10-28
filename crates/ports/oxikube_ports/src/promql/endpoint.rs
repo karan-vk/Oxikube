@@ -117,30 +117,35 @@ impl PromEndpoint {
     }
 
     /// Sets the path prefix.
+    #[must_use]
     pub fn with_path_prefix(mut self, prefix: impl Into<String>) -> Self {
         self.path_prefix = Some(prefix.into());
         self
     }
 
     /// Sets the authentication.
+    #[must_use]
     pub fn with_auth(mut self, auth: PromAuth) -> Self {
         self.auth = auth;
         self
     }
 
     /// Sets the TLS settings.
+    #[must_use]
     pub fn with_tls(mut self, tls: PromTls) -> Self {
         self.tls = tls;
         self
     }
 
     /// Sets the request deadline.
+    #[must_use]
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
         self
     }
 
     /// Sets the response size cap.
+    #[must_use]
     pub fn with_max_response_bytes(mut self, bytes: usize) -> Self {
         self.max_response_bytes = bytes;
         self

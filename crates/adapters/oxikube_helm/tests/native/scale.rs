@@ -76,22 +76,33 @@ async fn list_within_the_budget(label: &str, chart_values: Option<Value>) {
     let releases = reader
         .list_releases(&cluster(), &NamespaceSelection::All)
         .await
-        .unwrap();
+        .expect("listing releases from the fake cluster succeeds");
     let cold = started.elapsed();
-    assert_eq!(releases.len(), RELEASES as usize);
-    assert!(releases.iter().all(|r| r.revision == REVISIONS));
+    assert_eq!(
+        releases.len(),
+        RELEASES as usize,
+        "every seeded release is listed"
+    );
+    assert!(
+        releases.iter().all(|r| r.revision == REVISIONS),
+        "every listed release reports its latest revision"
+    );
     assert_eq!(
         gets(&fake),
         RELEASES as usize,
         "one fetch per release, latest only"
     );
-    assert_eq!(full_lists(&fake), 0);
+    assert_eq!(
+        full_lists(&fake),
+        0,
+        "the reader never lists whole collections"
+    );
 
     let started = Instant::now();
     reader
         .list_releases(&cluster(), &NamespaceSelection::All)
         .await
-        .unwrap();
+        .expect("the warm listing from the fake cluster succeeds");
     let warm = started.elapsed();
     eprintln!(
         "helm native list ({label}): {RELEASES} releases x {REVISIONS} revisions, {} KiB \

@@ -140,7 +140,27 @@ crate's `README.md` for its allowed dependencies. Highlights:
   over a `SourceListStore` (settings in the app), the `ClusterSourcePort` (`set_user_sources`,
   `source_statuses`, `validate_kubeconfig`) and the `FsPort` (`write_private`, `remove`); a pasted
   kubeconfig is stored `0600` as `<config dir>/kubeconfigs/<name>.yaml` (ADR 0015), only such files
-  are ever deleted, and the `kubeconfig::*` handlers register with `register_commands`.
+  are ever deleted, and the `kubeconfig::*` handlers register with `register_commands`. The names
+  `aws`, `gcloud` and `az` are reserved for cloud discovery's managed files.
+  Module `cloud` (E18-S05): `CloudDiscoveryService` runs the `CloudDiscoveryPort` adapters on the
+  app's `Spawner` (one abort-on-drop task per provider; a new refresh or `cancel` kills its CLI
+  processes), lists a provider's scopes `max_parallel_scopes` at a time (a failing scope is reported
+  and the others go on) and streams `CloudDiscoveryEvent`s (`Cached`, `Detected`, `Started`,
+  `ScopeDone`, `ScopeFailed`, then `Finished`, `Failed` or `Cancelled`). The cache is two
+  `StatePort` tables (`cloud_scopes`, `cloud_providers`; rows of the `kv` table, no migration) with
+  the listing time: within the TTL it answers without a CLI, past it the cached clusters are sent
+  first and the CLI runs behind them. `add` merges the provider's exec-auth entry by context name
+  into `<config dir>/kubeconfigs/<cli>.yaml` (`aws.yaml`, `gcloud.yaml`, `az.yaml`; a marker line,
+  `FsPort::write_private`, never a token; a file without the marker is refused) and lists it as a
+  `file` source through `KubeconfigSourcesService` so the cluster source reloads it; `remove` drops
+  the entry (the file and its source with the last one) and disconnects the context's open session.
+  The user's own kubeconfig is never touched. The binary wires it in `mount::cloud` over the three
+  `oxikube_cloud` adapters sharing one `CliRunner`. The `cloud::Refresh`, `Cancel`, `Add` and `Remove`
+  commands (E18-S06; `app.cloud_*` tools, no guard tier: they run the CLIs read-only and edit only
+  the managed files) are `CloudDiscoveryService::execute` and `cloud::register_commands`; `watch`
+  streams every refresh's events to whoever follows them, whichever surface asked.
+  The read-only agent tool `cloud.discover_clusters` (E18-S08, `tools::cloud`) answers from the
+  cache and refreshes only on `refresh: true`; its results hold no endpoint, CA or exec argument.
   Module `session::namespaces` (E06-S07): `NamespaceService` sets a session's `NamespaceSelection`
   (one `NamespaceChanged` per change, 150 ms debounce on the `ClockPort`), remembers selection,
   favourites and typed names per cluster in `StatePort` (kv `cluster/<id>/namespaces`), lists
@@ -283,6 +303,37 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `cargo bench -p oxikube_app --bench reference_index`: 10k Pods build in ~10 ms off the UI thread holding ~6 MB, a 500-op
   churn batch ~0.3 ms, one status update ~1 us, one cell ~30 ns. E12-S15's interim `PvcUsage` / `PvcUsageIndex` /
   `PvcUsageFeed` are gone: this is the one implementation.
+  Module `access` (E17-S01): `SubjectIndex`, "what can this subject do, and through which binding?". It applies the
+  store subscriptions' deltas of Role, ClusterRole, RoleBinding and ClusterRoleBinding (a snapshot replaces its kind,
+  each op edits one object; `subject -> {binding}` is kept incrementally) and answers `subjects`, `bindings_for`,
+  `grants_for` (binding, matched subject, role, `GrantScope`, rules), `rules_for` / `rules_in` (what
+  `kubectl auth can-i --list` lists), `can`, `can_url`, `roles_granting` and `matrix` (k9s's per-group, per-verb table).
+  The objects and the normaliser are pure domain (`oxikube_domain::rbac`: `Role`, `Binding`, `Subject` with its
+  implicit ServiceAccount and `system:authenticated` groups, `PolicyRule` read from JSON, `NormalisedRules`, whose
+  resource rules are `oxikube_domain::access::AccessRule`s, so rules reviews and RBAC objects share one matcher).
+  Aggregated ClusterRoles: live `rules` unioned with the selectors resolved over the ClusterRoles' labels. Fixture-tested
+  against recorded `kubectl auth can-i --list` output (`oxikube_testkit::fixtures::rbac`).
+  Module `rbac_subjects` (E17-S07): the subject views over that index. `PolicyFeed` subscribes to the four RBAC kinds on the
+  cluster's `ResourceStore` (all namespaces, shared with the Roles and Bindings tables) and applies their deltas to a
+  `SubjectIndex` behind a `PolicyHandle` (`status()` says how many feeds have not listed and which kinds were refused);
+  `summaries` lists the Users (users and ServiceAccounts, under `system:serviceaccount:<ns>:<name>`) or Groups with the number
+  of bindings and roles, reading bindings only; `subject_matrix` projects one subject's matrix cluster-wide or per namespace
+  (`Inherit::Direct`, or `ImplicitGroups` for what `system:authenticated` and a ServiceAccount's groups add) and `provenance`
+  names the bindings and roles behind one cell (with the `resourceNames` that make it partial); `SubjectMatrix::to_tsv` is the
+  copy-as-text; `SubjectFilter` is the `/` grammar over rows; `SubjectsService` remembers the subject names `:rbac <subject>`
+  completes. Matrices are computed per selected subject on the background executor. The API cannot list a group's members, so
+  the Groups page says so (`GROUP_MEMBERS_NOTE`).
+  Module `sa_kubeconfig` (E17-S09): the guarded `serviceaccount::GenerateKubeconfig` (mutating, risk low: one
+  confirmation, blocked on read-only clusters, tool `k8s.serviceaccount_generate_kubeconfig`). The handler reads the account,
+  asks `ClusterSourcePort::cluster_endpoint` for the cluster's server and CA (the adapter reads a CA file inline), posts a
+  `TokenRequest` (`ResourceWriter::create_subresource(ServiceAccount, ns, name, Subresource::Other("token"))`, one hour
+  unless asked, 10 minutes at least) through the guard's `Mutation`, and renders the kubeconfig (`KubeconfigSpec`: the CA as
+  `certificate-authority-data`, the token as `user.token`, context `<sa>@<cluster>` in the account's namespace). On a cluster
+  without `TokenRequest` (404/unsupported on the subresource) it reads an existing `kubernetes.io/service-account-token` Secret
+  or, only when the command says `allow_legacy_token`, creates one and waits for the token controller; the file then carries a
+  `# WARNING` comment. The token is a `SecretText` (zeroed on drop) and goes nowhere but `KubeconfigVault`, an in-memory store
+  keyed by account: the command's output, the audit record (account, lifetime, audience count, legacy flag), logs and toasts
+  never hold it. Nothing is written to disk by the app layer.
   E12-S05 adds `workload::Restart` and `workload::SetImage` for Deployments, StatefulSets and DaemonSets
   (`WorkloadService::restart`, `plan_set_image`, `set_image`, in `rollout`): restart merge-patches the pod template's
   `kubectl.kubernetes.io/restartedAt` (the kdash builder `oxikube_domain::build::restart_patch`, time from
@@ -688,6 +739,7 @@ crate's `README.md` for its allowed dependencies. Highlights:
 - `oxikube_resources_ui` — module `kinds::node::drain` (E12-S10): `DrainDialog` (reached by "Drain…" in a node row's menu, the palette's "Drain Node", `r` on the Nodes table (`resource_table::DrainSelected`, scoped to `kind == Node`) and the node panel's "Drain…" button through `DrainOpener`): the three `kubectl drain` switches, grace period and timeout, the equivalent `kubectl drain` line, the plan as a virtualised list (pods that block first, with the flag that allows them; Drain stays disabled while any does), the node's name typed, then per-pod progress (Pending, Evicting, Blocked by PDB, Terminating, Deleted, Failed) folded into a `DrainBoard` from the monitor's steps in batches with one coalesced notify; "Cancel drain" drops the run (no further eviction; the node stays cordoned) and the dialog then offers "Uncordon". `ResourceActions::with_drain` gives the tables the `DrainFlow`.
 - `oxikube_resources_ui` — module `warnings` and the detail's Events tab (E14-S04): `ObjectEvents` (the app's `WarningBadges` as a GPUI global, installed by `bins/oxikube::events::start`; without it no badge column and an Events tab that says events are unavailable), the badge column (`warnings`, a narrow non-sortable icon column right after Name offered by `ColumnScope` to every table but Events' own; the delegate draws it from `RowWarnings`, one hash lookup per visible row, never cached, with a tooltip of the newest warning and a click that dispatches `resource::ViewEvents`), the table's redraw on `BadgeChanges` through its render gate and its once-a-second tick that notices an expired badge; the detail drawer's Events tab (`detail::events_feed`) lists `WarningBadges::object_feed` (the service index by involved-object uid, newest first, Type / Reason / count / age / message) instead of a second watch of the store; `resource::ViewEvents` (a read, row action "View Events", MCP tool `k8s.resource_view_events`) opens a detail on that tab.
 - `oxikube_resources_ui` — module `used_by` and the detail's Used by tab (E12-S18): `DetailTab::UsedBy` for ServiceAccounts, ConfigMaps, Secrets, PersistentVolumeClaims and PriorityClasses lists the workloads whose Pods name the object (kind, name, pod count) over a lease on the shared `ReferenceFeed` taken when the tab opens and released when it is left or the detail closes; a foreground task looks at the index's version (200 ms while the Pods are read, then 1 s), one `used_by` read per change runs through `spawn_kube`, the view redraws only when the answer differs, and a click is `resource::Open` of the workload. `u` (k9s used-by), "Used By" in the row menu and the palette's "Show Used By" are `resource::ShowUsedBy` (a read; MCP stub `k8s.resource_show_used_by`), bound in a `kind == ServiceAccount || ConfigMap || Secret || PersistentVolumeClaim || PriorityClass` section of the default keymaps so `u` stays free for Namespaces, Services and Nodes.
+- `oxikube_rbac_ui` — module `service_account` (E17-S04): the ServiceAccount detail panel (`ServiceAccountPanel`, set on the kind `oxikube_resources_ui` registers with `KindSpecs::set_detail` from `oxikube_rbac_ui::init`, which `bins/oxikube` runs after the resources init): token Secrets and image pull secrets as links (never decoded), `automountServiceAccountToken` with the default explained when unset, the bound roles (scope, role, binding, the group a binding came through; a loading row, never an empty list, while the Role and binding feeds are listed, and a note for each RBAC kind the user may not list) and a "Used by" button (`resource::ShowUsedBy`, the E12-S18 tab that groups Pods by workload). The roles come from `oxikube_app::access::PolicyFeed` (four cluster-wide store subscriptions feeding a `SubjectIndex`, abort-on-drop) shared per cluster by `PolicyHub` and held only while a panel is open; a foreground task compares the feed's version and recomputes on the background executor, redrawing only when the answer differs. `register_header_action` is the header's extension point for extra buttons. The **Kubeconfig** section (E17-S09, `service_account::kubeconfig`): lifetime choices (10 min to 7 days, one hour by default), a checkbox for the legacy-token fallback and **Generate kubeconfig**, which sends `serviceaccount::GenerateKubeconfig` through the bus (the same command the row menu and the palette offer); the finished kubeconfig is read from the app's `KubeconfigVault` by the panel's poll and shown with the token masked until **Show token**, with **Copy** (clipboard), **Save…** (a save panel, then `FsPort::write_private`, mode 0600, ADR 0015: the file is the user's choice, never in the config directory) and **Discard**; closing the panel discards it. `oxikube_rbac_ui::install` hands the section the filesystem; `oxikube_rbac_ui::row_actions` adds "Generate Kubeconfig" to the ServiceAccount row menu. The list columns are the shared catalogue's (Name, Namespace, Secrets, Age, Labels).
 - `oxikube_resources_ui` — module `kinds::namespace` allocation (E13-S11): the Namespace panel sums the namespace's pods (read from the store through a `CountsLease`, summed on the background executor with the S02 functions) against its `ResourceQuota`s and lists each quota's `used` against `hard`. Module `kinds::node` (E12-S09): `node::spec()` (the Nodes `KindSpec`: a per-cluster `NodeColumns`, the panel, the actions cordon / uncordon), `NodePanel` (the detail panel above the Overview: cordon badge and button, condition chips, the allocation section (E13-S11: requests, limits and live usage per resource against allocatable, ephemeral storage and GPUs, the pods that set none, `metrics unavailable: <reason>` when there is no reading; `kinds::allocation` is the section the Namespace panel shares), taints with their effect, the pods on the node, capacity beside allocatable, images and system info; derived off the render path from the node's updates and a one-second tick over the pods-by-node index, with a one-time field-selector list when the Pod feed is not live), `node_row_actions` ("Cordon" and "Uncordon" in the row menu, keys `c` / `u` scoped to `kind == Node`, `resource_table::CordonSelected` / `UncordonSelected`).
   Node rows (E09-S09): `exec_row_actions` also offers "Shell" on a Node (`node::Shell`, key `s` on a node table, a button in
   the node detail's header), greyed out on every read-only cluster; the runner confirms with the node and the image named.
@@ -727,6 +779,21 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `describe.kubectl_path` settings, hot reloaded by the binary). `oxikube_kube::KubeConnector::set_describe_factory` hands each
   connection's client and discovery to the factory the binary supplies (`bins/oxikube::kube_ports::SourcesConnector`), which
   fills `ClusterPorts::describe` and points `kubectl` at the file that defines the context.
+- `oxikube_cloud` (E18) — the `CloudDiscoveryPort` adapters, one per provider (EKS through `aws`, GKE through `gcloud`, AKS
+  through `az`; E18-S02..S04). The port (`id`, `detect`, `scopes`, `list_clusters(scope)`, `kubeconfig_entry(cluster)`) moves
+  plain data from `oxikube_domain::cloud` (`CloudProvider`, `CloudScope`, `DiscoveredCluster`, `KubeconfigEntry` with an exec
+  plugin and no token field). Module `process` (E18-S01): `CliRunner`, the one way the crate runs a CLI (design copied from
+  `oxikube_helm::cli::run`, not depended on): stdin closed, `kill_on_drop`, a per-command timeout (30 s default), a
+  `CancellationToken`, JSON flags per CLI (`run_json::<T>`), a cap on concurrent processes (4), a lookup on the path override
+  (`cloud.<cli>_path`), the login shell's `PATH` (`$SHELL -lc 'printenv PATH'`, probed once with a timeout, falling back to
+  the app's `PATH`) and `/opt/homebrew/bin`, `/usr/local/bin`; stderr redacted into a typed `CliError` that maps to `Auth`
+  (with the CLI's login hint), `Forbidden`, `Network`, `Timeout` or `Unsupported` (naming the settings key). Adapters run
+  through the `ProcessRunner` trait, so their tests use `testing::RecordedRunner` (feature `testing`) over recorded output;
+  `oxikube_testkit::contracts::cloud_discovery` is the behaviour the adapters and `FakeCloudDiscoveryPort` both meet.
+  Module `az` (E18-S04): `AzureAksAdapter` lists enabled subscriptions and `az aks list` per subscription; the entry for an
+  Azure AD cluster is a `kubelogin get-token --login azurecli` exec user (CA from `az aks get-credentials` into a `0700` temp
+  dir deleted immediately, never `--admin`); local-account-only and stopped clusters are `Unsupported`; context
+  `aks:<subscription>:<resource-group>:<name>`.
 - `oxikube_helm` (E16) — the `HelmPort` adapters. Module `cli` (E16-S04): `HelmCli` drives the user's `helm` binary. It
   finds it (`HelmCliConfig::path`, the `helm.path` setting, else `PATH`, `/opt/homebrew/bin`, `/usr/local/bin`), requires
   `helm version --short` >= 3.10 (`BinaryMissing` / `VersionTooOld`, kind `Unsupported`) and caches the answer for the
@@ -826,6 +893,26 @@ crate's `README.md` for its allowed dependencies. Highlights:
 - `oxikube_helm_ui::upgrade` (E16-S10) — the upgrade tab (`HelmUpgradeView`, keyed `helm-upgrade:<ns>/<name>`): prefilled values, version picker,
   values diff and chart-defaults diff (E10 `ManifestDiff`, secrets fingerprinted), `--reuse-values` toggle, preview, medium confirmation; opened from the
   sidebar's Helm > Upgrade (release picker), the palette, or `helm::UpgradeRelease` (`mount/helm_upgrade.rs`).
+- `oxikube_rbac_ui::role` + `oxikube_app::role_ops` (E17-S05) — Roles and ClusterRoles. The two kinds register a `KindSpec` (no sidebar slot: Access Control
+  already lists them) whose detail panel `RolePanel` shows the rule table (virtualised uniform rows: API groups, resources, verbs, resource names, non-resource
+  URLs, normalised for reading, the rule as written on hover), an Aggregated badge with the selectors and, read through `RoleLinks` off the UI thread, the
+  ClusterRoles an aggregated role collects from. `RoleDialog` (`role::OpenDialog`: the table's "New", the row's "Edit Rules…", the panel's "Edit rules…", the
+  palette) edits rows of rules: verb checkboxes (a verb the picked kind does not support is disabled), a resource picker over `DiscoveryPort::discover` (plus
+  subresources, free text for CRDs), resource names, URLs in a ClusterRole; its model `RoleDraft` builds the manifest and the problems (errors block saving,
+  `resourceNames` with create/list/watch only warns). An aggregated ClusterRole's rules are read-only. Saving sends `role::Create` / `role::Edit` and deleting
+  `role::Delete` (mutating, risk medium: one confirmation, a server dry run first, blocked read-only, audited with a rule count; the handlers write Roles and
+  ClusterRoles only, an edit is a replace at the `resourceVersion` the dialog read; the delete confirmation names the bindings that name the role).
+- `oxikube_rbac_ui::binding` + `oxikube_app::binding_ops` (E17-S06) — RoleBindings and ClusterRoleBindings. The two kinds register a `KindSpec` (no sidebar slot)
+  whose generic table has the Role ref and Subjects (first subject and `+N`) columns and whose detail panel `BindingPanel` shows the role it grants (a link that
+  opens it), the subjects as a virtualised table (kind, name, namespace, apiGroup) and the rules the role grants (read once through `role_of`, off the UI
+  thread). `BindingDialog` (`binding::OpenDialog`: the table's "New", the row's "Edit Binding…", the panel's "Edit…", the palette) has a role picker that offers
+  only what the binding may name (a ClusterRoleBinding only ClusterRoles, a RoleBinding the Roles of its namespace and every ClusterRole; `BindingChoices` reads
+  the lists, each on its own so a refused list falls back to typing) and subject rows (User / Group with autocomplete from the names bindings already use,
+  ServiceAccount with a namespace and a picker, the `system:serviceaccount:<ns>:<name>` identity shown); `BindingDraft` is its model. Saving sends `binding::Create` /
+  `binding::Edit`, deleting `binding::Delete` (mutating, risk medium: one confirmation that calls out `cluster-admin` and everybody-groups from the domain's
+  `Escalation` table, a server dry run first, blocked read-only, audited with the role and a subject count; the handlers write bindings only). `roleRef` is
+  immutable in the API, so an edit that changes it is `binding::Edit` with `previous`: delete then create as one intent, the old binding put back if the new one
+  is refused.
 - `oxikube_notify_os` (E14-S06) — the `NotifierPort` adapter for desktop notifications. `OsNotifier` is off until the user opts in
   (`events.os_notifications`): `set_enabled(true)` is the only call that contacts the OS, on a thread of its own, and a system without a
   notification service answers `NotifierStatus::Unavailable`, never a panic. One `Backend` per platform behind a trait: macOS
@@ -924,6 +1011,13 @@ crate's `README.md` for its allowed dependencies. Highlights:
   chosen range is kept in `StatePort` under `metrics.history_range` (a per-viewer convenience). No polling here: the view asks,
   and dropping the future cancels the queries. The service is built by `bins/oxikube::metrics_provider` and handed to the views
   as the `oxikube_resources_ui::detail::MetricsHistory` global.
+- `oxikube_settings::cloud` (E18-S07) — the global `cloud` setting: `providers.{aws,gcloud,az}` (unknown id rejected),
+  `{aws,gcloud,az,gke_gcloud_auth_plugin,kubelogin}_path` (empty = look up), the scan lists `aws.profiles` / `aws.regions` /
+  `gcloud.projects` / `az.subscriptions` (empty = all, except regions = none extra), `cache_ttl_secs` (30..86400, 900),
+  `parallelism` (1..16, 4) and `command_timeout_secs` (5..600, 30); out-of-range numbers are clamped. `bins/oxikube::mount::cloud`
+  observes it and pushes it into `CliRunner::reconfigure`, `AwsDiscovery::set_settings` / `GcloudDiscovery::set_projects` /
+  `AzureAksAdapter::set_subscriptions` and `CloudDiscoveryService::set_config` (`DiscoveryConfig::disabled` hides a provider and
+  cancels its run): the next run uses it, no restart.
 - `oxikube_settings::portforward` + `oxikube_app::tools::portforward` (E15-S08) — the `portforward` setting (`default_bind`
   loopback by default, `allowed_in_readonly` false, `port_range` unset = OS-assigned, `annotations` false; also under
   `clusters.<id>.portforward`) and the agent tools `portforward.list_port_forwards` (read-only) and
@@ -990,6 +1084,14 @@ crate's `README.md` for its allowed dependencies. Highlights:
   and suggestion and a reconnect its attempt and next retry. `portforward::TogglePanel` (`:pf`, `f` in a resource table, the
   palette, `cmd-shift-f`), `portforward::CopyUrl` and `portforward::OpenInBrowser` (reads, tools `k8s.portforward_*`) are queued
   to the window (`mount::port_forwards`); `Stop`, `Restart` and `Remove` are the app's.
+- `oxikube_rbac_ui::can_i` (E17-S08) — the can-i dialog (`rbac::CanI`, palette "RBAC: Can I?", tool stub `k8s.rbac_can_i`):
+  `CanIDialog`, a modal of the cluster's tab prefilled from the selected object (`commands_for` supplies `target`), with verb
+  (buttons + free text), resource (`kubectl` spelling, resolved through the alias table), namespace, name and a subject
+  (Me / User / Group / ServiceAccount, impersonated, held in `SessionMemory` for the session only, never persisted). The answer
+  (`Allowed` / `Denied` / `Unknown`), the API's reason and the review that gave it (`SelfSubjectAccessReview` or
+  `SubjectAccessReview`) are copyable with the equivalent `kubectl auth can-i`; a new ask aborts the review in flight
+  (`spawn_kube`). The same `oxikube_app::tools::rbac::CanIService` backs the read-only agent tool `k8s.can_i` and the
+  `@rbac/sa/<ns>/<name>` context provider (bindings + a `SubjectAccessReview` verb summary, size-bounded).
 - `oxikube_events_ui` (E14-S03) — the cluster's events view (`:ev` / `:event` / `:events`, the sidebar's Events heading, the
   palette's "Show Events"; `events::Open`, tool `k8s.events_open`): `EventsView`, a workspace item of the cluster's tab (key
   `events`, key context `EventsView`) with a virtualised table (Type, Reason, Namespace, Object, Source, Count, Age, Last seen,
@@ -1004,6 +1106,17 @@ crate's `README.md` for its allowed dependencies. Highlights:
   are saved per cluster in the `StatePort` (`events.filter.<cluster>`). `EventsViews` (one per window, `mount::events`)
   applies the `events::*` requests; `perf_scenario::events_stream` measures it; `tests/screenshot.rs` (`--features
   screenshot`) photographs it.
+- `oxikube_rbac_ui` (E17-S07) — the RBAC subject pages (`:usr`, `:grp`, `:rbac <subject>`, the sidebar's Access Control >
+  Users and Groups, the palette's "RBAC: ..."; `rbac::OpenUsers`, `rbac::OpenGroups`, `rbac::ShowSubject`,
+  `rbac::CopyMatrix`, tools `k8s.rbac_*`): `SubjectsView`, a workspace item of the cluster's tab (key `cluster-rbac-subjects`,
+  key context `RbacSubjects`) with two virtualised tables: the Users / Groups list (Name, Kind, Bindings, Roles; `/` filter)
+  and a subject's k9s-style matrix (API group, resource, `GET LIST WATCH CREATE PATCH UPDATE DELETE DEL-LIST EXTRAS`; tick,
+  `~` for named objects only, dash; non-resource URLs after the resources). A scope toggle picks cluster-wide or one namespace
+  the subject is bound in, `i` adds the implicit groups, selecting a row lists the bindings and roles behind each verb column
+  (`h` / `l`), and `y` / "Copy as text" copies the matrix tab-separated. While the feeds list the page says how many of the
+  four are pending; an unknown subject shows "No bindings found" with a hint; a refused list is a warning line. Everything is
+  read from the app's `PolicyHandle`; reads and projections run on the background executor and redraws are
+  `notify_coalesced`. `SubjectsViews` (one per window, `mount::rbac`) applies the `rbac::*` requests.
 - `oxikube_ui::editor` (E07-S06, E10-S04) — gpui-component's editor (`tree-sitter-yaml` feature) behind our own API. `EditorApi`
   is the trait feature views use, in UTF-8 byte offsets and our types (`text`/`set_text`, `version`, `selections`/`select`,
   `set_read_only`, `set_soft_wrap`, `set_diagnostics(Vec<EditorDiagnostic>)`, `add_decoration`/`decorations`/
@@ -1319,7 +1432,16 @@ crate's `README.md` for its allowed dependencies. Highlights:
   visible rows, colours come from the parse for the rows on screen, and a new width re-wraps off the UI thread. Selection
   (click, drag, double/triple click), copy, select all and key scrolling are the view's own keys (`CodeView` context, bound by
   `oxikube_ui::init` as the component library binds its inputs'). A multi-megabyte object costs no UI-thread work per line.
-- `oxikube_catalog_ui` — the cluster catalog UI. Module `sources` (E06-S05): `SourcesView`, the
+- `oxikube_catalog_ui` — the cluster catalog UI. Module `cloud` (E18-S06): `CloudView`, the Cloud
+  section (a workspace `Item`, `CLOUD_VIEW`, opened by `view::Open` from the catalog toolbar's Cloud
+  button or its empty state): a card per provider whose CLI was found (hidden otherwise), with its
+  phase (Loading with "3 of 7 scopes", Loaded, Degraded with the detection's hints, Error), scope
+  filter chips, a virtualised cluster list (location, version, status, "In catalog") with Add and
+  a confirmed Remove, and the remediation table (`Issue` to words and a fixing command, copyable;
+  opening a terminal needs one without a cluster, so copy is the stand-in). The first refresh is
+  asked for after the first frame; rapid Refresh clicks start one run; Escape or closing the
+  section sends `cloud::Cancel`; the key context is `CatalogCloud` (`cmd-r`/`ctrl-r` bound to
+  `cloud::Refresh`). Module `sources` (E06-S05): `SourcesView`, the
   kubeconfig sources screen (a workspace `Item`): one row per entry of `kubeconfig.sources` with its
   status (found with N contexts, or the error inline next to that one source), add file / add folder
   through the platform picker (async), a paste dialog with a credentials warning (hosted by the
@@ -1571,7 +1693,7 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `cluster_sidebar` state table. Since E12-S01 the kind entries of Nodes, Workloads, Config, Network, Storage and
   Namespaces come from the kind registry (`oxikube_resources_ui::kinds` publishes them with
   `SidebarRegistry::set_entries`); each names its kind (`SidebarEntry::kind`), and the panel shows it only when the
-  cluster's discovery serves it and `SidebarDeps::visibility` allows it (`KindGate`), rebuilding on `KindsChanged`. Module `session` (E05-S12): `window::New`
+  cluster's discovery serves it and `SidebarDeps::visibility` allows it (`KindGate`), rebuilding on `KindsChanged`. Since E17-S03 the app mounts `oxikube_app::access::AccessVisibility` there (cached `AccessService` rules, refreshed on connect and namespace change; unknown never hides): denied kinds are hidden and counted in a "Limited access" line whose "Show all" link draws them greyed ("no list permission"); `ResourceActions::with_access` greys mutating row actions the cached review denies (`oxikube_app::actions::ActionAccess`, "no delete permission"), a soft gate in front of `MutationGuard`. Module `session` (E05-S12): `window::New`
   (several windows, one `Workspace` each, shared globals), UI zoom (`view::ZoomIn`/`ZoomOut`/`ZoomReset`,
   the `ui_scale` setting), the effective reduce-motion flag (`reduce_motion` setting over the OS
   preference, read by views through `oxikube_ui::motion`), and the quit guard (`app::Quit`:

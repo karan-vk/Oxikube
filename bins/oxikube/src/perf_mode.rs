@@ -50,7 +50,13 @@ pub fn start(dir: Option<PathBuf>) -> Result<Arc<Recorder>> {
 }
 
 /// The JSONL file of the running session, if one is running.
-#[cfg_attr(not(feature = "perf-window"), allow(dead_code))]
+#[cfg_attr(
+    not(feature = "perf-window"),
+    allow(
+        dead_code,
+        reason = "only the perf-window build reads the session file"
+    )
+)]
 pub fn jsonl_path() -> Option<PathBuf> {
     SESSION
         .lock()

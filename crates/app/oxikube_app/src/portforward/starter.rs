@@ -39,7 +39,7 @@ impl StartedForward {
         let host = match addr.ip() {
             ip if ip.is_unspecified() => "127.0.0.1".to_owned(),
             IpAddr::V6(ip) => format!("[{ip}]"),
-            ip => ip.to_string(),
+            IpAddr::V4(ip) => ip.to_string(),
         };
         Some(format!("http://{host}:{}", addr.port()))
     }

@@ -1,0 +1,13 @@
+{
+  "aadProfile": null,
+  "currentKubernetesVersion": "1.28.9",
+  "fqdn": "local-dns-def456.hcp.northeurope.azmk8s.io",
+  "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-local/providers/Microsoft.ContainerService/managedClusters/local",
+  "location": "northeurope",
+  "name": "local",
+  "powerState": {
+    "code": "Running"
+  },
+  "provisioningState": "Succeeded",
+  "resourceGroup": "rg-local"
+}

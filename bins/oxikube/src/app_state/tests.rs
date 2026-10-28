@@ -10,7 +10,7 @@ use super::AppState;
 
 #[gpui::test]
 fn the_state_port_is_the_testkit_fake(cx: &mut TestAppContext) {
-    let state = cx.update(|cx| AppState::test(cx));
+    let state = cx.update(AppState::test);
     let key = StateKey::new("k").unwrap();
     // The fake is plain in-memory data: no thread, no real wait.
     let read = block_on(async {

@@ -9,7 +9,11 @@
 //! check against docs/PERFORMANCE.md (palette: open <= 1 frame, filter 2 000 entries <= 5 ms,
 //! keystroke-to-visible <= 1 frame), not the frame budget itself.
 
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "a benchmark reports on stdout and stderr"
+)]
 
 use std::sync::Arc;
 use std::time::Instant;

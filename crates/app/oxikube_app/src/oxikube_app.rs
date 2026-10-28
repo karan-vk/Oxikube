@@ -9,7 +9,9 @@
 //!
 //! | Module | Story | Holds |
 //! |---|---|---|
+//! | [`access`] | E17-S01 | [`SubjectIndex`](access::SubjectIndex): the cluster's Roles, ClusterRoles and bindings from the store's subscriptions, kept incrementally as subject -> bindings -> normalised rules (`oxikube_domain::rbac`); `rules_for`, `bindings_for`, `subjects`, `can`, `roles_granting` and the k9s-style `matrix` |
 //! | [`metrics_history`] | E13-S08 | [`MetricsHistoryService`]: the history graphs of a detail panel's Metrics tab: [`charts_for`] (the charts of each of the six kinds, as data), the range fetch through `PromqlPort` and the stack's query catalogue, reference lines, the remembered range |
+//! | [`cloud`] | E18-S05 | [`CloudDiscoveryService`]: cloud clusters through the `CloudDiscoveryPort` adapters, refreshed off the UI thread with cancellation (one task per provider, scopes fanned out with a cap, per-scope failures kept apart), cached in the state db with a TTL (stale-while-revalidate), and the added ones merged into `<config dir>/kubeconfigs/<cli>.yaml` (atomic, `0600`, exec auth only), listed as kubeconfig sources so the catalog hot-reloads |
 //! | [`catalog`] | E06-S03 | [`ClusterCatalog`]: the kubeconfig contexts with favourites and last-used, and [`ClusterCommands`], the handler of `cluster::Connect`, `cluster::Disconnect` and `cluster::ToggleFavourite` |
 //! | [`search`] | E11-S04, E11-S11 | [`search::fuzzy`]: [`FuzzyService`], the one fuzzy ranking engine; [`search::recents`]: [`StateRecents`] and [`JumpRecents`], persisted through `StatePort`; [`search::aliases`]: [`AliasTable`], the words the `:` jump bar understands (built-in k9s aliases, aliases derived from API discovery, the user's `aliases.json`, collisions listed, never silent), and [`AliasRegistry`], one table per cluster kept in step with the sessions' discovery |
 //! | [`session`] | E06-S01 | [`ClusterSessionManager`]: connect / disconnect / reconnect, the session state machine, capabilities, namespace selection, read-only flag, colour, and the [`SessionUpdates`] stream |
@@ -39,10 +41,14 @@
 //! | [`workloads`] | E12-S08, E12-S04, E12-S03 | [`WorkloadService`]: trigger a CronJob (a Job from its template, `kubectl create job --from`), suspend and resume CronJobs and Jobs, and scale the replica controllers (`workload::Scale`, low risk, medium for zero: [`WorkloadService::plan_scale`] reads the `scale` subresource and any autoscaler, [`WorkloadService::scale`] patches `spec.replicas` through it, [`ScaleRunner`] runs it from a dialog); the `cronjob::*`, `job::*` and `workload::Scale` handlers (guarded, audited with the Job's name or the replica counts); evict, delete, force delete and sweep pods (`pod::Evict`, `pod::Delete`, `pod::ForceDelete`, `pod::Sanitize`: medium, high for the force delete, one audit record per pod under a batch id); the pod panel's reads (owner chain, node, environment sources) |
 //! | [`helm`] | E16-S03 | [`HelmService`]: a release revision's manifest parsed once (off the UI thread, cached) into [`ResourcePlan`]s of `ResourceRef`s; [`ReleaseResourcesLease`] holds the store feeds while the Resources tab is open; [`ReleaseResource`] is `Present { health }`, `Missing` or `Unknown` |
 //! | [`helm_charts`] | E16-S08 | [`ChartsService`]: the charts catalog over `HelmPort` (the whole catalog read once per generation and filtered in memory per keyword, grouped per chart with semver-ordered versions; only charts of configured repositories are shown; chart README / values / metadata cached per version; both dropped when a repository changes; readiness: no helm / no repos / ready; the hand-off to the install tab), `helm::SearchCharts` / `ShowChart` / `InstallChart` commands |
+//! | [`sa_kubeconfig`] | E17-S09 | the guarded `serviceaccount::GenerateKubeconfig` (risk low, one confirmation): a `TokenRequest` (legacy token Secret on clusters without it, only when allowed) turned into a kubeconfig held in memory by the `KubeconfigVault`; audited without the token |
 //! | [`helm_ops`] | E16-S06 | the guarded `helm::Rollback` (risk medium, one confirmation) and `helm::Uninstall` (risk high, type the release name; keep-history option); `values_diff` for the rollback preview; audited without values |
+//! | [`role_ops`] | E17-S05 | the guarded `role::Create`, `role::Edit` and `role::Delete` (risk medium, one confirmation, a server dry run first, writing Roles and ClusterRoles only; audited with a rule count) and [`RoleLinks`](role_ops::RoleLinks): the sources of an aggregated ClusterRole and the bindings that name a role |
+//! | [`binding_ops`] | E17-S06 | the guarded `binding::Create`, `binding::Edit` and `binding::Delete` (risk medium, one confirmation that calls out `cluster-admin` and everybody-groups, a server dry run first, writing RoleBindings and ClusterRoleBindings only; a changed `roleRef` is a delete and a create as one intent; audited with the role and a subject count) and [`BindingChoices`](binding_ops::BindingChoices): what the dialog's pickers offer |
 //! | [`helm_install`] | E16-S09 | [`InstallFlow`]: the install tab's guarded `helm::Install` (preview = the guard's dry run: `helm template` plus the server's dry run, Secret data masked; ask = the low-risk confirmation; start = the install with its output followed line by line through [`ReleaseProgress`]; Cancel kills `helm`); audited without the values |
 //! | [`helm_upgrade`] | E16-S10 | [`UpgradeFlow`]: the upgrade tab's guarded `helm::Upgrade` (a release's current chart and values read natively; preview = the guard's dry run: `helm template` with the values, the server's dry run, the objects added / removed / changed against the current manifest; ask = the medium-risk confirmation; start = the upgrade with its output followed line by line; Cancel kills `helm`); `helm::UpgradeRelease` hands a release to the tab; audited with the chart versions and `reuse_values`, never the values |
 //! | [`helm_releases`] | E16-S05 | [`ReleasesService`]: a cluster's Helm releases for the Releases view, read natively (list, history, values, manifest, notes, the E16-S03 resources join), credential-looking values and Secret manifests masked until the user's `helm::RevealValues`, a live watch on the release Secrets and ConfigMaps, the `/` filter over rows; `helm::ShowValues` / `ShowManifest` / `RevealValues` commands |
+//! | [`rbac_subjects`] | E17-S07 | [`SubjectsService`]: the subject views of RBAC. [`SubjectIndex`](access::SubjectIndex) groups the cluster's bindings by user, ServiceAccount and group (counts of bindings and roles; the API cannot list a group's members), and projects one subject's policy as k9s's per-verb matrix by API group ([`SubjectMatrix`]) cluster-wide or per namespace, each cell traced to the bindings and roles that grant it ([`Provenance`](rbac_subjects::Provenance)), with tab-separated export and the `/` filter; the four lists are read concurrently off the UI thread and the matrix is computed per selected subject |
 //! | [`helm_repos`] | E16-S07 | [`HelmReposService`]: the chart repositories in Helm's own configuration (list, add, remove, update one at a time through one queue, per-repository refresh status, a cue for the charts catalog to drop cached searches, memory-only staged passwords, readable errors, quick-add suggestions), `helm::RepoAdd` / `RepoRemove` / `RepoUpdate` commands; an agent's add needs permission |
 //! | [`portforward`] | E15-S03 | [`PortForwardManager`]: port-forwards to pods and Services across clusters (a registry keyed by [`ForwardId`], Service to ready pod through EndpointSlices preferring the previous pod, the target watched through the store, a pure restart state machine with backoff, the same local port across reconnects), drops / recoveries / failures to the notification centre, the read-only policy, a coalesced change subscription, `portforward::*` commands and the `service::OpenInBrowser` opener; E15-S06 `portforward::favourites`: [`PortForwardFavourites`](portforward::PortForwardFavourites), saved forwards in the state db's `port_forward_favourites` table, restored (4 at a time, failures to the notification centre) when a session becomes `Ready` |
 //! | [`overview`] | E12-S07 | the Workloads overview's inputs outside the store: [`RecentWarnings`], the hook the Events feed (E14) implements for the warnings panel, with [`NoRecentWarnings`] until then; the counters themselves are [`WorkloadCounters`] and the status buckets of `store::counts` |
@@ -57,11 +63,14 @@
 //! | [`namespaces`] | E12-S16 | the Namespace kind: `namespace::Create` / `namespace::Delete` handlers (guarded), [`delete_advice`](namespaces::delete_advice) (HNC and system-namespace warnings, counts of what a namespace holds) and [`NamespaceColumns`](namespaces::NamespaceColumns) (a live Pods count from the pods feed's per-namespace index) |
 //! | [`session::namespaces`] | E06-S07 | [`NamespaceService`](session::namespaces::NamespaceService): namespace selection remembered per cluster, favourites, the namespace list with the RBAC fallback, `namespace::*` commands |
 
+pub mod access;
 pub mod actions;
 pub mod allocation;
 pub mod apply;
 pub mod audit;
+pub mod binding_ops;
 pub mod catalog;
+pub mod cloud;
 pub mod cluster_overview;
 pub mod columns;
 pub mod command_bus;
@@ -90,8 +99,11 @@ pub mod notifications;
 pub mod os_notifications;
 pub mod overview;
 pub mod portforward;
+pub mod rbac_subjects;
 pub mod references;
+pub mod role_ops;
 pub mod rollout;
+pub mod sa_kubeconfig;
 pub mod search;
 pub mod secrets;
 pub mod selection;
@@ -111,9 +123,9 @@ mod testing;
 mod testing_posture;
 
 pub use actions::{
-    ActionContext, ActionState, DeleteError, DeleteFlow, DeletePlan, DeleteReport, ItemResult,
-    ItemStatus, ResolvedAction, RowAction, RowActionRegistry, RowActionSpec, RowActions,
-    object_label,
+    ActionAccess, ActionContext, ActionState, DeleteError, DeleteFlow, DeletePlan, DeleteReport,
+    ItemResult, ItemStatus, ResolvedAction, RowAction, RowActionRegistry, RowActionSpec,
+    RowActions, object_label,
 };
 pub use apply::{
     ApplyError, ApplyMethod, ApplyPreview, ApplyReport, ApplyRequest, ApplyService, BatchCounts,
@@ -125,6 +137,7 @@ pub use catalog::{
     CatalogEntry, ClusterCatalog, ClusterCommandOutcome, ClusterCommands, FavouriteChanged,
     FavouritesLagged,
 };
+pub use cloud::{CloudDiscoveryEvent, CloudDiscoveryService};
 pub use columns::{Cell, Column, ColumnId, ColumnProvider, CoreColumns, PodColumns, TableColumns};
 pub use command_bus::{
     CommandBus, CommandContext, CommandHandler, CommandIndex, CommandInfo, CommandOutput,
@@ -194,6 +207,7 @@ pub use portforward::{
     ForwardBackend, ForwardChanges, ForwardConfig, ForwardId, ForwardInfo, ForwardStarter,
     ForwardState, PortForwardManager, SessionBackend, StartError, StartedForward,
 };
+pub use rbac_subjects::{SubjectMatrix, SubjectsService};
 pub use references::{
     OwnerCache, PodKey, PodUse, ReferenceFeed, ReferenceHub, ReferenceIndex, Usage, UsageStatus,
     UsedBy, WorkloadUse, used_by,

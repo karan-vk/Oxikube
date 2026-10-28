@@ -10,7 +10,11 @@
 //! completion filter over 2 000 candidates <= 5 ms, keystroke-to-visible <= 1 frame), not the
 //! frame budget itself (that needs `oxikube --perf`).
 
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "a benchmark reports on stdout and stderr"
+)]
 
 use std::rc::Rc;
 use std::sync::Arc;
@@ -82,6 +86,7 @@ fn world(cx: &mut TestAppContext) -> World {
         catalog: ClusterCatalog::new(source, state.clone(), clock.clone()),
         aliases: aliases.clone(),
         namespaces: NamespaceService::new(sessions, state, clock),
+        rbac_subjects: Default::default(),
     };
     let host = Rc::new(JumpHost::new(&workspace, Rc::new(Sink), sources));
     vcx.update(|window, cx| host.install(window, cx));

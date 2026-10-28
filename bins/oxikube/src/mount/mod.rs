@@ -92,12 +92,21 @@
 //!     app's `EventService`; its `events::*` commands (faults only, pause, copy, export) are on the
 //!     bus with their tool stubs.
 //!
+//! 19. the RBAC subject pages (E17-S07, `mount::rbac`): `rbac::OpenUsers` (`:usr`, the sidebar's
+//!     Access Control > Users), `rbac::OpenGroups` (`:grp`) and `rbac::ShowSubject` (`:rbac
+//!     <subject>`) open the cluster's users, groups and a subject's per-verb policy matrix in its
+//!     tab, over the Roles and bindings of the cluster's `ResourceStore`; `rbac::CopyMatrix` copies
+//!     the open matrix as text.
 //! 18. the notification centre (E14-S05, `mount::notifications`, `crate::notification_centre`):
 //!     each open cluster's Warning events of the watched kinds become notifications (grouped,
 //!     rate limited, muted per cluster); the window shows them as capped toasts, a bell with the
 //!     unread count on the right of the status bar and the right-dock panel
 //!     (`notifications::TogglePanel`, `cmd-shift-i` / `ctrl-shift-i`, the palette, the bell);
 //!     raised ones reach the OS notifier once the user opted in.
+//! 19. cloud discovery (E18-S05, `mount::cloud`): the app's one `CloudDiscoveryService` over the
+//!     `aws`, `gcloud` and `az` adapters, handed to the main window's views (`ViewDeps::cloud`) for
+//!     the catalog's Cloud section (E18-S06); it runs no CLI until a refresh is asked for. The
+//!     read-only agent tool `cloud.discover_clusters` (E18-S08) reads the same service.
 //!
 //! Nothing here reads a file or touches the network: the catalog's first read of the kubeconfig
 //! files runs on the Tokio bridge once this update has ended, which is after the first frame
@@ -105,6 +114,7 @@
 //! [`Wiring`] entity the workspace keeps.
 
 pub mod bus;
+mod cloud;
 mod describe;
 mod editor;
 mod events;
@@ -125,7 +135,9 @@ mod overview;
 mod palette;
 mod port_forwards;
 mod pulses;
+mod rbac;
 mod resources;
+mod role_dialogs;
 mod tabs;
 mod terminal;
 #[cfg(test)]
@@ -214,6 +226,10 @@ pub struct Wiring {
     _metrics_pages: Task<()>,
     /// Opens the Helm repositories page for `helm::ShowRepos` (E16-S07).
     _helm_repos_pages: Task<()>,
+    /// Opens the Role / ClusterRole rule dialog for `role::OpenDialog` (E17-S05).
+    _role_dialogs: Task<()>,
+    /// Opens the RoleBinding / ClusterRoleBinding dialog for `binding::OpenDialog` (E17-S06).
+    _binding_dialogs: Task<()>,
     /// Opens the Helm releases page for `helm::OpenReleases` (E16-S05).
     _helm_releases_pages: Task<()>,
     /// Opens the Helm charts catalog for `helm::OpenCharts` (E16-S08).
@@ -237,6 +253,10 @@ pub struct Wiring {
     _notification_clicks: Task<()>,
     /// Opens the events views and applies the `events::*` requests (E14-S03).
     _events_views: Entity<oxikube_events_ui::EventsViews>,
+    /// Opens the can-i dialog for `rbac::CanI` (E17-S08).
+    _can_i_dialogs: gpui::Task<()>,
+    /// Opens the RBAC subject pages and applies the `rbac::*` requests (E17-S07).
+    _rbac_views: Entity<oxikube_rbac_ui::subjects::SubjectsViews>,
     /// The notification centre: panel, status-bar bell and toasts (E14-S05).
     _notification_centre: Rc<notifications::CentreMount>,
     /// The Port Forwards panel of the bottom dock and the task serving its commands (E15-S05).
@@ -266,11 +286,14 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let dispatcher_for_keymap = dispatcher.clone();
     let dispatcher_for_metrics = dispatcher.clone();
     let dispatcher_for_helm_repos = dispatcher.clone();
+    let dispatcher_for_roles = dispatcher.clone();
+    let dispatcher_for_bindings = dispatcher.clone();
     let dispatcher_for_helm_charts = dispatcher.clone();
     let dispatcher_for_helm_releases = dispatcher.clone();
     let dispatcher_for_pulses = dispatcher.clone();
     let dispatcher_for_notifications = dispatcher.clone();
     let dispatcher_for_events = dispatcher.clone();
+    let dispatcher_for_rbac = dispatcher.clone();
     let dispatcher_for_port_forwards = dispatcher.clone();
 
     // The log service every log viewer opens its sessions on (E08-S01); `logs.buffer_lines` follows
@@ -291,12 +314,22 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         aliases: services.aliases.clone(),
         clock: ports.clusters.clock.clone(),
     };
+    let can_i_service = oxikube_app::tools::rbac::CanIService::new(
+        services.sessions.clone(),
+        services.aliases.clone(),
+        ports.clusters.clock.clone(),
+    );
+    let can_i_agent = oxikube_app::tools::rbac::CanIDeps {
+        sessions: services.sessions.clone(),
+        service: can_i_service.clone(),
+    };
     let agent = logs::install_agent_hooks(
         &state,
         services.sessions.clone(),
         log_service.clone(),
         &metrics_agent,
         &events_agent,
+        &can_i_agent,
     );
 
     // Shells, attaches and commands in pod containers (E09-S08): one service per app, so the
@@ -316,6 +349,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let resources_slot = ResourceViewsSlot::new();
     let stores = resources::stores(&state, ports.clusters.clock.clone(), cx);
     let pulses_stores = stores.clone();
+    let rbac_stores = stores.clone();
     // The events of every cluster (E14-S02): one feed per cluster, started by its tab; the
     // overviews' warnings panels read the newest warnings from it.
     let badges = crate::events::start(&services.events, ports.clusters.clock.clone(), cx);
@@ -358,6 +392,9 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         ports.clusters.kubeconfigs_dir.clone(),
     );
     let follow_sources = oxikube_catalog_ui::sources::follow(sources.clone(), cx);
+    // Cloud discovery (E18-S05): nothing runs until the Cloud section asks for a refresh.
+    let cloud = cloud::discovery(&ports, sources.clone(), services.sessions.clone(), cx);
+    cloud::install_agent_tools(&state, &cloud);
 
     let (views_tx, views_rx) = mpsc::unbounded();
     let (kinds_tx, kinds_rx) = mpsc::unbounded();
@@ -373,6 +410,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (help_sink, help_rx) = oxikube_palette::help::HelpSink::channel();
     let (editor_sink, editor_rx) = oxikube_editor::view::EditorViewSink::channel();
     let (metrics_sink, metrics_rx) = oxikube_settings_ui::metrics::MetricsRequestSink::channel();
+    let (role_sink, role_rx) = oxikube_rbac_ui::role::RoleRequestSink::channel();
+    let (binding_sink, binding_rx) = oxikube_rbac_ui::binding::BindingRequestSink::channel();
     let (helm_repos_sink, helm_repos_rx) =
         oxikube_settings_ui::helm_repos::HelmReposRequestSink::channel();
     // Installs (E16-S09) run against each session's own kubeconfig context and file.
@@ -405,6 +444,10 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (pulses_sink, pulses_rx) = oxikube_overview_ui::pulses::PulsesRequestSink::channel();
     let (overview_sink, overview_rx) = oxikube_overview_ui::OverviewRequestSink::channel();
     let (events_sink, events_rx) = oxikube_events_ui::EventsCommandSink::channel();
+    let (can_i_sink, can_i_rx) = oxikube_rbac_ui::can_i::CanIRequestSink::channel();
+    // The RBAC subject pages (E17-S07): the subject names `:rbac` completes are shared with the jump bar.
+    let rbac_subjects = oxikube_app::rbac_subjects::SubjectsService::new();
+    let (rbac_sink, rbac_rx) = oxikube_rbac_ui::subjects::SubjectsRequestSink::channel();
     let (panel_sink, panel_rx) = oxikube_workspace::notifications::NotificationPanelSink::channel();
     let (port_forward_sink, port_forward_rx) = oxikube_portforward_ui::PortForwardUiSink::channel();
     let (port_forwards, port_forward_favourites) =
@@ -414,6 +457,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let helm_releases = helm_releases::service(helm_release_source.clone());
     let (helm_releases_sink, helm_releases_rx) =
         oxikube_helm_ui::releases::HelmReleasesRequestSink::channel();
+    // The ServiceAccount panel's kubeconfig section saves through the app's filesystem (E17-S09).
+    oxikube_rbac_ui::install(cx, ports.clusters.fs.clone());
     let registry = bus::build_registry(bus::BusParts {
         events_agent,
         agent_pending: agent.pending.clone(),
@@ -421,7 +466,9 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         cluster_commands: services.cluster_commands.clone(),
         namespaces: services.namespaces.clone(),
         sources: sources.clone(),
+        cloud: cloud.clone(),
         sessions: services.sessions.clone(),
+        cluster_source: ports.clusters.source.clone(),
         prefs: Arc::new(SettingsPrefsWriter::new(cx)),
         tabs: sink.clone(),
         views: views_tx,
@@ -447,6 +494,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         metrics_settings: Arc::new(crate::metrics_provider::SettingsMetricsWriter::new(cx)),
         metrics_pages: metrics_sink,
         helm_repos: helm_repos.clone(),
+        role_dialogs: role_sink,
+        binding_dialogs: binding_sink,
         helm_repos_pages: helm_repos_sink,
         helm_charts: helm_services.charts.clone(),
         helm_charts_pages: helm_charts_sink,
@@ -461,7 +510,9 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         os_notification_settings: Arc::new(
             crate::os_notifications::SettingsOsNotificationWriter::new(cx),
         ),
+        can_i_dialogs: can_i_sink,
         events_views: events_sink,
+        rbac_views: rbac_sink,
         notifications: services.notifications.clone(),
         notification_panel: panel_sink,
         port_forwards: port_forwards.clone(),
@@ -507,6 +558,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
                         &logs::row_actions(),
                     )
                     .with_exec(exec_service)
+                    // Greys out the actions the cached access reviews say the user may not run.
+                    .with_access(services.namespaces.access().clone())
                     .with_drain(oxikube_app::nodes::DrainFlow::new(
                         bus.clone(),
                         nodes,
@@ -564,6 +617,9 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         cx,
     );
 
+    // The access registry drops the services of closed and disconnected clusters (once per app).
+    crate::access_follow::start(&services.namespaces, cx);
+
     // The notification centre (E14-S05): the app's service follows the sessions (once per app),
     // and this window gets the panel, the status-bar bell and the toasts.
     crate::notification_centre::start(&services.notifications, &services.os_notifications, cx);
@@ -602,6 +658,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         catalog: services.catalog.clone(),
         sessions: services.sessions.clone(),
         sources,
+        cloud,
         dispatcher: dispatcher.clone(),
         clock: ports.clusters.clock.clone(),
     };
@@ -656,6 +713,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
             catalog: services.catalog.clone(),
             aliases: services.aliases.clone(),
             namespaces: services.namespaces.clone(),
+            rbac_subjects: rbac_subjects.clone(),
             history: state.jump_history().clone(),
         },
         jump_rx,
@@ -734,6 +792,22 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         window,
         cx,
     );
+    let role_dialogs = role_dialogs::start_views(
+        services.sessions.clone(),
+        dispatcher_for_roles,
+        tabs.downgrade(),
+        role_rx,
+        window,
+        cx,
+    );
+    let binding_dialogs = role_dialogs::start_binding_views(
+        services.sessions.clone(),
+        dispatcher_for_bindings,
+        tabs.downgrade(),
+        binding_rx,
+        window,
+        cx,
+    );
     let helm_repos_pages = helm_repos::start_views(
         helm_repos,
         dispatcher_for_helm_repos,
@@ -794,6 +868,30 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         window,
         cx,
     );
+    // The can-i dialog (E17-S08): `rbac::CanI` (palette "RBAC: Can I?", prefilled from the selected
+    // object) opens it in the cluster tab.
+    let can_i_dialogs = oxikube_rbac_ui::can_i::CanIViews::start(
+        oxikube_rbac_ui::can_i::CanIViewsDeps {
+            service: can_i_service,
+            tabs: tabs.downgrade(),
+        },
+        can_i_rx,
+        window,
+        cx,
+    );
+    // The RBAC subject pages (E17-S07): `rbac::OpenUsers` (`:usr`, the sidebar), `rbac::OpenGroups`
+    // (`:grp`) and `rbac::ShowSubject` (`:rbac <subject>`) open them in the cluster tab over the
+    // cluster's store.
+    let rbac_views = rbac::start_views(
+        rbac_subjects,
+        services.sessions.clone(),
+        rbac_stores,
+        dispatcher_for_rbac,
+        tabs.downgrade(),
+        rbac_rx,
+        window,
+        cx,
+    );
     let wiring = cx.new(|_| Wiring {
         tabs,
         bus,
@@ -818,6 +916,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _editor_views: editor_views,
         _metrics_pages: metrics_pages,
         _helm_repos_pages: helm_repos_pages,
+        _role_dialogs: role_dialogs,
+        _binding_dialogs: binding_dialogs,
         _helm_releases_pages: helm_releases_pages,
         _helm_charts_pages: helm_charts_pages,
         _helm_install_pages: helm_install_pages,
@@ -829,6 +929,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _follow_overviews: follow_overviews,
         _notification_clicks: notification_clicks,
         _events_views: events_views,
+        _can_i_dialogs: can_i_dialogs,
+        _rbac_views: rbac_views,
         _notification_centre: centre,
         _port_forward_panel: port_forward_panel,
     });

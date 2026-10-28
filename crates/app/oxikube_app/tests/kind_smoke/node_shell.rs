@@ -333,11 +333,9 @@ async fn an_image_that_cannot_be_pulled_is_reported_with_advice_and_leaves_no_po
     assert_eq!(error.kind(), ErrorKind::Conflict, "{error}");
     assert!(error.message().contains(bad), "{error}");
     assert!(error.message().contains("node_shell_image"), "{error}");
-    crate::eventually(
-        "no shell pod is left",
-        || String::new(),
-        || async { pods(&client, ns.name()).await.is_empty() },
-    )
+    crate::eventually("no shell pod is left", String::new, || async {
+        pods(&client, ns.name()).await.is_empty()
+    })
     .await;
 }
 

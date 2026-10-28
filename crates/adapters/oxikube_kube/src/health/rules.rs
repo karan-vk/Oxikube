@@ -165,6 +165,11 @@ impl RulesCache {
         self.lock().retain(|(c, _), _| c != context);
     }
 
+    /// Drops the entry of `namespace` in `context`.
+    pub fn invalidate_namespace(&self, context: &ContextName, namespace: &str) {
+        self.lock().remove(&(context.clone(), namespace.to_owned()));
+    }
+
     /// Drops everything.
     pub fn clear(&self) {
         self.lock().clear();

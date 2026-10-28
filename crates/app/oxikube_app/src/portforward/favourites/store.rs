@@ -20,6 +20,10 @@ pub struct FavouriteStore {
 
 impl FavouriteStore {
     /// A store over `state`.
+    ///
+    /// # Panics
+    ///
+    /// Never: [`TABLE`] is a constant, valid table name.
     pub fn new(state: Arc<dyn StatePort>) -> Self {
         Self {
             state,

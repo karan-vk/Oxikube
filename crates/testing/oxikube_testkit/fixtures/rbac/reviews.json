@@ -1,0 +1,2856 @@
+[
+  {
+    "subject": {
+      "kind": "User",
+      "name": "fx-viewer"
+    },
+    "user": "fx-viewer",
+    "groups": [
+      "system:authenticated"
+    ],
+    "namespace": "oxi-rbac-fx",
+    "status": {
+      "incomplete": false,
+      "nonResourceRules": [
+        {
+          "nonResourceURLs": [
+            "/api",
+            "/api/*",
+            "/apis",
+            "/apis/*",
+            "/healthz",
+            "/livez",
+            "/openapi",
+            "/openapi/*",
+            "/readyz",
+            "/version",
+            "/version/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        },
+        {
+          "nonResourceURLs": [
+            "/healthz",
+            "/livez",
+            "/readyz",
+            "/version",
+            "/version/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        }
+      ],
+      "resourceRules": [
+        {
+          "apiGroups": [
+            "authorization.k8s.io"
+          ],
+          "resources": [
+            "selfsubjectaccessreviews",
+            "selfsubjectrulesreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        },
+        {
+          "apiGroups": [
+            "authentication.k8s.io"
+          ],
+          "resources": [
+            "selfsubjectreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "configmaps",
+            "endpoints",
+            "persistentvolumeclaims",
+            "persistentvolumeclaims/status",
+            "pods",
+            "replicationcontrollers",
+            "replicationcontrollers/scale",
+            "serviceaccounts",
+            "services",
+            "services/status"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "bindings",
+            "limitranges",
+            "namespaces/status",
+            "pods/log",
+            "pods/status",
+            "replicationcontrollers/status",
+            "resourcequotas",
+            "resourcequotas/status"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "namespaces"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "",
+            "events.k8s.io"
+          ],
+          "resources": [
+            "events"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "discovery.k8s.io"
+          ],
+          "resources": [
+            "endpointslices"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "apps"
+          ],
+          "resources": [
+            "controllerrevisions",
+            "daemonsets",
+            "daemonsets/status",
+            "deployments",
+            "deployments/scale",
+            "deployments/status",
+            "replicasets",
+            "replicasets/scale",
+            "replicasets/status",
+            "statefulsets",
+            "statefulsets/scale",
+            "statefulsets/status"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "autoscaling"
+          ],
+          "resources": [
+            "horizontalpodautoscalers",
+            "horizontalpodautoscalers/status"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "batch"
+          ],
+          "resources": [
+            "cronjobs",
+            "cronjobs/status",
+            "jobs",
+            "jobs/status"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "extensions"
+          ],
+          "resources": [
+            "daemonsets",
+            "daemonsets/status",
+            "deployments",
+            "deployments/scale",
+            "deployments/status",
+            "ingresses",
+            "ingresses/status",
+            "networkpolicies",
+            "replicasets",
+            "replicasets/scale",
+            "replicasets/status",
+            "replicationcontrollers/scale"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "policy"
+          ],
+          "resources": [
+            "poddisruptionbudgets",
+            "poddisruptionbudgets/status"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "networking.k8s.io"
+          ],
+          "resources": [
+            "ingresses",
+            "ingresses/status",
+            "networkpolicies"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "resource.k8s.io"
+          ],
+          "resources": [
+            "resourceclaims",
+            "resourceclaims/status",
+            "resourceclaimtemplates"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "metrics.k8s.io"
+          ],
+          "resources": [
+            "pods",
+            "nodes"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        }
+      ]
+    },
+    "can_i_list": [
+      "selfsubjectreviews.authentication.k8s.io        []                  []               [create]",
+      "selfsubjectaccessreviews.authorization.k8s.io   []                  []               [create]",
+      "selfsubjectrulesreviews.authorization.k8s.io    []                  []               [create]",
+      "bindings                                        []                  []               [get list watch]",
+      "configmaps                                      []                  []               [get list watch]",
+      "endpoints                                       []                  []               [get list watch]",
+      "events                                          []                  []               [get list watch]",
+      "limitranges                                     []                  []               [get list watch]",
+      "namespaces/status                               []                  []               [get list watch]",
+      "namespaces                                      []                  []               [get list watch]",
+      "persistentvolumeclaims/status                   []                  []               [get list watch]",
+      "persistentvolumeclaims                          []                  []               [get list watch]",
+      "pods/log                                        []                  []               [get list watch]",
+      "pods/status                                     []                  []               [get list watch]",
+      "pods                                            []                  []               [get list watch]",
+      "replicationcontrollers/scale                    []                  []               [get list watch]",
+      "replicationcontrollers/status                   []                  []               [get list watch]",
+      "replicationcontrollers                          []                  []               [get list watch]",
+      "resourcequotas/status                           []                  []               [get list watch]",
+      "resourcequotas                                  []                  []               [get list watch]",
+      "serviceaccounts                                 []                  []               [get list watch]",
+      "services/status                                 []                  []               [get list watch]",
+      "services                                        []                  []               [get list watch]",
+      "controllerrevisions.apps                        []                  []               [get list watch]",
+      "daemonsets.apps/status                          []                  []               [get list watch]",
+      "daemonsets.apps                                 []                  []               [get list watch]",
+      "deployments.apps/scale                          []                  []               [get list watch]",
+      "deployments.apps/status                         []                  []               [get list watch]",
+      "deployments.apps                                []                  []               [get list watch]",
+      "replicasets.apps/scale                          []                  []               [get list watch]",
+      "replicasets.apps/status                         []                  []               [get list watch]",
+      "replicasets.apps                                []                  []               [get list watch]",
+      "statefulsets.apps/scale                         []                  []               [get list watch]",
+      "statefulsets.apps/status                        []                  []               [get list watch]",
+      "statefulsets.apps                               []                  []               [get list watch]",
+      "horizontalpodautoscalers.autoscaling/status     []                  []               [get list watch]",
+      "horizontalpodautoscalers.autoscaling            []                  []               [get list watch]",
+      "cronjobs.batch/status                           []                  []               [get list watch]",
+      "cronjobs.batch                                  []                  []               [get list watch]",
+      "jobs.batch/status                               []                  []               [get list watch]",
+      "jobs.batch                                      []                  []               [get list watch]",
+      "endpointslices.discovery.k8s.io                 []                  []               [get list watch]",
+      "events.events.k8s.io                            []                  []               [get list watch]",
+      "daemonsets.extensions/status                    []                  []               [get list watch]",
+      "daemonsets.extensions                           []                  []               [get list watch]",
+      "deployments.extensions/scale                    []                  []               [get list watch]",
+      "deployments.extensions/status                   []                  []               [get list watch]",
+      "deployments.extensions                          []                  []               [get list watch]",
+      "ingresses.extensions/status                     []                  []               [get list watch]",
+      "ingresses.extensions                            []                  []               [get list watch]",
+      "networkpolicies.extensions                      []                  []               [get list watch]",
+      "replicasets.extensions/scale                    []                  []               [get list watch]",
+      "replicasets.extensions/status                   []                  []               [get list watch]",
+      "replicasets.extensions                          []                  []               [get list watch]",
+      "replicationcontrollers.extensions/scale         []                  []               [get list watch]",
+      "nodes.metrics.k8s.io                            []                  []               [get list watch]",
+      "pods.metrics.k8s.io                             []                  []               [get list watch]",
+      "ingresses.networking.k8s.io/status              []                  []               [get list watch]",
+      "ingresses.networking.k8s.io                     []                  []               [get list watch]",
+      "networkpolicies.networking.k8s.io               []                  []               [get list watch]",
+      "poddisruptionbudgets.policy/status              []                  []               [get list watch]",
+      "poddisruptionbudgets.policy                     []                  []               [get list watch]",
+      "resourceclaims.resource.k8s.io/status           []                  []               [get list watch]",
+      "resourceclaims.resource.k8s.io                  []                  []               [get list watch]",
+      "resourceclaimtemplates.resource.k8s.io          []                  []               [get list watch]",
+      "                                                [/api/*]            []               [get]",
+      "                                                [/api]              []               [get]",
+      "                                                [/apis/*]           []               [get]",
+      "                                                [/apis]             []               [get]",
+      "                                                [/healthz]          []               [get]",
+      "                                                [/healthz]          []               [get]",
+      "                                                [/livez]            []               [get]",
+      "                                                [/livez]            []               [get]",
+      "                                                [/openapi/*]        []               [get]",
+      "                                                [/openapi]          []               [get]",
+      "                                                [/readyz]           []               [get]",
+      "                                                [/readyz]           []               [get]",
+      "                                                [/version/]         []               [get]",
+      "                                                [/version/]         []               [get]",
+      "                                                [/version]          []               [get]",
+      "                                                [/version]          []               [get]"
+    ]
+  },
+  {
+    "subject": {
+      "kind": "User",
+      "name": "fx-viewer"
+    },
+    "user": "fx-viewer",
+    "groups": [
+      "system:authenticated"
+    ],
+    "namespace": "default",
+    "status": {
+      "incomplete": false,
+      "nonResourceRules": [
+        {
+          "nonResourceURLs": [
+            "/api",
+            "/api/*",
+            "/apis",
+            "/apis/*",
+            "/healthz",
+            "/livez",
+            "/openapi",
+            "/openapi/*",
+            "/readyz",
+            "/version",
+            "/version/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        },
+        {
+          "nonResourceURLs": [
+            "/healthz",
+            "/livez",
+            "/readyz",
+            "/version",
+            "/version/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        }
+      ],
+      "resourceRules": [
+        {
+          "apiGroups": [
+            "authorization.k8s.io"
+          ],
+          "resources": [
+            "selfsubjectaccessreviews",
+            "selfsubjectrulesreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        },
+        {
+          "apiGroups": [
+            "authentication.k8s.io"
+          ],
+          "resources": [
+            "selfsubjectreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        }
+      ]
+    },
+    "can_i_list": [
+      "selfsubjectreviews.authentication.k8s.io        []                  []               [create]",
+      "selfsubjectaccessreviews.authorization.k8s.io   []                  []               [create]",
+      "selfsubjectrulesreviews.authorization.k8s.io    []                  []               [create]",
+      "                                                [/api/*]            []               [get]",
+      "                                                [/api]              []               [get]",
+      "                                                [/apis/*]           []               [get]",
+      "                                                [/apis]             []               [get]",
+      "                                                [/healthz]          []               [get]",
+      "                                                [/healthz]          []               [get]",
+      "                                                [/livez]            []               [get]",
+      "                                                [/livez]            []               [get]",
+      "                                                [/openapi/*]        []               [get]",
+      "                                                [/openapi]          []               [get]",
+      "                                                [/readyz]           []               [get]",
+      "                                                [/readyz]           []               [get]",
+      "                                                [/version/]         []               [get]",
+      "                                                [/version/]         []               [get]",
+      "                                                [/version]          []               [get]",
+      "                                                [/version]          []               [get]"
+    ]
+  },
+  {
+    "subject": {
+      "kind": "User",
+      "name": "fx-editor"
+    },
+    "user": "fx-editor",
+    "groups": [
+      "system:authenticated"
+    ],
+    "namespace": "oxi-rbac-fx",
+    "status": {
+      "incomplete": false,
+      "nonResourceRules": [
+        {
+          "nonResourceURLs": [
+            "/healthz",
+            "/livez",
+            "/readyz",
+            "/version",
+            "/version/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        },
+        {
+          "nonResourceURLs": [
+            "/api",
+            "/api/*",
+            "/apis",
+            "/apis/*",
+            "/healthz",
+            "/livez",
+            "/openapi",
+            "/openapi/*",
+            "/readyz",
+            "/version",
+            "/version/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        }
+      ],
+      "resourceRules": [
+        {
+          "apiGroups": [
+            "authorization.k8s.io"
+          ],
+          "resources": [
+            "selfsubjectaccessreviews",
+            "selfsubjectrulesreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        },
+        {
+          "apiGroups": [
+            "authentication.k8s.io"
+          ],
+          "resources": [
+            "selfsubjectreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "pods/attach",
+            "pods/exec",
+            "pods/portforward",
+            "pods/proxy",
+            "secrets",
+            "services/proxy"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "serviceaccounts"
+          ],
+          "verbs": [
+            "impersonate"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "pods",
+            "pods/attach",
+            "pods/exec",
+            "pods/portforward",
+            "pods/proxy"
+          ],
+          "verbs": [
+            "create",
+            "delete",
+            "deletecollection",
+            "patch",
+            "update"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "pods/eviction"
+          ],
+          "verbs": [
+            "create"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "configmaps",
+            "persistentvolumeclaims",
+            "replicationcontrollers",
+            "replicationcontrollers/scale",
+            "secrets",
+            "serviceaccounts",
+            "services",
+            "services/proxy"
+          ],
+          "verbs": [
+            "create",
+            "delete",
+            "deletecollection",
+            "patch",
+            "update"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "serviceaccounts/token"
+          ],
+          "verbs": [
+            "create"
+          ]
+        },
+        {
+          "apiGroups": [
+            "",
+            "events.k8s.io"
+          ],
+          "resources": [
+            "events"
+          ],
+          "verbs": [
+            "create",
+            "delete",
+            "deletecollection",
+            "patch",
+            "update"
+          ]
+        },
+        {
+          "apiGroups": [
+            "apps"
+          ],
+          "resources": [
+            "daemonsets",
+            "deployments",
+            "deployments/rollback",
+            "deployments/scale",
+            "replicasets",
+            "replicasets/scale",
+            "statefulsets",
+            "statefulsets/scale"
+          ],
+          "verbs": [
+            "create",
+            "delete",
+            "deletecollection",
+            "patch",
+            "update"
+          ]
+        },
+        {
+          "apiGroups": [
+            "autoscaling"
+          ],
+          "resources": [
+            "horizontalpodautoscalers"
+          ],
+          "verbs": [
+            "create",
+            "delete",
+            "deletecollection",
+            "patch",
+            "update"
+          ]
+        },
+        {
+          "apiGroups": [
+            "batch"
+          ],
+          "resources": [
+            "cronjobs",
+            "jobs"
+          ],
+          "verbs": [
+            "create",
+            "delete",
+            "deletecollection",
+            "patch",
+            "update"
+          ]
+        },
+        {
+          "apiGroups": [
+            "extensions"
+          ],
+          "resources": [
+            "daemonsets",
+            "deployments",
+            "deployments/rollback",
+            "deployments/scale",
+            "ingresses",
+            "networkpolicies",
+            "replicasets",
+            "replicasets/scale",
+            "replicationcontrollers/scale"
+          ],
+          "verbs": [
+            "create",
+            "delete",
+            "deletecollection",
+            "patch",
+            "update"
+          ]
+        },
+        {
+          "apiGroups": [
+            "policy"
+          ],
+          "resources": [
+            "poddisruptionbudgets"
+          ],
+          "verbs": [
+            "create",
+            "delete",
+            "deletecollection",
+            "patch",
+            "update"
+          ]
+        },
+        {
+          "apiGroups": [
+            "networking.k8s.io"
+          ],
+          "resources": [
+            "ingresses",
+            "networkpolicies"
+          ],
+          "verbs": [
+            "create",
+            "delete",
+            "deletecollection",
+            "patch",
+            "update"
+          ]
+        },
+        {
+          "apiGroups": [
+            "coordination.k8s.io"
+          ],
+          "resources": [
+            "leases"
+          ],
+          "verbs": [
+            "create",
+            "delete",
+            "deletecollection",
+            "get",
+            "list",
+            "patch",
+            "update",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "resource.k8s.io"
+          ],
+          "resources": [
+            "resourceclaims",
+            "resourceclaimtemplates"
+          ],
+          "verbs": [
+            "create",
+            "delete",
+            "deletecollection",
+            "patch",
+            "update"
+          ]
+        },
+        {
+          "apiGroups": [
+            "metrics.k8s.io"
+          ],
+          "resources": [
+            "pods",
+            "nodes"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "configmaps",
+            "endpoints",
+            "persistentvolumeclaims",
+            "persistentvolumeclaims/status",
+            "pods",
+            "replicationcontrollers",
+            "replicationcontrollers/scale",
+            "serviceaccounts",
+            "services",
+            "services/status"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "bindings",
+            "limitranges",
+            "namespaces/status",
+            "pods/log",
+            "pods/status",
+            "replicationcontrollers/status",
+            "resourcequotas",
+            "resourcequotas/status"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "namespaces"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "",
+            "events.k8s.io"
+          ],
+          "resources": [
+            "events"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "discovery.k8s.io"
+          ],
+          "resources": [
+            "endpointslices"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "apps"
+          ],
+          "resources": [
+            "controllerrevisions",
+            "daemonsets",
+            "daemonsets/status",
+            "deployments",
+            "deployments/scale",
+            "deployments/status",
+            "replicasets",
+            "replicasets/scale",
+            "replicasets/status",
+            "statefulsets",
+            "statefulsets/scale",
+            "statefulsets/status"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "autoscaling"
+          ],
+          "resources": [
+            "horizontalpodautoscalers",
+            "horizontalpodautoscalers/status"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "batch"
+          ],
+          "resources": [
+            "cronjobs",
+            "cronjobs/status",
+            "jobs",
+            "jobs/status"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "extensions"
+          ],
+          "resources": [
+            "daemonsets",
+            "daemonsets/status",
+            "deployments",
+            "deployments/scale",
+            "deployments/status",
+            "ingresses",
+            "ingresses/status",
+            "networkpolicies",
+            "replicasets",
+            "replicasets/scale",
+            "replicasets/status",
+            "replicationcontrollers/scale"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "policy"
+          ],
+          "resources": [
+            "poddisruptionbudgets",
+            "poddisruptionbudgets/status"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "networking.k8s.io"
+          ],
+          "resources": [
+            "ingresses",
+            "ingresses/status",
+            "networkpolicies"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "resource.k8s.io"
+          ],
+          "resources": [
+            "resourceclaims",
+            "resourceclaims/status",
+            "resourceclaimtemplates"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        }
+      ]
+    },
+    "can_i_list": [
+      "leases.coordination.k8s.io                      []                  []               [create delete deletecollection get list patch update watch]",
+      "configmaps                                      []                  []               [create delete deletecollection patch update get list watch]",
+      "events                                          []                  []               [create delete deletecollection patch update get list watch]",
+      "persistentvolumeclaims                          []                  []               [create delete deletecollection patch update get list watch]",
+      "pods                                            []                  []               [create delete deletecollection patch update get list watch]",
+      "replicationcontrollers/scale                    []                  []               [create delete deletecollection patch update get list watch]",
+      "replicationcontrollers                          []                  []               [create delete deletecollection patch update get list watch]",
+      "services                                        []                  []               [create delete deletecollection patch update get list watch]",
+      "daemonsets.apps                                 []                  []               [create delete deletecollection patch update get list watch]",
+      "deployments.apps/scale                          []                  []               [create delete deletecollection patch update get list watch]",
+      "deployments.apps                                []                  []               [create delete deletecollection patch update get list watch]",
+      "replicasets.apps/scale                          []                  []               [create delete deletecollection patch update get list watch]",
+      "replicasets.apps                                []                  []               [create delete deletecollection patch update get list watch]",
+      "statefulsets.apps/scale                         []                  []               [create delete deletecollection patch update get list watch]",
+      "statefulsets.apps                               []                  []               [create delete deletecollection patch update get list watch]",
+      "horizontalpodautoscalers.autoscaling            []                  []               [create delete deletecollection patch update get list watch]",
+      "cronjobs.batch                                  []                  []               [create delete deletecollection patch update get list watch]",
+      "jobs.batch                                      []                  []               [create delete deletecollection patch update get list watch]",
+      "events.events.k8s.io                            []                  []               [create delete deletecollection patch update get list watch]",
+      "daemonsets.extensions                           []                  []               [create delete deletecollection patch update get list watch]",
+      "deployments.extensions/scale                    []                  []               [create delete deletecollection patch update get list watch]",
+      "deployments.extensions                          []                  []               [create delete deletecollection patch update get list watch]",
+      "ingresses.extensions                            []                  []               [create delete deletecollection patch update get list watch]",
+      "networkpolicies.extensions                      []                  []               [create delete deletecollection patch update get list watch]",
+      "replicasets.extensions/scale                    []                  []               [create delete deletecollection patch update get list watch]",
+      "replicasets.extensions                          []                  []               [create delete deletecollection patch update get list watch]",
+      "replicationcontrollers.extensions/scale         []                  []               [create delete deletecollection patch update get list watch]",
+      "ingresses.networking.k8s.io                     []                  []               [create delete deletecollection patch update get list watch]",
+      "networkpolicies.networking.k8s.io               []                  []               [create delete deletecollection patch update get list watch]",
+      "poddisruptionbudgets.policy                     []                  []               [create delete deletecollection patch update get list watch]",
+      "resourceclaims.resource.k8s.io                  []                  []               [create delete deletecollection patch update get list watch]",
+      "resourceclaimtemplates.resource.k8s.io          []                  []               [create delete deletecollection patch update get list watch]",
+      "deployments.apps/rollback                       []                  []               [create delete deletecollection patch update]",
+      "deployments.extensions/rollback                 []                  []               [create delete deletecollection patch update]",
+      "pods/eviction                                   []                  []               [create]",
+      "serviceaccounts/token                           []                  []               [create]",
+      "selfsubjectreviews.authentication.k8s.io        []                  []               [create]",
+      "selfsubjectaccessreviews.authorization.k8s.io   []                  []               [create]",
+      "selfsubjectrulesreviews.authorization.k8s.io    []                  []               [create]",
+      "pods/attach                                     []                  []               [get list watch create delete deletecollection patch update]",
+      "pods/exec                                       []                  []               [get list watch create delete deletecollection patch update]",
+      "pods/portforward                                []                  []               [get list watch create delete deletecollection patch update]",
+      "pods/proxy                                      []                  []               [get list watch create delete deletecollection patch update]",
+      "secrets                                         []                  []               [get list watch create delete deletecollection patch update]",
+      "services/proxy                                  []                  []               [get list watch create delete deletecollection patch update]",
+      "bindings                                        []                  []               [get list watch]",
+      "endpoints                                       []                  []               [get list watch]",
+      "limitranges                                     []                  []               [get list watch]",
+      "namespaces/status                               []                  []               [get list watch]",
+      "namespaces                                      []                  []               [get list watch]",
+      "persistentvolumeclaims/status                   []                  []               [get list watch]",
+      "pods/log                                        []                  []               [get list watch]",
+      "pods/status                                     []                  []               [get list watch]",
+      "replicationcontrollers/status                   []                  []               [get list watch]",
+      "resourcequotas/status                           []                  []               [get list watch]",
+      "resourcequotas                                  []                  []               [get list watch]",
+      "services/status                                 []                  []               [get list watch]",
+      "controllerrevisions.apps                        []                  []               [get list watch]",
+      "daemonsets.apps/status                          []                  []               [get list watch]",
+      "deployments.apps/status                         []                  []               [get list watch]",
+      "replicasets.apps/status                         []                  []               [get list watch]",
+      "statefulsets.apps/status                        []                  []               [get list watch]",
+      "horizontalpodautoscalers.autoscaling/status     []                  []               [get list watch]",
+      "cronjobs.batch/status                           []                  []               [get list watch]",
+      "jobs.batch/status                               []                  []               [get list watch]",
+      "endpointslices.discovery.k8s.io                 []                  []               [get list watch]",
+      "daemonsets.extensions/status                    []                  []               [get list watch]",
+      "deployments.extensions/status                   []                  []               [get list watch]",
+      "ingresses.extensions/status                     []                  []               [get list watch]",
+      "replicasets.extensions/status                   []                  []               [get list watch]",
+      "nodes.metrics.k8s.io                            []                  []               [get list watch]",
+      "pods.metrics.k8s.io                             []                  []               [get list watch]",
+      "ingresses.networking.k8s.io/status              []                  []               [get list watch]",
+      "poddisruptionbudgets.policy/status              []                  []               [get list watch]",
+      "resourceclaims.resource.k8s.io/status           []                  []               [get list watch]",
+      "                                                [/api/*]            []               [get]",
+      "                                                [/api]              []               [get]",
+      "                                                [/apis/*]           []               [get]",
+      "                                                [/apis]             []               [get]",
+      "                                                [/healthz]          []               [get]",
+      "                                                [/healthz]          []               [get]",
+      "                                                [/livez]            []               [get]",
+      "                                                [/livez]            []               [get]",
+      "                                                [/openapi/*]        []               [get]",
+      "                                                [/openapi]          []               [get]",
+      "                                                [/readyz]           []               [get]",
+      "                                                [/readyz]           []               [get]",
+      "                                                [/version/]         []               [get]",
+      "                                                [/version/]         []               [get]",
+      "                                                [/version]          []               [get]",
+      "                                                [/version]          []               [get]",
+      "serviceaccounts                                 []                  []               [impersonate create delete deletecollection patch update get list watch]"
+    ]
+  },
+  {
+    "subject": {
+      "kind": "User",
+      "name": "fx-editor"
+    },
+    "user": "fx-editor",
+    "groups": [
+      "system:authenticated"
+    ],
+    "namespace": "default",
+    "status": {
+      "incomplete": false,
+      "nonResourceRules": [
+        {
+          "nonResourceURLs": [
+            "/healthz",
+            "/livez",
+            "/readyz",
+            "/version",
+            "/version/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        },
+        {
+          "nonResourceURLs": [
+            "/api",
+            "/api/*",
+            "/apis",
+            "/apis/*",
+            "/healthz",
+            "/livez",
+            "/openapi",
+            "/openapi/*",
+            "/readyz",
+            "/version",
+            "/version/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        }
+      ],
+      "resourceRules": [
+        {
+          "apiGroups": [
+            "authorization.k8s.io"
+          ],
+          "resources": [
+            "selfsubjectaccessreviews",
+            "selfsubjectrulesreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        },
+        {
+          "apiGroups": [
+            "authentication.k8s.io"
+          ],
+          "resources": [
+            "selfsubjectreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        }
+      ]
+    },
+    "can_i_list": [
+      "selfsubjectreviews.authentication.k8s.io        []                  []               [create]",
+      "selfsubjectaccessreviews.authorization.k8s.io   []                  []               [create]",
+      "selfsubjectrulesreviews.authorization.k8s.io    []                  []               [create]",
+      "                                                [/api/*]            []               [get]",
+      "                                                [/api]              []               [get]",
+      "                                                [/apis/*]           []               [get]",
+      "                                                [/apis]             []               [get]",
+      "                                                [/healthz]          []               [get]",
+      "                                                [/healthz]          []               [get]",
+      "                                                [/livez]            []               [get]",
+      "                                                [/livez]            []               [get]",
+      "                                                [/openapi/*]        []               [get]",
+      "                                                [/openapi]          []               [get]",
+      "                                                [/readyz]           []               [get]",
+      "                                                [/readyz]           []               [get]",
+      "                                                [/version/]         []               [get]",
+      "                                                [/version/]         []               [get]",
+      "                                                [/version]          []               [get]",
+      "                                                [/version]          []               [get]"
+    ]
+  },
+  {
+    "subject": {
+      "kind": "User",
+      "name": "fx-admin"
+    },
+    "user": "fx-admin",
+    "groups": [
+      "system:authenticated"
+    ],
+    "namespace": "oxi-rbac-fx",
+    "status": {
+      "incomplete": false,
+      "nonResourceRules": [
+        {
+          "nonResourceURLs": [
+            "/api",
+            "/api/*",
+            "/apis",
+            "/apis/*",
+            "/healthz",
+            "/livez",
+            "/openapi",
+            "/openapi/*",
+            "/readyz",
+            "/version",
+            "/version/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        },
+        {
+          "nonResourceURLs": [
+            "/healthz",
+            "/livez",
+            "/readyz",
+            "/version",
+            "/version/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        }
+      ],
+      "resourceRules": [
+        {
+          "apiGroups": [
+            "authorization.k8s.io"
+          ],
+          "resources": [
+            "selfsubjectaccessreviews",
+            "selfsubjectrulesreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        },
+        {
+          "apiGroups": [
+            "authentication.k8s.io"
+          ],
+          "resources": [
+            "selfsubjectreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "pods/attach",
+            "pods/exec",
+            "pods/portforward",
+            "pods/proxy",
+            "secrets",
+            "services/proxy"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "serviceaccounts"
+          ],
+          "verbs": [
+            "impersonate"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "pods",
+            "pods/attach",
+            "pods/exec",
+            "pods/portforward",
+            "pods/proxy"
+          ],
+          "verbs": [
+            "create",
+            "delete",
+            "deletecollection",
+            "patch",
+            "update"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "pods/eviction"
+          ],
+          "verbs": [
+            "create"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "configmaps",
+            "persistentvolumeclaims",
+            "replicationcontrollers",
+            "replicationcontrollers/scale",
+            "secrets",
+            "serviceaccounts",
+            "services",
+            "services/proxy"
+          ],
+          "verbs": [
+            "create",
+            "delete",
+            "deletecollection",
+            "patch",
+            "update"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "serviceaccounts/token"
+          ],
+          "verbs": [
+            "create"
+          ]
+        },
+        {
+          "apiGroups": [
+            "",
+            "events.k8s.io"
+          ],
+          "resources": [
+            "events"
+          ],
+          "verbs": [
+            "create",
+            "delete",
+            "deletecollection",
+            "patch",
+            "update"
+          ]
+        },
+        {
+          "apiGroups": [
+            "apps"
+          ],
+          "resources": [
+            "daemonsets",
+            "deployments",
+            "deployments/rollback",
+            "deployments/scale",
+            "replicasets",
+            "replicasets/scale",
+            "statefulsets",
+            "statefulsets/scale"
+          ],
+          "verbs": [
+            "create",
+            "delete",
+            "deletecollection",
+            "patch",
+            "update"
+          ]
+        },
+        {
+          "apiGroups": [
+            "autoscaling"
+          ],
+          "resources": [
+            "horizontalpodautoscalers"
+          ],
+          "verbs": [
+            "create",
+            "delete",
+            "deletecollection",
+            "patch",
+            "update"
+          ]
+        },
+        {
+          "apiGroups": [
+            "batch"
+          ],
+          "resources": [
+            "cronjobs",
+            "jobs"
+          ],
+          "verbs": [
+            "create",
+            "delete",
+            "deletecollection",
+            "patch",
+            "update"
+          ]
+        },
+        {
+          "apiGroups": [
+            "extensions"
+          ],
+          "resources": [
+            "daemonsets",
+            "deployments",
+            "deployments/rollback",
+            "deployments/scale",
+            "ingresses",
+            "networkpolicies",
+            "replicasets",
+            "replicasets/scale",
+            "replicationcontrollers/scale"
+          ],
+          "verbs": [
+            "create",
+            "delete",
+            "deletecollection",
+            "patch",
+            "update"
+          ]
+        },
+        {
+          "apiGroups": [
+            "policy"
+          ],
+          "resources": [
+            "poddisruptionbudgets"
+          ],
+          "verbs": [
+            "create",
+            "delete",
+            "deletecollection",
+            "patch",
+            "update"
+          ]
+        },
+        {
+          "apiGroups": [
+            "networking.k8s.io"
+          ],
+          "resources": [
+            "ingresses",
+            "networkpolicies"
+          ],
+          "verbs": [
+            "create",
+            "delete",
+            "deletecollection",
+            "patch",
+            "update"
+          ]
+        },
+        {
+          "apiGroups": [
+            "coordination.k8s.io"
+          ],
+          "resources": [
+            "leases"
+          ],
+          "verbs": [
+            "create",
+            "delete",
+            "deletecollection",
+            "get",
+            "list",
+            "patch",
+            "update",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "resource.k8s.io"
+          ],
+          "resources": [
+            "resourceclaims",
+            "resourceclaimtemplates"
+          ],
+          "verbs": [
+            "create",
+            "delete",
+            "deletecollection",
+            "patch",
+            "update"
+          ]
+        },
+        {
+          "apiGroups": [
+            "metrics.k8s.io"
+          ],
+          "resources": [
+            "pods",
+            "nodes"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "configmaps",
+            "endpoints",
+            "persistentvolumeclaims",
+            "persistentvolumeclaims/status",
+            "pods",
+            "replicationcontrollers",
+            "replicationcontrollers/scale",
+            "serviceaccounts",
+            "services",
+            "services/status"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "bindings",
+            "limitranges",
+            "namespaces/status",
+            "pods/log",
+            "pods/status",
+            "replicationcontrollers/status",
+            "resourcequotas",
+            "resourcequotas/status"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "namespaces"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "",
+            "events.k8s.io"
+          ],
+          "resources": [
+            "events"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "discovery.k8s.io"
+          ],
+          "resources": [
+            "endpointslices"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "apps"
+          ],
+          "resources": [
+            "controllerrevisions",
+            "daemonsets",
+            "daemonsets/status",
+            "deployments",
+            "deployments/scale",
+            "deployments/status",
+            "replicasets",
+            "replicasets/scale",
+            "replicasets/status",
+            "statefulsets",
+            "statefulsets/scale",
+            "statefulsets/status"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "autoscaling"
+          ],
+          "resources": [
+            "horizontalpodautoscalers",
+            "horizontalpodautoscalers/status"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "batch"
+          ],
+          "resources": [
+            "cronjobs",
+            "cronjobs/status",
+            "jobs",
+            "jobs/status"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "extensions"
+          ],
+          "resources": [
+            "daemonsets",
+            "daemonsets/status",
+            "deployments",
+            "deployments/scale",
+            "deployments/status",
+            "ingresses",
+            "ingresses/status",
+            "networkpolicies",
+            "replicasets",
+            "replicasets/scale",
+            "replicasets/status",
+            "replicationcontrollers/scale"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "policy"
+          ],
+          "resources": [
+            "poddisruptionbudgets",
+            "poddisruptionbudgets/status"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "networking.k8s.io"
+          ],
+          "resources": [
+            "ingresses",
+            "ingresses/status",
+            "networkpolicies"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "resource.k8s.io"
+          ],
+          "resources": [
+            "resourceclaims",
+            "resourceclaims/status",
+            "resourceclaimtemplates"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "authorization.k8s.io"
+          ],
+          "resources": [
+            "localsubjectaccessreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        },
+        {
+          "apiGroups": [
+            "rbac.authorization.k8s.io"
+          ],
+          "resources": [
+            "rolebindings",
+            "roles"
+          ],
+          "verbs": [
+            "create",
+            "delete",
+            "deletecollection",
+            "get",
+            "list",
+            "patch",
+            "update",
+            "watch"
+          ]
+        }
+      ]
+    },
+    "can_i_list": [
+      "leases.coordination.k8s.io                       []                  []               [create delete deletecollection get list patch update watch]",
+      "rolebindings.rbac.authorization.k8s.io           []                  []               [create delete deletecollection get list patch update watch]",
+      "roles.rbac.authorization.k8s.io                  []                  []               [create delete deletecollection get list patch update watch]",
+      "configmaps                                       []                  []               [create delete deletecollection patch update get list watch]",
+      "events                                           []                  []               [create delete deletecollection patch update get list watch]",
+      "persistentvolumeclaims                           []                  []               [create delete deletecollection patch update get list watch]",
+      "pods                                             []                  []               [create delete deletecollection patch update get list watch]",
+      "replicationcontrollers/scale                     []                  []               [create delete deletecollection patch update get list watch]",
+      "replicationcontrollers                           []                  []               [create delete deletecollection patch update get list watch]",
+      "services                                         []                  []               [create delete deletecollection patch update get list watch]",
+      "daemonsets.apps                                  []                  []               [create delete deletecollection patch update get list watch]",
+      "deployments.apps/scale                           []                  []               [create delete deletecollection patch update get list watch]",
+      "deployments.apps                                 []                  []               [create delete deletecollection patch update get list watch]",
+      "replicasets.apps/scale                           []                  []               [create delete deletecollection patch update get list watch]",
+      "replicasets.apps                                 []                  []               [create delete deletecollection patch update get list watch]",
+      "statefulsets.apps/scale                          []                  []               [create delete deletecollection patch update get list watch]",
+      "statefulsets.apps                                []                  []               [create delete deletecollection patch update get list watch]",
+      "horizontalpodautoscalers.autoscaling             []                  []               [create delete deletecollection patch update get list watch]",
+      "cronjobs.batch                                   []                  []               [create delete deletecollection patch update get list watch]",
+      "jobs.batch                                       []                  []               [create delete deletecollection patch update get list watch]",
+      "events.events.k8s.io                             []                  []               [create delete deletecollection patch update get list watch]",
+      "daemonsets.extensions                            []                  []               [create delete deletecollection patch update get list watch]",
+      "deployments.extensions/scale                     []                  []               [create delete deletecollection patch update get list watch]",
+      "deployments.extensions                           []                  []               [create delete deletecollection patch update get list watch]",
+      "ingresses.extensions                             []                  []               [create delete deletecollection patch update get list watch]",
+      "networkpolicies.extensions                       []                  []               [create delete deletecollection patch update get list watch]",
+      "replicasets.extensions/scale                     []                  []               [create delete deletecollection patch update get list watch]",
+      "replicasets.extensions                           []                  []               [create delete deletecollection patch update get list watch]",
+      "replicationcontrollers.extensions/scale          []                  []               [create delete deletecollection patch update get list watch]",
+      "ingresses.networking.k8s.io                      []                  []               [create delete deletecollection patch update get list watch]",
+      "networkpolicies.networking.k8s.io                []                  []               [create delete deletecollection patch update get list watch]",
+      "poddisruptionbudgets.policy                      []                  []               [create delete deletecollection patch update get list watch]",
+      "resourceclaims.resource.k8s.io                   []                  []               [create delete deletecollection patch update get list watch]",
+      "resourceclaimtemplates.resource.k8s.io           []                  []               [create delete deletecollection patch update get list watch]",
+      "deployments.apps/rollback                        []                  []               [create delete deletecollection patch update]",
+      "deployments.extensions/rollback                  []                  []               [create delete deletecollection patch update]",
+      "pods/eviction                                    []                  []               [create]",
+      "serviceaccounts/token                            []                  []               [create]",
+      "selfsubjectreviews.authentication.k8s.io         []                  []               [create]",
+      "localsubjectaccessreviews.authorization.k8s.io   []                  []               [create]",
+      "selfsubjectaccessreviews.authorization.k8s.io    []                  []               [create]",
+      "selfsubjectrulesreviews.authorization.k8s.io     []                  []               [create]",
+      "pods/attach                                      []                  []               [get list watch create delete deletecollection patch update]",
+      "pods/exec                                        []                  []               [get list watch create delete deletecollection patch update]",
+      "pods/portforward                                 []                  []               [get list watch create delete deletecollection patch update]",
+      "pods/proxy                                       []                  []               [get list watch create delete deletecollection patch update]",
+      "secrets                                          []                  []               [get list watch create delete deletecollection patch update]",
+      "services/proxy                                   []                  []               [get list watch create delete deletecollection patch update]",
+      "bindings                                         []                  []               [get list watch]",
+      "endpoints                                        []                  []               [get list watch]",
+      "limitranges                                      []                  []               [get list watch]",
+      "namespaces/status                                []                  []               [get list watch]",
+      "namespaces                                       []                  []               [get list watch]",
+      "persistentvolumeclaims/status                    []                  []               [get list watch]",
+      "pods/log                                         []                  []               [get list watch]",
+      "pods/status                                      []                  []               [get list watch]",
+      "replicationcontrollers/status                    []                  []               [get list watch]",
+      "resourcequotas/status                            []                  []               [get list watch]",
+      "resourcequotas                                   []                  []               [get list watch]",
+      "services/status                                  []                  []               [get list watch]",
+      "controllerrevisions.apps                         []                  []               [get list watch]",
+      "daemonsets.apps/status                           []                  []               [get list watch]",
+      "deployments.apps/status                          []                  []               [get list watch]",
+      "replicasets.apps/status                          []                  []               [get list watch]",
+      "statefulsets.apps/status                         []                  []               [get list watch]",
+      "horizontalpodautoscalers.autoscaling/status      []                  []               [get list watch]",
+      "cronjobs.batch/status                            []                  []               [get list watch]",
+      "jobs.batch/status                                []                  []               [get list watch]",
+      "endpointslices.discovery.k8s.io                  []                  []               [get list watch]",
+      "daemonsets.extensions/status                     []                  []               [get list watch]",
+      "deployments.extensions/status                    []                  []               [get list watch]",
+      "ingresses.extensions/status                      []                  []               [get list watch]",
+      "replicasets.extensions/status                    []                  []               [get list watch]",
+      "nodes.metrics.k8s.io                             []                  []               [get list watch]",
+      "pods.metrics.k8s.io                              []                  []               [get list watch]",
+      "ingresses.networking.k8s.io/status               []                  []               [get list watch]",
+      "poddisruptionbudgets.policy/status               []                  []               [get list watch]",
+      "resourceclaims.resource.k8s.io/status            []                  []               [get list watch]",
+      "                                                 [/api/*]            []               [get]",
+      "                                                 [/api]              []               [get]",
+      "                                                 [/apis/*]           []               [get]",
+      "                                                 [/apis]             []               [get]",
+      "                                                 [/healthz]          []               [get]",
+      "                                                 [/healthz]          []               [get]",
+      "                                                 [/livez]            []               [get]",
+      "                                                 [/livez]            []               [get]",
+      "                                                 [/openapi/*]        []               [get]",
+      "                                                 [/openapi]          []               [get]",
+      "                                                 [/readyz]           []               [get]",
+      "                                                 [/readyz]           []               [get]",
+      "                                                 [/version/]         []               [get]",
+      "                                                 [/version/]         []               [get]",
+      "                                                 [/version]          []               [get]",
+      "                                                 [/version]          []               [get]",
+      "serviceaccounts                                  []                  []               [impersonate create delete deletecollection patch update get list watch]"
+    ]
+  },
+  {
+    "subject": {
+      "kind": "User",
+      "name": "fx-admin"
+    },
+    "user": "fx-admin",
+    "groups": [
+      "system:authenticated"
+    ],
+    "namespace": "default",
+    "status": {
+      "incomplete": false,
+      "nonResourceRules": [
+        {
+          "nonResourceURLs": [
+            "/api",
+            "/api/*",
+            "/apis",
+            "/apis/*",
+            "/healthz",
+            "/livez",
+            "/openapi",
+            "/openapi/*",
+            "/readyz",
+            "/version",
+            "/version/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        },
+        {
+          "nonResourceURLs": [
+            "/healthz",
+            "/livez",
+            "/readyz",
+            "/version",
+            "/version/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        }
+      ],
+      "resourceRules": [
+        {
+          "apiGroups": [
+            "authorization.k8s.io"
+          ],
+          "resources": [
+            "selfsubjectaccessreviews",
+            "selfsubjectrulesreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        },
+        {
+          "apiGroups": [
+            "authentication.k8s.io"
+          ],
+          "resources": [
+            "selfsubjectreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        }
+      ]
+    },
+    "can_i_list": [
+      "selfsubjectreviews.authentication.k8s.io        []                  []               [create]",
+      "selfsubjectaccessreviews.authorization.k8s.io   []                  []               [create]",
+      "selfsubjectrulesreviews.authorization.k8s.io    []                  []               [create]",
+      "                                                [/api/*]            []               [get]",
+      "                                                [/api]              []               [get]",
+      "                                                [/apis/*]           []               [get]",
+      "                                                [/apis]             []               [get]",
+      "                                                [/healthz]          []               [get]",
+      "                                                [/healthz]          []               [get]",
+      "                                                [/livez]            []               [get]",
+      "                                                [/livez]            []               [get]",
+      "                                                [/openapi/*]        []               [get]",
+      "                                                [/openapi]          []               [get]",
+      "                                                [/readyz]           []               [get]",
+      "                                                [/readyz]           []               [get]",
+      "                                                [/version/]         []               [get]",
+      "                                                [/version/]         []               [get]",
+      "                                                [/version]          []               [get]",
+      "                                                [/version]          []               [get]"
+    ]
+  },
+  {
+    "subject": {
+      "kind": "User",
+      "name": "fx-root"
+    },
+    "user": "fx-root",
+    "groups": [
+      "system:authenticated"
+    ],
+    "namespace": "oxi-rbac-fx",
+    "status": {
+      "incomplete": false,
+      "nonResourceRules": [
+        {
+          "nonResourceURLs": [
+            "/api",
+            "/api/*",
+            "/apis",
+            "/apis/*",
+            "/healthz",
+            "/livez",
+            "/openapi",
+            "/openapi/*",
+            "/readyz",
+            "/version",
+            "/version/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        },
+        {
+          "nonResourceURLs": [
+            "*"
+          ],
+          "verbs": [
+            "*"
+          ]
+        },
+        {
+          "nonResourceURLs": [
+            "/healthz",
+            "/livez",
+            "/readyz",
+            "/version",
+            "/version/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        }
+      ],
+      "resourceRules": [
+        {
+          "apiGroups": [
+            "*"
+          ],
+          "resources": [
+            "*"
+          ],
+          "verbs": [
+            "*"
+          ]
+        },
+        {
+          "apiGroups": [
+            "authorization.k8s.io"
+          ],
+          "resources": [
+            "selfsubjectaccessreviews",
+            "selfsubjectrulesreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        },
+        {
+          "apiGroups": [
+            "authentication.k8s.io"
+          ],
+          "resources": [
+            "selfsubjectreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        }
+      ]
+    },
+    "can_i_list": [
+      "*.*                                             []                  []               [*]",
+      "                                                [*]                 []               [*]",
+      "selfsubjectreviews.authentication.k8s.io        []                  []               [create]",
+      "selfsubjectaccessreviews.authorization.k8s.io   []                  []               [create]",
+      "selfsubjectrulesreviews.authorization.k8s.io    []                  []               [create]",
+      "                                                [/api/*]            []               [get]",
+      "                                                [/api]              []               [get]",
+      "                                                [/apis/*]           []               [get]",
+      "                                                [/apis]             []               [get]",
+      "                                                [/healthz]          []               [get]",
+      "                                                [/healthz]          []               [get]",
+      "                                                [/livez]            []               [get]",
+      "                                                [/livez]            []               [get]",
+      "                                                [/openapi/*]        []               [get]",
+      "                                                [/openapi]          []               [get]",
+      "                                                [/readyz]           []               [get]",
+      "                                                [/readyz]           []               [get]",
+      "                                                [/version/]         []               [get]",
+      "                                                [/version/]         []               [get]",
+      "                                                [/version]          []               [get]",
+      "                                                [/version]          []               [get]"
+    ]
+  },
+  {
+    "subject": {
+      "kind": "User",
+      "name": "fx-root"
+    },
+    "user": "fx-root",
+    "groups": [
+      "system:authenticated"
+    ],
+    "namespace": "default",
+    "status": {
+      "incomplete": false,
+      "nonResourceRules": [
+        {
+          "nonResourceURLs": [
+            "*"
+          ],
+          "verbs": [
+            "*"
+          ]
+        },
+        {
+          "nonResourceURLs": [
+            "/healthz",
+            "/livez",
+            "/readyz",
+            "/version",
+            "/version/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        },
+        {
+          "nonResourceURLs": [
+            "/api",
+            "/api/*",
+            "/apis",
+            "/apis/*",
+            "/healthz",
+            "/livez",
+            "/openapi",
+            "/openapi/*",
+            "/readyz",
+            "/version",
+            "/version/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        }
+      ],
+      "resourceRules": [
+        {
+          "apiGroups": [
+            "*"
+          ],
+          "resources": [
+            "*"
+          ],
+          "verbs": [
+            "*"
+          ]
+        },
+        {
+          "apiGroups": [
+            "authorization.k8s.io"
+          ],
+          "resources": [
+            "selfsubjectaccessreviews",
+            "selfsubjectrulesreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        },
+        {
+          "apiGroups": [
+            "authentication.k8s.io"
+          ],
+          "resources": [
+            "selfsubjectreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        }
+      ]
+    },
+    "can_i_list": [
+      "*.*                                             []                  []               [*]",
+      "                                                [*]                 []               [*]",
+      "selfsubjectreviews.authentication.k8s.io        []                  []               [create]",
+      "selfsubjectaccessreviews.authorization.k8s.io   []                  []               [create]",
+      "selfsubjectrulesreviews.authorization.k8s.io    []                  []               [create]",
+      "                                                [/api/*]            []               [get]",
+      "                                                [/api]              []               [get]",
+      "                                                [/apis/*]           []               [get]",
+      "                                                [/apis]             []               [get]",
+      "                                                [/healthz]          []               [get]",
+      "                                                [/healthz]          []               [get]",
+      "                                                [/livez]            []               [get]",
+      "                                                [/livez]            []               [get]",
+      "                                                [/openapi/*]        []               [get]",
+      "                                                [/openapi]          []               [get]",
+      "                                                [/readyz]           []               [get]",
+      "                                                [/readyz]           []               [get]",
+      "                                                [/version/]         []               [get]",
+      "                                                [/version/]         []               [get]",
+      "                                                [/version]          []               [get]",
+      "                                                [/version]          []               [get]"
+    ]
+  },
+  {
+    "subject": {
+      "kind": "Group",
+      "name": "fx-team"
+    },
+    "user": "fx-member",
+    "groups": [
+      "fx-team",
+      "system:authenticated"
+    ],
+    "namespace": "oxi-rbac-fx",
+    "status": {
+      "incomplete": false,
+      "nonResourceRules": [
+        {
+          "nonResourceURLs": [
+            "/healthz",
+            "/livez",
+            "/readyz",
+            "/version",
+            "/version/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        },
+        {
+          "nonResourceURLs": [
+            "/api",
+            "/api/*",
+            "/apis",
+            "/apis/*",
+            "/healthz",
+            "/livez",
+            "/openapi",
+            "/openapi/*",
+            "/readyz",
+            "/version",
+            "/version/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        },
+        {
+          "nonResourceURLs": [
+            "/healthz",
+            "/metrics/*"
+          ],
+          "verbs": [
+            "get"
+          ]
+        }
+      ],
+      "resourceRules": [
+        {
+          "apiGroups": [
+            "authorization.k8s.io"
+          ],
+          "resources": [
+            "selfsubjectaccessreviews",
+            "selfsubjectrulesreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        },
+        {
+          "apiGroups": [
+            "authentication.k8s.io"
+          ],
+          "resources": [
+            "selfsubjectreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resourceNames": [
+            "team-settings",
+            "team-flags"
+          ],
+          "resources": [
+            "configmaps"
+          ],
+          "verbs": [
+            "get",
+            "update"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "pods",
+            "pods/log"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "apps"
+          ],
+          "resources": [
+            "*/scale"
+          ],
+          "verbs": [
+            "get",
+            "update",
+            "patch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "apps"
+          ],
+          "resources": [
+            "deployments"
+          ],
+          "verbs": [
+            "get",
+            "list"
+          ]
+        },
+        {
+          "apiGroups": [
+            "apps"
+          ],
+          "resources": [
+            "deployments"
+          ],
+          "verbs": [
+            "list",
+            "watch"
+          ]
+        }
+      ]
+    },
+    "can_i_list": [
+      "selfsubjectreviews.authentication.k8s.io        []                  []                [create]",
+      "selfsubjectaccessreviews.authorization.k8s.io   []                  []                [create]",
+      "selfsubjectrulesreviews.authorization.k8s.io    []                  []                [create]",
+      "pods/log                                        []                  []                [get list watch]",
+      "pods                                            []                  []                [get list watch]",
+      "deployments.apps                                []                  []                [get list watch]",
+      "*.apps/scale                                    []                  []                [get update patch]",
+      "configmaps                                      []                  [team-flags]      [get update]",
+      "configmaps                                      []                  [team-settings]   [get update]",
+      "                                                [/api/*]            []                [get]",
+      "                                                [/api]              []                [get]",
+      "                                                [/apis/*]           []                [get]",
+      "                                                [/apis]             []                [get]",
+      "                                                [/healthz]          []                [get]",
+      "                                                [/healthz]          []                [get]",
+      "                                                [/healthz]          []                [get]",
+      "                                                [/livez]            []                [get]",
+      "                                                [/livez]            []                [get]",
+      "                                                [/metrics/*]        []                [get]",
+      "                                                [/openapi/*]        []                [get]",
+      "                                                [/openapi]          []                [get]",
+      "                                                [/readyz]           []                [get]",
+      "                                                [/readyz]           []                [get]",
+      "                                                [/version/]         []                [get]",
+      "                                                [/version/]         []                [get]",
+      "                                                [/version]          []                [get]",
+      "                                                [/version]          []                [get]"
+    ]
+  },
+  {
+    "subject": {
+      "kind": "Group",
+      "name": "fx-team"
+    },
+    "user": "fx-member",
+    "groups": [
+      "fx-team",
+      "system:authenticated"
+    ],
+    "namespace": "default",
+    "status": {
+      "incomplete": false,
+      "nonResourceRules": [
+        {
+          "nonResourceURLs": [
+            "/api",
+            "/api/*",
+            "/apis",
+            "/apis/*",
+            "/healthz",
+            "/livez",
+            "/openapi",
+            "/openapi/*",
+            "/readyz",
+            "/version",
+            "/version/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        },
+        {
+          "nonResourceURLs": [
+            "/healthz",
+            "/metrics/*"
+          ],
+          "verbs": [
+            "get"
+          ]
+        },
+        {
+          "nonResourceURLs": [
+            "/healthz",
+            "/livez",
+            "/readyz",
+            "/version",
+            "/version/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        }
+      ],
+      "resourceRules": [
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resourceNames": [
+            "team-settings",
+            "team-flags"
+          ],
+          "resources": [
+            "configmaps"
+          ],
+          "verbs": [
+            "get",
+            "update"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "pods",
+            "pods/log"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "apps"
+          ],
+          "resources": [
+            "*/scale"
+          ],
+          "verbs": [
+            "get",
+            "update",
+            "patch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "apps"
+          ],
+          "resources": [
+            "deployments"
+          ],
+          "verbs": [
+            "get",
+            "list"
+          ]
+        },
+        {
+          "apiGroups": [
+            "apps"
+          ],
+          "resources": [
+            "deployments"
+          ],
+          "verbs": [
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "authorization.k8s.io"
+          ],
+          "resources": [
+            "selfsubjectaccessreviews",
+            "selfsubjectrulesreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        },
+        {
+          "apiGroups": [
+            "authentication.k8s.io"
+          ],
+          "resources": [
+            "selfsubjectreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        }
+      ]
+    },
+    "can_i_list": [
+      "selfsubjectreviews.authentication.k8s.io        []                  []                [create]",
+      "selfsubjectaccessreviews.authorization.k8s.io   []                  []                [create]",
+      "selfsubjectrulesreviews.authorization.k8s.io    []                  []                [create]",
+      "pods/log                                        []                  []                [get list watch]",
+      "pods                                            []                  []                [get list watch]",
+      "deployments.apps                                []                  []                [get list watch]",
+      "*.apps/scale                                    []                  []                [get update patch]",
+      "configmaps                                      []                  [team-flags]      [get update]",
+      "configmaps                                      []                  [team-settings]   [get update]",
+      "                                                [/api/*]            []                [get]",
+      "                                                [/api]              []                [get]",
+      "                                                [/apis/*]           []                [get]",
+      "                                                [/apis]             []                [get]",
+      "                                                [/healthz]          []                [get]",
+      "                                                [/healthz]          []                [get]",
+      "                                                [/healthz]          []                [get]",
+      "                                                [/livez]            []                [get]",
+      "                                                [/livez]            []                [get]",
+      "                                                [/metrics/*]        []                [get]",
+      "                                                [/openapi/*]        []                [get]",
+      "                                                [/openapi]          []                [get]",
+      "                                                [/readyz]           []                [get]",
+      "                                                [/readyz]           []                [get]",
+      "                                                [/version/]         []                [get]",
+      "                                                [/version/]         []                [get]",
+      "                                                [/version]          []                [get]",
+      "                                                [/version]          []                [get]"
+    ]
+  },
+  {
+    "subject": {
+      "kind": "ServiceAccount",
+      "name": "oxi-rbac-fx/fx-sa"
+    },
+    "user": "system:serviceaccount:oxi-rbac-fx:fx-sa",
+    "groups": [
+      "system:serviceaccounts",
+      "system:serviceaccounts:oxi-rbac-fx",
+      "system:authenticated"
+    ],
+    "namespace": "oxi-rbac-fx",
+    "status": {
+      "incomplete": false,
+      "nonResourceRules": [
+        {
+          "nonResourceURLs": [
+            "/api",
+            "/api/*",
+            "/apis",
+            "/apis/*",
+            "/healthz",
+            "/livez",
+            "/openapi",
+            "/openapi/*",
+            "/readyz",
+            "/version",
+            "/version/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        },
+        {
+          "nonResourceURLs": [
+            "/.well-known/openid-configuration",
+            "/.well-known/openid-configuration/",
+            "/openid/v1/jwks",
+            "/openid/v1/jwks/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        },
+        {
+          "nonResourceURLs": [
+            "/healthz",
+            "/livez",
+            "/readyz",
+            "/version",
+            "/version/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        }
+      ],
+      "resourceRules": [
+        {
+          "apiGroups": [
+            "certificates.k8s.io"
+          ],
+          "resources": [
+            "clustertrustbundles"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "authorization.k8s.io"
+          ],
+          "resources": [
+            "selfsubjectaccessreviews",
+            "selfsubjectrulesreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        },
+        {
+          "apiGroups": [
+            "authentication.k8s.io"
+          ],
+          "resources": [
+            "selfsubjectreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "configmaps"
+          ],
+          "verbs": [
+            "*"
+          ]
+        },
+        {
+          "apiGroups": [
+            "*"
+          ],
+          "resources": [
+            "jobs",
+            "cronjobs"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "get"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resourceNames": [
+            "fx-secret"
+          ],
+          "resources": [
+            "secrets"
+          ],
+          "verbs": [
+            "get"
+          ]
+        },
+        {
+          "apiGroups": [
+            "batch"
+          ],
+          "resources": [
+            "*"
+          ],
+          "verbs": [
+            "delete",
+            "deletecollection"
+          ]
+        },
+        {
+          "apiGroups": [
+            "",
+            "events.k8s.io"
+          ],
+          "resources": [
+            "events"
+          ],
+          "verbs": [
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "serviceaccounts/token"
+          ],
+          "verbs": [
+            "create"
+          ]
+        }
+      ]
+    },
+    "can_i_list": [
+      "configmaps                                      []                                     []               [*]",
+      "serviceaccounts/token                           []                                     []               [create]",
+      "selfsubjectreviews.authentication.k8s.io        []                                     []               [create]",
+      "selfsubjectaccessreviews.authorization.k8s.io   []                                     []               [create]",
+      "selfsubjectrulesreviews.authorization.k8s.io    []                                     []               [create]",
+      "*.batch                                         []                                     []               [delete deletecollection]",
+      "clustertrustbundles.certificates.k8s.io         []                                     []               [get list watch]",
+      "cronjobs.*                                      []                                     []               [get list]",
+      "jobs.*                                          []                                     []               [get list]",
+      "                                                [/.well-known/openid-configuration/]   []               [get]",
+      "                                                [/.well-known/openid-configuration]    []               [get]",
+      "                                                [/api/*]                               []               [get]",
+      "                                                [/api]                                 []               [get]",
+      "                                                [/apis/*]                              []               [get]",
+      "                                                [/apis]                                []               [get]",
+      "                                                [/healthz]                             []               [get]",
+      "                                                [/healthz]                             []               [get]",
+      "                                                [/livez]                               []               [get]",
+      "                                                [/livez]                               []               [get]",
+      "                                                [/openapi/*]                           []               [get]",
+      "                                                [/openapi]                             []               [get]",
+      "                                                [/openid/v1/jwks/]                     []               [get]",
+      "                                                [/openid/v1/jwks]                      []               [get]",
+      "                                                [/readyz]                              []               [get]",
+      "                                                [/readyz]                              []               [get]",
+      "                                                [/version/]                            []               [get]",
+      "                                                [/version/]                            []               [get]",
+      "                                                [/version]                             []               [get]",
+      "                                                [/version]                             []               [get]",
+      "secrets                                         []                                     [fx-secret]      [get]",
+      "events                                          []                                     []               [list watch]",
+      "events.events.k8s.io                            []                                     []               [list watch]"
+    ]
+  },
+  {
+    "subject": {
+      "kind": "ServiceAccount",
+      "name": "oxi-rbac-fx/fx-sa"
+    },
+    "user": "system:serviceaccount:oxi-rbac-fx:fx-sa",
+    "groups": [
+      "system:serviceaccounts",
+      "system:serviceaccounts:oxi-rbac-fx",
+      "system:authenticated"
+    ],
+    "namespace": "default",
+    "status": {
+      "incomplete": false,
+      "nonResourceRules": [
+        {
+          "nonResourceURLs": [
+            "/healthz",
+            "/livez",
+            "/readyz",
+            "/version",
+            "/version/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        },
+        {
+          "nonResourceURLs": [
+            "/api",
+            "/api/*",
+            "/apis",
+            "/apis/*",
+            "/healthz",
+            "/livez",
+            "/openapi",
+            "/openapi/*",
+            "/readyz",
+            "/version",
+            "/version/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        },
+        {
+          "nonResourceURLs": [
+            "/.well-known/openid-configuration",
+            "/.well-known/openid-configuration/",
+            "/openid/v1/jwks",
+            "/openid/v1/jwks/"
+          ],
+          "verbs": [
+            "get"
+          ]
+        }
+      ],
+      "resourceRules": [
+        {
+          "apiGroups": [
+            "certificates.k8s.io"
+          ],
+          "resources": [
+            "clustertrustbundles"
+          ],
+          "verbs": [
+            "get",
+            "list",
+            "watch"
+          ]
+        },
+        {
+          "apiGroups": [
+            "authorization.k8s.io"
+          ],
+          "resources": [
+            "selfsubjectaccessreviews",
+            "selfsubjectrulesreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        },
+        {
+          "apiGroups": [
+            "authentication.k8s.io"
+          ],
+          "resources": [
+            "selfsubjectreviews"
+          ],
+          "verbs": [
+            "create"
+          ]
+        }
+      ]
+    },
+    "can_i_list": [
+      "selfsubjectreviews.authentication.k8s.io        []                                     []               [create]",
+      "selfsubjectaccessreviews.authorization.k8s.io   []                                     []               [create]",
+      "selfsubjectrulesreviews.authorization.k8s.io    []                                     []               [create]",
+      "clustertrustbundles.certificates.k8s.io         []                                     []               [get list watch]",
+      "                                                [/.well-known/openid-configuration/]   []               [get]",
+      "                                                [/.well-known/openid-configuration]    []               [get]",
+      "                                                [/api/*]                               []               [get]",
+      "                                                [/api]                                 []               [get]",
+      "                                                [/apis/*]                              []               [get]",
+      "                                                [/apis]                                []               [get]",
+      "                                                [/healthz]                             []               [get]",
+      "                                                [/healthz]                             []               [get]",
+      "                                                [/livez]                               []               [get]",
+      "                                                [/livez]                               []               [get]",
+      "                                                [/openapi/*]                           []               [get]",
+      "                                                [/openapi]                             []               [get]",
+      "                                                [/openid/v1/jwks/]                     []               [get]",
+      "                                                [/openid/v1/jwks]                      []               [get]",
+      "                                                [/readyz]                              []               [get]",
+      "                                                [/readyz]                              []               [get]",
+      "                                                [/version/]                            []               [get]",
+      "                                                [/version/]                            []               [get]",
+      "                                                [/version]                             []               [get]",
+      "                                                [/version]                             []               [get]"
+    ]
+  }
+]

@@ -45,6 +45,10 @@ impl NamespacePrefs {
 }
 
 /// The kv key holding `cluster`'s [`NamespacePrefs`]: `cluster/<id>/namespaces`.
+///
+/// # Panics
+///
+/// Never: a [`ClusterId`] is 16 hex characters, so the key is always valid.
 pub fn prefs_key(cluster: &ClusterId) -> StateKey {
     // A `ClusterId` is 16 hex characters, so the key is always valid.
     StateKey::new(format!("cluster/{cluster}/namespaces")).expect("cluster ids make valid keys")

@@ -62,7 +62,7 @@ fn deployment(replicas: u64) -> Resource {
         "spec": {"replicas": replicas},
         "status": {"availableReplicas": replicas}
     }))
-    .unwrap()
+    .expect("fixture Deployment is a valid resource")
 }
 
 const PASSWORD: &str = "c2VjcmV0LXBhc3N3b3Jk";
@@ -74,7 +74,7 @@ fn secret() -> Resource {
         "metadata": {"name": "db", "namespace": "default"},
         "data": {"password": PASSWORD, "username": "YWRtaW4="}
     }))
-    .unwrap()
+    .expect("fixture Secret is a valid resource")
 }
 
 /// The bus, reduced to what the editor does: queue the request.
@@ -280,7 +280,9 @@ impl Fixture {
     fn only_editor(&mut self) -> Entity<ManifestEditor> {
         let mut editors = self.editors();
         assert_eq!(editors.len(), 1, "one editor tab");
-        editors.pop().unwrap()
+        editors
+            .pop()
+            .expect("exactly one editor was asserted above")
     }
 
     fn text(&mut self, editor: &Entity<ManifestEditor>) -> String {

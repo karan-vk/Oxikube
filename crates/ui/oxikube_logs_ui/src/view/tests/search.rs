@@ -291,7 +291,7 @@ fn an_invalid_pattern_shows_why_and_keeps_the_last_good_one(cx: &mut TestAppCont
     // Closing the group makes a valid pattern again (matching nothing here).
     fx.vcx.simulate_keystrokes(")");
     fx.settle();
-    assert_eq!(fx.read(&view, |v| v.search_state().error().is_none()), true);
+    assert!(fx.read(&view, |v| v.search_state().error().is_none()));
 }
 
 #[gpui::test]

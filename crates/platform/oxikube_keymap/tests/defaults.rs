@@ -229,6 +229,18 @@ const VIEW_LOCAL: &[&str] = &[
     "helm_releases::PreviousTab",
     "helm_releases::ToggleValuesMode",
     "helm_releases::CloseDetail",
+    // The RBAC subject pages (E17-S07): cursor, filter, verb column, scope and groups toggles.
+    "rbac_subjects::SelectNext",
+    "rbac_subjects::SelectPrevious",
+    "rbac_subjects::SelectFirst",
+    "rbac_subjects::SelectLast",
+    "rbac_subjects::FocusFilter",
+    "rbac_subjects::FocusTable",
+    "rbac_subjects::Back",
+    "rbac_subjects::PreviousColumn",
+    "rbac_subjects::NextColumn",
+    "rbac_subjects::NextScope",
+    "rbac_subjects::ToggleImplicitGroups",
     // The notification centre's list (E14-S05).
     "notification_panel::SelectNext",
     "notification_panel::SelectPrevious",
@@ -250,10 +262,11 @@ fn action_names(platform: KeymapPlatform) -> Vec<String> {
     let mut names = Vec::new();
     for section in defaults(platform) {
         for value in section.bindings.values() {
-            if let KeymapAction::Action { name, .. } = KeymapAction::from_json(value).unwrap() {
-                if !names.contains(&name) {
-                    names.push(name);
-                }
+            if let KeymapAction::Action { name, .. } =
+                KeymapAction::from_json(value).expect("default keymap binding parses")
+                && !names.contains(&name)
+            {
+                names.push(name);
             }
         }
     }

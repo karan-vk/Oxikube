@@ -317,6 +317,10 @@ impl AppState {
 impl AppState {
     /// The installed state, or one built by running the real init order on test fakes (see the
     /// [module docs](self)). Safe to call again in the same app: it returns the installed one.
+    ///
+    /// # Panics
+    ///
+    /// When the init order fails on the test fakes.
     pub fn test(cx: &mut App) -> Arc<AppState> {
         if let Some(state) = Self::try_global(cx) {
             return state;
@@ -330,7 +334,11 @@ impl AppState {
     /// keeps its handles: script `ports.state`, then assert on `ports.state.recorded_calls()`.
     ///
     /// Must be the first `AppState` call of the app: ports cannot be swapped under an installed
-    /// state, so it panics when one is already installed.
+    /// state.
+    ///
+    /// # Panics
+    ///
+    /// When an `AppState` is already installed, or the init order fails on the test fakes.
     #[track_caller]
     pub fn test_with(cx: &mut App, ports: &oxikube_testkit::TestPorts) -> Arc<AppState> {
         assert!(

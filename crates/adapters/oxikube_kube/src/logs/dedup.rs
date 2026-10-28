@@ -124,14 +124,13 @@ impl Dedup {
     fn record(&mut self, key: u64) {
         *self.counts.entry(key).or_insert(0) += 1;
         self.ring.push_back(key);
-        if self.ring.len() > self.cap {
-            if let Some(old) = self.ring.pop_front() {
-                if let Some(count) = self.counts.get_mut(&old) {
-                    *count -= 1;
-                    if *count == 0 {
-                        self.counts.remove(&old);
-                    }
-                }
+        if self.ring.len() > self.cap
+            && let Some(old) = self.ring.pop_front()
+            && let Some(count) = self.counts.get_mut(&old)
+        {
+            *count -= 1;
+            if *count == 0 {
+                self.counts.remove(&old);
             }
         }
     }

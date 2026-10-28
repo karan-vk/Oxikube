@@ -141,3 +141,29 @@ fn accepting_replaces_the_typed_word_and_leaves_room_for_the_next() {
     let line = ":dep";
     assert_eq!(accept(line, &site(line), "deploy"), ":deploy ");
 }
+
+#[test]
+fn rbac_completes_a_subject_from_the_names_the_cluster_has() {
+    assert_eq!(slot("rbac "), Slot::Subject);
+    assert_eq!(slot("rbac ali"), Slot::Subject);
+    assert_eq!(slot("rbac alice "), Slot::Nothing);
+    assert_eq!(slot("usr "), Slot::Nothing);
+    let mut env = Env::new();
+    assert!(
+        candidates(Slot::Subject, &env).is_empty(),
+        "nothing known yet"
+    );
+    env.subjects = vec!["alice".into(), "system:serviceaccount:default:foo".into()];
+    let texts: Vec<String> = candidates(Slot::Subject, &env)
+        .iter()
+        .map(|c| c.text.to_string())
+        .collect();
+    assert_eq!(texts, ["alice", "system:serviceaccount:default:foo"]);
+    let names: Vec<String> = candidates(Slot::Alias, &env)
+        .iter()
+        .map(|c| c.text.to_string())
+        .collect();
+    for word in ["usr", "grp", "rbac"] {
+        assert!(names.iter().any(|n| n == word), "{word}");
+    }
+}

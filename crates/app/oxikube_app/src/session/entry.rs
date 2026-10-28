@@ -36,7 +36,13 @@ use super::updates::{SessionChange, UpdateSender};
 /// A connection taken out of an entry. Drop it *after* releasing the entry lock: an
 /// adapter's teardown may report health, which takes the same lock.
 #[must_use = "drop the released connection outside the entry lock"]
-pub(super) struct Released(#[allow(dead_code)] pub(super) Option<ClusterConnection>);
+pub(super) struct Released(
+    #[allow(
+        dead_code,
+        reason = "held only so dropping the entry releases the connection"
+    )]
+    pub(super) Option<ClusterConnection>,
+);
 
 pub(super) struct Entry {
     pub(super) id: ClusterId,

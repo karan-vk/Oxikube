@@ -82,6 +82,7 @@ impl ClusterBadge {
     }
 
     /// Sets the selector prefix.
+    #[must_use]
     pub fn name(mut self, name: impl Into<SharedString>) -> Self {
         self.name = name.into();
         self

@@ -26,7 +26,7 @@ fn unchanged_rows_are_not_reshaped(cx: &mut TestAppContext) {
     assert_eq!(after.shaped_runs, idle.shaped_runs + 1);
     assert_eq!(
         h.terminal
-            .read_with(&mut *h.window, |t, _| t.snapshot().row_text(2)),
+            .read_with(&*h.window, |t, _| t.snapshot().row_text(2)),
         "third and more"
     );
 }
@@ -65,9 +65,7 @@ fn the_block_cursor_glyph_is_reshaped_on_zoom_and_palette_changes(cx: &mut TestA
         cx.notify();
     });
     h.frame();
-    let cursor = h
-        .terminal
-        .read_with(&mut *h.window, |t, _| t.snapshot().cursor);
+    let cursor = h.terminal.read_with(&*h.window, |t, _| t.snapshot().cursor);
     assert_eq!(
         (cursor.row, cursor.column),
         (0, 2),

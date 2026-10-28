@@ -78,6 +78,12 @@ fn confirm_copy(command: &Command) -> (&'static str, &'static str, bool) {
         Command::PodSanitize { .. } => ("Delete finished pods?", "Delete", true),
         Command::WorkloadRestart { .. } => ("Restart the workload?", "Restart", false),
         Command::WorkloadSetImage { .. } => ("Set the image?", "Set image", false),
+        Command::BindingCreate { .. } => ("Create the binding?", "Create", false),
+        Command::BindingEdit { .. } => ("Save the binding?", "Save", false),
+        Command::BindingDelete { .. } => ("Delete the binding?", "Delete", true),
+        Command::RoleCreate { .. } => ("Create the role?", "Create", false),
+        Command::RoleEdit { .. } => ("Save the role?", "Save", false),
+        Command::RoleDelete { .. } => ("Delete the role?", "Delete", true),
         _ => ("Are you sure?", "Turn off", true),
     }
 }

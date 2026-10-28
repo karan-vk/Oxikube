@@ -10,6 +10,7 @@ use base64::engine::general_purpose::STANDARD;
 use oxikube_domain::event::{Event, EventType};
 use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_domain::json::JsonRef;
+use oxikube_domain::rbac::AUTHENTICATED_GROUP;
 use oxikube_domain::{
     ContainerSummary, CronJobSummary, JobSummary, NodeSummary, PodSummary, Resource,
     WorkloadSummary,
@@ -28,21 +29,24 @@ fn fixtures_dir() -> PathBuf {
 /// chart pins and the OpenAPI schema documents (which are not `Resource`s; see
 /// `every_openapi_fixture_is_registered_and_shaped`).
 fn json_files_on_disk(dir: &Path, root: &Path, out: &mut Vec<String>) {
-    for entry in std::fs::read_dir(dir).unwrap() {
-        let path = entry.unwrap().path();
+    for entry in std::fs::read_dir(dir).expect("fixtures directory is readable") {
+        let path = entry.expect("fixtures directory entry is readable").path();
         if path.is_dir() {
             if path.file_name().is_some_and(|n| {
                 n == "cluster"
                     || n == "metrics-server"
                     || n == "metrics-stack"
                     || n == "openapi"
+                    || n == "rbac"
                     || n == "tables"
             }) {
                 continue;
             }
             json_files_on_disk(&path, root, out);
         } else if path.extension().is_some_and(|e| e == "json") {
-            let rel = path.strip_prefix(root).unwrap();
+            let rel = path
+                .strip_prefix(root)
+                .expect("the walk starts at `root`, so every path is under it");
             out.push(rel.to_string_lossy().replace('\\', "/"));
         }
     }
@@ -286,13 +290,13 @@ fn same_pod(builder: PodBuilder, fixture: &Resource) {
     let printer = |r: &Resource| PodSummary {
         controlled_by: None,
         resources: Default::default(),
-        ..PodSummary::from_resource(r).unwrap()
+        ..PodSummary::from_resource(r).expect("a pod builds a pod summary")
     };
     let (a, b) = (printer(&built), printer(fixture));
     assert_eq!(a, b, "{}", fixture.name());
     let containers = |r: &Resource| {
         ContainerSummary::list_from_resource(r)
-            .unwrap()
+            .expect("a pod lists its containers")
             .into_iter()
             .map(|c| {
                 (
@@ -313,10 +317,25 @@ fn same_pod(builder: PodBuilder, fixture: &Resource) {
         "{}",
         fixture.name()
     );
-    assert_eq!(built.kind, fixture.kind);
-    assert_eq!(built.meta.namespace, fixture.meta.namespace);
-    assert_eq!(built.meta.creation, fixture.meta.creation);
-    assert_eq!(built.meta.deletion, fixture.meta.deletion);
+    assert_eq!(built.kind, fixture.kind, "kind of {}", fixture.name());
+    assert_eq!(
+        built.meta.namespace,
+        fixture.meta.namespace,
+        "namespace of {}",
+        fixture.name()
+    );
+    assert_eq!(
+        built.meta.creation,
+        fixture.meta.creation,
+        "creation timestamp of {}",
+        fixture.name()
+    );
+    assert_eq!(
+        built.meta.deletion,
+        fixture.meta.deletion,
+        "deletion timestamp of {}",
+        fixture.name()
+    );
 }
 
 #[test]
@@ -469,5 +488,25 @@ fn every_recorded_table_is_registered_and_shaped() {
                 "{name}: rows carry metadata"
             );
         }
+    }
+}
+
+#[test]
+fn the_rbac_recording_is_complete() {
+    let objects = fixtures::rbac::cluster();
+    for name in ["view", "edit", "admin", "cluster-admin"] {
+        assert!(
+            objects
+                .iter()
+                .any(|o| &*o.kind.kind == "ClusterRole" && o.name() == name),
+            "built-in {name} recorded"
+        );
+    }
+    let reviews = fixtures::rbac::reviews();
+    assert_eq!(reviews.len(), 12, "six subjects, two namespaces each");
+    for review in &reviews {
+        assert_eq!(review.status["incomplete"], false, "{:?}", review.subject);
+        assert!(!review.can_i_list.is_empty(), "{:?}", review.subject);
+        assert!(review.groups.iter().any(|g| g == AUTHENTICATED_GROUP));
     }
 }

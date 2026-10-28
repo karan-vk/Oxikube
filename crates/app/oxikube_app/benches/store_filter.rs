@@ -88,7 +88,8 @@ fn main() {
     run(&mut pool);
     assert_eq!(
         anchor.next().now_or_never().flatten().map(|d| d.len),
-        Some(OBJECTS)
+        Some(OBJECTS),
+        "the anchor's first delta must carry every seeded object"
     );
 
     let typing = [
@@ -121,7 +122,8 @@ fn main() {
         run(&mut pool);
         assert_eq!(
             view.next().now_or_never().flatten().map(|d| d.len),
-            Some(OBJECTS)
+            Some(OBJECTS),
+            "a fresh view's first delta must carry every seeded object"
         );
         for input in typing {
             narrowing.push(step(&mut view, input, &mut pool));

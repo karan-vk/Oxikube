@@ -60,7 +60,7 @@ impl Layer {
     }
 
     fn allowed_internal(self) -> &'static [Layer] {
-        use Layer::*;
+        use Layer::{Adapters, App, Bins, Domain, Platform, Ports, Testing, Ui, Xtask};
         match self {
             Domain => &[],
             Ports => &[Domain],
@@ -75,7 +75,7 @@ impl Layer {
 
     /// External crate-name prefixes that must not appear in this layer's direct deps.
     fn banned_external(self) -> &'static [&'static str] {
-        use Layer::*;
+        use Layer::{Adapters, App, Bins, Domain, Platform, Ports, Testing, Ui, Xtask};
         const EVERYWHERE: &[&str] = &["chrono", "serde_yaml", "serde_yml"];
         match self {
             Domain => &[

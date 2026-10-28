@@ -58,6 +58,10 @@ fn matchers_are_reused_between_calls() {
 }
 
 #[test]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "exercises panic handling: a caller's panic must not poison the matcher pool"
+)]
 fn a_matcher_survives_a_panicking_caller() {
     let service = FuzzyService::new();
     let titles = titles();

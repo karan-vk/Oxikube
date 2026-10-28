@@ -22,6 +22,10 @@ pub fn cluster() -> ClusterId {
 
 /// `count` releases across 12 namespaces and the nine statuses (mostly `deployed`), the way a busy
 /// cluster looks: names, charts and versions vary, so sorting and filtering have something to do.
+///
+/// # Panics
+///
+/// When `count` is so large that a generated timestamp leaves the representable range.
 pub fn fixture(count: usize) -> Vec<Release> {
     const CHARTS: [&str; 8] = [
         "nginx",

@@ -122,6 +122,7 @@ impl SidebarModel {
 
     /// The sidebar filtered to `have`: items whose `needs` are not met are
     /// dropped, and so are sections left empty.
+    #[must_use]
     pub fn visible_with(&self, have: Capabilities) -> SidebarModel {
         let sections = self
             .sections

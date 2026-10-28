@@ -1,0 +1,190 @@
+# The RBAC objects `record.sh` applies to a kind cluster before recording the rules reviews in
+# `reviews.json` (E17-S01). Every object is named `oxi-rbac-fx*` so the recording never touches a
+# shared fixture; `record.sh` deletes them all again afterwards.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: oxi-rbac-fx
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fx-sa
+  namespace: oxi-rbac-fx
+---
+# Built-in `view`, `edit` and `admin` (aggregated ClusterRoles) granted inside one namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: fx-viewer-view
+  namespace: oxi-rbac-fx
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: fx-viewer
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: fx-editor-edit
+  namespace: oxi-rbac-fx
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edit
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: fx-editor
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: fx-admin-admin
+  namespace: oxi-rbac-fx
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: admin
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: fx-admin
+---
+# Built-in `cluster-admin` granted cluster-wide.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: oxi-rbac-fx-root
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: fx-root
+---
+# A custom aggregated ClusterRole: its rules come from the two labelled ClusterRoles below.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: oxi-rbac-fx-aggregate
+aggregationRule:
+  clusterRoleSelectors:
+    - matchLabels:
+        oxi-rbac-fx/aggregate-to-team: "true"
+rules: []
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: oxi-rbac-fx-team-workloads
+  labels:
+    oxi-rbac-fx/aggregate-to-team: "true"
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["*/scale"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: oxi-rbac-fx-team-urls
+  labels:
+    oxi-rbac-fx/aggregate-to-team: "true"
+rules:
+  - nonResourceURLs: ["/healthz", "/metrics/*"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["team-settings", "team-flags"]
+    verbs: ["get", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: oxi-rbac-fx-team
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: oxi-rbac-fx-aggregate
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: fx-team
+---
+# A namespaced Role with wildcards, granted to a ServiceAccount, and a ClusterRole granted to
+# every ServiceAccount of the namespace (the `system:serviceaccounts:<ns>` group).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: fx-role
+  namespace: oxi-rbac-fx
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["*"]
+  - apiGroups: ["*"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "get"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["fx-secret"]
+    verbs: ["get"]
+  - apiGroups: ["batch"]
+    resources: ["*"]
+    verbs: ["delete", "deletecollection"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: fx-sa-role
+  namespace: oxi-rbac-fx
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: fx-role
+subjects:
+  - kind: ServiceAccount
+    name: fx-sa
+    namespace: oxi-rbac-fx
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: oxi-rbac-fx-sa-events
+rules:
+  - apiGroups: ["", "events.k8s.io"]
+    resources: ["events"]
+    verbs: ["list", "watch"]
+  - apiGroups: [""]
+    resources: ["serviceaccounts/token"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: fx-namespace-sas
+  namespace: oxi-rbac-fx
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: oxi-rbac-fx-sa-events
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: system:serviceaccounts:oxi-rbac-fx

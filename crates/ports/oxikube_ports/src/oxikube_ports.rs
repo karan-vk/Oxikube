@@ -138,14 +138,18 @@ pub use agent::{
     ToolCallId, ToolCallInfo, ToolCallPatch, ToolCallStatus, ToolKind, WriteTextFile,
 };
 pub use clock::ClockPort;
-pub use cloud::{CloudDiscoveryPort, CloudProvider, CloudToolStatus, DiscoveredCluster};
+pub use cloud::{
+    CloudDetection, CloudDiscoveryPort, CloudProvider, CloudScope, CloudToolStatus, ClusterStatus,
+    DiscoveredCluster, ExecEnvVar, ExecInteractiveMode, ExecPlugin, KubeconfigEntry, SetupHint,
+};
 pub use cluster_prefs::{
     ClusterPrefs, ClusterPrefsTable, MetricsMode, NodeShellPrefs, PrometheusAuthKind,
     PrometheusOverride, WatchBudgetPrefs,
 };
 pub use cluster_source::{
-    ClusterContext, ClusterSource, ClusterSourcePort, DiagnosticSeverity, SourceDiagnostic,
-    SourceId, SourceKind, SourceState, SourceStatus, SourcesChanged, UserSource, UserSourceKind,
+    ClusterContext, ClusterEndpoint, ClusterSource, ClusterSourcePort, DiagnosticSeverity,
+    SourceDiagnostic, SourceId, SourceKind, SourceState, SourceStatus, SourcesChanged, UserSource,
+    UserSourceKind,
 };
 pub use connector::{
     ClusterConnection, ClusterConnectorPort, ClusterPorts, ConnectRequest, ConnectionGuard,
@@ -230,7 +234,10 @@ mod tests {
     use super::*;
 
     /// Each function only has to compile: it proves `Arc<dyn Port>` is valid.
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "the fields only have to compile to prove object safety"
+    )]
     struct ObjectSafe {
         cluster_source: Arc<dyn ClusterSourcePort>,
         cloud: Arc<dyn CloudDiscoveryPort>,

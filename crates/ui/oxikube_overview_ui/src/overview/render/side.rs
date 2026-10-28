@@ -64,32 +64,32 @@ impl ClusterOverview {
                 None => warning.object.clone(),
             };
             let count = (warning.count > 1).then(|| format!(" ×{}", warning.count));
-            card =
-                card.child(
-                    v_flex()
-                        .debug_selector(move || format!("overview-warning-{ix}"))
-                        .gap(u(px(2.)))
-                        .text_size(u(tokens.font.small))
-                        .child(
-                            h_flex()
-                                .gap(u(tokens.spacing.sm))
-                                .child(
-                                    div()
-                                        .text_color(tokens.colors.warning)
-                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                        .child(SharedString::from(warning.reason.clone())),
-                                )
-                                .child(div().min_w_0().truncate().child(SharedString::from(
-                                    object + &count.unwrap_or_default(),
-                                ))),
-                        )
-                        .child(
-                            div()
-                                .text_color(tokens.colors.text_muted)
-                                .line_clamp(2)
-                                .child(SharedString::from(warning.message.clone())),
-                        ),
-                );
+            card = card.child(
+                v_flex()
+                    .debug_selector(move || format!("overview-warning-{ix}"))
+                    .gap(u(px(2.)))
+                    .text_size(u(tokens.font.small))
+                    .child(
+                        h_flex()
+                            .gap(u(tokens.spacing.sm))
+                            .child(
+                                div()
+                                    .text_color(tokens.colors.warning)
+                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                    .child(SharedString::from(warning.reason.clone())),
+                            )
+                            .child(div().min_w_0().truncate().child(SharedString::from(format!(
+                                "{object}{}",
+                                count.unwrap_or_default()
+                            )))),
+                    )
+                    .child(
+                        div()
+                            .text_color(tokens.colors.text_muted)
+                            .line_clamp(2)
+                            .child(SharedString::from(warning.message.clone())),
+                    ),
+            );
         }
         card.into_any_element()
     }

@@ -200,11 +200,11 @@ impl EventRing {
             self.shed.insert(key);
             return false;
         }
-        if let Some((_, oldest_key)) = self.order.pop_first() {
-            if let Some(entry) = self.entries.remove(&oldest_key) {
-                self.shed.insert(&oldest_key);
-                out.push(Delta::Deleted(entry.event));
-            }
+        if let Some((_, oldest_key)) = self.order.pop_first()
+            && let Some(entry) = self.entries.remove(&oldest_key)
+        {
+            self.shed.insert(&oldest_key);
+            out.push(Delta::Deleted(entry.event));
         }
         true
     }

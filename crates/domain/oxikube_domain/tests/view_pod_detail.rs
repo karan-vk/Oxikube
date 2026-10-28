@@ -25,7 +25,7 @@ fn pod(spec: Value) -> Resource {
         "status": {"podIP": "10.1.2.3", "hostIP": "192.168.0.7",
                    "podIPs": [{"ip": "10.1.2.3"}, {"ip": "fd00::3"}]},
     }))
-    .unwrap()
+    .expect("a Pod resource")
 }
 
 fn config_map(data: Value) -> Resource {
@@ -34,7 +34,7 @@ fn config_map(data: Value) -> Resource {
         "metadata": {"name": "web-config", "namespace": "shop"},
         "data": data, "binaryData": {"blob": "AAEC"},
     }))
-    .unwrap()
+    .expect("a ConfigMap resource")
 }
 
 fn secret(data: Value) -> Resource {
@@ -43,7 +43,7 @@ fn secret(data: Value) -> Resource {
         "metadata": {"name": "web-secret", "namespace": "shop"},
         "data": data,
     }))
-    .unwrap()
+    .expect("a Secret resource")
 }
 
 fn sources(config: Option<&Resource>, secret_state: Option<SourceState>) -> EnvSources {
@@ -89,7 +89,10 @@ fn env_pod() -> Resource {
 }
 
 fn rows_of(pod: &Resource, sources: &EnvSources) -> Vec<oxikube_domain::view::EnvRow> {
-    PodDetail::from_resource(pod).unwrap().containers[0].env_rows(pod, sources)
+    PodDetail::from_resource(pod)
+        .expect("a Pod detail")
+        .containers[0]
+        .env_rows(pod, sources)
 }
 
 fn row<'a>(

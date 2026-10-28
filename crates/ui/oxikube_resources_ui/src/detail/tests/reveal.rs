@@ -70,10 +70,7 @@ fn a_secret_holds_no_value_until_it_is_revealed(cx: &mut TestAppContext) {
     let keys: Vec<&str> = summary.keys.iter().map(|k| k.key.as_str()).collect();
     assert_eq!(keys, ["blob", "password", "username"]);
     assert!(!d.read(&view, |v| v.reveal_requested()));
-    assert_eq!(
-        d.read(&view, |v| v.revealed_value("password").is_none()),
-        true
-    );
+    assert!(d.read(&view, |v| v.revealed_value("password").is_none()));
     assert_eq!(gets(&d), 1, "only the full read so far");
 }
 

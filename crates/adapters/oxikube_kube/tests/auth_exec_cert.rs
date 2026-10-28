@@ -25,14 +25,15 @@ const EXPIRY: &str = "2099-01-01T00:00:00Z";
 /// Writes `<dir>/plugin.sh`: it appends a line to `<dir>/runs`, runs `prelude` (shell), then
 /// prints `<dir>/credential.json`.
 fn write_plugin_with(dir: &Path, credential: &serde_json::Value, prelude: &str) -> String {
-    std::fs::write(dir.join("credential.json"), credential.to_string()).unwrap();
+    std::fs::write(dir.join("credential.json"), credential.to_string())
+        .expect("write credential.json into the temp dir");
     let script = format!(
         "echo run >> {runs}\n{prelude}\ncat {cred}\n",
         runs = dir.join("runs").display(),
         cred = dir.join("credential.json").display()
     );
     let path = dir.join("plugin.sh");
-    std::fs::write(&path, script).unwrap();
+    std::fs::write(&path, script).expect("write plugin.sh into the temp dir");
     path.to_string_lossy().into_owned()
 }
 
@@ -54,7 +55,7 @@ fn certificate(cert: &str, key: &str) -> serde_json::Value {
 }
 
 fn config(script: &str) -> Config {
-    let mut config = Config::new("http://127.0.0.1:1".parse().unwrap());
+    let mut config = Config::new("http://127.0.0.1:1".parse().expect("a literal URI parses"));
     config.auth_info.exec = Some(ExecConfig {
         api_version: Some("client.authentication.k8s.io/v1".into()),
         command: Some("sh".into()),
@@ -88,7 +89,7 @@ fn runs(dir: &Path) -> usize {
 async fn kube_only_runs(config: Config, dir: &Path) -> usize {
     tokio::task::spawn_blocking(move || Client::try_from(config))
         .await
-        .unwrap()
+        .expect("the client build task does not panic")
         .expect("kube builds the client");
     runs(dir)
 }

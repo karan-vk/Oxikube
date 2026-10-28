@@ -85,8 +85,12 @@ pub fn record(name: &str, namespace: &str, revision: u32, status: &str) -> Value
 /// Helm's encoding: gzip, then base64.
 pub fn helm_encode(record: &Value) -> String {
     let mut gz = GzEncoder::new(Vec::new(), Compression::fast());
-    gz.write_all(record.to_string().as_bytes()).unwrap();
-    STANDARD.encode(gz.finish().unwrap())
+    gz.write_all(record.to_string().as_bytes())
+        .expect("writing to an in-memory gzip encoder cannot fail");
+    STANDARD.encode(
+        gz.finish()
+            .expect("finishing an in-memory gzip encoder cannot fail"),
+    )
 }
 
 /// A release object holding `data` verbatim as its `data.release`.
@@ -119,15 +123,21 @@ pub fn object_with_data(
             "metadata": metadata, "data": {"release": data},
         }),
     };
-    Resource::from_json(json).unwrap()
+    Resource::from_json(json).expect("the constructed release object is a valid resource")
 }
 
 /// A release object storing `record`.
 pub fn object(driver: Driver, record: &Value) -> Resource {
-    let name = record["name"].as_str().unwrap();
-    let namespace = record["namespace"].as_str().unwrap();
-    let revision = record["version"].as_u64().unwrap() as u32;
-    let status = record["info"]["status"].as_str().unwrap();
+    let name = record["name"].as_str().expect("record has a string name");
+    let namespace = record["namespace"]
+        .as_str()
+        .expect("record has a string namespace");
+    let revision = record["version"]
+        .as_u64()
+        .expect("record has a numeric version") as u32;
+    let status = record["info"]["status"]
+        .as_str()
+        .expect("record has a string status");
     object_with_data(
         driver,
         namespace,

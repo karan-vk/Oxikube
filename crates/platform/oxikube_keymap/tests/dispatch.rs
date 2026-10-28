@@ -28,13 +28,13 @@ fn is<A: Action>(binding: &KeyBinding, action: &A) -> bool {
 }
 
 fn key(source: &str) -> Keystroke {
-    Keystroke::parse(source).unwrap()
+    Keystroke::parse(source).expect("test keystroke parses")
 }
 
 fn stack(contexts: &[&str]) -> Vec<KeyContext> {
     contexts
         .iter()
-        .map(|source| KeyContext::parse(source).unwrap())
+        .map(|source| KeyContext::parse(source).expect("test key context parses"))
         .collect()
 }
 

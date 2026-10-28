@@ -29,6 +29,12 @@ pub const FEATURES: &[Feature] = &[
         name: "oxikube_resources_ui",
         init: oxikube_resources_ui::init,
     },
+    // After `oxikube_resources_ui`: it gives the ServiceAccount kind that crate registers its panel, and
+    // the Role kinds join its registry (E17-S05).
+    Feature {
+        name: "oxikube_rbac_ui",
+        init: oxikube_rbac_ui::init,
+    },
     Feature {
         name: "oxikube_terminal",
         init: oxikube_terminal::init,

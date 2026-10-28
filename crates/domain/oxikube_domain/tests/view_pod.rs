@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 const DELETING: &str = "2026-10-03T12:00:00Z";
 
 fn ts(s: &str) -> Timestamp {
-    s.parse().unwrap()
+    s.parse().expect("test timestamp is RFC 3339")
 }
 
 /// A Pod with the given `spec` and `status`; `deletion` sets `deletionTimestamp`.
@@ -25,7 +25,8 @@ fn pod_json(spec: Value, status: Value, deletion: Option<&str>) -> Value {
 }
 
 fn summary(json: Value) -> PodSummary {
-    PodSummary::from_resource(&Resource::from_json(json).unwrap()).unwrap()
+    PodSummary::from_resource(&Resource::from_json(json).expect("a pod resource"))
+        .expect("a pod summary")
 }
 
 /// `spec` with `n` regular containers `c0..cn`.

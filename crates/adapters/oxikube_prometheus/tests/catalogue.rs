@@ -502,7 +502,9 @@ fn ingress_query(provider: MetricsProviderKind, kind: MetricKind) -> String {
         },
         kind,
     );
-    build(provider, &request).unwrap().promql
+    build(provider, &request)
+        .expect("every provider has an ingress query")
+        .promql
 }
 
 #[test]

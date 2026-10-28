@@ -10,9 +10,10 @@ use std::future::Future;
 use std::sync::Arc;
 
 use oxikube_domain::OxiResult;
-use oxikube_domain::access::AccessRules;
+use oxikube_domain::access::{AccessCheck, AccessDecision, AccessRules};
 use oxikube_domain::ids::ContextName;
 
+use super::access::can_i;
 use super::capabilities::CapabilityReport;
 use super::liveness::probe_apiserver_version;
 use super::rules::{RulesCache, fetch_rules, probe_capabilities};
@@ -93,6 +94,30 @@ pub async fn rules_for_context(
                 })
                 .await?;
             Ok(snapshot.to_access_rules())
+        },
+    )
+    .await
+}
+
+/// One `SelfSubjectAccessReview` for `check` in `context`, using the pooled client and
+/// rebuilding it once after a retryable auth failure.
+///
+/// # Errors
+///
+/// As [`can_i`], plus the pool's build error.
+pub async fn can_i_for_context(
+    pool: &ClientPool,
+    context: &ContextName,
+    check: &AccessCheck,
+    refresh: CredentialRefresh,
+) -> OxiResult<AccessDecision> {
+    retry_once(
+        || async {
+            pool.invalidate(context);
+        },
+        || async {
+            let client = pool.get(context).await?;
+            can_i(&client, check, refresh).await
         },
     )
     .await

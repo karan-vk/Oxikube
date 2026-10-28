@@ -54,8 +54,8 @@ fn age_text(age: SignedDuration) -> String {
     let s = age.as_secs();
     match s {
         ..120 => format!("{s}s"),
-        ..7_200 => format!("{}m", s / 60),
-        ..172_800 => format!("{}h", s / 3_600),
+        120..7_200 => format!("{}m", s / 60),
+        7_200..172_800 => format!("{}h", s / 3_600),
         _ => format!("{}d", s / 86_400),
     }
 }
@@ -185,7 +185,9 @@ pub(super) fn block(m: &PodMetrics<'_>, cap: usize) -> ContextBlock {
     }
     if !lines.is_empty() {
         body.push_str("# time cpu memory (oldest first)\n");
-        lines.iter().for_each(|l| body.push_str(l));
+        for l in &lines {
+            body.push_str(l);
+        }
     }
     body.push_str(&tail);
 

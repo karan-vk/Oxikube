@@ -45,6 +45,10 @@ impl Worker {
                         return;
                     }
                 };
+                #[expect(
+                    clippy::disallowed_methods,
+                    reason = "defence in depth: a panicking job must not take the store down"
+                )]
                 while let Ok(job) = jobs_rx.recv() {
                     // A panicking job must not take the store down with it.
                     if catch_unwind(AssertUnwindSafe(|| job(&mut conn))).is_err() {

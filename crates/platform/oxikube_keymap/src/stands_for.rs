@@ -185,6 +185,9 @@ pub const STANDS_FOR: &[(&str, CommandId)] = &[
     ("events_view::CopyRow", CommandId::EVENTS_COPY_ROW),
     ("events_view::CopyRowJson", CommandId::EVENTS_COPY_ROW_JSON),
     ("events_view::ExportJson", CommandId::EVENTS_EXPORT_JSON),
+    // The RBAC subject pages (E17-S07): `enter` opens the subject under the cursor, `y` copies.
+    ("rbac_subjects::OpenSelected", CommandId::RBAC_SHOW_SUBJECT),
+    ("rbac_subjects::CopyMatrix", CommandId::RBAC_COPY_MATRIX),
     // The pulses page (E13-S10): `enter` opens the selected tile's table.
     ("pulses::Open", CommandId::RESOURCE_OPEN_LIST),
     // The notification centre (E14-S05): `enter` marks the selected notification read and opens

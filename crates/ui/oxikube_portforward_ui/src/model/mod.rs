@@ -208,11 +208,11 @@ impl PanelModel {
 
     /// Keeps the selection on its forward; when it left, on the same line number.
     fn reselect(&mut self) {
-        if let Some(id) = self.selected {
-            if let Some(ix) = self.position(id) {
-                self.selected_ix = ix;
-                return;
-            }
+        if let Some(id) = self.selected
+            && let Some(ix) = self.position(id)
+        {
+            self.selected_ix = ix;
+            return;
         }
         if self.visible.is_empty() {
             self.selected = None;

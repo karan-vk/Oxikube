@@ -22,6 +22,15 @@ name: integration
 # nightly `helm-minimum` job reruns the CLI scenarios with Helm 3.10, the oldest supported, to
 # catch output-format drift. Charts are local; nothing is pulled from a chart repository.
 #
+# The RBAC suite (E17-S10) runs in the `kind` job: the adapter's rules review against `kubectl auth
+# can-i --list` (`oxikube_kube/tests/rbac`) and the app-level scenarios (`oxikube_app/tests/kind_smoke/rbac`:
+# a restricted ServiceAccount's generated kubeconfig gates the sidebar's sections and the namespace
+# fallback, the subject index and its matrix equal `kubectl auth can-i --list` before and after a
+# `view` binding made through the guard, the kubeconfig works with `kubectl` and expires when asked).
+# Its app end to end (`bins/oxikube/tests/kind_rbac`) runs in the `terminal` job. A mismatch saves
+# both sides (rules and kubectl output, never a token) under diagnostics/namespaces/rbac, which both
+# jobs upload when they fail.
+#
 # The data plane suite (E04-S14) is `crates/adapters/oxikube_kube/tests/`; its README maps every
 # port method and epic acceptance item to the test that exercises it. The nightly run executes the
 # whole suite twice on the same cluster as a flake check: a test that passes once and fails once is
@@ -225,7 +234,7 @@ jobs:
       TERMINAL_SUITE: >-
         cargo test -p oxikube --features integration --test kind_exec --test kind_terminal --test kind_terminal_data --test kind_assist
         --test kind_templates --test kind_editor --test kind_network --test kind_sections
-        --test kind_metrics_server --test kind_notifications --test kind_events
+        --test kind_metrics_server --test kind_notifications --test kind_events --test kind_rbac
         --no-fail-fast
     steps:
       - uses: actions/checkout@v7

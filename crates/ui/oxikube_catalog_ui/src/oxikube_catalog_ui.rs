@@ -13,6 +13,8 @@
 //!   and favourite cluster (colour dot, initials, state, tooltip, menu, drag to reorder).
 //! - [`sources`] (E06-S05): [`SourcesView`], the kubeconfig sources screen: the files and folders the
 //!   catalog reads, add (pickers), paste, remove, reload, with each source's status inline.
+//! - [`cloud`] (E18-S06): [`CloudView`], the catalog's Cloud section: AWS, Google Cloud and Azure
+//!   clusters found by their CLIs, with scope filters, Add / Remove and remediation for errors.
 //! - [`catalog`] (E06-S03): [`CatalogView`], the searchable list of every kubeconfig context with
 //!   its connection state, favourites and last-used, and the empty state that explains how to add
 //!   kubeconfigs.
@@ -21,12 +23,14 @@
 //! dependency direction. `cargo xtask lint-deps` enforces it.
 
 pub mod catalog;
+pub mod cloud;
 pub mod connect;
 pub mod hotbar;
 pub mod namespaces;
 pub mod sources;
 
 pub use catalog::{CatalogDeps, CatalogView, CommandDispatcher, ServiceDispatcher};
+pub use cloud::{CloudBackend, CloudDeps, CloudView};
 pub use connect::{ConnectDeps, ConnectView, ConnectViewModel, DegradedBanner};
 pub use hotbar::{Hotbar, HotbarDeps};
 pub use sources::{ServiceBackend, SourcesBackend, SourcesDeps, SourcesView};

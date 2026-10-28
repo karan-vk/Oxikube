@@ -100,7 +100,10 @@ fn install(cx: &mut TestAppContext, platform: KeymapPlatform, user: &str) {
 
 /// What `keys` does in the context stack `contexts`, outermost first.
 fn press(cx: &mut TestAppContext, keys: &str, contexts: &[&str]) -> Resolution {
-    cx.read(|cx| resolve(cx, keys, &parse_stack(contexts).unwrap()).unwrap())
+    cx.read(|cx| {
+        let stack = parse_stack(contexts).expect("test context stack parses");
+        resolve(cx, keys, &stack).expect("test keystrokes parse")
+    })
 }
 
 /// The action `keys` runs in `contexts`, `None` when it runs none.

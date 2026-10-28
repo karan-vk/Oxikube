@@ -8,7 +8,11 @@
 //! those need `oxikube --perf` against the real table (E07, ADR 0013). Prints rows built per frame
 //! (must stay in the dozens, never thousands) and frame time mean / p95 / max.
 
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "a benchmark reports on stdout and stderr"
+)]
 
 use gpui::{
     App, Context, IntoElement, ParentElement as _, Render, Styled as _, TestAppContext, Window, div,

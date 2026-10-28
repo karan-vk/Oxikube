@@ -156,10 +156,10 @@ fn parse_node(
             _ => Vec::new(),
         };
         for text in texts {
-            if let Some(parsed) = SchemaType::parse(text) {
-                if !schema.types.contains(&parsed) {
-                    schema.types.push(parsed);
-                }
+            if let Some(parsed) = SchemaType::parse(text)
+                && !schema.types.contains(&parsed)
+            {
+                schema.types.push(parsed);
             }
         }
     }

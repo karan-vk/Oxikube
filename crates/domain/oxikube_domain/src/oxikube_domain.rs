@@ -9,10 +9,12 @@
 //! | [`alias`] | [`AliasTarget`]: what a jump-bar alias (`deploy`, a user's `prodpods`) resolves to |
 //! | [`kinds`] | [`ResourceKind`](kinds::ResourceKind), [`Verb`](kinds::Verb), [`VerbSet`](kinds::VerbSet) |
 //! | [`access`] | [`AccessRules`](access::AccessRules): what the user may do per resource (a rules review as data), [`AccessRequirement`](access::AccessRequirement) |
+//! | [`rbac`] | RBAC policy as data (E17-S01): [`Role`](rbac::Role), [`Binding`](rbac::Binding), [`Subject`](rbac::Subject), [`PolicyRule`](rbac::PolicyRule) read from JSON; the rule normaliser ([`NormalisedRules`](rbac::NormalisedRules)) into the [`access`] matcher's rules; [`PolicyMatrix`](rbac::PolicyMatrix) |
 //! | [`resource`] | the thin [`Resource`] model: [`ObjectMeta`] + the object's JSON |
 //! | [`json`] | [`JsonDoc`]: compact immutable JSON read in place through [`JsonRef`] |
 //! | [`drain`] | node drain as data (E12-S10): [`drain::DrainOptions`], [`drain::plan_drain`] (kubectl's filters), [`drain::DrainProgress`], [`drain::DrainFlags`] (the `node::Drain` payload), [`drain::DrainBoard`] (per-pod progress) |
 //! | [`build`] | manifest builders for kubectl-equivalent actions ([`build::job_from_cronjob`], [`build::suspend_patch`]) |
+//! | [`cloud`] | cloud discovery (E18): [`cloud::CloudProvider`], [`cloud::CloudScope`], [`cloud::DiscoveredCluster`], [`cloud::KubeconfigEntry`] (exec auth only), [`cloud::CloudDetection`] |
 //! | [`helm`] | Helm vocabulary: [`helm::Release`], [`helm::ReleaseRef`], [`helm::Revision`], [`helm::ChartRef`], [`helm::RepoEntry`], [`helm::Values`], [`helm::HelmCapabilities`], [`helm::HelmError`] (E16) |
 //! | [`rollout`] | rollout history and rollback of Deployments, StatefulSets and DaemonSets: [`rollout::Revision`], [`rollout::RollbackPlan`] (E12-S06) |
 //! | [`view`] | typed view-models for core kinds ([`PodSummary`], [`NodeSummary`], ...) |
@@ -53,6 +55,7 @@ pub mod alias;
 pub mod audit;
 mod bounds;
 pub mod build;
+pub mod cloud;
 pub mod colour;
 pub mod command;
 pub mod drain;
@@ -73,6 +76,7 @@ pub mod notification;
 pub mod portforward;
 pub mod preset;
 pub mod quantity;
+pub mod rbac;
 pub mod redact;
 pub mod resource;
 pub mod rollout;

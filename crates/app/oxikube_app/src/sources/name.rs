@@ -2,6 +2,7 @@
 
 use std::path::{Component, Path};
 
+use oxikube_domain::cloud::CloudProvider;
 use oxikube_domain::{OxiError, OxiResult};
 
 /// The longest name accepted for a pasted kubeconfig (before `.yaml`).
@@ -13,12 +14,22 @@ const RESERVED: [&str; 22] = [
     "com9", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
 ];
 
+/// Whether `stem` (a file name without `.yaml`) is one of the kubeconfigs cloud discovery
+/// manages (`aws`, `gcloud`, `az`: [`CloudProvider::cli`]), in any letter case. A pasted
+/// kubeconfig may not take these names, so it can never collide with a managed file.
+pub fn is_managed_stem(stem: &str) -> bool {
+    CloudProvider::ALL
+        .iter()
+        .any(|provider| provider.cli().eq_ignore_ascii_case(stem))
+}
+
 /// The file name `<name>.yaml` for a pasted kubeconfig called `name`.
 ///
 /// A trailing `.yaml` or `.yml` the user typed is dropped, so `prod.yaml` and `prod` mean the
 /// same. Only letters, digits, `-`, `_` and `.` are accepted, and the name may not start with
 /// a dot (hidden files are skipped by folder sources), so no separator, `..` or drive prefix
-/// can reach the file name: a name never escapes the kubeconfigs directory.
+/// can reach the file name: a name never escapes the kubeconfigs directory. The names of the
+/// files cloud discovery manages (`aws`, `gcloud`, `az`) are refused too.
 ///
 /// # Errors
 ///
@@ -54,7 +65,7 @@ pub fn pasted_file_name(name: &str) -> OxiResult<String> {
         return Err(OxiError::validation("The name cannot start with a dot."));
     }
     let first = stem.split('.').next().unwrap_or(stem).to_ascii_lowercase();
-    if RESERVED.contains(&first.as_str()) {
+    if RESERVED.contains(&first.as_str()) || is_managed_stem(stem) {
         return Err(OxiError::validation(format!(
             "{stem:?} is a reserved name: pick another."
         )));

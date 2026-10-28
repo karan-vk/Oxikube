@@ -31,10 +31,13 @@ fn apply(context: &str, namespace: &str, manifest: &str) {
     child
         .stdin
         .take()
-        .unwrap()
+        .expect("stdin was piped above")
         .write_all(manifest.as_bytes())
-        .unwrap();
-    assert!(child.wait().unwrap().success(), "kubectl apply failed");
+        .expect("the manifest is written to kubectl's stdin");
+    assert!(
+        child.wait().expect("kubectl apply exits").success(),
+        "kubectl apply failed"
+    );
 }
 
 async fn client(context: &str) -> Client {

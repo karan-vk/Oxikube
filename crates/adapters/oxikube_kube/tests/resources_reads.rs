@@ -37,8 +37,11 @@ fn assert_same(typed: &oxikube_domain::Resource, dynamic: &oxikube_domain::Resou
         None,
         "typed vs dynamic read of {name}"
     );
-    assert_eq!(typed.kind, dynamic.kind);
-    assert_eq!(typed.meta, dynamic.meta);
+    assert_eq!(typed.kind, dynamic.kind, "typed vs dynamic kind of {name}");
+    assert_eq!(
+        typed.meta, dynamic.meta,
+        "typed vs dynamic metadata of {name}"
+    );
 }
 
 /// The kind cluster's single node, found through the adapter itself.

@@ -53,6 +53,7 @@ impl FieldMap {
     }
 
     /// The default map with `level`, `time` and `message` names tried before the defaults.
+    #[must_use]
     pub fn with_first(mut self, level: &[&str], time: &[&str], message: &[&str]) -> Self {
         let put_first = |names: &mut Vec<String>, first: &[&str]| {
             let mut all: Vec<String> = first.iter().map(|name| (*name).to_owned()).collect();

@@ -148,7 +148,11 @@ pub fn kind(app: &mut Launched, context: &str, namespace: &str, case: &KindCase,
                 case.kind
             );
         };
-        assert_eq!(request.command, id);
+        assert_eq!(
+            request.command, id,
+            "{id} on a {}: the confirmation is for the dispatched command",
+            case.kind
+        );
         assert!(
             request.tier >= entry.action.meta().confirm && request.tier != ConfirmTier::None,
             "{id} on a {}: {:?}",
@@ -198,7 +202,11 @@ pub fn printer_columns(app: &mut Launched, context: &str, namespace: &str) {
         context,
         &format!("/apis/test.oxikube.dev/v1/namespaces/{namespace}/widgets"),
     );
-    assert_eq!(server.first().map(String::as_str), Some("Name"));
+    assert_eq!(
+        server.first().map(String::as_str),
+        Some("Name"),
+        "the server's Widget table leads with Name: {server:?}"
+    );
     assert_eq!(
         documented_columns("Widget", columns(app, &table)),
         server,

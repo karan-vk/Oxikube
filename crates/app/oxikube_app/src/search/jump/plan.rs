@@ -17,6 +17,8 @@
 //! | `:ns` | `resource::OpenList { Namespace }` |
 //! | `:pulses` | `cluster::ShowPulses` (E13-S10) |
 //! | `:helm` | `helm::OpenReleases`: the cluster's Helm releases (E16-S05) |
+//! | `:usr`, `:grp` | `rbac::OpenUsers`, `rbac::OpenGroups`: the RBAC subjects of the cluster (E17-S07) |
+//! | `:rbac <subject>` | `rbac::ShowSubject`: what the subject may do, as a per-verb matrix (E17-S07) |
 //! | `:pf` | `portforward::TogglePanel { show: true }`: the Port Forwards panel (E15-S05) |
 //! | `:ev`, `:events kube-system /BackOff` | `events::Open { namespace, filter }`: the events view (E14-S03), not the generic table |
 //! | `:ns kube-system` | `namespace::Select { [kube-system] }` |
@@ -116,6 +118,23 @@ fn resolve_at(
         JumpCommand::Ns(name) => ns_plan(name.as_ref(), env)?,
         JumpCommand::Pulses => pulses_plan(env)?,
         JumpCommand::Helm => helm_plan(env)?,
+        JumpCommand::Users => {
+            let cluster = active(env)?;
+            JumpPlan::now(vec![Command::RbacOpenUsers { cluster }])
+        }
+        JumpCommand::Groups => {
+            let cluster = active(env)?;
+            JumpPlan::now(vec![Command::RbacOpenGroups { cluster }])
+        }
+        JumpCommand::Rbac(subject) => {
+            let cluster = env
+                .active_cluster()
+                .ok_or_else(|| no_cluster(subject.span))?;
+            JumpPlan::now(vec![Command::RbacShowSubject {
+                cluster,
+                subject: subject.value.clone(),
+            }])
+        }
         JumpCommand::PortForwards => {
             JumpPlan::now(vec![Command::PortForwardTogglePanel { show: true }])
         }
@@ -380,6 +399,12 @@ fn pulses_plan(env: &dyn JumpEnv) -> Result<JumpPlan, ParseError> {
         .active_cluster()
         .ok_or_else(|| no_cluster(Span::default()))?;
     Ok(JumpPlan::now(vec![Command::ClusterShowPulses { cluster }]))
+}
+
+/// The cluster whose tab is shown, or the error to underline.
+fn active(env: &dyn JumpEnv) -> Result<ClusterId, ParseError> {
+    env.active_cluster()
+        .ok_or_else(|| no_cluster(Span::default()))
 }
 
 /// `:helm`

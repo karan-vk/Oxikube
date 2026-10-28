@@ -82,6 +82,7 @@ macro_rules! fake_plumbing {
 
 mod agent;
 mod clock;
+mod cloud;
 mod cluster;
 mod data;
 mod drain;
@@ -108,10 +109,8 @@ pub use agent::{
     AgentCall, AgentClientCall, AgentClientScripts, AgentScripts, FakeAgentClient, FakeAgentPort,
 };
 pub use clock::{ClockCall, DEFAULT_START, FakeClockPort};
-pub use cluster::{
-    CloudCall, CloudScripts, ClusterSourceCall, ClusterSourceScripts, FakeCloudDiscoveryPort,
-    FakeClusterSourcePort,
-};
+pub use cloud::{CloudCall, CloudScripts, FakeCloudDiscoveryPort};
+pub use cluster::{ClusterSourceCall, ClusterSourceScripts, FakeClusterSourcePort};
 pub use data::{
     DiscoveryCall, DiscoveryScripts, FakeDiscoveryPort, FakeLogPort, FakeTableFeedPort, LogCall,
     LogScripts, TableCall, TableScripts,

@@ -40,10 +40,11 @@ pub(super) fn suggest(index: &Index, input: &str) -> Vec<Arc<str>> {
         let source = index.source_of(name).map_or(3, |s| s as u8);
         if name.starts_with(input) {
             found.push((0, name.len(), source, name));
-        } else if check_distance && name.len() <= MAX_COMPARED {
-            if let Some(distance) = bounded_distance(input.as_bytes(), name.as_bytes(), allowed) {
-                found.push((1, distance, source, name));
-            }
+        } else if check_distance
+            && name.len() <= MAX_COMPARED
+            && let Some(distance) = bounded_distance(input.as_bytes(), name.as_bytes(), allowed)
+        {
+            found.push((1, distance, source, name));
         }
     }
     found.sort();

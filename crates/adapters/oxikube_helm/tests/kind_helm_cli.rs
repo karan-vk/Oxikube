@@ -27,24 +27,26 @@ use oxikube_testkit::integration::{TestNamespace, test_context};
 const TOKEN: &str = "s3cr3t-token-for-the-redaction-check";
 
 fn write_chart(dir: &Path) {
-    std::fs::create_dir_all(dir.join("templates")).unwrap();
+    std::fs::create_dir_all(dir.join("templates"))
+        .expect("the chart directory is creatable in a temp dir");
     std::fs::write(
         dir.join("Chart.yaml"),
         "apiVersion: v2\nname: oxi-demo\nversion: 0.1.0\nappVersion: \"1.0\"\n",
     )
-    .unwrap();
-    std::fs::write(dir.join("values.yaml"), "greeting: hello\ntoken: \"\"\n").unwrap();
+    .expect("Chart.yaml is writable in the temp chart dir");
+    std::fs::write(dir.join("values.yaml"), "greeting: hello\ntoken: \"\"\n")
+        .expect("values.yaml is writable in the temp chart dir");
     std::fs::write(
         dir.join("templates/configmap.yaml"),
         "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: {{ .Release.Name }}\n\
          data:\n  greeting: {{ .Values.greeting | quote }}\n",
     )
-    .unwrap();
+    .expect("the configmap template is writable in the temp chart dir");
     std::fs::write(
         dir.join("templates/NOTES.txt"),
         "Installed {{ .Release.Name }}.\n",
     )
-    .unwrap();
+    .expect("NOTES.txt is writable in the temp chart dir");
 }
 
 async fn drain(output: HelmOutput) -> Vec<String> {
@@ -56,7 +58,7 @@ async fn drain(output: HelmOutput) -> Vec<String> {
 }
 
 fn values(yaml: &str) -> Values {
-    Values::from_yaml(yaml).unwrap()
+    Values::from_yaml(yaml).expect("the test values literal is valid YAML")
 }
 
 #[tokio::test]

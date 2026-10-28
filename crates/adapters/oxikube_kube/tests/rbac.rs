@@ -1,6 +1,7 @@
 //! Kind integration: a restricted service account gets `Forbidden`, not a crash, and the
 //! capabilities probe reports its limited rights (E03-S09; error classification from
-//! E03-S04, capabilities from E03-S05). Needs `cargo xtask kind-up` and
+//! E03-S04, capabilities from E03-S05). Its rules review matches `kubectl auth can-i --list`
+//! (E17-S10). Needs `cargo xtask kind-up` and
 //! `OXIKUBE_TEST_CONTEXT`; skips cleanly otherwise.
 #![cfg(feature = "integration")]
 
@@ -12,17 +13,20 @@ use k8s_openapi::api::core::v1::{Pod, Secret};
 use k8s_openapi::api::rbac::v1::PolicyRule;
 use kube::api::ListParams;
 use kube::{Api, Client};
-use oxikube_domain::access::{Access, AccessRequirement};
+use oxikube_domain::access::{Access, AccessCheck, AccessDecision, AccessRequirement, Impersonate};
 use oxikube_domain::ids::{ContextName, Gvr};
+use oxikube_domain::rbac::{NormalisedRules, PolicyRule as PolicyRuleModel, Subject};
 use oxikube_domain::{Capability, ErrorKind};
 use oxikube_kube::auth::{CredentialRefresh, classify};
 use oxikube_kube::health::{
-    AccessLevel, AccessQuery, RBAC_DERIVED, RulesCache, can_i, capabilities_for_context,
+    AccessLevel, RBAC_DERIVED, RulesCache, can_i, can_i_for_context, capabilities_for_context,
     fetch_rules, rules_for_context,
 };
 use oxikube_kube::{ClientPool, CrdWatchConfig, KubeDiscovery};
 use oxikube_ports::{CrdWatchStatus, DiscoveryEvent, DiscoveryPort};
+use oxikube_testkit::fixtures::rbac::printed_rules;
 use oxikube_testkit::integration::TestNamespace;
+use oxikube_testkit::integration::rbac::{can_i_list, save_diagnostic};
 
 use common::{DEADLINE, Kind, TestServiceAccount, wait_until, whoami};
 
@@ -167,17 +171,17 @@ async fn restricted_account_reports_limited_capabilities() {
     let pods = Gvr::new("", "v1", "pods");
     let secrets = Gvr::new("", "v1", "secrets");
     let checks = [
-        (AccessQuery::new("get", pods.clone()), true),
-        (AccessQuery::new("list", pods.clone()), true),
-        (AccessQuery::new("delete", pods.clone()), false),
+        (AccessCheck::new("get", pods.clone()), true),
+        (AccessCheck::new("list", pods.clone()), true),
+        (AccessCheck::new("delete", pods.clone()), false),
         (
-            AccessQuery::new("create", pods.clone()).subresource("exec"),
+            AccessCheck::new("create", pods.clone()).subresource("exec"),
             false,
         ),
-        (AccessQuery::new("get", secrets.clone()), false),
-        (AccessQuery::new("list", secrets.clone()), false),
-        (AccessQuery::new("create", secrets.clone()), false),
-        (AccessQuery::new("delete", secrets), false),
+        (AccessCheck::new("get", secrets.clone()), false),
+        (AccessCheck::new("list", secrets.clone()), false),
+        (AccessCheck::new("create", secrets.clone()), false),
+        (AccessCheck::new("delete", secrets), false),
     ];
     for (query, allowed) in checks {
         let query = query.namespace(ns);
@@ -293,4 +297,184 @@ async fn a_refused_crd_watch_is_reported_and_does_not_retry_hot() {
     assert!(!watch.is_finished(), "parked until the next interval");
     // The fallback re-discovery ran once the watch was refused.
     assert!(!discovery.registry().is_empty());
+}
+
+/// E17-S02: a service account bound in one namespace sees its rules only there, the cluster-wide
+/// checks deny, and the rules-based decision agrees with the server's `SelfSubjectAccessReview`.
+#[tokio::test]
+async fn bound_in_one_namespace_rules_and_cluster_wide_checks_agree() {
+    let Some(kind) = common::kind().await else {
+        return;
+    };
+    let restricted = Restricted::create(&kind).await;
+    let ns = restricted.namespace();
+    let refresh = CredentialRefresh::Static;
+    let cache = RulesCache::default();
+    let pods = Gvr::new("", "v1", "pods");
+
+    let own = rules_for_context(&restricted.pool, &cache, &restricted.context, ns, refresh)
+        .await
+        .expect("own namespace rules");
+    let other = rules_for_context(
+        &restricted.pool,
+        &cache,
+        &restricted.context,
+        "kube-system",
+        refresh,
+    )
+    .await
+    .expect("other namespace rules");
+    assert_eq!(own.level("list", "", "pods"), Access::Granted);
+    assert_eq!(other.level("list", "", "pods"), Access::Denied, "{other:?}");
+
+    let checks = [
+        AccessCheck::new("list", pods.clone()).namespace(ns),
+        AccessCheck::new("delete", pods.clone()).namespace(ns),
+        AccessCheck::new("list", pods.clone()).namespace("kube-system"),
+        // Cluster-wide: no namespace, and a cluster-scoped kind.
+        AccessCheck::new("list", pods.clone()),
+        AccessCheck::new("list", Gvr::new("", "v1", "nodes")),
+    ];
+    let expected = [true, false, false, false, false];
+    for (check, allowed) in checks.iter().zip(expected) {
+        let server = can_i_for_context(&restricted.pool, &restricted.context, check, refresh)
+            .await
+            .expect("access review");
+        assert_eq!(server.is_allowed(), allowed, "{check:?}: {server:?}");
+        let rules = match &check.namespace {
+            Some(namespace) if namespace == ns => Some(&own),
+            Some(_) => Some(&other),
+            None => None,
+        };
+        if let Some(decision) = rules.and_then(|rules| rules.decide(check)) {
+            assert_eq!(decision.is_allowed(), allowed, "rules vs server: {check:?}");
+        }
+    }
+}
+
+/// E17-S08: the admin asks as the restricted account through a `SubjectAccessReview`: `get pods`
+/// is allowed and `delete pods` denied, as `kubectl auth can-i --as` answers. The account itself
+/// cannot ask as anyone (no right to create reviews), and the refusal names the permission.
+#[tokio::test]
+async fn subject_access_review_answers_for_another_identity() {
+    let Some(kind) = common::kind().await else {
+        return;
+    };
+    let restricted = Restricted::create(&kind).await;
+    let ns = restricted.namespace();
+    let admin = kind.admin_client().await;
+    let refresh = CredentialRefresh::Static;
+    let pods = Gvr::new("", "v1", "pods");
+    let sa = Impersonate::service_account(ns, "oxi-restricted");
+
+    let get = AccessCheck::new("get", pods.clone())
+        .namespace(ns)
+        .impersonating(sa.clone());
+    let delete = AccessCheck::new("delete", pods.clone())
+        .namespace(ns)
+        .impersonating(sa.clone());
+    assert!(
+        can_i(&admin, &get, refresh)
+            .await
+            .expect("review")
+            .is_allowed(),
+        "the Role grants get"
+    );
+    let denied = can_i(&admin, &delete, refresh).await.expect("review");
+    assert!(
+        matches!(denied, AccessDecision::Denied { .. }),
+        "the Role does not grant delete: {denied:?}"
+    );
+
+    let error = can_i(&restricted.client, &get, refresh)
+        .await
+        .expect_err("the restricted account may not create reviews");
+    assert_eq!(error.kind(), ErrorKind::Forbidden);
+    assert!(
+        error.message().contains("subjectaccessreviews"),
+        "{}",
+        error.message()
+    );
+}
+
+/// E17 audit: a user or group asked about through a `SubjectAccessReview` is in
+/// `system:authenticated`, as `kubectl auth can-i --as` (impersonation) puts them. Every cluster
+/// binds `system:basic-user` to that group, so creating a `SelfSubjectAccessReview` is allowed
+/// for any user or group, never denied for want of the implicit group.
+#[tokio::test]
+async fn a_user_or_group_review_counts_the_bindings_of_system_authenticated() {
+    let Some(kind) = common::kind().await else {
+        return;
+    };
+    let admin = kind.admin_client().await;
+    let refresh = CredentialRefresh::Static;
+    let reviews = Gvr::new("authorization.k8s.io", "v1", "selfsubjectaccessreviews");
+    for identity in [
+        Impersonate::user("oxi-audit-jane"),
+        Impersonate::group("oxi-audit-devs"),
+    ] {
+        let check = AccessCheck::new("create", reviews.clone()).impersonating(identity.clone());
+        let decision = can_i(&admin, &check, refresh).await.expect("review");
+        assert!(
+            decision.is_allowed(),
+            "{identity:?}: kubectl auth can-i create selfsubjectaccessreviews says yes, got {decision:?}"
+        );
+    }
+}
+
+fn strs(list: &[String]) -> Vec<&str> {
+    list.iter().map(String::as_str).collect()
+}
+
+/// E17-S10: the rules review the app gates on lists what `kubectl auth can-i --list` prints for
+/// the same account and namespace (the resource rows; the adapter keeps no non-resource URLs):
+/// the Role's pods rule in its own namespace, only the defaults every account gets elsewhere.
+#[tokio::test]
+async fn rules_review_lists_what_kubectl_auth_can_i_list_prints() {
+    let Some(kind) = common::kind().await else {
+        return;
+    };
+    let restricted = Restricted::create(&kind).await;
+    let refresh = CredentialRefresh::Static;
+    let cache = RulesCache::default();
+    let account = Subject::from_username(&restricted.account.username);
+
+    for namespace in [restricted.namespace(), "kube-system"] {
+        let ours = rules_for_context(
+            &restricted.pool,
+            &cache,
+            &restricted.context,
+            namespace,
+            refresh,
+        )
+        .await
+        .expect("rules review");
+        let ours: Vec<PolicyRuleModel> = ours
+            .rules
+            .iter()
+            .map(|rule| {
+                PolicyRuleModel::resource(
+                    &strs(&rule.verbs),
+                    &strs(&rule.api_groups),
+                    &strs(&rule.resources),
+                    &strs(&rule.resource_names),
+                )
+            })
+            .collect();
+        let ours = NormalisedRules::from_policy(&ours);
+        let printed = can_i_list(kind.context.as_str(), &account, namespace).expect("kubectl");
+        let theirs = NormalisedRules::from_policy(&printed_rules(&printed));
+        let ours: Vec<_> = ours.resource_rules().collect();
+        let theirs: Vec<_> = theirs.resource_rules().collect();
+        if ours != theirs {
+            save_diagnostic(
+                &format!("adapter-rules-{namespace}.txt"),
+                &format!(
+                    "adapter:\n{ours:#?}\nkubectl auth can-i --list:\n{}",
+                    printed.join("\n")
+                ),
+            );
+        }
+        assert_eq!(ours, theirs, "in {namespace}");
+    }
 }

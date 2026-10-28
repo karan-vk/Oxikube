@@ -46,10 +46,10 @@ async fn next_kinds(
         let remaining = DEADLINE.saturating_sub(started.elapsed());
         match tokio::time::timeout(remaining, updates.next()).await {
             Ok(Some(Ok(update))) => {
-                if let SessionChange::KindsChanged(change) = update.change {
-                    if wanted(&change) {
-                        return;
-                    }
+                if let SessionChange::KindsChanged(change) = update.change
+                    && wanted(&change)
+                {
+                    return;
                 }
             }
             Ok(Some(Err(_))) => {}

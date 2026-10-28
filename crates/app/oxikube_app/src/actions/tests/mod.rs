@@ -2,6 +2,7 @@
 //! `MutationGuard` (see [`crate::testing::Harness`]).
 
 mod flow;
+mod gating;
 mod guard;
 mod resolve;
 

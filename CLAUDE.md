@@ -35,6 +35,7 @@ cargo it                                     # run the integration test suites (
 ## Docs
 - `docs/ARCHITECTURE.md` — canonical crate map and layer rules
 - `docs/CONTEXT.md` — domain glossary (use its terms in type names)
+- `docs/STYLE.md` — Rust style (Google Rust Style Guide, ADR 0018); clippy enforces what it can
 - `docs/adr/` — decisions; add one when you change one
 - `docs/research/` — feature inventories and ecosystem research behind the plan
 - `docs/PLAN.md, docs/DEPENDENCIES.md (dependency matrix, waves, critical path)` — full epic and story catalogue
