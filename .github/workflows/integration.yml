@@ -111,7 +111,7 @@ jobs:
           cluster_name: oxikube
           wait: 120s
       # After kind-action, so this pinned binary is the `helm` on PATH the Helm suite finds.
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
         with:
           version: ${{ env.HELM_VERSION }}
       # Idempotent: the cluster already exists, so this pulls every test image into the node
@@ -193,7 +193,7 @@ jobs:
         with:
           cluster_name: oxikube
           wait: 120s
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
         with:
           version: v3.10.3
       - name: Test images and cluster fixtures
