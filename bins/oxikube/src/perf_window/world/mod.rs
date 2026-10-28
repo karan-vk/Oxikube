@@ -121,6 +121,7 @@ impl ClusterSpec {
     }
 
     /// The same, with a metrics-server (live CPU and memory).
+    #[must_use]
     pub fn with_metrics(self) -> Self {
         Self {
             metrics: true,
@@ -129,6 +130,7 @@ impl ClusterSpec {
     }
 
     /// The same, with a Prometheus-compatible endpoint (the history graphs).
+    #[must_use]
     pub fn with_prometheus(self) -> Self {
         Self {
             prometheus: true,

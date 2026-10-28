@@ -100,6 +100,7 @@ impl AppPorts {
 
     /// Uses `prometheus` instead of the app's HTTP adapters for the history metrics (the
     /// synthetic perf world, E13-S09-F1).
+    #[must_use]
     pub fn with_prometheus(mut self, prometheus: PrometheusPorts) -> Self {
         self.prometheus = Some(prometheus);
         self
