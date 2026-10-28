@@ -22,6 +22,7 @@
 //! | `sidebar` | count badges under churn |
 //! | `nodes-table` | the Nodes table with its pods-by-node index on, under 10 000-pod churn |
 //! | `overview` | the cluster overview of a 100-node, 3 000-pod cluster under churn (E13-S09) |
+//! | `overview-graphs` | the same overview with live metrics and Prometheus graphs (E13-S09-F1) |
 //! | `logs` | stream 5 000 lines/s; type a search; JSON mode |
 //! | `terminal` | a 50 MB `yes` flood; a full-screen redraw at 60 Hz; resize |
 //! | `idle` | two clusters connected, nothing moving: CPU |
@@ -74,6 +75,8 @@ pub enum Scenario {
     NodesTable,
     /// The cluster overview of a 100-node, 3 000-pod cluster under churn.
     Overview,
+    /// The same overview, with live metrics and Prometheus graphs (E13-S09-F1).
+    OverviewGraphs,
     /// Stream 5 000 log lines a second; search typing; JSON mode.
     Logs,
     /// `yes` flood, full-screen redraws, resize.
@@ -93,7 +96,7 @@ pub const OVERVIEW_PODS: usize = 3_000;
 
 impl Scenario {
     /// Every scenario, in report order.
-    pub const ALL: [Scenario; 13] = [
+    pub const ALL: [Scenario; 14] = [
         Scenario::PodsTable,
         Scenario::TableFilter,
         Scenario::Namespaces,
@@ -104,6 +107,7 @@ impl Scenario {
         Scenario::Sidebar,
         Scenario::NodesTable,
         Scenario::Overview,
+        Scenario::OverviewGraphs,
         Scenario::Logs,
         Scenario::Terminal,
         Scenario::Idle,
@@ -122,6 +126,7 @@ impl Scenario {
             Scenario::Sidebar => "sidebar",
             Scenario::NodesTable => "nodes-table",
             Scenario::Overview => "overview",
+            Scenario::OverviewGraphs => "overview-graphs",
             Scenario::Logs => "logs",
             Scenario::Terminal => "terminal",
             Scenario::Idle => "idle",
@@ -151,6 +156,17 @@ impl Scenario {
             Scenario::Overview => WorldSpec {
                 clusters: vec![
                     ClusterSpec::churning(MAIN_CONTEXT, OVERVIEW_PODS).with_nodes(OVERVIEW_NODES),
+                ],
+                listed_only: 0,
+            },
+            // The same cluster, with a metrics-server and a Prometheus-compatible endpoint
+            // (E13-S09-F1): the usage bars, the top consumers and the history graphs have data.
+            Scenario::OverviewGraphs => WorldSpec {
+                clusters: vec![
+                    ClusterSpec::churning(MAIN_CONTEXT, OVERVIEW_PODS)
+                        .with_nodes(OVERVIEW_NODES)
+                        .with_metrics()
+                        .with_prometheus(),
                 ],
                 listed_only: 0,
             },

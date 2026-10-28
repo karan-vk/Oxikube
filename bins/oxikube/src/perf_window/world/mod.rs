@@ -17,12 +17,16 @@
 //! | `logs` | [`WorldLogs`] and [`line`]: the mixed log at 5 000 lines/s |
 //! | `describe` | [`WorldDescribe`]: `kubectl describe`-shaped text |
 //! | `fixed` | the fixed objects: namespaces, nodes, workloads, services, ConfigMaps |
+//! | `metrics` | [`WorldMetrics`]: the synthetic metrics-server (a cluster with `metrics`) |
+//! | `prometheus` | [`WorldPromql`], [`WorldDetector`]: the synthetic Prometheus (a cluster with `prometheus`) |
 
 mod describe;
 mod fixed;
 mod hub;
 pub mod logs;
+mod metrics;
 mod population;
+mod prometheus;
 mod resources;
 
 use std::collections::HashMap;
@@ -44,14 +48,16 @@ use oxikube_testkit::{
 };
 use tokio::runtime::Handle;
 
-use crate::app_state::{AppPorts, ClusterAdapters};
+use crate::app_state::{AppPorts, ClusterAdapters, PrometheusPorts};
 use crate::kube_ports::{SystemClock, WatchBudgets};
 
 pub use describe::WorldDescribe;
 pub use fixed::{BIG_CONFIG_MAP, BIG_CONFIG_MAP_BYTES};
 pub use hub::{Hub, Stream};
 pub use logs::{WorldLogs, line};
+pub use metrics::WorldMetrics;
 pub use population::{Population, namespace_name};
+pub use prometheus::{WorldDetector, WorldPromql};
 pub use resources::WorldResources;
 
 /// The source every synthetic context is listed under.
@@ -74,6 +80,13 @@ pub struct ClusterSpec {
     pub nodes: usize,
     /// Recycle 1 % of the pods every [`CHURN_EVERY`] once connected.
     pub churn: bool,
+    /// The cluster serves live metrics (a metrics-server): the overview's usage bars and top
+    /// consumers have numbers (E13-S09-F1).
+    pub metrics: bool,
+    /// The cluster serves a Prometheus-compatible endpoint: the overview's history graphs have an
+    /// hour of samples (E13-S09-F1). The endpoint is the app's, not the cluster's: the world's
+    /// Prometheus answers for every cluster that asks for one.
+    pub prometheus: bool,
 }
 
 impl ClusterSpec {
@@ -85,6 +98,8 @@ impl ClusterSpec {
             namespaces: 8,
             nodes: fixed::NODES,
             churn: true,
+            metrics: false,
+            prometheus: false,
         }
     }
 
@@ -102,6 +117,24 @@ impl ClusterSpec {
         Self {
             churn: false,
             ..Self::churning(context, pods)
+        }
+    }
+
+    /// The same, with a metrics-server (live CPU and memory).
+    #[must_use]
+    pub fn with_metrics(self) -> Self {
+        Self {
+            metrics: true,
+            ..self
+        }
+    }
+
+    /// The same, with a Prometheus-compatible endpoint (the history graphs).
+    #[must_use]
+    pub fn with_prometheus(self) -> Self {
+        Self {
+            prometheus: true,
+            ..self
         }
     }
 
@@ -130,6 +163,8 @@ struct Cluster {
     churn: bool,
     churning: OnceLock<()>,
     resources: Arc<WorldResources>,
+    /// The cluster's metrics-server, when it has one.
+    metrics: Option<Arc<WorldMetrics>>,
 }
 
 /// The connector: testkit's fake connect (health reporter, guard), with each cluster's
@@ -157,6 +192,9 @@ impl ClusterConnectorPort for WorldConnector {
             connection.ports.resources = cluster.resources.clone();
             connection.ports.logs = Arc::new(WorldLogs::new(self.runtime.clone()));
             connection.ports.describe = Arc::new(WorldDescribe::new(cluster.resources.clone()));
+            if let Some(metrics) = &cluster.metrics {
+                connection.ports.metrics = metrics.clone();
+            }
         }
         Ok(connection)
     }
@@ -198,6 +236,9 @@ pub fn ports_with(
                 churn: spec.churn,
                 churning: OnceLock::new(),
                 resources,
+                metrics: spec
+                    .metrics
+                    .then(|| Arc::new(WorldMetrics::new(spec.nodes, spec.pods, spec.namespaces))),
             },
         );
         contexts.push(context(&spec.context, &source));
@@ -228,8 +269,27 @@ pub fn ports_with(
         describe: DescribePreference::default(),
         kubeconfig_origins: Default::default(),
     };
-    AppPorts::new(Arc::new(FakeStatePort::new()), adapters)
-        .with_secrets(Arc::new(FakeSecretStorePort::new()))
+    let mut ports = AppPorts::new(Arc::new(FakeStatePort::new()), adapters)
+        .with_secrets(Arc::new(FakeSecretStorePort::new()));
+    if let Some(prometheus) = prometheus_ports(spec) {
+        ports = ports.with_prometheus(prometheus);
+    }
+    ports
+}
+
+/// The synthetic Prometheus, when a cluster of `spec` asks for one: the endpoint answers for
+/// every cluster, so its scale is the sum of the nodes and pods of the clusters that asked.
+fn prometheus_ports(spec: &WorldSpec) -> Option<PrometheusPorts> {
+    let clusters: Vec<&ClusterSpec> = spec.clusters.iter().filter(|c| c.prometheus).collect();
+    if clusters.is_empty() {
+        return None;
+    }
+    let nodes = clusters.iter().map(|c| c.nodes).sum();
+    let pods = clusters.iter().map(|c| c.pods).sum();
+    Some(PrometheusPorts {
+        promql: Arc::new(WorldPromql::new(nodes, pods)),
+        detector: Arc::new(WorldDetector),
+    })
 }
 
 fn context(name: &str, source: &SourceId) -> ClusterContext {

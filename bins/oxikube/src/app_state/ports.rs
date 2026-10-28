@@ -5,8 +5,8 @@ use std::sync::Arc;
 
 use oxikube_describe::DescribePreference;
 use oxikube_ports::{
-    ClockPort, ClusterConnectorPort, ClusterSourcePort, FsPort, NotifierPort, SecretStorePort,
-    StatePort,
+    ClockPort, ClusterConnectorPort, ClusterSourcePort, FsPort, NotifierPort, PromqlPort,
+    ProviderDetectorPort, SecretStorePort, StatePort,
 };
 
 use crate::kube_ports::WatchBudgets;
@@ -29,6 +29,20 @@ pub struct AppPorts {
     /// The cluster side: the kubeconfig catalog and the connector (`oxikube_kube` in the app,
     /// testkit fakes in tests).
     pub clusters: ClusterAdapters,
+    /// The Prometheus side of the metrics (the PromQL port the graphs query and the detector
+    /// that finds a provider). `None` in the app, which builds the HTTP adapters
+    /// ([`crate::metrics_provider::build`]); the synthetic perf world brings its own, so the
+    /// overview's graphs have an hour of samples to draw (E13-S09-F1).
+    pub prometheus: Option<PrometheusPorts>,
+}
+
+/// The Prometheus ports a host brings instead of the app's HTTP ones.
+#[derive(Clone)]
+pub struct PrometheusPorts {
+    /// The per-cluster PromQL port the graphs query.
+    pub promql: Arc<dyn PromqlPort>,
+    /// The detector that finds a provider for a cluster.
+    pub detector: Arc<dyn ProviderDetectorPort>,
 }
 
 /// The adapters the cluster services run on (E07-S00): what `oxikube_app`'s session manager,
@@ -66,6 +80,7 @@ impl AppPorts {
             secrets: None,
             notifier: crate::os_notifications::build(),
             clusters,
+            prometheus: None,
         }
     }
 
@@ -80,6 +95,14 @@ impl AppPorts {
     #[must_use]
     pub fn with_secrets(mut self, secrets: Arc<dyn SecretStorePort>) -> Self {
         self.secrets = Some(secrets);
+        self
+    }
+
+    /// Uses `prometheus` instead of the app's HTTP adapters for the history metrics (the
+    /// synthetic perf world, E13-S09-F1).
+    #[must_use]
+    pub fn with_prometheus(mut self, prometheus: PrometheusPorts) -> Self {
+        self.prometheus = Some(prometheus);
         self
     }
 }
