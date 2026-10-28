@@ -9,17 +9,19 @@
 //!
 //! | File | Holds |
 //! |---|---|
-//! | `feed` | [`PolicyFeed`], [`PolicyHandle`], [`PolicyStatus`]: the four store feeds applied to the index, and the shared view of it |
+//! | `feed` | [`PolicyHandle`], [`PolicyChanges`], [`PolicyProgress`]: the pages' view of the cluster's shared [`PolicyFeed`](crate::access::PolicyFeed) |
 //! | `summary` | [`SubjectList`], [`SubjectSummary`]: the rows of the Users and Groups pages |
 //! | `matrix` | [`SubjectMatrix`], [`MatrixLine`], [`MatrixColumn`], [`Provenance`], [`Inherit`], the tab-separated export |
 //! | `filter` | [`SubjectFilter`]: the `/` filter grammar over rows |
-//! | `service` | [`SubjectsService`]: opens the feeds on a cluster's store, remembers the subject names `:rbac` completes |
+//! | `service` | [`SubjectsService`]: takes the cluster's feed from the [`PolicyHub`](crate::access::PolicyHub), remembers the subject names `:rbac` completes |
 //!
 //! # Cost
 //!
 //! The Roles and bindings arrive through the store's shared feeds (full objects, one list and one
 //! watch per kind, cluster-wide), so a page open next to the Roles and Bindings tables costs no
-//! extra request. The Users and Groups pages read the bindings only. A subject's matrix is
+//! extra request, and the index they fill is the one the ServiceAccount panel reads (one per
+//! cluster, through the [`PolicyHub`](crate::access::PolicyHub)). The Users and Groups pages read
+//! the bindings only. A subject's matrix is
 //! computed when it is selected: the roles it is bound to are normalised once (the index caches
 //! them), merged and projected, on a background task, never on the UI thread.
 //!
@@ -38,7 +40,7 @@ mod summary;
 #[cfg(test)]
 mod tests;
 
-pub use feed::{PolicyFeed, PolicyHandle, PolicyStatus};
+pub use feed::{PolicyChanges, PolicyHandle, PolicyProgress};
 pub use filter::SubjectFilter;
 pub use matrix::{
     Inherit, LineKind, MatrixColumn, MatrixLine, Provenance, SubjectMatrix, provenance, scopes_of,

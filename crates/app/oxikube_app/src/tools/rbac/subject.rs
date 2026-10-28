@@ -5,6 +5,10 @@ use std::fmt;
 use oxikube_domain::access::Impersonate;
 use oxikube_domain::{OxiError, OxiResult};
 
+/// The user name the `kubectl` command of a group question asks as: `kubectl` takes
+/// `--as-group` only with `--as`, and a name no binding uses stands for "any member".
+const GROUP_MEMBER: &str = "oxikube:group-member";
+
 /// Who a question is asked as (`kubectl auth can-i --as`). Held in the panel or the call only;
 /// never stored.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -61,7 +65,9 @@ impl CanISubject {
         }
     }
 
-    /// The identity to ask as; `None` for [`Myself`](Self::Myself).
+    /// The identity to ask as; `None` for [`Myself`](Self::Myself). It carries the groups the
+    /// API server adds when impersonating (`system:authenticated`, a ServiceAccount's groups), so
+    /// the answer is the one `kubectl auth can-i --as` gives.
     pub fn impersonation(&self) -> Option<Impersonate> {
         match self {
             Self::Myself => None,
@@ -78,7 +84,7 @@ impl CanISubject {
         match self {
             Self::Myself => String::new(),
             Self::User(user) => format!(" --as {user}"),
-            Self::Group(group) => format!(" --as-group {group}"),
+            Self::Group(group) => format!(" --as {GROUP_MEMBER} --as-group {group}"),
             Self::ServiceAccount { namespace, name } => {
                 format!(" --as system:serviceaccount:{namespace}:{name}")
             }

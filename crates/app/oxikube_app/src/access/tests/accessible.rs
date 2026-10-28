@@ -63,3 +63,22 @@ async fn wildcards_and_a_failed_review_keep_the_candidate() {
 
     assert_eq!(found.names, ["a", "b"]);
 }
+
+/// A partial review (a webhook authorizer may grant more than RBAC lists) is Unknown, never a
+/// deny: the namespace stays on offer, as for a failed review.
+#[tokio::test]
+async fn a_partial_review_keeps_the_candidate() {
+    let (service, _port, _clock) = service(
+        FakeAccessReviewPort::new()
+            .with_namespace_rules("team-a", AccessRules::none().into_partial())
+            .with_namespace_rules("prod", AccessRules::none()),
+    );
+
+    let found = accessible_namespaces(&service, &[], names(&["team-a", "prod"])).await;
+
+    assert_eq!(
+        found.names,
+        ["team-a"],
+        "only the complete, empty review hides"
+    );
+}

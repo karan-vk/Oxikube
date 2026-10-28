@@ -1,5 +1,5 @@
-//! [`SubjectsService`]: opens the policy feeds of a cluster and remembers the subject names
-//! `:rbac` completes.
+//! [`SubjectsService`]: hands the subject pages the cluster's shared policy feed and remembers
+//! the subject names `:rbac` completes.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -7,13 +7,14 @@ use std::sync::Arc;
 use oxikube_domain::ids::ClusterId;
 use parking_lot::RwLock;
 
-use super::feed::{PolicyFeed, PolicyHandle};
+use super::feed::{PolicyChanges, PolicyHandle};
+use crate::access::PolicyHub;
 use crate::store::ResourceStore;
 
 /// The names last seen per cluster.
 pub(super) type Names = Arc<RwLock<HashMap<ClusterId, Arc<[Arc<str>]>>>>;
 
-/// The subject views' entry point: feeds in, names for completion out.
+/// The subject views' entry point: the shared policy in, names for completion out.
 #[derive(Clone, Default)]
 pub struct SubjectsService {
     names: Names,
@@ -25,13 +26,18 @@ impl SubjectsService {
         Self::default()
     }
 
-    /// Opens the four policy feeds on `store` for `cluster`. Drive the returned feed with
-    /// [`PolicyFeed::changed`] on the runtime; the handle reads the index it fills. The feed
-    /// publishes the subject names to [`known_names`](Self::known_names) as they change.
-    pub fn open(&self, cluster: &ClusterId, store: &ResourceStore) -> (PolicyFeed, PolicyHandle) {
-        let (mut feed, handle) = PolicyFeed::open(store);
-        feed.publish_names(cluster.clone(), self.names.clone());
-        (feed, handle)
+    /// The policy of `store`'s cluster: the feed the [`PolicyHub`] shares (started if no view
+    /// holds one), a handle that reads its index, and the changes that tell a page to read it
+    /// again. Drive the changes with [`PolicyChanges::changed`] on the runtime; they publish the
+    /// subject names to [`known_names`](Self::known_names) as they change.
+    pub fn open(
+        &self,
+        cluster: &ClusterId,
+        store: &ResourceStore,
+    ) -> (PolicyChanges, PolicyHandle) {
+        let feed = PolicyHub::shared().acquire(store);
+        let changes = PolicyChanges::new(feed.clone(), Some((cluster.clone(), self.names.clone())));
+        (changes, PolicyHandle::live(feed))
     }
 
     /// The subject names the last open feed of `cluster` found (empty before any), for `:rbac`

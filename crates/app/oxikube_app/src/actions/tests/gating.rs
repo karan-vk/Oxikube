@@ -160,3 +160,23 @@ fn only_mutating_row_commands_map_to_a_verb() {
         assert_eq!(required_access(read), None, "{read}");
     }
 }
+
+#[tokio::test]
+async fn a_large_selection_is_checked_once_per_namespace() {
+    let port = Arc::new(FakeAccessReviewPort::new().with_rules(viewer_rules()));
+    let service = AccessService::new(port, Arc::new(FakeClockPort::default()), DEFAULT_TTL);
+    service.rules(Some("a")).await.expect("rules");
+    service.rules(Some("b")).await.expect("rules");
+    let selection: Vec<Option<String>> = (0..10_000)
+        .map(|i| Some(if i % 2 == 0 { "a" } else { "b" }.to_owned()))
+        .collect();
+
+    let access = ActionAccess::new(service, selection);
+
+    assert_eq!(
+        access.namespaces(),
+        [Some("a".to_owned()), Some("b".to_owned())]
+    );
+    let delete = required_access(CommandId::RESOURCE_DELETE).expect("delete needs a verb");
+    assert!(access.denies(&deployments(), delete), "viewer in both");
+}

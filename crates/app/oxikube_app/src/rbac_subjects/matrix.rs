@@ -189,9 +189,8 @@ fn applicable(
         GrantScope::Namespace(ns) => Some(&**ns),
     };
     index
-        .grants_for(subject)
+        .grants_in(subject, namespace)
         .into_iter()
-        .filter(|grant| grant.scope.covers(namespace))
         .filter(|grant| is_included(subject, grant, inherit))
         .collect()
 }
@@ -234,7 +233,7 @@ pub fn subject_matrix(
     inherit: Inherit,
 ) -> SubjectMatrix {
     let grants = applicable(index, subject, scope, inherit);
-    let merged = NormalisedRules::union(grants.iter().map(|grant| &grant.rules));
+    let merged = NormalisedRules::union(grants.iter().map(|grant| &*grant.rules));
     let projected = PolicyMatrix::from_rules(&merged);
     let mut lines: Vec<MatrixLine> = projected
         .rows

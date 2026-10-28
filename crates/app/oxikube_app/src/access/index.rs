@@ -40,6 +40,9 @@ pub struct SubjectIndex {
     objects: Objects,
     /// Aggregated, normalised rules per role; cleared whenever a role changes.
     role_rules: Mutex<HashMap<RoleId, Arc<NormalisedRules>>>,
+    /// The same without non-resource URLs, for grants a RoleBinding makes; cleared with
+    /// `role_rules`.
+    role_resource_rules: Mutex<HashMap<RoleId, Arc<NormalisedRules>>>,
     version: u64,
 }
 
@@ -60,6 +63,7 @@ impl SubjectIndex {
         let changed = self.objects.apply(kind, rows);
         if changed.roles {
             self.role_rules.get_mut().clear();
+            self.role_resource_rules.get_mut().clear();
         }
         if changed.any() {
             self.version += 1;
@@ -112,25 +116,38 @@ impl SubjectIndex {
             .collect()
     }
 
-    /// Each binding's grant to `subject`, sorted by binding.
+    /// Each binding's grant to `subject`, sorted by binding. The rules are shared with the
+    /// index's per-role cache, not copied: a call costs one lookup per binding once the roles
+    /// are normalised.
     pub fn grants_for(&self, subject: &Subject) -> Vec<Grant> {
+        self.grants_where(subject, |_| true)
+    }
+
+    /// The grants to `subject` that hold in `namespace` (`None`: the cluster-wide ones only),
+    /// sorted by binding. Roles of grants elsewhere are not resolved.
+    pub fn grants_in(&self, subject: &Subject, namespace: Option<&str>) -> Vec<Grant> {
+        self.grants_where(subject, |scope| scope.covers(namespace))
+    }
+
+    fn grants_where(&self, subject: &Subject, keep: impl Fn(&GrantScope) -> bool) -> Vec<Grant> {
         self.matching(subject)
             .into_iter()
             .filter_map(|(id, via)| {
                 let binding = self.objects.bindings.get(&id)?;
                 let scope = binding.scope();
-                let role = binding.role_id().and_then(|role| self.role_rules(&role));
+                if !keep(&scope) {
+                    return None;
+                }
+                let role = binding
+                    .role_id()
+                    .and_then(|role| self.scoped_role_rules(&role, &scope));
                 let role_found = role.is_some();
-                let rules = role.map_or_else(NormalisedRules::default, |rules| match scope {
-                    GrantScope::Cluster => (*rules).clone(),
-                    GrantScope::Namespace(_) => rules.resource_only(),
-                });
                 Some(Grant {
                     binding: id,
                     via,
                     role: binding.role_ref.clone(),
                     scope,
-                    rules,
+                    rules: role.unwrap_or_default(),
                     role_found,
                 })
             })
@@ -139,7 +156,7 @@ impl SubjectIndex {
 
     /// `subject`'s rules grouped by where they hold: the cluster first, then each namespace.
     pub fn rules_for(&self, subject: &Subject) -> Vec<ScopedRules> {
-        let mut by_scope: BTreeMap<GrantScope, Vec<NormalisedRules>> = BTreeMap::new();
+        let mut by_scope: BTreeMap<GrantScope, Vec<Arc<NormalisedRules>>> = BTreeMap::new();
         for grant in self.grants_for(subject) {
             by_scope.entry(grant.scope).or_default().push(grant.rules);
         }
@@ -147,7 +164,7 @@ impl SubjectIndex {
             .into_iter()
             .map(|(scope, sets)| ScopedRules {
                 scope,
-                rules: NormalisedRules::union(&sets),
+                rules: NormalisedRules::union(sets.iter().map(|rules| &**rules)),
             })
             .collect()
     }
@@ -156,13 +173,8 @@ impl SubjectIndex {
     /// non-resource URLs, which only cluster-wide grants reach). What a rules review
     /// (`kubectl auth can-i --list -n <namespace>`) lists for the subject.
     pub fn rules_in(&self, subject: &Subject, namespace: Option<&str>) -> NormalisedRules {
-        let grants = self.grants_for(subject);
-        NormalisedRules::union(
-            grants
-                .iter()
-                .filter(|grant| grant.scope.covers(namespace))
-                .map(|grant| &grant.rules),
-        )
+        let grants = self.grants_in(subject, namespace);
+        NormalisedRules::union(grants.iter().map(|grant| &*grant.rules))
     }
 
     /// Whether `subject` may `verb` the resource `gvr` in `namespace` (`None` for a
@@ -194,6 +206,27 @@ impl SubjectIndex {
         let rules = Arc::new(aggregated_rules(role, &self.objects.cluster_roles()));
         self.role_rules.lock().insert(id.clone(), rules.clone());
         Some(rules)
+    }
+
+    /// A role's rules as a grant in `scope` gives them: all of them cluster-wide, the resource
+    /// rules alone in a namespace. Cached like [`role_rules`](Self::role_rules).
+    fn scoped_role_rules(&self, id: &RoleId, scope: &GrantScope) -> Option<Arc<NormalisedRules>> {
+        let rules = self.role_rules(id)?;
+        if matches!(scope, GrantScope::Cluster) {
+            return Some(rules);
+        }
+        if let Some(resources) = self.role_resource_rules.lock().get(id) {
+            return Some(resources.clone());
+        }
+        let resources = if rules.non_resource_rules().next().is_none() {
+            rules
+        } else {
+            Arc::new(rules.resource_only())
+        };
+        self.role_resource_rules
+            .lock()
+            .insert(id.clone(), resources.clone());
+        Some(resources)
     }
 
     /// The roles whose rules allow `verb` on `gvr` (on every object or on named ones), sorted.

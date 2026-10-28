@@ -83,12 +83,21 @@ impl ActionAccess {
         Self::default()
     }
 
-    /// A gate over `service` for objects in `namespaces`.
-    pub fn new(service: AccessService, namespaces: Vec<Option<String>>) -> Self {
+    /// A gate over `service` for objects in `namespaces` (one entry per selected object is
+    /// fine: they are reduced to the distinct namespaces, so a 10 000-row selection over two
+    /// namespaces costs two cache reads per action).
+    pub fn new(service: AccessService, mut namespaces: Vec<Option<String>>) -> Self {
+        namespaces.sort_unstable();
+        namespaces.dedup();
         Self {
             service: Some(service),
             namespaces,
         }
+    }
+
+    /// The distinct namespaces the gate checks, sorted (`None`: cluster-scoped or unknown).
+    pub fn namespaces(&self) -> &[Option<String>] {
+        &self.namespaces
     }
 
     /// Whether the cached reviews say the user may not do `need` on `kind` in any of the

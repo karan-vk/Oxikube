@@ -349,10 +349,11 @@ fn a_new_role_says_the_binding_is_deleted_and_created_again_and_sends_the_old_on
 fn a_list_the_user_may_not_read_is_noted_and_the_role_can_be_typed(cx: &mut TestAppContext) {
     let mut rig = Rig::new(cx);
     seeded(&mut rig);
+    // The Roles are listed first, as metadata (the picker needs their names only).
     rig.ports()
         .resources
         .script()
-        .list
+        .list_metadata
         .push_err(oxikube_domain::OxiError::forbidden("roles is forbidden"));
     let dialog = rig.open_dialog(new_binding(BindingKind::RoleBinding));
     assert!(rig.is_laid_out("binding-note-0"), "the refusal is said");

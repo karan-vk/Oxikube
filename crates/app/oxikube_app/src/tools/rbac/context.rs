@@ -1,8 +1,9 @@
 //! `@rbac/sa/<namespace>/<name>` (E17-S08): a ServiceAccount's permissions as a block of text.
 //!
-//! The block lists the RoleBindings (in the namespace) and ClusterRoleBindings that name the
-//! ServiceAccount, directly or through the groups every ServiceAccount is in, with the role each
-//! points to, then a compact verb summary: `get list create patch delete` on a fixed set of common
+//! The block lists the RoleBindings (in the namespace) and ClusterRoleBindings that apply to the
+//! ServiceAccount, directly or through the groups the API server puts every ServiceAccount in
+//! (`system:serviceaccounts`, `system:serviceaccounts:<ns>`, `system:authenticated`; the same
+//! groups the verb reviews carry), with the role each points to, then a compact verb summary: `get list create patch delete` on a fixed set of common
 //! resources, each answered by a `SubjectAccessReview` as the ServiceAccount. The two parts are
 //! labelled (`# bindings` come from the objects, `# verbs` from the API server). Without permission
 //! to create a `SubjectAccessReview` the verb part says so and the bindings still stand.
@@ -14,6 +15,7 @@ use async_trait::async_trait;
 use oxikube_domain::access::Impersonate;
 use oxikube_domain::agent::{ContextBlock, MAX_CONTEXT_BLOCK_BYTES};
 use oxikube_domain::ids::{ClusterId, Gvk};
+use oxikube_domain::rbac::{Binding, Subject, UserInfo};
 use oxikube_domain::redact::redact;
 use oxikube_domain::{OxiError, OxiResult, Resource};
 use oxikube_ports::{ContextProviderPort, ContextScope, Mention, ResourceReader};
@@ -173,7 +175,7 @@ fn build(title: String, lines: Vec<String>, notes: Vec<String>, cap: usize) -> C
     block
 }
 
-/// The bindings that name `namespace/name`, directly or via a ServiceAccount group.
+/// The bindings that apply to `namespace/name`, directly or through a group it is in.
 async fn bindings(
     reader: &dyn ResourceReader,
     _cluster: &ClusterId,
@@ -181,10 +183,8 @@ async fn bindings(
     name: &str,
     notes: &mut Vec<String>,
 ) -> Vec<Bound> {
-    let groups = [
-        "system:serviceaccounts".to_owned(),
-        format!("system:serviceaccounts:{namespace}"),
-    ];
+    let account = Subject::service_account(namespace, name);
+    let identity = account.user_info();
     let mut found = Vec::new();
     let kinds = [
         (
@@ -209,11 +209,11 @@ async fn bindings(
                         gvk.kind
                     ));
                 }
-                for item in &page.items {
-                    if let Some(bound) = match_binding(item, ns, namespace, name, &groups) {
-                        found.push(bound);
-                    }
-                }
+                found.extend(
+                    page.items
+                        .iter()
+                        .filter_map(|item| match_binding(item, &account, &identity)),
+                );
             }
             Err(error) => notes.push(format!(
                 "could not list {}s: {}",
@@ -225,53 +225,34 @@ async fn bindings(
     found
 }
 
-/// Whether `binding` names the ServiceAccount, and how.
-fn match_binding(
-    binding: &Resource,
-    binding_ns: Option<&str>,
-    namespace: &str,
-    name: &str,
-    groups: &[String],
-) -> Option<Bound> {
-    let subjects = binding.get("/subjects")?.as_array()?;
-    let mut via = None;
-    for subject in subjects.iter() {
-        let field = |key: &str| subject.get(key).and_then(|v| v.as_str());
-        match field("kind") {
-            Some("ServiceAccount")
-                if field("name") == Some(name)
-                    && field("namespace").or(binding_ns) == Some(namespace) =>
-            {
-                via = Some(String::new());
-                break;
-            }
-            Some("User")
-                if field("name")
-                    == Some(format!("system:serviceaccount:{namespace}:{name}").as_str()) =>
-            {
-                via = Some(" (as user)".to_owned());
-            }
-            Some("Group") if field("name").is_some_and(|g| groups.iter().any(|x| x == g)) => {
-                via = Some(format!(
-                    " (via group {})",
-                    field("name").unwrap_or_default()
-                ));
-            }
-            _ => {}
+/// Whether `binding` applies to `account` (who is `identity`, implicit groups included), and how:
+/// by the account itself, by its user name, or through a group.
+fn match_binding(binding: &Resource, account: &Subject, identity: &UserInfo) -> Option<Bound> {
+    let binding = Binding::from_resource(binding).ok()?;
+    let applying: Vec<&Subject> = binding
+        .subjects
+        .iter()
+        .filter(|subject| identity.is(subject))
+        .collect();
+    let via = if applying.contains(&account) {
+        String::new()
+    } else {
+        match applying.first()? {
+            Subject::Group(group) => format!(" (via group {group})"),
+            Subject::User(_) | Subject::ServiceAccount { .. } => " (as user)".to_owned(),
         }
-    }
-    let role = format!(
-        "{} {}",
-        binding.get_str("/roleRef/kind").unwrap_or("?"),
-        binding.get_str("/roleRef/name").unwrap_or("?")
-    );
+    };
     Some(Bound {
-        scope: match binding_ns {
+        scope: match &binding.id.namespace {
             Some(ns) => format!("RoleBinding {ns}/"),
             None => "ClusterRoleBinding".to_owned(),
         },
-        binding: binding.name().to_owned(),
-        role,
-        via: via?,
+        binding: binding.id.name.to_string(),
+        role: format!(
+            "{} {}",
+            binding.role_ref.kind.as_str(),
+            binding.role_ref.name
+        ),
+        via,
     })
 }

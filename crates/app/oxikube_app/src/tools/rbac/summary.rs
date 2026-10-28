@@ -1,7 +1,14 @@
 //! The compact verb summary of a ServiceAccount: a fixed set of common resources checked with
 //! `SubjectAccessReview`s, a few at a time.
+//!
+//! The `*` on `*` review goes first and alone: when it is refused (the caller may not create
+//! `SubjectAccessReview`s) or allowed (cluster-admin), the other 60 would add nothing, so they are
+//! not sent. Otherwise they run [`IN_FLIGHT`] at a time as a stream (a slow review holds up only
+//! its own slot), and the first error stops the rest.
 
-use futures::future::join_all;
+use futures::FutureExt as _;
+use futures::future::BoxFuture;
+use futures::stream::{self, StreamExt as _};
 use oxikube_domain::OxiResult;
 use oxikube_domain::access::{AccessCheck, AccessDecision, Impersonate};
 use oxikube_domain::ids::Gvr;
@@ -72,8 +79,29 @@ pub(super) async fn summarize(
     subject: &Impersonate,
     namespace: &str,
 ) -> Summary {
-    let mut checks =
-        vec![AccessCheck::new("*", Gvr::new("*", "", "*")).impersonating(subject.clone())];
+    let mut summary = Summary::default();
+    let everything = AccessCheck::new("*", Gvr::new("*", "", "*")).impersonating(subject.clone());
+    match review(port, &everything).await {
+        Err(error) => {
+            summary.unavailable = Some(error.message().to_owned());
+            return summary;
+        }
+        Ok(AccessDecision::Allowed) => {
+            summary.everything = true;
+            summary.rows = RESOURCES
+                .iter()
+                .map(|(group, plural, _)| Row {
+                    resource: resource_label(group, plural),
+                    allowed: VERBS.to_vec(),
+                    unknown: Vec::new(),
+                })
+                .collect();
+            return summary;
+        }
+        Ok(AccessDecision::Unknown { .. }) => summary.everything_unknown = true,
+        Ok(AccessDecision::Denied { .. }) => {}
+    }
+    let mut checks = Vec::with_capacity(RESOURCES.len() * VERBS.len());
     for (group, plural, namespaced) in RESOURCES {
         for verb in VERBS {
             let mut check =
@@ -84,45 +112,47 @@ pub(super) async fn summarize(
             checks.push(check);
         }
     }
-    let mut answers: Vec<OxiResult<AccessDecision>> = Vec::with_capacity(checks.len());
-    for chunk in checks.chunks(IN_FLIGHT) {
-        answers.extend(join_all(chunk.iter().map(|check| review(port, check))).await);
-    }
-    let mut summary = Summary::default();
-    if let Some(Err(error)) = answers.iter().find(|a| a.is_err()) {
-        summary.unavailable = Some(error.message().to_owned());
-        return summary;
-    }
-    let verdicts: Vec<Verdict> = answers
+    // Boxed so the stream's item is not a closure higher-ranked over the borrow of `checks`.
+    let reviews: Vec<BoxFuture<'_, OxiResult<AccessDecision>>> = checks
         .iter()
-        .map(|a| match a {
+        .map(|check| review(port, check).boxed())
+        .collect();
+    let mut answers = stream::iter(reviews).buffered(IN_FLIGHT);
+    let mut verdicts = Vec::with_capacity(checks.len());
+    while let Some(answer) = answers.next().await {
+        verdicts.push(match answer {
+            Err(error) => {
+                summary.unavailable = Some(error.message().to_owned());
+                return summary;
+            }
             Ok(AccessDecision::Allowed) => Verdict::Allowed,
             Ok(AccessDecision::Unknown { .. }) => Verdict::Unknown,
-            _ => Verdict::Denied,
-        })
-        .collect();
-    summary.everything = verdicts[0] == Verdict::Allowed;
-    summary.everything_unknown = verdicts[0] == Verdict::Unknown;
-    for (i, (group, plural, _)) in RESOURCES.iter().enumerate() {
-        let start = 1 + i * VERBS.len();
-        let answered = VERBS.iter().zip(&verdicts[start..start + VERBS.len()]);
+            Ok(AccessDecision::Denied { .. }) => Verdict::Denied,
+        });
+    }
+    for ((group, plural, _), answered) in RESOURCES.iter().zip(verdicts.chunks(VERBS.len())) {
         let verbs_with = |wanted: Verdict| {
-            answered
-                .clone()
+            VERBS
+                .iter()
+                .zip(answered)
                 .filter(|(_, verdict)| **verdict == wanted)
                 .map(|(verb, _)| *verb)
                 .collect::<Vec<_>>()
         };
-        let resource = if group.is_empty() {
-            (*plural).to_owned()
-        } else {
-            format!("{plural}.{group}")
-        };
         summary.rows.push(Row {
-            resource,
+            resource: resource_label(group, plural),
             allowed: verbs_with(Verdict::Allowed),
             unknown: verbs_with(Verdict::Unknown),
         });
     }
     summary
+}
+
+/// `pods`, `deployments.apps`.
+fn resource_label(group: &str, plural: &str) -> String {
+    if group.is_empty() {
+        plural.to_owned()
+    } else {
+        format!("{plural}.{group}")
+    }
 }

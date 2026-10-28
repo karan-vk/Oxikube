@@ -12,7 +12,7 @@ use gpui::{
     Subscription, Task, WeakEntity, Window,
 };
 use oxikube_app::rbac_subjects::{
-    Inherit, MatrixColumn, PolicyHandle, PolicyStatus, Provenance, SubjectFilter, SubjectMatrix,
+    Inherit, MatrixColumn, PolicyHandle, PolicyProgress, Provenance, SubjectFilter, SubjectMatrix,
 };
 use oxikube_app::store::ResourceStore;
 use oxikube_domain::ids::ClusterId;
@@ -50,7 +50,7 @@ pub struct SubjectsView {
     pub(crate) focus: FocusHandle,
     pub(crate) page: Page,
     pub(crate) phase: Phase,
-    pub(crate) status: PolicyStatus,
+    pub(crate) status: PolicyProgress,
     pub(crate) policy: Option<PolicyHandle>,
     pub(crate) list: TableHandle<ListDelegate>,
     pub(crate) grid: TableHandle<MatrixDelegate>,
@@ -114,7 +114,7 @@ impl SubjectsView {
             focus: cx.focus_handle(),
             page: Page::Users,
             phase: Phase::Loading { pending: 4 },
-            status: PolicyStatus::default(),
+            status: PolicyProgress::default(),
             policy: None,
             list,
             grid,

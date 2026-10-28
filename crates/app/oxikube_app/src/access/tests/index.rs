@@ -244,3 +244,45 @@ fn an_aggregated_cluster_role_is_resolved_from_its_selectors() {
         Access::Granted
     );
 }
+
+#[test]
+fn grants_share_the_cached_role_rules_instead_of_copying_them() {
+    let index = cluster();
+    let root = Subject::User("root".into());
+    let admin = RoleId {
+        kind: RoleKind::ClusterRole,
+        namespace: None,
+        name: "cluster-admin".into(),
+    };
+    let cached = index.role_rules(&admin).expect("cluster-admin exists");
+    let grants = index.grants_for(&root);
+    assert!(
+        Arc::ptr_eq(&grants[0].rules, &cached),
+        "a cluster-wide grant hands out the cached rules"
+    );
+
+    // A RoleBinding's grant drops the URLs once, then shares that copy too.
+    let builder = Subject::service_account("ci", "builder");
+    let first = index.grants_for(&builder);
+    let again = index.grants_for(&builder);
+    assert!(Arc::ptr_eq(&first[0].rules, &again[0].rules));
+    assert_eq!(first[0].rules.non_resource_rules().count(), 0);
+}
+
+#[test]
+fn grants_in_keeps_the_grants_of_one_scope() {
+    let index = cluster();
+    let builder = Subject::service_account("ci", "builder");
+    assert_eq!(index.grants_in(&builder, Some("ci")).len(), 2);
+    assert!(index.grants_in(&builder, Some("shop")).is_empty());
+    assert!(
+        index.grants_in(&builder, None).is_empty(),
+        "no cluster grant"
+    );
+    let root = Subject::User("root".into());
+    assert_eq!(
+        index.grants_in(&root, Some("shop")).len(),
+        1,
+        "a cluster-wide grant holds in every namespace"
+    );
+}

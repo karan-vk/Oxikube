@@ -59,7 +59,8 @@ fn reads_something_namespaced(rules: &AccessRules) -> bool {
 /// Otherwise each of `candidates` (the kubeconfig context's namespace, favourites, names the user
 /// typed, the current selection) gets a rules review through `service` (cached, at most
 /// [`MAX_IN_FLIGHT`] at once) and the ones where the user may read something are kept. A review
-/// that fails keeps its candidate: this is an offer to pick from, never a hiding gate.
+/// that fails or is partial keeps its candidate: this is an offer to pick from, never a hiding
+/// gate.
 pub async fn accessible_namespaces(
     service: &AccessService,
     override_names: &[String],
@@ -83,7 +84,9 @@ pub async fn accessible_namespaces(
     let kept: BTreeSet<String> = stream::iter(candidates)
         .map(|name| async move {
             let keep = match service.rules(Some(&name)).await {
-                Ok(rules) => reads_something_namespaced(&rules),
+                // A partial review (a webhook or other authorizer may grant more) is Unknown,
+                // never a deny: the candidate stays, as for a failed review.
+                Ok(rules) => rules.partial || reads_something_namespaced(&rules),
                 Err(_) => true,
             };
             keep.then_some(name)

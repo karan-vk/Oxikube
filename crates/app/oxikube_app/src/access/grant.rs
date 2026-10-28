@@ -1,5 +1,7 @@
 //! [`Grant`] and [`ScopedRules`]: what the [`SubjectIndex`](super::SubjectIndex) answers with.
 
+use std::sync::Arc;
+
 use oxikube_domain::rbac::{BindingRef, GrantScope, NormalisedRules, RoleRef, Subject};
 
 /// One binding's grant to a subject: which binding, which role, where it holds and the
@@ -16,8 +18,9 @@ pub struct Grant {
     /// Where the grant holds.
     pub scope: GrantScope,
     /// The role's rules, aggregation included; a namespaced grant carries no non-resource URLs
-    /// (they are never namespaced, so a RoleBinding cannot grant them).
-    pub rules: NormalisedRules,
+    /// (they are never namespaced, so a RoleBinding cannot grant them). Shared with the index's
+    /// per-role cache.
+    pub rules: Arc<NormalisedRules>,
     /// Whether the role exists. A binding to a missing role grants nothing (yet).
     pub role_found: bool,
 }

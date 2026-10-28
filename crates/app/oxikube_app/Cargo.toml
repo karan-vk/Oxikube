@@ -152,3 +152,8 @@ harness = false
 [[bench]]
 name = "reference_index"
 harness = false
+
+# `cargo bench -p oxikube_app --bench rbac_matrix` (E17 audit): SubjectIndex queries behind the RBAC matrix, 12k objects.
+[[bench]]
+name = "rbac_matrix"
+harness = false

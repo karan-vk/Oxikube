@@ -1,10 +1,10 @@
 //! [`PolicyMatrix`]: normalised rules as k9s's policy table, one row per API group and
 //! resource, one column per verb.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
 use super::normalise::{NonResourceRule, NormalisedRules};
-use crate::access::{Access, resource_matches};
+use crate::access::{Access, AccessRule, resource_matches};
 use crate::kinds::Verb;
 
 /// The verb columns, in k9s's order: `GET LIST WATCH CREATE PATCH UPDATE DELETE DEL-LIST`.
@@ -19,6 +19,9 @@ pub const MATRIX_VERBS: [Verb; 8] = [
     Verb::Delete,
     Verb::DeleteCollection,
 ];
+
+/// The API group a rule names to cover every group.
+const ALL_GROUPS: &str = "*";
 
 /// The header of the column of extra verbs.
 pub const EXTRAS_HEADER: &str = "EXTRAS";
@@ -75,20 +78,33 @@ pub struct PolicyMatrix {
 impl PolicyMatrix {
     /// Projects `rules`: one row per (API group, resource) any rule names, each cell answered by
     /// every rule that covers the row (so `*` in `apps` also fills the `deployments` row).
+    ///
+    /// A row only looks at the rules of its own API group and of `*`, so a policy of many groups
+    /// (hundreds of aggregated CRD roles) costs about one pass, not rows times rules.
     pub fn from_rules(rules: &NormalisedRules) -> Self {
-        let keys: BTreeSet<(&str, &str)> = rules
-            .resource_rules()
-            .flat_map(|rule| {
-                rule.api_groups.iter().flat_map(|group| {
+        let mut by_group: HashMap<&str, Vec<&AccessRule>> = HashMap::new();
+        let mut keys: BTreeSet<(&str, &str)> = BTreeSet::new();
+        for rule in rules.resource_rules() {
+            for group in &rule.api_groups {
+                by_group.entry(group.as_str()).or_default().push(rule);
+                keys.extend(
                     rule.resources
                         .iter()
-                        .map(move |resource| (group.as_str(), resource.as_str()))
-                })
-            })
-            .collect();
+                        .map(|resource| (group.as_str(), resource.as_str())),
+                );
+            }
+        }
+        let wildcard: &[&AccessRule] = by_group.get(ALL_GROUPS).map_or(&[], Vec::as_slice);
         let rows = keys
             .into_iter()
-            .map(|(group, resource)| row(rules, group, resource))
+            .map(|(group, resource)| {
+                let own: &[&AccessRule] = if group == ALL_GROUPS {
+                    &[]
+                } else {
+                    by_group.get(group).map_or(&[], Vec::as_slice)
+                };
+                row(own.iter().chain(wildcard).copied(), group, resource)
+            })
             .collect();
         Self {
             rows,
@@ -97,11 +113,25 @@ impl PolicyMatrix {
     }
 }
 
-fn row(rules: &NormalisedRules, group: &str, resource: &str) -> MatrixRow {
-    let cells = MATRIX_VERBS.map(|verb| rules.level(verb.as_str(), group, resource, None));
+/// The row of `group`/`resource`, answered by `candidates`: every rule that may cover it (the
+/// others answer nothing anyway).
+fn row<'a>(
+    candidates: impl Iterator<Item = &'a AccessRule> + Clone,
+    group: &str,
+    resource: &str,
+) -> MatrixRow {
+    let cells = MATRIX_VERBS.map(|verb| {
+        candidates
+            .clone()
+            .filter_map(|rule| rule.level_for(verb.as_str(), group, resource, None))
+            .max()
+            .unwrap_or(Access::Denied)
+    });
     let mut extras = BTreeSet::new();
-    let covering = rules.resource_rules().filter(|rule| {
-        rule.api_groups.iter().any(|g| g == "*" || g == group)
+    let covering = candidates.filter(|rule| {
+        rule.api_groups
+            .iter()
+            .any(|g| g == ALL_GROUPS || g == group)
             && rule.resources.iter().any(|r| resource_matches(r, resource))
     });
     for rule in covering {

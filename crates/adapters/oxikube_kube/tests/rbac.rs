@@ -397,6 +397,31 @@ async fn subject_access_review_answers_for_another_identity() {
     );
 }
 
+/// E17 audit: a user or group asked about through a `SubjectAccessReview` is in
+/// `system:authenticated`, as `kubectl auth can-i --as` (impersonation) puts them. Every cluster
+/// binds `system:basic-user` to that group, so creating a `SelfSubjectAccessReview` is allowed
+/// for any user or group, never denied for want of the implicit group.
+#[tokio::test]
+async fn a_user_or_group_review_counts_the_bindings_of_system_authenticated() {
+    let Some(kind) = common::kind().await else {
+        return;
+    };
+    let admin = kind.admin_client().await;
+    let refresh = CredentialRefresh::Static;
+    let reviews = Gvr::new("authorization.k8s.io", "v1", "selfsubjectaccessreviews");
+    for identity in [
+        Impersonate::user("oxi-audit-jane"),
+        Impersonate::group("oxi-audit-devs"),
+    ] {
+        let check = AccessCheck::new("create", reviews.clone()).impersonating(identity.clone());
+        let decision = can_i(&admin, &check, refresh).await.expect("review");
+        assert!(
+            decision.is_allowed(),
+            "{identity:?}: kubectl auth can-i create selfsubjectaccessreviews says yes, got {decision:?}"
+        );
+    }
+}
+
 fn strs(list: &[String]) -> Vec<&str> {
     list.iter().map(String::as_str).collect()
 }

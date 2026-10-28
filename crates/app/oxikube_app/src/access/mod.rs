@@ -12,7 +12,8 @@
 //! * **Invalidation** on connect, namespace change and context switch:
 //!   [`AccessService::invalidate`] and [`AccessService::invalidate_namespace`]; the
 //!   [`AccessRegistry`] hands out one service per [`ClusterSession`](crate::session::ClusterSession)
-//!   connection and starts a fresh one when the connection (so the port) is replaced.
+//!   connection, starts a fresh one when the connection (so the port) is replaced, and
+//!   ([`AccessRegistry::follow`]) drops it when the cluster is closed or disconnected.
 //! * **Batch can-i.** [`AccessService::can_i_many`] answers from the cached rules whenever
 //!   they can decide ([`AccessRules::decide`](oxikube_domain::access::AccessRules::decide)) and
 //!   falls back to one `SelfSubjectAccessReview` only for the rest (`resourceNames` grants,
@@ -31,7 +32,10 @@
 //! store's subscriptions, turned into normalised rules per subject (`oxikube_domain::rbac` reads and
 //! normalises; `index`, `objects` and `grant` index them). It is plain data with no port.
 //! E17-S04 adds the [`PolicyFeed`] that keeps one from the store's four RBAC subscriptions (abort-on-drop)
-//! and the [`PolicyHub`] that shares it between the views that need it (a ServiceAccount's bound roles).
+//! and the [`PolicyHub`] that shares it between the views that need it (a ServiceAccount's bound
+//! roles, and the Users, Groups and matrix pages of [`rbac_subjects`](crate::rbac_subjects)): one
+//! index per cluster. Its grants share the index's cached, normalised role rules (`Arc`), so a
+//! query costs a lookup per binding, not a copy of every role.
 //!
 //! * **Soft gates** (E17-S03): [`AccessVisibility`] implements the sidebar's
 //!   [`KindVisibility`](crate::kinds::KindVisibility) over the cached rules, and

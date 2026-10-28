@@ -8,12 +8,19 @@
 
 use super::{Access, AccessRules, is_cluster_scoped};
 use crate::ids::Gvr;
+use crate::rbac::Subject;
 
 /// Who a check is asked as, when not the current identity (`kubectl --as`).
 ///
 /// Answered by a `SubjectAccessReview` (the can-i tool, E17-S08); an adapter that cannot ask as
 /// another identity answers such a check with `Unsupported`. Lives in memory only: it is never
 /// persisted.
+///
+/// A review is evaluated with exactly the groups it carries (the authorizer adds none), so the
+/// constructors spell out the groups the API server would add when impersonating
+/// ([`Subject::user_info`]): `system:authenticated` for everyone but `system:anonymous`, and a
+/// ServiceAccount's `system:serviceaccounts` groups. That keeps a can-i answer equal to
+/// `kubectl auth can-i --as` and to the policy matrix with implicit groups.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct Impersonate {
     /// The user name (`--as`).
@@ -23,32 +30,31 @@ pub struct Impersonate {
 }
 
 impl Impersonate {
-    /// A user (`--as <user>`).
+    /// A user (`--as <user>`), in `system:authenticated` (`system:anonymous` in
+    /// `system:unauthenticated`). A `system:serviceaccount:<ns>:<name>` user is that
+    /// ServiceAccount.
     pub fn user(user: impl Into<String>) -> Self {
-        Self {
-            user: user.into(),
-            groups: Vec::new(),
-        }
+        Self::of(&Subject::from_username(&user.into()))
     }
 
-    /// A group alone (`--as-group <group>`), with no user name.
+    /// A member of `group` with no user name of their own, in the group and in
+    /// `system:authenticated` (unless the group is `system:unauthenticated`).
     pub fn group(group: impl Into<String>) -> Self {
-        Self {
-            user: String::new(),
-            groups: vec![group.into()],
-        }
+        Self::of(&Subject::Group(group.into().into()))
     }
 
     /// A ServiceAccount: the user `system:serviceaccount:<namespace>:<name>` in the groups the
     /// API server gives every ServiceAccount.
     pub fn service_account(namespace: &str, name: &str) -> Self {
+        Self::of(&Subject::service_account(namespace, name))
+    }
+
+    /// Who a request made as `subject` is, implicit groups included.
+    pub fn of(subject: &Subject) -> Self {
+        let info = subject.user_info();
         Self {
-            user: format!("system:serviceaccount:{namespace}:{name}"),
-            groups: vec![
-                "system:serviceaccounts".to_owned(),
-                format!("system:serviceaccounts:{namespace}"),
-                "system:authenticated".to_owned(),
-            ],
+            user: info.user.map(|user| user.to_string()).unwrap_or_default(),
+            groups: info.groups.iter().map(|group| group.to_string()).collect(),
         }
     }
 }
@@ -235,18 +241,49 @@ mod tests {
 
     #[test]
     fn impersonation_targets_spell_the_api_servers_identities() {
-        assert_eq!(Impersonate::user("jane").groups, Vec::<String>::new());
+        let authenticated = "system:authenticated".to_owned();
+        let user = Impersonate::user("jane");
+        assert_eq!(
+            (user.user.as_str(), user.groups),
+            ("jane", vec![authenticated.clone()]),
+            "kubectl --as adds system:authenticated; a review must carry it"
+        );
         let group = Impersonate::group("devs");
         assert_eq!(
             (group.user.as_str(), group.groups),
-            ("", vec!["devs".to_owned()])
+            ("", vec!["devs".to_owned(), authenticated.clone()])
         );
         let sa = Impersonate::service_account("shop", "bot");
         assert_eq!(sa.user, "system:serviceaccount:shop:bot");
-        assert!(
-            sa.groups
-                .contains(&"system:serviceaccounts:shop".to_owned())
+        assert_eq!(
+            sa.groups,
+            [
+                authenticated.as_str(),
+                "system:serviceaccounts",
+                "system:serviceaccounts:shop"
+            ]
         );
+        assert_eq!(
+            Impersonate::user("system:serviceaccount:shop:bot"),
+            sa,
+            "a ServiceAccount's user name is the ServiceAccount"
+        );
+        let anonymous = Impersonate::user("system:anonymous");
+        assert_eq!(anonymous.groups, ["system:unauthenticated"]);
+    }
+
+    #[test]
+    fn every_constructor_agrees_with_the_subjects_user_info() {
+        for subject in [
+            Subject::User("jane".into()),
+            Subject::Group("devs".into()),
+            Subject::service_account("shop", "bot"),
+        ] {
+            let info = subject.user_info();
+            let identity = Impersonate::of(&subject);
+            let groups: Vec<&str> = info.groups.iter().map(|group| &**group).collect();
+            assert_eq!(identity.groups, groups, "{subject}");
+        }
     }
 
     #[test]
