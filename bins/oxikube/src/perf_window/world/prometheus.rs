@@ -128,11 +128,10 @@ impl PromqlPort for WorldPromql {
                 ts,
                 value: scale.value(ts, 0.0),
             });
-            let next = ts.checked_add(step);
-            if next.is_err() {
+            let Ok(next) = ts.checked_add(step) else {
                 break;
-            }
-            ts = next.expect("the addition succeeded");
+            };
+            ts = next;
         }
         Ok(vec![PromqlSeries {
             labels: BTreeMap::new(),
