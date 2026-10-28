@@ -1,5 +1,6 @@
 //! [`ObjectEventsFeed`]: the events about one object, for its Events tab.
 
+use std::collections::HashSet;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -8,15 +9,20 @@ use futures::Stream;
 use oxikube_domain::event::Event;
 use oxikube_domain::ids::ClusterId;
 
-use crate::events::{EventFilter, EventService, EventsState, EventsSubscription, seen_at};
+use crate::events::{
+    EventFilter, EventKey, EventService, EventsState, EventsSubscription, ObjectTarget, seen_at,
+};
 
 /// Most events the Events tab lists.
 pub const MAX_OBJECT_EVENTS: usize = 200;
 
 /// A live view of the events about one object, read from the service's index by the object's
-/// uid: no watch, no API call. A stream that yields `()` when the events or the feed's state
-/// changed (coalesced per poll), then [`events`](Self::events) and [`state`](Self::state) read
+/// uid and by its name: no watch, no API call. A stream that yields `()` when the events or the
+/// feed's state changed (coalesced per poll), then [`events`](Self::events) and [`state`](Self::state) read
 /// the new values. Dropping it drops its subscriptions.
+///
+/// The events whose writer gave no uid are found by the object's name (kind, namespace and
+/// name), so they show in the tab too.
 ///
 /// A cluster-scoped object (a Node) is also followed under its name: the kubelet records a
 /// Node's events with the node's name as the uid.
@@ -36,24 +42,41 @@ impl ObjectEventsFeed {
     pub(super) fn new(
         service: &EventService,
         cluster: &ClusterId,
-        uid: Option<&str>,
+        target: &ObjectTarget,
         cluster_scoped_name: Option<&str>,
     ) -> Self {
-        let mut uids: Vec<&str> = uid.into_iter().collect();
-        if let Some(name) = cluster_scoped_name
-            && !uids.contains(&name)
-        {
-            uids.push(name);
+        let identity = target.identity().cloned();
+        // The object's uid, and (for a cluster-scoped object) its name as the kubelet writes it.
+        let mut uids: Vec<Arc<str>> = Vec::new();
+        if let Some(uid) = target.uid_value() {
+            uids.push(Arc::from(uid));
         }
+        if let Some(name) = cluster_scoped_name
+            && !uids.iter().any(|uid| &**uid == name)
+        {
+            uids.push(Arc::from(name));
+        }
+        let targets: Vec<ObjectTarget> = match (&identity, uids.is_empty()) {
+            // No uid to follow: the name alone finds the events that gave none.
+            (Some(identity), true) => vec![ObjectTarget::named(None, identity.clone())],
+            (Some(identity), false) => uids
+                .iter()
+                .map(|uid| ObjectTarget::named(Some(uid.clone()), identity.clone()))
+                .collect(),
+            (None, _) => uids
+                .iter()
+                .map(|uid| ObjectTarget::uid(uid.clone()))
+                .collect(),
+        };
         Self {
-            subscriptions: uids
+            subscriptions: targets
                 .into_iter()
-                .map(|uid| service.subscribe(cluster, EventFilter::new().object(uid)))
+                .map(|target| service.subscribe(cluster, EventFilter::new().object_target(target)))
                 .collect(),
         }
     }
 
-    /// Whether the feed follows anything (the object had a uid to follow).
+    /// Whether the feed follows anything (the object had a uid or a name to follow).
     pub fn is_empty(&self) -> bool {
         self.subscriptions.is_empty()
     }
@@ -67,9 +90,13 @@ impl ObjectEventsFeed {
             .flat_map(|s| s.latest(MAX_OBJECT_EVENTS))
             .collect();
         if self.subscriptions.len() > 1 {
+            // Two subscriptions (a cluster-scoped object's uid and its name) hold the same
+            // event when the event gave no uid: it is listed once, newest first.
             events.sort_by_key(|e| std::cmp::Reverse(seen_at(e)));
-            events.truncate(MAX_OBJECT_EVENTS);
+            let mut seen: HashSet<EventKey> = HashSet::with_capacity(events.len());
+            events.retain(|event| seen.insert(EventKey::of(event)));
         }
+        events.truncate(MAX_OBJECT_EVENTS);
         events
     }
 

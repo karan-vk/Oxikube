@@ -12,6 +12,7 @@
 //! | `ring` | `Order -> (key, Arc<Event>)` | insert, evict, update `O(log n)` |
 //! | `by_key` | `EventKey -> Order` (the dedupe map) | `O(1)` |
 //! | `index.by_object` | involved-object uid `->` positions, warning count | `O(log k)` per change, `O(1)` count |
+//! | `index.by_named` | the events that gave no uid, by the object's name | `O(log k)` per change |
 //! | `index.by_namespace` | event namespace `->` positions | `O(log k)` per change |
 //! | `index.warnings` | positions of `Warning` events | `O(log w)` per change |
 
@@ -251,10 +252,12 @@ impl EventBuffer {
 
     /// Panics unless the key map and every index agree with a brute-force scan of the ring.
     pub(crate) fn assert_consistent(&self) {
+        use crate::events::object::ObjectIdentity;
         use std::collections::BTreeSet;
         assert!(self.ring.len() <= self.capacity, "over capacity");
         assert_eq!(self.by_key.len(), self.ring.len(), "by_key size");
         let mut objects: HashMap<Arc<str>, (BTreeSet<Order>, usize)> = HashMap::new();
+        let mut named: HashMap<ObjectIdentity, (BTreeSet<Order>, usize)> = HashMap::new();
         let mut namespaces: HashMap<Arc<str>, BTreeSet<Order>> = HashMap::new();
         let mut warnings = BTreeSet::new();
         for (order, slot) in &self.ring {
@@ -266,6 +269,12 @@ impl EventBuffer {
             assert_eq!(slot.key, EventKey::of(&slot.event), "slot key");
             if let Some(uid) = &slot.event.regarding_uid {
                 let entry = objects.entry(uid.clone()).or_default();
+                entry.0.insert(*order);
+                entry.1 += usize::from(slot.event.is_warning());
+            } else {
+                let entry = named
+                    .entry(ObjectIdentity::of_event(&slot.event))
+                    .or_default();
                 entry.0.insert(*order);
                 entry.1 += usize::from(slot.event.is_warning());
             }
@@ -283,6 +292,13 @@ impl EventBuffer {
             .map(|(k, v)| (k.clone(), (v.orders.clone(), v.warnings)))
             .collect();
         assert_eq!(indexed, objects, "by_object");
+        let indexed_named: HashMap<ObjectIdentity, (BTreeSet<Order>, usize)> = self
+            .index
+            .by_named
+            .iter()
+            .map(|(k, v)| (k.clone(), (v.orders.clone(), v.warnings)))
+            .collect();
+        assert_eq!(indexed_named, named, "by_named");
         assert_eq!(self.index.by_namespace, namespaces, "by_namespace");
         assert_eq!(self.index.warnings, warnings, "warnings");
     }

@@ -84,6 +84,14 @@ impl EventBuilder {
         self
     }
 
+    /// The event's writer left the object's uid out (`involvedObject.uid` is empty): the event
+    /// is only about its object by name.
+    #[must_use]
+    pub fn without_object_uid(mut self) -> Self {
+        self.0.regarding_uid = None;
+        self
+    }
+
     /// How many times it happened.
     #[must_use]
     pub fn count(mut self, count: u32) -> Self {

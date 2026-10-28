@@ -209,6 +209,39 @@ fn every_kind_has_the_tab_and_a_node_is_found_by_its_name(cx: &mut TestAppContex
 }
 
 #[gpui::test]
+fn an_event_whose_writer_gave_no_uid_is_in_the_objects_events_tab(cx: &mut TestAppContext) {
+    // The writer left `involvedObject.uid` out: the event is found by the object's name.
+    let mut nameless = normal_about_web("e1", "Pulled", 30 * MIN);
+    nameless.regarding_uid = None;
+    let feed = FakeEventFeed::new().initial([nameless]);
+    let (mut d, _rig) = Detail::with_events(cx, [pod_with_uid()], feed);
+    let view = d.open(&pod_ref("web-0"));
+    d.click("detail-tab-events");
+    d.settle();
+    assert_eq!(
+        reasons(&mut d, &view),
+        ["Pulled"],
+        "the event that gave no uid is listed in the object's tab"
+    );
+}
+
+#[gpui::test]
+fn an_event_with_another_objects_uid_is_not_in_the_objects_events_tab(cx: &mut TestAppContext) {
+    // The pod was deleted and re-created under the same name: the event carries the old uid.
+    let mut old = normal_about_web("e1", "Pulled", 30 * MIN);
+    old.regarding_uid = Some("uid-web-0-old".into());
+    let feed = FakeEventFeed::new().initial([old]);
+    let (mut d, _rig) = Detail::with_events(cx, [pod_with_uid()], feed);
+    let view = d.open(&pod_ref("web-0"));
+    d.click("detail-tab-events");
+    d.settle();
+    assert!(
+        reasons(&mut d, &view).is_empty(),
+        "the old pod's event stays with the old pod"
+    );
+}
+
+#[gpui::test]
 fn view_events_opens_the_drawer_on_the_events_tab(cx: &mut TestAppContext) {
     let feed = FakeEventFeed::new().initial([normal_about_web("e1", "Pulled", MIN)]);
     let (mut d, _rig) = Detail::with_events(cx, [pod_with_uid()], feed);

@@ -150,7 +150,7 @@ pub use context::{
 };
 pub use events::{
     EventBuffer, EventFilter, EventFilterError, EventKey, EventService, EventsChanged,
-    EventsConfig, EventsState, EventsSubscription,
+    EventsConfig, EventsState, EventsSubscription, ObjectIdentity, ObjectTarget,
 };
 pub use exec::{
     ContainerChoices, ContainerPlan, DEFAULT_DEBUG_START_TIMEOUT, DebugDefaults, DebugOpened,
