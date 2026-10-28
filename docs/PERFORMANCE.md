@@ -1557,12 +1557,19 @@ preparation, no present and no GPU time):
 | `slow_frame_pct` | 0 % | 0 % | | |
 | `peak_rss_mib` | 174 MiB | | | |
 
-**Baseline.** `editor-5mb` is seeded for `linux` in [`docs/perf/baseline.json`](perf/baseline.json)
-from nightly run 38096579563 on the story branch (only that scenario was taken from the report, so
-the other scenarios keep their E08-F520 numbers). The runner measured `open_ms` p50 318 ms,
+**Baseline.** `editor-5mb` is seeded for both `linux` and `macos` in
+[`docs/perf/baseline.json`](perf/baseline.json). Only that scenario was taken from each report, so
+the other scenarios keep their E08-F520 numbers. The Linux seed is from nightly run 38096579563
+on the E10-S11 story branch. The runner measured `open_ms` p50 318 ms,
 `validation_ms` 346 ms, `draw_ms` p95 0.64 ms, `scroll_frame_ms` p95 1.53 ms, `slow_frame_pct` 0 and
-`peak_rss_mib` 229. The `macos` seed waits for the macOS perf smoke tests to pass again (#592; seed:
-#643). Until then the advisory macOS check reports the scenario as `MISSING`.
+`peak_rss_mib` 229. The macOS seed (E10-F153, #643) is from
+[nightly run 39346156417](https://github.com/karan-vk/Oxikube/actions/runs/39346156417), whose macOS
+perf smoke tests passed. Across seven launches it measured `open_ms` p50 269 ms (p95 296 ms),
+`validation_ms` p50 596 ms, `draw_ms` p95 1.17 ms, `scroll_frame_ms` p95 3.12 ms,
+`slow_frame_pct` 0 and `peak_rss_mib` 182. All four editor budgets pass. The advisory macOS
+comparison now has a baseline for the scenario. Baselines store the median of each per-launch
+percentile summary; the cold-open p95 above comes from the report's separate across-launch
+statistics.
 
 Before this story the same open took 220 to 340 ms in a headless probe (unchanged code path: the
 rope and the display map; the spread is the machine), a keystroke 0.4 to 1.7 ms, and every pause
