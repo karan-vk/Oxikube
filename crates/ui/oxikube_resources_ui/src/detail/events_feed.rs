@@ -68,9 +68,11 @@ impl DetailView {
         let Some(target) = self.events_target() else {
             return;
         };
-        let meta = self.object.as_ref().expect("the object").meta();
         // A Node's events are recorded under its name as well as its uid.
-        let cluster_scoped_name = self.target.namespace().is_none().then_some(&*meta.name);
+        let cluster_scoped_name = target
+            .identity()
+            .filter(|_| self.target.namespace().is_none())
+            .map(ObjectIdentity::name);
         let feed = events.object_feed(&self.target.cluster, &target, cluster_scoped_name);
         self.events.feed = Some(feed);
         self.events.target = Some(target);
