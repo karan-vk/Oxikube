@@ -9,6 +9,10 @@
 //! formatter; adapters call it directly for error text and manual `Debug` impls; audit and crash
 //! reporting must reuse it rather than copy the patterns.
 //!
+//! For structured data, [`redact_json`] walks a `serde_json::Value`: a `Secret`'s `data` /
+//! `stringData` values and any value under a sensitive key become [`MARKER`] (keys stay), and
+//! every other string goes through [`redact`]. Agent tool output and crash context use it.
+//!
 //! # Redacted patterns
 //!
 //! The authoritative list is [`PATTERNS`] (snapshotted with `insta` so any change shows up in
@@ -56,11 +60,13 @@
 //! scrubber; `oxikube_logging` formats with ANSI off for that reason.
 
 mod blocks;
+mod json;
 mod patterns;
 mod scrubber;
 mod values;
 mod wrapper;
 
+pub use json::redact_json;
 pub use patterns::{
     MARKER, PATTERNS, Pattern, SENSITIVE_FIELDS, SENSITIVE_SUFFIXES, is_sensitive_field, patterns,
 };
