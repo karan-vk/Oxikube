@@ -178,6 +178,7 @@ impl MutationIntent {
             dry_run,
             outcome,
         );
+        let record = record.with_verb(self.verb);
         match &self.batch_id {
             Some(batch_id) => record.with_batch_id(batch_id),
             None => record,

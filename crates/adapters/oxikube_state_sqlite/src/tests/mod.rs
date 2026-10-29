@@ -1,6 +1,7 @@
 //! Tests of the SQLite state store, all on temp directories.
 
 mod audit;
+mod audit_store;
 mod parity;
 mod port;
 mod recovery;

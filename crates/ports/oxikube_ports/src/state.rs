@@ -16,8 +16,9 @@
 //! * `kv_*`: small free-form settings-like values (recent clusters, window layout).
 //! * `table_*`: rows in a named [`StateTable`] keyed by [`StateKey`] (favourites,
 //!   port-forward presets, agent threads).
-//! * `append_audit` / `query_audit`: the append-only audit log, written by
-//!   `MutationGuard` in batches.
+//! * `append_audit` / `query_audit` / `prune_audit`: the append-only audit log, written by
+//!   `MutationGuard` in batches, read a keyset [`AuditPage`] at a time, shrunk only by
+//!   retention pruning.
 //!
 //! The trait stays object-safe by speaking `serde_json::Value`; [`StatePortExt`]
 //! adds typed `get`/`put` helpers for any `StatePort`, including `dyn StatePort`.
@@ -25,8 +26,9 @@
 
 use async_trait::async_trait;
 use jiff::Timestamp;
-use oxikube_domain::audit::AuditRecord;
+use oxikube_domain::audit::{AuditOutcome, AuditRecord, Initiator};
 use oxikube_domain::ids::ClusterId;
+use oxikube_domain::safety::MutationVerb;
 use oxikube_domain::{OxiError, OxiResult};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -94,6 +96,35 @@ impl StateTable {
     }
 }
 
+/// Where the next page of [`StatePort::query_audit`] starts: the position of the last record of
+/// the previous page in the `(time, row)` order the log is read in.
+///
+/// Opaque to callers: take it from [`AuditPage::next`] and hand it back in
+/// [`AuditQuery::cursor`]. A keyset cursor (not an offset), so paging stays cheap and stable
+/// however large the log grows and however many records are appended meanwhile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct AuditCursor {
+    ts: Timestamp,
+    row: u64,
+}
+
+impl AuditCursor {
+    /// A cursor after the record stored at `ts` as row number `row` (adapters and fakes only).
+    pub fn new(ts: Timestamp, row: u64) -> Self {
+        Self { ts, row }
+    }
+
+    /// The time of the record the cursor follows.
+    pub fn ts(&self) -> Timestamp {
+        self.ts
+    }
+
+    /// The store's row number of the record the cursor follows.
+    pub fn row(&self) -> u64 {
+        self.row
+    }
+}
+
 /// Filter for [`StatePort::query_audit`]. All set fields must match; the default
 /// matches everything (up to `limit`).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -106,6 +137,17 @@ pub struct AuditQuery {
     pub until: Option<Timestamp>,
     /// Only records of this command id.
     pub cmd: Option<String>,
+    /// Only records of this verb. Records written without a verb never match.
+    pub verb: Option<MutationVerb>,
+    /// Only records that came through this door.
+    pub initiator: Option<Initiator>,
+    /// Only records that ended this way.
+    pub outcome: Option<AuditOutcome>,
+    /// Only the records of this bulk operation.
+    pub batch_id: Option<String>,
+    /// Continue after this position ([`AuditPage::next`] of the previous page); `None` starts at
+    /// the newest record.
+    pub cursor: Option<AuditCursor>,
     /// Maximum number of records returned.
     pub limit: usize,
 }
@@ -117,9 +159,23 @@ impl Default for AuditQuery {
             since: None,
             until: None,
             cmd: None,
+            verb: None,
+            initiator: None,
+            outcome: None,
+            batch_id: None,
+            cursor: None,
             limit: 200,
         }
     }
+}
+
+/// One page of audit records, newest first.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct AuditPage {
+    /// The records of this page.
+    pub records: Vec<AuditRecord>,
+    /// Where the next (older) page starts, or `None` when this page reached the end of the log.
+    pub next: Option<AuditCursor>,
 }
 
 /// Durable local state.
@@ -169,8 +225,14 @@ pub trait StatePort: Send + Sync {
     /// Appends `records` to the audit log in one batch. The log is append-only.
     async fn append_audit(&self, records: &[AuditRecord]) -> OxiResult<()>;
 
-    /// Records matching `query`, newest first.
-    async fn query_audit(&self, query: &AuditQuery) -> OxiResult<Vec<AuditRecord>>;
+    /// The page of records matching `query`, newest first. Pass [`AuditPage::next`] as the next
+    /// query's [`cursor`](AuditQuery::cursor) to read on; every record is returned exactly once.
+    async fn query_audit(&self, query: &AuditQuery) -> OxiResult<AuditPage>;
+
+    /// Retention pruning, the one way the audit log shrinks: removes the records stamped before
+    /// `before`, returns how many it removed and gives the freed disk space back. The log stays
+    /// append-only otherwise: there is no update, and no delete of a record at or after `before`.
+    async fn prune_audit(&self, before: Timestamp) -> OxiResult<u64>;
 }
 
 /// Typed helpers over [`StatePort`]'s JSON values. Implemented for every
@@ -302,8 +364,11 @@ mod tests {
         async fn append_audit(&self, _records: &[AuditRecord]) -> OxiResult<()> {
             Ok(())
         }
-        async fn query_audit(&self, _query: &AuditQuery) -> OxiResult<Vec<AuditRecord>> {
-            Ok(Vec::new())
+        async fn query_audit(&self, _query: &AuditQuery) -> OxiResult<AuditPage> {
+            Ok(AuditPage::default())
+        }
+        async fn prune_audit(&self, _before: Timestamp) -> OxiResult<u64> {
+            Ok(0)
         }
     }
 

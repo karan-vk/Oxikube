@@ -39,7 +39,7 @@ async fn script(state: &dyn StatePort) -> serde_json::Value {
         "table_list": state.table_list(&fav, None).await.unwrap().into_iter().map(|(k, v)| (k.as_str().to_owned(), v)).collect::<Vec<_>>(),
         "table_limit": state.table_list(&fav, Some(1)).await.unwrap().len(),
         "deleted": [del_kv, del_kv_again],
-        "audit": serde_json::to_value(audit).unwrap(),
+        "audit": serde_json::to_value(audit.records).unwrap(),
     })
 }
 

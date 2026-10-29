@@ -119,6 +119,7 @@ fn audit_record_carries_the_initiator_target_and_batch() {
     assert_eq!(record.initiator, Initiator::Agent);
     assert_eq!(record.target, pod());
     assert_eq!(record.batch_id.as_deref(), Some("batch-1"));
+    assert_eq!(record.verb, Some(MutationVerb::Delete));
     let single = MutationIntent::new(
         &pod(),
         MutationVerb::Delete,

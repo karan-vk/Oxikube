@@ -1,5 +1,21 @@
 {
   "$defs": {
+    "AuditSettingsContent": {
+      "additionalProperties": false,
+      "description": "What one settings layer says about the audit log.",
+      "properties": {
+        "retention_days": {
+          "description": "Days the audit log keeps a record before it is pruned (0 to 3650; default 90). 0 keeps\nevery record. Applies at once.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
     "AuthContent": {
       "description": "How requests to a `url` authenticate (`prometheus.auth`).",
       "oneOf": [
@@ -270,6 +286,9 @@
             "array",
             "null"
           ]
+        },
+        "audit": {
+          "$ref": "#/$defs/AuditSettingsContent"
         },
         "base_keymap": {
           "anyOf": [
@@ -1928,6 +1947,9 @@
         "array",
         "null"
       ]
+    },
+    "audit": {
+      "$ref": "#/$defs/AuditSettingsContent"
     },
     "base_keymap": {
       "anyOf": [

@@ -21,11 +21,18 @@ pub struct Migration {
 }
 
 /// Every migration, oldest first.
-pub const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    name: "init",
-    sql: include_str!("0001_init.sql"),
-}];
+pub const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        name: "init",
+        sql: include_str!("0001_init.sql"),
+    },
+    Migration {
+        version: 2,
+        name: "audit_columns",
+        sql: include_str!("0002_audit_columns.sql"),
+    },
+];
 
 /// The schema version a fully migrated database has.
 pub fn latest_version() -> u32 {
@@ -175,6 +182,49 @@ mod tests {
         assert_eq!(leftover, 0, "the failed migration left nothing behind");
         // The connection is usable and the earlier migration is intact.
         assert_eq!(apply(&mut conn).unwrap(), latest_version());
+    }
+
+    #[test]
+    fn rows_stored_before_the_audit_columns_are_indexed_by_them() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        apply_all(&mut conn, &MIGRATIONS[..1]).unwrap();
+        let record = r#"{"initiator":"agent","outcome":"failed","verb":"scale","batch_id":"b","target":{"gvk":{"kind":"Pod"},"namespace":"ns","name":"web"}}"#;
+        conn.execute(
+            "INSERT INTO audit_log (ts_ns, cluster, cmd, record) VALUES (1, 'c', 'x', ?1)",
+            [record],
+        )
+        .unwrap();
+        assert_eq!(apply(&mut conn).unwrap(), latest_version());
+        let cols: (String, String, String, String, String, String, String) = conn
+            .query_row(
+                "SELECT initiator, outcome, verb, batch_id, kind, namespace, name FROM audit_log",
+                [],
+                |r| {
+                    Ok((
+                        r.get(0)?,
+                        r.get(1)?,
+                        r.get(2)?,
+                        r.get(3)?,
+                        r.get(4)?,
+                        r.get(5)?,
+                        r.get(6)?,
+                    ))
+                },
+            )
+            .unwrap();
+        let expected = ["agent", "failed", "scale", "b", "Pod", "ns", "web"].map(String::from);
+        assert_eq!(
+            [cols.0, cols.1, cols.2, cols.3, cols.4, cols.5, cols.6],
+            expected
+        );
+        let hit: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM audit_log WHERE initiator = 'agent'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(hit, 1);
     }
 
     #[test]

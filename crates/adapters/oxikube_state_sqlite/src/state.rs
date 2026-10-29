@@ -3,8 +3,9 @@
 use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
+use jiff::Timestamp;
 use oxikube_domain::{OxiError, OxiResult, audit::AuditRecord};
-use oxikube_ports::{AuditQuery, StateKey, StatePort, StateTable};
+use oxikube_ports::{AuditPage, AuditQuery, StateKey, StatePort, StateTable};
 use serde_json::Value;
 
 use crate::{
@@ -149,10 +150,16 @@ impl StatePort for SqliteState {
             .await
     }
 
-    async fn query_audit(&self, query: &AuditQuery) -> OxiResult<Vec<AuditRecord>> {
+    async fn query_audit(&self, query: &AuditQuery) -> OxiResult<AuditPage> {
         let query = query.clone();
         self.worker
             .run(move |conn| audit::query(conn, &query))
+            .await
+    }
+
+    async fn prune_audit(&self, before: Timestamp) -> OxiResult<u64> {
+        self.worker
+            .run(move |conn| audit::prune(conn, before))
             .await
     }
 }

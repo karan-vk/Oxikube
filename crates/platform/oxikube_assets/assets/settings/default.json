@@ -200,6 +200,13 @@
     "max_streams": 20,
     "reconnect_retries": 5
   },
+  // The audit log of guarded mutations (E19). One local file for every cluster.
+  //   retention_days  days a record is kept (0 to 3650; 0 keeps every record). Older records are
+  //                   pruned when Oxikube starts, once a day after that, and at once when this
+  //                   changes; the freed disk space is given back. Applies at once.
+  "audit": {
+    "retention_days": 90
+  },
   // Kubernetes events and the notifications raised from them (E14). Can also be set under
   // "clusters.<id>.events" (buffer, watched_kinds, ignore_reasons, os_notifications). A number or
   // duration out of range is clamped and a duration that does not parse falls back to its

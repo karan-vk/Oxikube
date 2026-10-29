@@ -29,7 +29,11 @@ fn append_and_query_newest_first_with_filters() {
             .await
             .unwrap();
 
-        let all = state.query_audit(&AuditQuery::default()).await.unwrap();
+        let all = state
+            .query_audit(&AuditQuery::default())
+            .await
+            .unwrap()
+            .records;
         let times: Vec<_> = all.iter().map(|r| r.ts.to_string()).collect();
         assert_eq!(
             times,
@@ -51,7 +55,8 @@ fn append_and_query_newest_first_with_filters() {
                 ..Default::default()
             })
             .await
-            .unwrap();
+            .unwrap()
+            .records;
         assert_eq!(prod.len(), 3);
 
         let deletes = state
@@ -60,7 +65,8 @@ fn append_and_query_newest_first_with_filters() {
                 ..Default::default()
             })
             .await
-            .unwrap();
+            .unwrap()
+            .records;
         assert_eq!(deletes.len(), 3);
 
         // `since` is inclusive, `until` exclusive.
@@ -71,7 +77,8 @@ fn append_and_query_newest_first_with_filters() {
                 ..Default::default()
             })
             .await
-            .unwrap();
+            .unwrap()
+            .records;
         assert_eq!(window.len(), 2);
 
         let limited = state
@@ -81,8 +88,9 @@ fn append_and_query_newest_first_with_filters() {
             })
             .await
             .unwrap();
-        assert_eq!(limited.len(), 1);
-        assert_eq!(limited[0].ts, ts("2026-10-01T13:00:00Z"));
+        assert_eq!(limited.records.len(), 1);
+        assert!(limited.next.is_some(), "three older records remain");
+        assert_eq!(limited.records[0].ts, ts("2026-10-01T13:00:00Z"));
     });
 }
 
@@ -95,7 +103,11 @@ fn equal_timestamps_come_back_last_appended_first() {
         let b = record("prod", "b::Second", "2026-10-01T10:00:00Z", Succeeded);
         state.append_audit(&[a.clone(), b.clone()]).await.unwrap();
         assert_eq!(
-            state.query_audit(&AuditQuery::default()).await.unwrap(),
+            state
+                .query_audit(&AuditQuery::default())
+                .await
+                .unwrap()
+                .records,
             [b, a]
         );
     });
@@ -123,6 +135,7 @@ fn the_log_survives_a_reopen_and_empty_appends_are_fine() {
                 .query_audit(&AuditQuery::default())
                 .await
                 .unwrap()
+                .records
                 .len(),
             1
         );
@@ -147,6 +160,7 @@ fn the_log_is_append_only_in_the_database_itself() {
     });
     let conn = rusqlite::Connection::open(fx.path()).unwrap();
     let update = conn.execute("UPDATE audit_log SET cmd = 'x'", []);
+    // No retention cutoff is parked, so nothing may be deleted.
     let delete = conn.execute("DELETE FROM audit_log", []);
     assert!(update.unwrap_err().to_string().contains("append-only"));
     assert!(delete.unwrap_err().to_string().contains("append-only"));

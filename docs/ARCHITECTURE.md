@@ -1544,7 +1544,9 @@ crate's `README.md` for its allowed dependencies. Highlights:
   once instead of after kube's minutes of backoff.
 - `oxikube_state_sqlite` — the `StatePort` adapter (ADR 0010): rusqlite (bundled) on a dedicated
   thread, embedded ordered migrations, one `kv` table for the kv store and typed tables, the
-  append-only audit log, corrupt-file fallback (`state.db.corrupt-<timestamp>`).
+  append-only audit log (E19-S08: migration 0002 adds generated `verb` / `initiator` / `outcome` / `batch_id`
+  columns and newest-first indices, `query_audit` pages by keyset on `(ts, id)`, `prune_audit` is the only
+  delete and vacuums off the UI thread), corrupt-file fallback (`state.db.corrupt-<timestamp>`).
 - `oxikube_terminal` — the terminal stack. Module `backend::local` (E09-S02): `LocalPty`, the user's
   shell on a `portable-pty` PTY as a `TerminalBackend` (`terminal.shell` / `terminal.shell_args`
   settings, default `$SHELL` then `/bin/sh`). Three OS threads per session (read into a bounded

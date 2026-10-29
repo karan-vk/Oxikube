@@ -20,10 +20,11 @@ use async_trait::async_trait;
 use futures::FutureExt as _;
 use futures::future::{BoxFuture, Shared};
 use gpui::{App, AppContext as _, Task};
+use jiff::Timestamp;
 use oxikube_domain::OxiError;
 use oxikube_domain::OxiResult;
 use oxikube_domain::audit::AuditRecord;
-use oxikube_ports::{AuditQuery, StateKey, StatePort, StateTable};
+use oxikube_ports::{AuditPage, AuditQuery, StateKey, StatePort, StateTable};
 use oxikube_state_sqlite::SqliteState;
 use serde_json::Value;
 
@@ -130,7 +131,11 @@ impl StatePort for LazyState {
         self.ready().await?.append_audit(records).await
     }
 
-    async fn query_audit(&self, query: &AuditQuery) -> OxiResult<Vec<AuditRecord>> {
+    async fn query_audit(&self, query: &AuditQuery) -> OxiResult<AuditPage> {
         self.ready().await?.query_audit(query).await
+    }
+
+    async fn prune_audit(&self, before: Timestamp) -> OxiResult<u64> {
+        self.ready().await?.prune_audit(before).await
     }
 }

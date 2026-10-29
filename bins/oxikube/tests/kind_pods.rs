@@ -296,7 +296,8 @@ fn z_and_ctrl_k_on_the_pods_table_sweep_and_force_delete_through_the_guard(
     // The guard audited every attempt: one record per swept pod under the batch, and the force
     // delete with its grace period.
     let records = futures::executor::block_on(state.state().query_audit(&AuditQuery::default()))
-        .expect("the audit log");
+        .expect("the audit log")
+        .records;
     let ours: Vec<_> = records
         .iter()
         .filter(|r| r.target.name.starts_with("e12p-") || &*r.cmd == "pod::Sanitize")
