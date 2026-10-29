@@ -25,7 +25,7 @@ use super::{ModalPlacement, ModalView};
 pub const DIALOG_KEY_CONTEXT: &str = "DialogModal";
 
 /// The key context wrapped around each footer button, so Enter reaches the focused button.
-const BUTTON_KEY_CONTEXT: &str = "DialogButton";
+pub(super) const BUTTON_KEY_CONTEXT: &str = "DialogButton";
 
 /// Registers Enter = confirm in the dialog's context. Called by [`super::register`].
 ///
@@ -132,9 +132,9 @@ impl DialogModal {
     /// Whether the confirm button can be pressed: always, unless a name has to be typed first and
     /// the field does not hold it yet.
     pub fn can_confirm(&self, cx: &App) -> bool {
-        self.typed
-            .as_ref()
-            .is_none_or(|typed| typed.input.read(cx).value().trim() == typed.expected.as_ref())
+        self.typed.as_ref().is_none_or(|typed| {
+            super::confirm::typed_matches(typed.input.read(cx).value().as_ref(), &typed.expected)
+        })
     }
 
     /// Presses confirm (a click, Enter). Does nothing while the typed name is wrong.

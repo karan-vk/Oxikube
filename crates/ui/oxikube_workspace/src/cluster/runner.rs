@@ -16,7 +16,7 @@
 //! * completed: a toast with the handler's message, if it had one, and an "Open" button when the
 //!   handler named an object to go to next (`cronjob::Trigger`: the Job it created; the button
 //!   dispatches `resource::Open` for it);
-//! * needs confirmation: a [`DialogModal`] with the guard's one-line summary; confirming
+//! * needs confirmation: a [`ConfirmDialog`] rendering the guard's request; confirming
 //!   dispatches the same command again with the answer, cancelling declines it (audited);
 //! * refused: a toast naming the cluster ([`denial_toast`]). A read-only refusal also pulses the
 //!   status bar badge once. The refusal came from the guard; the UI only reports it.
@@ -31,13 +31,12 @@ use oxikube_app::{
 use oxikube_domain::audit::Initiator;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::ResourceRef;
-use oxikube_domain::safety::ConfirmTier;
 use oxikube_runtime::spawn_kube;
 
 use super::echo::SessionEcho;
 use super::status::ClusterStatusItem;
 use crate::cluster_tab::apply_queued;
-use crate::modal::DialogModal;
+use crate::modal::{ConfirmDialog, confirm_prompt_for as prompt_for};
 use crate::toast::{Toast, ToastAction};
 use crate::workspace::Workspace;
 
@@ -53,38 +52,6 @@ pub fn denial_toast(error: &DispatchError) -> Toast {
         ))
         .key(format!("read-only:{cluster}")),
         other => Toast::error(other.to_string()),
-    }
-}
-
-/// The title, the confirm button and whether it is styled destructive, for the dialog the guard's
-/// request opens. The posture commands (read-only, colour, presets) ask "Are you sure?" and offer
-/// to turn the protection off; a debug container (E09-S10) is an addition that cannot be undone;
-/// a node shell (E09-S09) says what is being opened, because it creates a privileged pod; the
-/// workload commands (E12-S08) name their verb on the button.
-fn confirm_copy(command: &Command) -> (&'static str, &'static str, bool) {
-    match command {
-        Command::PodDebug { .. } => ("Add a debug container?", "Add debug container", false),
-        Command::NodeShell { .. } => ("Open a shell on the node?", "Open shell", true),
-        Command::CronJobTrigger { .. } => ("Run the CronJob now?", "Trigger", false),
-        Command::CronJobSuspend { .. } | Command::JobSuspend { .. } => {
-            ("Suspend it?", "Suspend", false)
-        }
-        Command::CronJobResume { .. } | Command::JobResume { .. } => {
-            ("Resume it?", "Resume", false)
-        }
-        Command::PodEvict { .. } => ("Evict the pod?", "Evict", true),
-        Command::PodDelete { .. } => ("Delete the pod?", "Delete", true),
-        Command::PodForceDelete { .. } => ("Force delete the pod?", "Force delete", true),
-        Command::PodSanitize { .. } => ("Delete finished pods?", "Delete", true),
-        Command::WorkloadRestart { .. } => ("Restart the workload?", "Restart", false),
-        Command::WorkloadSetImage { .. } => ("Set the image?", "Set image", false),
-        Command::BindingCreate { .. } => ("Create the binding?", "Create", false),
-        Command::BindingEdit { .. } => ("Save the binding?", "Save", false),
-        Command::BindingDelete { .. } => ("Delete the binding?", "Delete", true),
-        Command::RoleCreate { .. } => ("Create the role?", "Create", false),
-        Command::RoleEdit { .. } => ("Save the role?", "Save", false),
-        Command::RoleDelete { .. } => ("Delete the role?", "Delete", true),
-        _ => ("Are you sure?", "Turn off", true),
     }
 }
 
@@ -249,41 +216,30 @@ impl ClusterCommandRunner {
         cx: &mut App,
     ) {
         let token = request.token;
-        let (title, confirm_label, destructive) = confirm_copy(&command);
-        // The `TypeName` tier (a force delete): the dialog confirms only once the name is typed,
-        // and the answer carries it for the guard to check again.
-        let typed = request
-            .expected_name
-            .clone()
-            .filter(|_| request.tier == ConfirmTier::TypeName);
+        let session = self.sessions.get(&request.cluster);
+        let prompt = prompt_for(&command, &request, session.as_ref());
         let (on_confirm, on_decline) = (self.clone(), self.clone());
         self.workspace
             .update(cx, |workspace, cx| {
                 let dialog = cx.new(|cx| {
-                    let modal = DialogModal::new(title, cx)
-                        .message(request.summary)
-                        .confirm_label(confirm_label);
-                    let modal = if destructive {
-                        modal.destructive()
-                    } else {
-                        modal
-                    };
-                    let modal = match &typed {
-                        Some(name) => modal.require_typed(name.clone(), window, cx),
-                        None => modal,
-                    };
-                    modal
-                        .on_confirm(move |window, cx| {
-                            let answer = match &typed {
-                                Some(name) => Confirmation::typed(token, name.clone()),
+                    ConfirmDialog::new(
+                        prompt,
+                        move |typed, window, cx| {
+                            // What the user typed goes back as typed: the guard compares it
+                            // again, exactly, and refuses a name that is not the expected one.
+                            let answer = match typed {
+                                Some(name) => Confirmation::typed(token, name),
                                 None => Confirmation::simple(token),
                             };
-                            on_confirm.dispatch(command.clone(), Some(answer), window, cx);
-                        })
-                        .on_cancel(move |_, cx| on_decline.decline(token, cx))
+                            on_confirm.dispatch(command, Some(answer), window, cx);
+                        },
+                        move |cx| on_decline.decline(token, cx),
+                        window,
+                        cx,
+                    )
                 });
                 workspace.show_modal(dialog.clone(), window, cx);
-                dialog.update(cx, |dialog, cx| dialog.focus_typed(window, cx));
+                dialog.update(cx, |dialog, cx| dialog.focus_initial(window, cx));
             })
             .ok();
     }

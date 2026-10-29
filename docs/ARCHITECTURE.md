@@ -1378,6 +1378,12 @@ crate's `README.md` for its allowed dependencies. Highlights:
   owner (`JumpToOwnerSelected`, which on pod tables replaces `shift-j`'s selection extension; `shift-down` still extends).
   `pod::JumpToOwner` and `pod::ShowNode` are bus commands that `ResourceViews` handles (`views::pod_nav`): one `get` of the
   pod through `spawn_kube`, then the drawer opens on the owner or the node, or a toast says there is none.
+- `oxikube_workspace::modal::confirm` (E19-S06) — `ConfirmDialog` is the one dialog that renders a guard `ConfirmationRequest`
+  (`request::prompt_for` builds a token-free `ConfirmPrompt`: title, summary, cluster name and colour, initiator, risk, dry-run
+  banner, a virtualised bulk item list). Type-the-name compares with `typed_matches` (exact, case-sensitive, no trimming, as the
+  guard does; the delete, bulk and drain dialogs use it too). Every way out answers the request: Confirm and Cancel directly,
+  Esc and a scrim click through `on_before_dismiss`, a replacing modal or a closing window through entity release (decline).
+  The runner opens it for every `NeedsConfirmation`; the older `DialogModal` stays for non-guard prompts.
 - `oxikube_workspace::cluster::runner` and `modal::DialogModal` (E12-S03) — the runner answers a `TypeName` confirmation
   with a dialog that asks for the guard's `expected_name` (`DialogModal::require_typed`: the confirm button is disabled and
   Enter does nothing until the field holds exactly that text; the answer is `Confirmation::typed`). Pod commands have

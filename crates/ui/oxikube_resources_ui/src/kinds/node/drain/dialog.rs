@@ -13,6 +13,7 @@ use oxikube_domain::ids::ResourceRef;
 use oxikube_runtime::spawn_kube;
 use oxikube_ui::input::{InputEvent, InputState};
 use oxikube_workspace::modal::{ModalPlacement, ModalView};
+use oxikube_workspace::typed_matches;
 use oxikube_workspace::{CommandDispatcher, Workspace};
 
 use super::rows::{DrainLine, plan_lines};
@@ -265,7 +266,7 @@ impl DrainDialog {
         if let Err(error) = self.numbers(cx) {
             return Some(error);
         }
-        if self.typed.read(cx).value().trim() != &*self.target.name {
+        if !typed_matches(self.typed.read(cx).value().as_ref(), &self.target.name) {
             return Some(format!("Type {} to confirm.", self.target.name));
         }
         None

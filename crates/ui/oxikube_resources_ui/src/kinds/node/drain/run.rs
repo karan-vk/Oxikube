@@ -26,7 +26,7 @@ impl DrainDialog {
         };
         self.flags.grace_period_secs = grace;
         self.flags.timeout_secs = timeout;
-        let typed = self.typed.read(cx).value().trim().to_owned();
+        let typed = self.typed.read(cx).value().to_string();
         let DrainStart { progress, run } = self.flow.start(&self.target, self.flags.clone(), typed);
         self.stage = DrainStage::Draining;
         self.error = None;

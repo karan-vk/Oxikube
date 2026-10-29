@@ -118,14 +118,14 @@ fn force_delete_pod() -> Command {
 
 #[gpui::test]
 fn a_force_delete_asks_for_the_pods_name_and_waits_for_it(cx: &mut TestAppContext) {
-    use crate::modal::DialogModal;
+    use crate::modal::ConfirmDialog;
 
     let mut f = fixture(cx);
     run(&mut f, force_delete_pod());
     let layer = f.vcx.update(|_, cx| f.ws.read(cx).modal_layer().clone());
     let dialog = f
         .vcx
-        .update(|_, cx| layer.read(cx).active_modal::<DialogModal>())
+        .update(|_, cx| layer.read(cx).active_modal::<ConfirmDialog>())
         .expect("the guard's confirmation opens a dialog");
     let (title, expected, can_confirm) = f.vcx.update(|_, cx| {
         let dialog = dialog.read(cx);
@@ -209,16 +209,13 @@ fn a_node_shell_asks_with_the_node_and_the_image_named_and_opens_only_when_confi
     let layer = f.vcx.update(|_, cx| f.ws.read(cx).modal_layer().clone());
     let dialog = f
         .vcx
-        .update(|_, cx| layer.read(cx).active_modal::<crate::modal::DialogModal>())
+        .update(|_, cx| layer.read(cx).active_modal::<crate::modal::ConfirmDialog>())
         .expect("the guard's confirmation opens a dialog");
     let (title, message) = f.vcx.update(|_, cx| {
         let dialog = dialog.read(cx);
         (
             dialog.title().to_string(),
-            dialog
-                .message_text()
-                .map(ToString::to_string)
-                .unwrap_or_default(),
+            dialog.message_text().to_string(),
         )
     });
     assert_eq!(title, "Open a shell on the node?");
@@ -262,7 +259,7 @@ fn a_node_shell_on_a_read_only_cluster_is_refused_with_a_toast_and_no_dialog(
 fn a_debug_container_is_confirmed_in_its_own_words_not_as_turning_something_off(
     cx: &mut TestAppContext,
 ) {
-    use crate::modal::DialogModal;
+    use crate::modal::ConfirmDialog;
 
     let mut f = fixture(cx);
     run(
@@ -286,15 +283,12 @@ fn a_debug_container_is_confirmed_in_its_own_words_not_as_turning_something_off(
     let (title, message) = f.vcx.update(|_, cx| {
         let dialog = layer
             .read(cx)
-            .active_modal::<DialogModal>()
+            .active_modal::<ConfirmDialog>()
             .expect("a dialog");
         let dialog = dialog.read(cx);
         (
             dialog.title().to_string(),
-            dialog
-                .message_text()
-                .map(ToString::to_string)
-                .unwrap_or_default(),
+            dialog.message_text().to_string(),
         )
     });
     assert_eq!(title, "Add a debug container?");
@@ -410,16 +404,13 @@ fn a_trigger_asks_first_then_offers_to_open_the_job_it_created(cx: &mut TestAppC
     let (title, button, message) = f.vcx.update(|_, cx| {
         let dialog = layer
             .read(cx)
-            .active_modal::<crate::modal::DialogModal>()
+            .active_modal::<crate::modal::ConfirmDialog>()
             .expect("a dialog");
         let dialog = dialog.read(cx);
         (
             dialog.title().to_string(),
             dialog.confirm_text().to_string(),
-            dialog
-                .message_text()
-                .map(ToString::to_string)
-                .unwrap_or_default(),
+            dialog.message_text().to_string(),
         )
     });
     assert_eq!(title, "Run the CronJob now?");

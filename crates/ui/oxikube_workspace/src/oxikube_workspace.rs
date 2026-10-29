@@ -88,7 +88,10 @@ pub use dock::Dock;
 pub use item::{
     CloseRequest, Item, ItemEvent, ItemHandle, ItemRegistry, TabContent, register_item,
 };
-pub use modal::{DialogModal, ModalLayer, ModalView};
+pub use modal::{
+    ConfirmDialog, ConfirmItem, ConfirmPrompt, DialogModal, ModalLayer, ModalView, PreviewNote,
+    typed_matches,
+};
 pub use pane::{Member, Pane, PaneAxis, PaneGroup, PaneId, SplitDirection};
 pub use panel::{DockPosition, Panel, PanelEvent, PanelHandle};
 pub use status_bar::{StatusBar, StatusItem, StatusItemId, StatusSide};
