@@ -19,6 +19,7 @@ use super::rehearse::{Rehearsal, applied_status};
 use super::run::{APPLIES_AT_ONCE, Run, failed, failure};
 use super::types::{ObjectResult, ObjectStatus};
 use crate::apply::types::ApplyMethod;
+use crate::apply::write::Preview;
 
 /// What the objects already done say to the next ones.
 struct Ledger<'a> {
@@ -163,22 +164,23 @@ impl Run<'_> {
         match rehearsal {
             Rehearsal::Failed(status) => (status.clone(), None),
             Rehearsal::Skipped(reason) => (ObjectStatus::skipped(reason.clone()), None),
-            Rehearsal::Ready { .. } | Rehearsal::NoPreview | Rehearsal::Deferred => {
-                self.send(item).await
-            }
+            Rehearsal::Ready { .. } | Rehearsal::Deferred => self.send(item, Preview::First).await,
+            Rehearsal::NoPreview => self.send(item, Preview::Unavailable).await,
         }
     }
 
     /// The write itself, audited: the server rehearses it once more (a deferred object is
-    /// validated here, now that what it needs exists), then it is applied, and the object read
-    /// just before says what it did.
-    async fn send(&self, item: &Item) -> (ObjectStatus, Option<ApplyMethod>) {
+    /// validated here, now that what it needs exists) unless `preview` says it cannot, then it is
+    /// applied, and the object read just before says what it did.
+    async fn send(&self, item: &Item, preview: Preview) -> (ObjectStatus, Option<ApplyMethod>) {
         let Ok(write) = &item.write else {
             return (failed("the object names no kind or name"), None);
         };
         let work = async {
             let before = write.live(self.reader).await?;
-            let (method, after) = write.send(self.mutation.writer(), self.reader).await?;
+            let (method, after) = write
+                .send(self.mutation.writer(), self.reader, preview)
+                .await?;
             Ok::<_, OxiError>((applied_change(before.as_ref(), &after), method))
         };
         match self.audited(item, work).await {

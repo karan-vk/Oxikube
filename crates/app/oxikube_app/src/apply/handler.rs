@@ -21,7 +21,7 @@ use serde_json::json;
 use super::manifest::Manifest;
 use super::mask::SecretMask;
 use super::types::ApplyMethod;
-use super::write::{ObjectWrite, version_of};
+use super::write::{ObjectWrite, Preview, version_of};
 use crate::actions::object_label;
 use crate::command_bus::{CommandOutput, CommandRegistry, HandlerContext, RegisterError};
 use crate::session::ClusterSessionManager;
@@ -92,7 +92,7 @@ async fn handle(
     if mutation.dry_run() {
         return rehearse(&write, writer, reader.as_ref()).await;
     }
-    let (method, object) = write.send(writer, reader.as_ref()).await?;
+    let (method, object) = write.send(writer, reader.as_ref(), Preview::First).await?;
     let label = object_label(&write.target);
     let message = match method {
         ApplyMethod::ServerSide => format!("Applied {label}"),

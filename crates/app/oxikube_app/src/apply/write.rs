@@ -3,9 +3,10 @@
 //! (each object of a plan), both through the guard's [`Mutation`](crate::guard::Mutation) writer.
 //!
 //! ```text
-//! rehearse:  SSA dry run ─unsupported─> replace / create dry run
-//! send:      SSA dry run ─ok─> SSA
-//!                 └─unsupported─> replace / create dry run ─> replace / create
+//! rehearse:            SSA dry run ─unsupported─> replace / create dry run
+//! send (First):        SSA dry run ─ok─> SSA
+//!                           └─unsupported─> replace / create dry run ─> replace / create
+//! send (Unavailable):  SSA ─unsupported─> replace / create
 //! ```
 //!
 //! Server-side apply runs under the field manager with `force` only when the user chose it. A
@@ -22,6 +23,15 @@ use serde_json::Value;
 
 use super::manifest::with_resource_version;
 use super::types::ApplyMethod;
+
+/// Whether the server rehearses a write before it is sent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Preview {
+    /// A server dry run first (admission, validation, ownership), then the write.
+    First,
+    /// The server cannot dry-run the kind (the rehearsal said so): the write is sent without one.
+    Unavailable,
+}
 
 /// One object to write, as a command describes it.
 pub(super) struct ObjectWrite {
@@ -80,15 +90,23 @@ impl ObjectWrite {
         }
     }
 
-    /// The write itself. The server rehearses it first (admission, validation, ownership); then
-    /// it is sent.
+    /// The write itself. With [`Preview::First`] the server rehearses it first (admission,
+    /// validation, ownership); with [`Preview::Unavailable`] it is sent straight away, the dry run
+    /// being one the server cannot do.
     pub(super) async fn send(
         &self,
         writer: &dyn ResourceWriter,
         reader: &dyn ResourceReader,
+        preview: Preview,
     ) -> OxiResult<(ApplyMethod, Resource)> {
-        match self.server_side(writer, true).await {
-            Ok(_) => Ok((
+        // `None`: the dry run passed and the apply is still to send; `Some`: already sent.
+        let server_side = match preview {
+            Preview::First => self.server_side(writer, true).await.map(|_| None),
+            Preview::Unavailable => self.server_side(writer, false).await.map(Some),
+        };
+        match server_side {
+            Ok(Some(object)) => Ok((ApplyMethod::ServerSide, object)),
+            Ok(None) => Ok((
                 ApplyMethod::ServerSide,
                 self.server_side(writer, false).await?,
             )),
@@ -101,7 +119,9 @@ impl ObjectWrite {
                     (None, true) => None,
                     (None, false) => version_of(self.live(reader).await?.as_ref()),
                 };
-                self.fallback(writer, version.as_deref(), true).await?;
+                if preview == Preview::First {
+                    self.fallback(writer, version.as_deref(), true).await?;
+                }
                 self.fallback(writer, version.as_deref(), false).await
             }
             Err(error) => Err(error),

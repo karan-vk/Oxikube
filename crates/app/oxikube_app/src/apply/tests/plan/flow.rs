@@ -9,7 +9,7 @@ use oxikube_ports::PatchKind;
 use oxikube_testkit::ResourceCall;
 
 use super::*;
-use crate::apply::MAX_PLAN_OBJECTS;
+use crate::apply::{ApplyMethod, MAX_PLAN_OBJECTS};
 use crate::command_bus::{DispatchContext, Outcome};
 
 #[test]
@@ -260,5 +260,56 @@ fn a_kind_the_server_cannot_dry_run_has_no_preview() {
         words(&report),
         ["no preview", "created"],
         "the plan goes on"
+    );
+}
+
+#[test]
+fn an_object_without_a_preview_is_applied_without_another_dry_run() {
+    let t = Applying::new(false);
+    let unsupported = || OxiError::unsupported("dry run is not supported");
+    // The rehearsal: neither dry run. The apply: no server-side apply either, so it is created.
+    t.port().script().patch.push_err(unsupported());
+    t.port().script().patch.push_err(unsupported());
+    t.port().script().create.push_err(unsupported());
+    let plan = t.plan(vec![configmap("a", None)]);
+    let report = t
+        .apply_plan(&plan, &ApplyOptions::default(), Answering::confirm())
+        .expect("applied");
+    assert_eq!(words(&report), ["created"], "applied without a preview");
+    assert_eq!(report.objects[0].method, Some(ApplyMethod::Create));
+    assert_eq!(
+        t.writes(),
+        [
+            ("patch", true),
+            ("create", true),
+            ("patch", false),
+            ("create", false)
+        ],
+        "the server is not asked for a dry run it cannot do"
+    );
+}
+
+#[test]
+fn an_object_without_a_preview_is_still_server_side_applied_when_the_server_takes_it() {
+    let t = Applying::new(false);
+    // Only the dry runs are unsupported.
+    t.port()
+        .script()
+        .patch
+        .push_err(OxiError::unsupported("dry run is not supported"));
+    t.port()
+        .script()
+        .create
+        .push_err(OxiError::unsupported("dry run is not supported"));
+    let plan = t.plan(vec![configmap("a", None)]);
+    let report = t
+        .apply_plan(&plan, &ApplyOptions::default(), Answering::confirm())
+        .expect("applied");
+    assert_eq!(words(&report), ["created"]);
+    assert_eq!(report.objects[0].method, Some(ApplyMethod::ServerSide));
+    assert_eq!(
+        t.writes(),
+        [("patch", true), ("create", true), ("patch", false)],
+        "one server-side apply, no dry run"
     );
 }
