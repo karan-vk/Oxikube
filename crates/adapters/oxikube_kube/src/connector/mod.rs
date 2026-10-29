@@ -386,13 +386,16 @@ impl ClusterConnectorPort for KubeConnector {
             Some((fs, dir)) => schemas.with_disk_cache(fs, dir),
             None => schemas,
         };
+        // One adapter for both exec ports: the terminal and the file transfer share its client.
+        let exec = Arc::new(KubeExec::new(client.clone()));
         let ports = ClusterPorts {
             resources: budgeted.clone(),
             discovery,
             describe,
             tables: budgeted,
             logs: Arc::new(KubeLogs::new(client.clone())),
-            exec: Arc::new(KubeExec::new(client.clone())),
+            exec: exec.clone(),
+            exec_stream: exec,
             port_forward: Arc::new(KubePortForward::new(client.clone())),
             metrics: Arc::new(KubeMetrics::new(client.clone(), request.cluster.clone())),
             service_proxy: Arc::new(KubeServiceProxy::new(client)),

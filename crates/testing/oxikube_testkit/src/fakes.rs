@@ -88,6 +88,7 @@ mod cluster;
 mod data;
 mod drain;
 mod events;
+mod exec_stream;
 mod forward_start;
 mod helm;
 mod infra;
@@ -121,6 +122,9 @@ pub use drain::{DrainCall, DrainRun, DrainScripts, FakeDrainPort};
 pub use events::{
     EventBuilder, EventsCall, EventsScripts, FakeEventFeed, FakeEventsMonitor, FakeEventsPort,
     event,
+};
+pub use exec_stream::{
+    ExecCapture, ExecScript, ExecStreamCall, ExecStreamScripts, FakeExecStreamPort,
 };
 pub use helm::{FakeHelmPort, HelmCall, HelmScripts};
 pub use infra::{
@@ -156,7 +160,6 @@ pub use storage::{
     StateCall, StateScripts,
 };
 pub use stream_io::{
-    ExecCapture, ExecScript, ExecStreamCall, ExecStreamScripts, FakeExecStreamPort,
     FakePortForwardPort, ForwardCapture, ForwardScript, PortForwardCall, PortForwardScripts,
 };
 pub use terminal::{

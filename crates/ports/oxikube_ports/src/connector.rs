@@ -34,8 +34,9 @@ use oxikube_domain::{ErrorKind, OxiError, OxiResult};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AccessReviewPort, DescribePort, DiscoveryPort, EventsPort, ExecPort, LogPort, MetricsPort,
-    PortForwardPort, ResourcePort, SchemaPort, ServiceProxyPort, TableFeedPort, WarningPort,
+    AccessReviewPort, DescribePort, DiscoveryPort, EventsPort, ExecPort, ExecStreamPort, LogPort,
+    MetricsPort, PortForwardPort, ResourcePort, SchemaPort, ServiceProxyPort, TableFeedPort,
+    WarningPort,
 };
 
 /// How interactive an exec credential plugin may be (a per-cluster setting, E06-S08).
@@ -158,6 +159,10 @@ pub struct ClusterPorts {
     pub logs: Arc<dyn LogPort>,
     /// Exec and attach.
     pub exec: Arc<dyn ExecPort>,
+    /// The same exec as raw streams, for file transfer ([`ExecTransferExt`](crate::ExecTransferExt),
+    /// E20-S06). The adapter hands out one object for both (`KubeExec` implements both ports).
+    /// Its upload writes into pods, so the app keeps it crate-private (non-negotiable 3).
+    pub exec_stream: Arc<dyn ExecStreamPort>,
     /// Port-forwarding.
     pub port_forward: Arc<dyn PortForwardPort>,
     /// `metrics.k8s.io`.

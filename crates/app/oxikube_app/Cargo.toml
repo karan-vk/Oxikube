@@ -36,6 +36,8 @@ similar.workspace = true
 x509-parser.workspace = true
 # `resource::Apply` (E10-S08) reads a manifest written in YAML (or JSON) as one object.
 serde-saphyr.workspace = true
+# Tar headers for pod file transfer (`transfer`, E20-S06): the safe unpack and the upload archive.
+tar.workspace = true
 thiserror.workspace = true
 # `tokio::sync::broadcast` (the session update stream) and one spawned task per connected session:
 # the forwarder of the adapter's kind events (`session::kinds`, E03-F544).

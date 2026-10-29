@@ -498,6 +498,18 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `node_usage` / `namespace_usage` over `MetricsPort`; an absence is `Usage::Unavailable("metrics unavailable: <reason>")`
   (never a zero), a resource metrics-server does not measure is `Usage::NotReported`. `ResourceStore::namespace_objects` reads
   one namespace's cached objects (the index, no scan). The polling service (E13-S03) will replace the panels' own usage poll.
+- `oxikube_app::transfer` (E20-S06) — pod file transfer over exec. The tar helpers live in the ports layer as
+  `oxikube_ports::ExecTransferExt`, written once over `ExecStreamPort` so the kube adapter (`KubeExec`) and
+  `FakeExecStreamPort` run the same code: `tar_download` (`tar -cf - -C <parent> <name>`, no TTY, stderr drained beside
+  stdout, under an `sh` script that kills `tar` when the held-open stdin ends, because the API server leaves an exec'd
+  process running after the connection closes), `tar_upload` (`tar -xmf - -C <dir>`, stdin closed at the end, exit status
+  mapped), `cat_download`; `TransferProgress` throttled to ten a second, a runtime-free `CancellationToken`, missing `tar`
+  as `Unsupported` (the 126/127 / `executable file not found` rule shared with the shell search, `exec::missing`).
+  `ClusterPorts::exec_stream` carries the port (the kube connector hands out one `KubeExec` for both exec ports);
+  `ClusterSession::exec_stream` is crate-private. `TransferService::download` adds the `cat` fallback for one file;
+  `TransferService::upload` takes the guard's `Mutation` (the only way the app writes into a container). `safe_unpack`
+  unpacks a downloaded archive through `FsPort` (absolute paths, `..` refused; links, devices never created);
+  `tar_file_stream` streams one local file as an archive. The Commands, MCP stubs and the file browser are E20-S07.
 - `oxikube_app::exec` (E09-S08) — `ExecService`: `open_shell(pod, container, &ShellOptions)` finds the shell with a quick
   non-interactive exec per entry of the chain (`terminal.exec_shells`, default `bash`, `sh`; exit 126/127 or `executable file
   not found` means missing, anything else stops the search), opens the first the container has over the session's `ExecPort`

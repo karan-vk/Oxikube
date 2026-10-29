@@ -16,9 +16,9 @@ use oxikube_ports::{
 use parking_lot::Mutex;
 
 use super::{
-    FakeDescribePort, FakeDiscoveryPort, FakeEventsPort, FakeExecPort, FakeLogPort,
-    FakeMetricsPort, FakePortForwardPort, FakeResourcePort, FakeSchemaPort, FakeServiceProxyPort,
-    FakeTableFeedPort, FakeWarningPort,
+    FakeDescribePort, FakeDiscoveryPort, FakeEventsPort, FakeExecPort, FakeExecStreamPort,
+    FakeLogPort, FakeMetricsPort, FakePortForwardPort, FakeResourcePort, FakeSchemaPort,
+    FakeServiceProxyPort, FakeTableFeedPort, FakeWarningPort,
 };
 use crate::script::{CallLog, Script};
 
@@ -261,6 +261,8 @@ pub struct FakeClusterPorts {
     pub logs: Arc<FakeLogPort>,
     /// `ExecPort`.
     pub exec: Arc<FakeExecPort>,
+    /// `ExecStreamPort` (the tar transfer helpers run over it).
+    pub exec_stream: Arc<FakeExecStreamPort>,
     /// `PortForwardPort`.
     pub port_forward: Arc<FakePortForwardPort>,
     /// `MetricsPort`.
@@ -288,6 +290,7 @@ impl FakeClusterPorts {
             tables: self.tables.clone(),
             logs: self.logs.clone(),
             exec: self.exec.clone(),
+            exec_stream: self.exec_stream.clone(),
             port_forward: self.port_forward.clone(),
             metrics: self.metrics.clone(),
             service_proxy: self.service_proxy.clone(),
