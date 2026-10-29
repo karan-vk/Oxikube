@@ -18,8 +18,8 @@ use crate::safety::{MutationFlags, MutationVerb, Risk, classify};
 /// | `Node`, `CustomResourceDefinition`, or any object with [`Propagation::Foreground`] (a cascading delete) | [`Risk::High`] | type the name |
 /// | anything else | [`Risk::Medium`] | simple confirm |
 ///
-/// This is [`classify`] for [`MutationVerb::Delete`]. The kind is matched on group and kind only (not version), so `v1` and any future version of
-/// the core kinds match, and a custom resource that happens to be named `Node` in another group
+/// This is [`classify`] for [`MutationVerb::Delete`]. The kind is matched on group and kind only
+/// (not version), so `v1` and any future version of the core kinds match, and a custom resource that happens to be named `Node` in another group
 /// does not.
 pub fn delete_risk(gvk: &Gvk, propagation: Propagation) -> Risk {
     // A delete is classified by kind alone, so the scope passed here never changes the result.
