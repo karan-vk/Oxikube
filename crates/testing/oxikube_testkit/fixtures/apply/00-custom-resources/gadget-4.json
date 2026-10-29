@@ -1,0 +1,15 @@
+{
+  "apiVersion": "fxrun.apply.test.oxikube.dev/v1",
+  "kind": "Gadget",
+  "metadata": {
+    "name": "gadget-4",
+    "namespace": "fxrun-app",
+    "labels": {
+      "app.kubernetes.io/part-of": "apply-fixture"
+    }
+  },
+  "spec": {
+    "size": 4,
+    "tier": "bronze"
+  }
+}

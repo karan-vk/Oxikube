@@ -1,0 +1,30 @@
+# Apply fixture (E20-S10): dummy values only. `fxrun` is replaced by a per-run id.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tuning-1
+  namespace: fxrun-data
+  labels:
+    app.kubernetes.io/part-of: apply-fixture
+data:
+  pool: "4"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tuning-2
+  namespace: fxrun-data
+  labels:
+    app.kubernetes.io/part-of: apply-fixture
+data:
+  pool: "8"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tuning-3
+  namespace: fxrun-data
+  labels:
+    app.kubernetes.io/part-of: apply-fixture
+data:
+  pool: "12"

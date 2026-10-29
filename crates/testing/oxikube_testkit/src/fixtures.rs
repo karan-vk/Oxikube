@@ -12,6 +12,7 @@
 //! `cargo xtask kind-up` and are not part of this set. Secret and Helm fixtures hold
 //! obvious dummy data only.
 
+pub mod apply;
 pub mod rbac;
 
 use std::fmt;

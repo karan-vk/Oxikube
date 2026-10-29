@@ -1,0 +1,26 @@
+# Apply fixture (E20-S10): dummy values only. `fxrun` is replaced by a per-run id.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: fxrun-node-reader
+  labels:
+    app.kubernetes.io/part-of: apply-fixture
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: fxrun-node-reader
+  labels:
+    app.kubernetes.io/part-of: apply-fixture
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: fxrun-node-reader
+subjects:
+  - kind: ServiceAccount
+    name: runner-1
+    namespace: fxrun-app

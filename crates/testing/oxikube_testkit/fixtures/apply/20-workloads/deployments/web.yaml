@@ -1,0 +1,75 @@
+# Apply fixture (E20-S10): dummy values only. `fxrun` is replaced by a per-run id.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-1
+  namespace: fxrun-app
+  labels:
+    app.kubernetes.io/part-of: apply-fixture
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: web-1
+  template:
+    metadata:
+      labels:
+        app: web-1
+    spec:
+      serviceAccountName: runner-1
+      containers:
+        - name: web
+          image: nginx:1.27
+          envFrom:
+            - configMapRef:
+                name: settings-1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-2
+  namespace: fxrun-app
+  labels:
+    app.kubernetes.io/part-of: apply-fixture
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: web-2
+  template:
+    metadata:
+      labels:
+        app: web-2
+    spec:
+      serviceAccountName: runner-1
+      containers:
+        - name: web
+          image: nginx:1.27
+          envFrom:
+            - configMapRef:
+                name: settings-1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-3
+  namespace: fxrun-app
+  labels:
+    app.kubernetes.io/part-of: apply-fixture
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: web-3
+  template:
+    metadata:
+      labels:
+        app: web-3
+    spec:
+      serviceAccountName: runner-1
+      containers:
+        - name: web
+          image: nginx:1.27
+          envFrom:
+            - configMapRef:
+                name: settings-1

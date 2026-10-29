@@ -1,0 +1,14 @@
+# Apply fixture (E20-S10): dummy values only. `fxrun` is replaced by a per-run id.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fxrun-app
+  labels:
+    app.kubernetes.io/part-of: apply-fixture
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fxrun-data
+  labels:
+    app.kubernetes.io/part-of: apply-fixture

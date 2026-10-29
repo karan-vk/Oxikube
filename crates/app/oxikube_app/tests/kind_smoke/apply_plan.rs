@@ -53,7 +53,7 @@ impl Drop for Cleanup {
 }
 
 /// Confirms whatever it is asked.
-struct Yes;
+pub(crate) struct Yes;
 
 #[async_trait]
 impl ConfirmationProvider for Yes {
@@ -65,15 +65,15 @@ impl ConfirmationProvider for Yes {
     }
 }
 
-struct Rig {
-    service: ApplyService,
-    manager: ClusterSessionManager,
-    state: Arc<FakeStatePort>,
-    target: PlanTarget,
+pub(crate) struct Rig {
+    pub(crate) service: ApplyService,
+    pub(crate) manager: ClusterSessionManager,
+    pub(crate) state: Arc<FakeStatePort>,
+    pub(crate) target: PlanTarget,
 }
 
 impl Rig {
-    async fn new(kind: &Kind) -> Self {
+    pub(crate) async fn new(kind: &Kind) -> Self {
         let entry = catalog_entry(&kind.context);
         let connector = KubeConnector::new(
             kind.kubeconfig.clone(),

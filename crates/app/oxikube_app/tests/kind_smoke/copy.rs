@@ -82,18 +82,36 @@ fn get(context: &str, namespace: &str, what: &str) -> Value {
     serde_json::from_str(&text).expect("kubectl prints JSON")
 }
 
-struct Rig {
-    service: CopyService,
-    manager: ClusterSessionManager,
-    state: Arc<FakeStatePort>,
-    cluster: oxikube_domain::ids::ClusterId,
+pub(crate) struct Rig {
+    pub(crate) service: CopyService,
+    pub(crate) manager: ClusterSessionManager,
+    pub(crate) state: Arc<FakeStatePort>,
+    pub(crate) cluster: oxikube_domain::ids::ClusterId,
+    /// The second cluster of [`Rig::across`]; the same one as `cluster` for [`Rig::new`].
+    pub(crate) other: oxikube_domain::ids::ClusterId,
 }
 
 impl Rig {
-    async fn new(kind: &Kind) -> Self {
-        let entry = catalog_entry(&kind.context);
+    pub(crate) async fn new(kind: &Kind) -> Self {
+        Self::build(kind.kubeconfig.clone(), &[kind]).await
+    }
+
+    /// Two real clusters in one manager (E20-S10's nightly cross-cluster copy): `cluster` is `a`,
+    /// `other` is `b`.
+    pub(crate) async fn across(a: &Kind, b: &Kind) -> Self {
+        let mut kubeconfig = a.kubeconfig.clone();
+        kubeconfig.clusters.extend(b.kubeconfig.clusters.clone());
+        kubeconfig
+            .auth_infos
+            .extend(b.kubeconfig.auth_infos.clone());
+        kubeconfig.contexts.extend(b.kubeconfig.contexts.clone());
+        Self::build(kubeconfig, &[a, b]).await
+    }
+
+    async fn build(kubeconfig: kube::config::Kubeconfig, kinds: &[&Kind]) -> Self {
+        let entries: Vec<_> = kinds.iter().map(|k| catalog_entry(&k.context)).collect();
         let connector = KubeConnector::new(
-            kind.kubeconfig.clone(),
+            kubeconfig,
             PoolConfig::default(),
             ConnectorConfig::default(),
         );
@@ -113,17 +131,20 @@ impl Rig {
             registry,
             MutationGuard::new(manager.clone(), state.clone(), Arc::new(TokioClock)),
         );
-        manager.open(&entry, SessionOptions::default());
-        manager.connect(&entry.cluster).await.expect("connect");
+        for entry in &entries {
+            manager.open(entry, SessionOptions::default());
+            manager.connect(&entry.cluster).await.expect("connect");
+        }
         Self {
             service: CopyService::new(bus, manager.clone(), "tester"),
             manager,
             state,
-            cluster: entry.cluster,
+            cluster: entries[0].cluster.clone(),
+            other: entries[entries.len() - 1].cluster.clone(),
         }
     }
 
-    fn request(&self, gvk: Gvk, from: &str, to: &str, name: &str) -> CopyRequest {
+    pub(crate) fn request(&self, gvk: Gvk, from: &str, to: &str, name: &str) -> CopyRequest {
         let source = ResourceRef::namespaced(self.cluster.clone(), gvk, from, name);
         CopyRequest::to(source, self.cluster.clone(), Some(to))
     }
