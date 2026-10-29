@@ -66,8 +66,9 @@ impl ApplyPlan {
             .collect();
         // `sort_by_key` is stable.
         items.sort_by_key(|item| item.kind_rank);
+        let gvks: Vec<Gvk> = items.iter().map(|item| gvk_of(&item.doc)).collect();
         let edges: Vec<Vec<usize>> = (0..items.len())
-            .map(|index| dependencies(&items, index))
+            .map(|index| dependencies(&items, &gvks, index))
             .collect();
         for (item, depends_on) in items.iter_mut().zip(edges) {
             item.depends_on = depends_on;
@@ -142,20 +143,19 @@ fn crd_scope(doc: &ManifestDoc) -> Option<(String, String, Scope)> {
 }
 
 /// The earlier items that `items[index]` needs.
-fn dependencies(items: &[PlanItem], index: usize) -> Vec<usize> {
-    let me = &items[index].doc;
-    let gvk = gvk_of(me);
-    let namespace = namespace_of(me);
+fn dependencies(items: &[PlanItem], gvks: &[Gvk], index: usize) -> Vec<usize> {
+    let gvk = &gvks[index];
+    let namespace = namespace_of(&items[index].doc);
     (0..index)
         .filter(|&earlier| {
             let other = &items[earlier].doc;
-            let other_gvk = gvk_of(other);
-            if is_namespace(&other_gvk) {
+            let other_gvk = &gvks[earlier];
+            if is_namespace(other_gvk) {
                 // A Namespace needs no namespace; a cluster-scoped object that names one ignores it
                 // on the server, but waiting for it is harmless.
-                return !is_namespace(&gvk) && namespace.is_some() && namespace == name_of(other);
+                return !is_namespace(gvk) && namespace.is_some() && namespace == name_of(other);
             }
-            is_crd(&other_gvk) && defines(other, &gvk)
+            is_crd(other_gvk) && defines(other, gvk)
         })
         .collect()
 }
