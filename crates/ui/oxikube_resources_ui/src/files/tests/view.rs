@@ -286,3 +286,41 @@ fn find_fallback_listings_say_names_only(cx: &mut TestAppContext) {
     assert_eq!(fx.names(), ["data", "index.html"]);
     assert_eq!(fx.read(|v, _| v.state().clone()), LoadState::Ready);
 }
+
+#[gpui::test]
+fn an_upload_to_another_directory_drops_its_cached_listing(cx: &mut TestAppContext) {
+    let mut fx = Fx::new(cx);
+    fx.prepare(&["app"], &listing());
+    let view = fx.open_at(None);
+    let execs = |fx: &Fx| fx.ports().exec_stream.recorded_calls().len();
+    // Into /etc, so the root's listing is cached and the view is elsewhere.
+    fx.script(ExecScript::new().stdout(ls_output(&[('-', "passwd", 100)])));
+    let row = fx
+        .read(|v, cx| v.model(cx).rows().position(|r| r.entry.name == "etc"))
+        .unwrap();
+    fx.vcx
+        .update(|_, cx| view.update(cx, |v, cx| v.open_row(row, cx)));
+    fx.settle();
+    let container: std::sync::Arc<str> = "app".into();
+    let before = execs(&fx);
+    // An upload to / finished while /etc is on show: no reload of /etc ...
+    fx.vcx.update(|_, cx| {
+        view.update(cx, |v, cx| v.uploaded_to(&container, "/", cx));
+    });
+    fx.settle();
+    assert_eq!(execs(&fx), before);
+    assert_eq!(fx.read(|v, _| v.path().to_owned()), "/etc");
+    // ... but going back to / lists it again rather than serving the stale cache.
+    fx.script(ExecScript::new().stdout(ls_output(&[('-', "uploaded.txt", 1)])));
+    fx.vcx.update(|_, cx| view.update(cx, |v, cx| v.go_up(cx)));
+    fx.settle();
+    assert_eq!(execs(&fx), before + 1);
+    assert_eq!(fx.names(), ["uploaded.txt"]);
+}
+
+#[test]
+fn the_ticker_runs_while_a_batch_is_in_flight_even_with_an_empty_board() {
+    use crate::files::view::progress::keep_ticking;
+    assert!(keep_ticking(1, &[]));
+    assert!(!keep_ticking(0, &[]));
+}

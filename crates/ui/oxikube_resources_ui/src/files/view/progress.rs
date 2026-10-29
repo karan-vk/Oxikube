@@ -71,7 +71,7 @@ impl FilesView {
             self.update_progress_toasts(&transfers, &board, cx);
             notify_coalesced(cx);
         }
-        transfers.iter().any(|info| !info.state.is_finished())
+        keep_ticking(self.jobs, &transfers)
     }
 
     fn update_progress_toasts(
@@ -112,6 +112,11 @@ impl FilesView {
         self.toasted.clear();
         cx.notify();
     }
+}
+
+/// Whether the ticker goes on: a batch is still in flight, or a transfer of the pod runs.
+pub(crate) fn keep_ticking(jobs: usize, transfers: &[TransferInfo]) -> bool {
+    jobs > 0 || transfers.iter().any(|info| !info.state.is_finished())
 }
 
 /// A number naming the transfer in toast keys.

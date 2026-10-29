@@ -101,12 +101,16 @@ impl FilesView {
         };
         let runner = self.deps.runner.clone();
         let work = spawn_kube(cx, async move { runner.download(command).await });
+        self.jobs += 1;
         self.watch_transfers(cx);
         let name = entry.name;
         let task = cx.spawn(async move |this, cx| {
             let result = work.await.unwrap_or_else(|error| Err(error.into()));
-            this.update(cx, |view, cx| view.transfer_finished(&name, result, cx))
-                .ok();
+            this.update(cx, |view, cx| {
+                view.jobs = view.jobs.saturating_sub(1);
+                view.transfer_finished(&name, result, cx);
+            })
+            .ok();
         });
         self.tasks.push(task);
     }

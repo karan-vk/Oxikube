@@ -153,6 +153,8 @@ impl FilesView {
             self.pod.clone(),
             self.path.clone(),
         );
+        let dest_container = container.clone();
+        let dest_path = dest.clone();
         let work = spawn_kube(cx, async move {
             let mut done = Vec::with_capacity(plans.len());
             for plan in plans {
@@ -163,19 +165,22 @@ impl FilesView {
             }
             done
         });
+        self.jobs += 1;
         self.watch_transfers(cx);
         let task = cx.spawn(async move |this, cx| {
-            let Ok(done) = work.await else {
-                return;
-            };
+            let done = work.await;
             this.update(cx, |view, cx| {
+                view.jobs = view.jobs.saturating_sub(1);
+                let Ok(done) = done else {
+                    return;
+                };
                 let uploaded = done.iter().any(|(_, result)| result.is_ok());
                 for (name, result) in done {
                     view.transfer_finished(&name, result, cx);
                 }
                 // The directory has new files in it.
                 if uploaded {
-                    view.refresh(cx);
+                    view.uploaded_to(&dest_container, &dest_path, cx);
                 }
             })
             .ok();

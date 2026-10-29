@@ -23,7 +23,7 @@ mod delegate;
 mod download;
 mod load;
 mod panel;
-mod progress;
+pub(crate) mod progress;
 mod render;
 mod upload;
 
@@ -92,6 +92,9 @@ pub struct FilesView {
     pub(crate) tasks: Vec<Task<()>>,
     /// The progress ticker runs.
     pub(crate) ticking: bool,
+    /// Transfer batches started but not finished: the ticker runs for them even before a
+    /// transfer shows on the board (the guard and the exec setup come first).
+    pub(crate) jobs: usize,
     /// The board's version at the last tick.
     pub(crate) seen_version: u64,
     /// The transfers whose progress toast is on screen.
@@ -144,6 +147,7 @@ impl FilesView {
             load_task: None,
             tasks: Vec::new(),
             ticking: false,
+            jobs: 0,
             seen_version: 0,
             toasted: HashSet::new(),
             _subscriptions: Vec::new(),

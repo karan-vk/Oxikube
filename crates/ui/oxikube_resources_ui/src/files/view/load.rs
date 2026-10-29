@@ -184,6 +184,15 @@ impl FilesView {
         self.load(self.path.clone(), true, cx);
     }
 
+    /// Brings the listing of `path` in `container` up to date after files were added to it: the
+    /// cached listing is dropped, and the directory is read again when it is the one on show.
+    pub(crate) fn uploaded_to(&mut self, container: &Arc<str>, path: &str, cx: &mut Context<Self>) {
+        self.cache.remove(&(container.clone(), path.to_owned()));
+        if self.container.as_ref() == Some(container) && self.path == path {
+            self.refresh(cx);
+        }
+    }
+
     /// Shows or hides dot files.
     pub fn toggle_hidden(&mut self, cx: &mut Context<Self>) {
         let show = !self.table.delegate(cx).model.show_hidden();
