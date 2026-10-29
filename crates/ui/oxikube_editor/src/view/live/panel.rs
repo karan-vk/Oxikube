@@ -183,6 +183,17 @@ fn diff_rows(
     range: Range<usize>,
     cx: &mut Context<ManifestEditor>,
 ) -> Vec<AnyElement> {
+    layout_rows(diff, layout, range, cx)
+}
+
+/// The rows `range` of `diff` in `layout`, as the panel draws them (the resource diff tab,
+/// E20-S09, draws its diff with them); nothing else is built.
+pub fn layout_rows(
+    diff: &ManifestDiff,
+    layout: DiffLayout,
+    range: Range<usize>,
+    cx: &gpui::App,
+) -> Vec<AnyElement> {
     let colors = Colors::of(cx);
     range
         .map(|ix| match layout {

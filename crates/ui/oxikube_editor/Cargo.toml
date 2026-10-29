@@ -81,6 +81,15 @@ path = "tests/diff_screenshot.rs"
 harness = false
 required-features = ["screenshot"]
 
+# The cross-cluster resource diff (E20-S09): the summary above the side-by-side line diff, a
+# Secret without values, a missing side.
+# `cargo test -p oxikube_editor --features screenshot --test resource_diff_screenshot`
+[[test]]
+name = "resource_diff_screenshot"
+path = "tests/resource_diff_screenshot.rs"
+harness = false
+required-features = ["screenshot"]
+
 # Create from template and multi-document apply (E10-S09): the "Create resource" picker and the
 # combined preview of several documents.
 # `cargo test -p oxikube_editor --features screenshot --test create_screenshot`

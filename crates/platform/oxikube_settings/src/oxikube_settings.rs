@@ -21,7 +21,11 @@
 //! - [`audit`]: the `audit` setting, how many days the audit log keeps its records (E19-S08).
 //! - [`cluster`]: the per-cluster settings (`clusters.<id>`: name, colour, read-only, ...), E06-S08.
 //! - [`cloud`]: the `cloud` setting, providers, CLI paths, scan lists, cache TTL, parallelism (E18-S07).
+<<<<<<< HEAD
 //! - [`kustomize`]: the `kustomize` setting, the binary that builds overlays (E20-S04).
+=======
+//! - [`diff`]: the `diff` setting, the paths the cross-cluster resource diff ignores (E20-S09).
+>>>>>>> 1197fc7a (feat(app): E20-S09 cross-cluster and cross-namespace resource diff)
 //! - [`helm`]: the `helm` setting, binary path, server-side apply, default repositories (E16-S11).
 //! - [`kubeconfig`]: the `kubeconfig.sources` setting, the kubeconfig files and folders to read (E06-S05).
 //! - [`metrics`]: the `metrics` setting, which extended resources count as GPUs (E13-S02).
@@ -43,6 +47,7 @@ pub mod audit;
 pub mod cloud;
 pub mod cluster;
 pub mod diagnostics;
+pub mod diff;
 pub mod global;
 pub mod helm;
 pub mod json_edit;
@@ -64,6 +69,7 @@ pub use audit::{AuditSettings, AuditSettingsContent};
 pub use cloud::{CloudSettings, CloudSettingsContent};
 pub use cluster::{ClusterSettings, ClusterSettingsContent};
 pub use diagnostics::SettingsDiagnostic;
+pub use diff::{DiffSettings, DiffSettingsContent};
 pub use global::{init, init_with_dir, update_user_settings};
 pub use helm::{HelmRepoContent, HelmSettings, HelmSettingsContent};
 pub use kubeconfig::{KubeconfigSettings, KubeconfigSettingsContent};

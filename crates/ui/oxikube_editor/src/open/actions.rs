@@ -15,6 +15,9 @@ pub const VIEW_ORDER: u16 = 15;
 /// Where "Edit" sits: after "Describe" (20), before the per-kind actions.
 pub const EDIT_ORDER: u16 = 30;
 
+/// Where "Diff With…" sits: right after "Edit".
+pub const DIFF_ORDER: u16 = 31;
+
 /// The row actions this module adds, for every kind, one object at a time.
 pub fn editor_row_actions() -> Vec<RowActionSpec> {
     vec![
@@ -30,5 +33,17 @@ pub fn editor_row_actions() -> Vec<RowActionSpec> {
         })
         .label("Edit")
         .order(EDIT_ORDER),
+        // E20-S09: compare with the same kind in another cluster or namespace. It reads two
+        // objects and writes nothing; without a second object the picker asks for it.
+        RowActionSpec::new(CommandId::RESOURCE_DIFF_WITH, |target| {
+            Command::ResourceDiffWith {
+                target: target.clone(),
+                other: None,
+                include_status: false,
+                compare_identity: false,
+            }
+        })
+        .label("Diff With…")
+        .order(DIFF_ORDER),
     ]
 }

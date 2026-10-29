@@ -213,6 +213,7 @@ Two rules keep a scenario measuring what the app does (E07-F509, see
 | `events-stream` | measured (E14-S03, see [Events view](#events-view-10-000-events-streaming-e14-s03)) | the events view over a full 10 000-event buffer (the app's `EventService` on `FakeEventsPort`) in the app's window root: `frame_ms` / `draw_ms` (120 frames, 2 events arriving each, the live tail putting them on top), `scroll_*` (a page scrolled a frame while they arrive; the tail pauses itself), `filter_*` (a key typed into the text filter every frame: a new subscription filter whose rows are read off the UI thread), `faults_*` (the faults toggle every frame), `burst_*` (500 events in one frame, 20 frames), `rss_mib`; fails when a frame absorbed more than one coalesced notify, the tail put nothing on top, or the bursts did not reach the rows |
 | `notifications-burst` | measured (E14-S05, see [Notification centre](#notification-centre-a-burst-of-1-000-warnings-e14-s05)) | 1 000 Warning events about distinct pods (50 reasons) reaching the notification centre over 120 frames through the shipped path (`FakeEventsPort` → the cluster's `EventService` feed → the centre's pump, tracker and rules), after a 200-warning backlog that must not notify, the panel open, in the app's window root: `frame_ms` / `draw_ms` (the burst: news detection, rules, grouping, dedupe, rate limit, the coalesced redraw of the panel and badge, the toasts) and `idle_frame_ms` / `idle_draw_ms` (the full panel with nothing new), `rss_mib`; fails when more than `MAX_TOASTS` toasts plus the summary are ever shown or waiting, when a frame absorbs more than one coalesced notify or none reaches the window, when the status-bar count is behind the centre, or when a warning of the burst is lost |
 
+| `resource-diff` | measured (E20-S09, see [Resource diff](#resource-diff-a-1-mb-configmap-e20-s09)) | the cross-cluster diff tab over a 1 MB ConfigMap (64 files of about 200 lines): `compute_ms` (normalise both sides, the changed-path summary, both written as YAML and the line diff: what the handler does off the UI thread, with 8 files differing by a line) and `compute_worst_ms` (every line differs: the line diff's 500 ms timeout case), `frame_ms` / `draw_ms` (120 repaints of the tab), `scroll_frame_ms` / `scroll_draw_ms` (120 frames scrolling the every-line-different diff of 12 800 side-by-side rows, 200 rows a frame), `rss_mib` / `peak_rss_mib` |
 A scenario whose view is not built yet writes `status: "unavailable"` and a specific `reason` into the JSON report, prints `UNAVAILABLE: <reason>` with the enabling stories, and exits 0; every scenario is scripted today (`editor-5mb` was the last, E10-S11). The scripted path and the sample schema are covered by a `#[gpui::test]` that drives a fake feed through the same driver (`oxikube_runtime::perf::harness`).
 
 ### Baseline and the nightly gate
@@ -1731,6 +1732,24 @@ The pulses page stays open with live updates: p95 frame at most 8 ms, idle CPU u
   (all 16 tiles sampled on every frame) p50 1.1, p95 1.8; rss 49 MiB; 0 dropped frames.
 - Not measured here: the 10 000-pod churn fixture on a kind cluster (it needs the shared cluster's 10 000 pods; the page reads
   tallies, so churn costs it nothing beyond what the pods table's feed already costs).
+
+## Resource diff: a 1 MB ConfigMap (E20-S09)
+
+Comparing two large objects must not stall the editor: normalising and diffing run off the UI thread, and the tab builds
+only the rows on screen.
+
+- **Costs.** The handler (`resource::DiffWith`, on the Kubernetes runtime) reads both objects side by side, normalises each
+  in one pass (a clone, the server-owned fields and the ignore list removed, keys sorted), walks the two once for the
+  changed-path summary (at most 1 000 paths listed), writes both as YAML with the editor's writer and runs `similar` on the
+  lines (`ManifestDiff::between`, 500 ms timeout, then a coarser diff). The tab holds the finished `DiffData`; the summary and
+  the line diff are `uniform_list`s, so a repaint and a scroll cost the rows on screen whatever the object's size. Nothing is
+  recomputed by a repaint or a scroll; a switch (status, name and namespace) re-reads and recomputes.
+- **Headless** (`oxikube --perf-scenario resource-diff`, **debug build**, Apple silicon, one run; release-fast numbers are
+  seeded by the nightly run like the other scenarios, a debug build runs the same scripts about 8x slower: the `pulses`
+  repaint is p50 6.3 ms in the same build against 0.8 ms in release-fast): 1 026 KiB ConfigMap, 8 hunks: `compute_ms` p50
+  150 (five runs, the first 321), every line different (12 867 side rows) `compute_worst_ms` 167; repaint `frame_ms` p50 13.8
+  / p95 32.0; scrolling 200 rows a frame through the 12 867 rows `scroll_frame_ms` p50 16.5 / p95 60 (the one 537 ms frame is
+  the first jump into an unscrolled list); rss 100 MiB.
 
 ## Events view: 10 000 events streaming (E14-S03)
 

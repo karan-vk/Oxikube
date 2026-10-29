@@ -6,7 +6,8 @@
 
 use std::hash::{DefaultHasher, Hash as _, Hasher as _};
 
-use serde_json::{Map, Value};
+use oxikube_app::diff::remove_path;
+use serde_json::Value;
 
 /// The fields the diff ignores, as paths from the object's root: what the server writes and a
 /// manifest never sets (`status`, the bookkeeping under `metadata`). The list is the app's, so the
@@ -18,16 +19,14 @@ pub use oxikube_app::apply::SERVER_OWNED_FIELDS as IGNORED_FIELDS;
 pub const SECRET_PLACEHOLDER: &str = "(hidden)";
 
 /// The annotation `kubectl apply` writes: the whole applied manifest, a Secret's data included.
-pub(super) const LAST_APPLIED: &str = "kubectl.kubernetes.io/last-applied-configuration";
-
-/// The fields of a Secret that hold values.
-pub(super) const SECRET_FIELDS: [&str; 2] = ["data", "stringData"];
+pub(super) use oxikube_app::diff::{LAST_APPLIED, SECRET_FIELDS};
 
 /// Whether `value` is a core `Secret` (`apiVersion: v1`, `kind: Secret`).
-pub fn is_secret(value: &Value) -> bool {
-    value.get("apiVersion").and_then(Value::as_str) == Some("v1")
-        && value.get("kind").and_then(Value::as_str) == Some("Secret")
-}
+pub use oxikube_app::diff::is_secret;
+
+/// `value` with the keys of every object sorted (the cross-cluster diff, `oxikube_app::diff`,
+/// shares it, so both diffs order keys alike).
+pub use oxikube_app::diff::sort_keys;
 
 /// `value` as the diff compares it: [`IGNORED_FIELDS`] removed and object keys sorted at every
 /// level (so key order never shows as a change). For a Secret, each `data` / `stringData` value
@@ -46,22 +45,6 @@ pub fn normalize(value: &Value, reference: Option<&Value>) -> Value {
         mask_secret(&mut out, reference);
     }
     sort_keys(out)
-}
-
-fn remove_path(value: &mut Value, path: &[&str]) {
-    let Some((last, parents)) = path.split_last() else {
-        return;
-    };
-    let mut at = value;
-    for key in parents {
-        match at.get_mut(*key) {
-            Some(next) => at = next,
-            None => return,
-        }
-    }
-    if let Some(map) = at.as_object_mut() {
-        map.shift_remove(*last);
-    }
 }
 
 fn mask_secret(value: &mut Value, reference: Option<&Value>) {
@@ -101,25 +84,6 @@ fn fingerprint(value: &Value) -> String {
     let mut hasher = DefaultHasher::new();
     value.to_string().hash(&mut hasher);
     format!("(value #{:08x})", hasher.finish() as u32)
-}
-
-/// `value` with the keys of every object sorted (the workspace's `serde_json` keeps insertion
-/// order, so sorting is explicit).
-pub fn sort_keys(value: Value) -> Value {
-    match value {
-        Value::Object(map) => {
-            let mut entries: Vec<(String, Value)> = map.into_iter().collect();
-            entries.sort_by(|a, b| a.0.cmp(&b.0));
-            Value::Object(
-                entries
-                    .into_iter()
-                    .map(|(key, value)| (key, sort_keys(value)))
-                    .collect::<Map<String, Value>>(),
-            )
-        }
-        Value::Array(items) => Value::Array(items.into_iter().map(sort_keys).collect()),
-        other => other,
-    }
 }
 
 #[cfg(test)]

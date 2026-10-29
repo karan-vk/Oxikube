@@ -25,7 +25,7 @@ use std::sync::Arc;
 
 use futures::channel::mpsc;
 use gpui::{App, Entity, WeakEntity, Window};
-use oxikube_app::{ApplyService, ClusterSessionManager, TemplateService};
+use oxikube_app::{ApplyService, ClusterCatalog, ClusterSessionManager, TemplateService};
 use oxikube_editor::view::{ClusterEditorHost, EditorRequest, EditorViews, EditorViewsDeps};
 use oxikube_ports::FsPort;
 use oxikube_workspace::{ClusterTabs, CommandDispatcher, Workspace};
@@ -38,6 +38,7 @@ pub fn start_views(
     sessions: ClusterSessionManager,
     apply: ApplyService,
     templates: Option<TemplateService>,
+    catalog: ClusterCatalog,
     tabs: WeakEntity<ClusterTabs>,
     workspace: &Entity<Workspace>,
     dispatcher: Rc<dyn CommandDispatcher>,
@@ -46,7 +47,9 @@ pub fn start_views(
     cx: &mut App,
 ) -> Entity<EditorViews> {
     oxikube_editor::view::install(dispatcher.clone(), cx);
-    let mut host = ClusterEditorHost::new(tabs, sessions).with_apply(apply);
+    let mut host = ClusterEditorHost::new(tabs, sessions)
+        .with_apply(apply)
+        .with_catalog(catalog);
     if let Some(templates) = templates {
         host = host.with_templates(templates);
     }

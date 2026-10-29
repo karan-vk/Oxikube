@@ -332,6 +332,9 @@
         "describe": {
           "$ref": "#/$defs/DescribeSettingsContent"
         },
+        "diff": {
+          "$ref": "#/$defs/DiffSettingsContent"
+        },
         "display_name": {
           "description": "A name to show instead of the kubeconfig context name. Cluster ids are opaque hashes, so\nkeep this next to the id to recognise the entry.",
           "type": [
@@ -685,6 +688,23 @@
           "description": "Path of the `kubectl` binary; unset looks `kubectl` up on `PATH`.",
           "type": [
             "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "DiffSettingsContent": {
+      "additionalProperties": false,
+      "description": "What one settings layer says about the resource diff.",
+      "properties": {
+        "ignore_paths": {
+          "description": "Paths the diff leaves out, as JSON pointers with `*` wildcards inside a segment\n(`/metadata/annotations/kubectl.kubernetes.io~1*`). Replaces the default list.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
             "null"
           ]
         }
@@ -2013,6 +2033,9 @@
     },
     "describe": {
       "$ref": "#/$defs/DescribeSettingsContent"
+    },
+    "diff": {
+      "$ref": "#/$defs/DiffSettingsContent"
     },
     "display_name": {
       "description": "A name to show instead of the kubeconfig context name. Cluster ids are opaque hashes, so\nkeep this next to the id to recognise the entry.",

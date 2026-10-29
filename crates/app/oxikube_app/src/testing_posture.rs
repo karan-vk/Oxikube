@@ -560,6 +560,12 @@ fn build_sample(command: CommandId, name: &str, missing: impl FnOnce(&str) -> Co
             port: Some(80),
         },
         "resource::ShowUsedBy" => Command::ResourceShowUsedBy { target: target() },
+        "resource::DiffWith" => Command::ResourceDiffWith {
+            target: target(),
+            other: Some(target()),
+            include_status: false,
+            compare_identity: false,
+        },
         "service::ShowPods" => Command::ServiceShowPods {
             target: ResourceRef::namespaced(
                 cluster,

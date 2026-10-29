@@ -1,6 +1,7 @@
-//! "Edit" and "View YAML in Editor" in the header of a detail (E10-S06): the entry points from
-//! the drawer (and from a pinned detail tab) to the manifest editor. Each sends its command
-//! (`resource::Edit`, `resource::ViewYamlInEditor`), like the row actions and the palette do; the
+//! "Edit", "View YAML in Editor" and "Diff with..." in the header of a detail (E10-S06, E20-S09):
+//! the entry points from the drawer (and from a pinned detail tab) to the manifest editor and the
+//! cross-cluster diff. Each sends its command (`resource::Edit`, `resource::ViewYamlInEditor`,
+//! `resource::DiffWith`), like the row actions and the palette do; the
 //! editor opens a tab titled `kind/name` and reads the object fresh.
 
 use gpui::{
@@ -30,7 +31,19 @@ impl DetailView {
         self.deps.dispatcher.dispatch(command, cx);
     }
 
-    /// The header's two buttons. Opening an editor only reads the object, so they are there on a
+    /// Sends `resource::DiffWith` for this object without a second one: the picker asks for it
+    /// (E20-S09). Reading two objects changes nothing, so it is there on a read-only cluster too.
+    fn request_diff_with(&mut self, cx: &mut Context<Self>) {
+        let command = Command::ResourceDiffWith {
+            target: self.target.clone(),
+            other: None,
+            include_status: false,
+            compare_identity: false,
+        };
+        self.deps.dispatcher.dispatch(command, cx);
+    }
+
+    /// The header's three buttons. Opening an editor only reads the object, so they are there on a
     /// read-only cluster too (an edit tab then opens read-only, with a notice).
     pub(super) fn editor_buttons(&self, cx: &mut Context<Self>) -> AnyElement {
         div()
@@ -59,6 +72,18 @@ impl DetailView {
                         .tooltip("Edit the manifest")
                         .on_click(cx.listener(|this, _, _, cx| this.request_edit(cx))),
                 ),
+            )
+            .child(
+                div()
+                    .debug_selector(|| "detail-diff-with".to_owned())
+                    .child(
+                        Button::new("detail-diff-with")
+                            .xsmall()
+                            .ghost()
+                            .icon(Icon::new(IconName::GitBranch).size(u(px(14.))))
+                            .tooltip("Diff with the same kind in another cluster or namespace")
+                            .on_click(cx.listener(|this, _, _, cx| this.request_diff_with(cx))),
+                    ),
             )
             .into_any_element()
     }

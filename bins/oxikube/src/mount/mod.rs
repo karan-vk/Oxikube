@@ -116,6 +116,7 @@
 pub mod bus;
 mod cloud;
 mod describe;
+mod diff;
 mod editor;
 mod events;
 mod gallery;
@@ -191,6 +192,8 @@ pub struct Wiring {
     _follow_sources: Subscription,
     /// Re-reads the Helm repositories and charts when the Helm gate changes (E16).
     _follow_helm_gate: Option<Subscription>,
+    /// Keeps the diff's ignore list following `diff.ignore_paths` (E20-S09).
+    _follow_diff_settings: Subscription,
     _follow_active: Subscription,
     /// Opens the views `view::Open` asks for. Lives as long as the window.
     _open_views: Task<()>,
@@ -466,7 +469,11 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         oxikube_helm_ui::releases::HelmReleasesRequestSink::channel();
     // The ServiceAccount panel's kubeconfig section saves through the app's filesystem (E17-S09).
     oxikube_rbac_ui::install(cx, ports.clusters.fs.clone());
+    // The resource diff (E20-S09): the service behind `resource::DiffWith`, its ignore list
+    // following `diff.ignore_paths`.
+    let diff = diff::install(services.sessions.clone(), cx);
     let registry = bus::build_registry(bus::BusParts {
+        diff: diff.service.clone(),
         events_agent,
         agent_pending: agent.pending.clone(),
         nodes: nodes.clone(),
@@ -616,6 +623,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         services.sessions.clone(),
         oxikube_app::ApplyService::new(bus.clone(), services.sessions.clone(), local_user()),
         editor::templates(ports.clusters.fs.clone(), cx),
+        services.catalog.clone(),
         tabs.downgrade(),
         &workspace,
         dispatcher.clone(),
@@ -916,6 +924,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _sources_list: sources_list,
         _follow_sources: follow_sources,
         _follow_helm_gate: follow_helm_gate,
+        _follow_diff_settings: diff.follow,
         _follow_active: follow_active,
         _open_views: open_views,
         _open_kinds: open_kinds,
