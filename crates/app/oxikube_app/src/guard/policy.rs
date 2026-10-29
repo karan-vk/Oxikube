@@ -88,6 +88,8 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ClusterShowMetricsSettings { cluster }
         | Command::ClusterShowPulses { cluster }
         | Command::HelmOpenReleases { cluster }
+        | Command::ApplyDirectory { cluster, .. }
+        | Command::ApplyKustomize { cluster, .. }
         | Command::RbacOpenUsers { cluster }
         | Command::RbacOpenGroups { cluster }
         | Command::RbacShowSubject { cluster, .. }

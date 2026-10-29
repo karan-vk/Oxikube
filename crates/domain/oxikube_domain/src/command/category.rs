@@ -102,6 +102,7 @@ impl CommandCategory {
             ("cloud", CommandCategory::Cluster),
             ("namespace", CommandCategory::Namespace),
             ("resource", CommandCategory::Resource),
+            ("apply", CommandCategory::Resource),
             ("table", CommandCategory::Resource),
             ("crd", CommandCategory::Resource),
             ("ingressclass", CommandCategory::Resource),

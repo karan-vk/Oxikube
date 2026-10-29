@@ -627,6 +627,25 @@
     }
   },
   {
+    // The apply panel (E20-S05): the cursor over the result rows, expanding a failed row to its
+    // full message and field paths (`enter`), the errors-only filter (`e`) and opening the row's
+    // document in the editor at its source line (`o`). Not while the namespace field has focus.
+    "context": "ApplyResults && !Editing",
+    "bindings": {
+      "up": "apply_results::SelectPrevious",
+      "k": "apply_results::SelectPrevious",
+      "down": "apply_results::SelectNext",
+      "j": "apply_results::SelectNext",
+      "home": "apply_results::SelectFirst",
+      "g": "apply_results::SelectFirst",
+      "end": "apply_results::SelectLast",
+      "shift-g": "apply_results::SelectLast",
+      "enter": "apply_results::ToggleExpand",
+      "e": "apply_results::ToggleErrorsOnly",
+      "o": "apply_results::OpenInEditor"
+    }
+  },
+  {
     // The RBAC subject pages (E17-S07): the cursor, the filter, the verb column whose granting
     // bindings the detail lists (`h` / `l`), the scope (`s`), the implicit groups (`i`) and the
     // copy. `enter` opens the subject under the cursor; `escape` goes back to the list.

@@ -227,6 +227,16 @@ fn build_sample(command: CommandId, name: &str, missing: impl FnOnce(&str) -> Co
         "audit::Export" => Command::AuditExport {
             format: oxikube_domain::audit::AuditExportFormat::Csv,
         },
+        "apply::Directory" => Command::ApplyDirectory {
+            cluster,
+            path: Some("/work/manifests".to_owned()),
+            namespace: None,
+        },
+        "apply::Kustomize" => Command::ApplyKustomize {
+            cluster,
+            path: Some("/work/overlay".to_owned()),
+            namespace: None,
+        },
         "helm::SearchCharts" => Command::HelmSearchCharts {
             keyword: "nginx".to_owned(),
         },

@@ -229,6 +229,15 @@ const VIEW_LOCAL: &[&str] = &[
     "helm_releases::PreviousTab",
     "helm_releases::ToggleValuesMode",
     "helm_releases::CloseDetail",
+    // The apply panel (E20-S05): the cursor over the results, expanding a row, the errors-only
+    // filter. `apply_results::OpenInEditor` opens a document in the editor, a view action.
+    "apply_results::SelectNext",
+    "apply_results::SelectPrevious",
+    "apply_results::SelectFirst",
+    "apply_results::SelectLast",
+    "apply_results::ToggleExpand",
+    "apply_results::ToggleErrorsOnly",
+    "apply_results::OpenInEditor",
     // The RBAC subject pages (E17-S07): cursor, filter, verb column, scope and groups toggles.
     "rbac_subjects::SelectNext",
     "rbac_subjects::SelectPrevious",

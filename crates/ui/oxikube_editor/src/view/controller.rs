@@ -124,6 +124,7 @@ impl EditorViews {
             EditorRequest::ShowResourceDiff { request, state } => {
                 this.show_resource_diff(request, state, window, cx)
             }
+            EditorRequest::OpenText(open) => this.open_text(open, window, cx),
             EditorRequest::ToggleManagedFields => {
                 this.on_target(window, cx, |editor, window, cx| {
                     editor.toggle_managed_fields(window, cx);

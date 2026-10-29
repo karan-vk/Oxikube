@@ -21,6 +21,7 @@
 //! | `create` | create from template (E10-S09): `resource::Create` lists the templates off the UI thread, opens the picker, and opens the chosen template in a new editor with the namespace filled in |
 //! | `secret` | "Create secret" (E12-S11): `secret::Create` opens [`CreateSecretDialog`] (Opaque, Docker registry, TLS, checked before anything opens); a valid Secret opens in an editor with its values as text, base64-encoded when applied |
 //! | `resource_diff` | the cross-cluster resource diff (E20-S09): `resource::DiffWith` reads two objects (connecting a cluster on demand) and opens a tab with the changed-path summary and the side-by-side line diff; the "Diff with..." picker; read-only |
+//! | `open_text` | "Open in editor" from the apply panel (E20-S05): [`OpenText`], a document's text in a new tab with the cursor on its line |
 //! | `apply` | applying the buffer (E10-S08): `resource::Apply` (`cmd-s` / `ctrl-s`, the palette, the toolbar), the dry run, [`ApplyPreviewDialog`], [`ConflictDialog`], the server's errors on their fields |
 //!
 //! The editor never writes its buffer anywhere: not to the layout, not to logs. Applying it to a
@@ -38,6 +39,7 @@ mod live;
 mod manifest_editor;
 mod model;
 mod notice;
+mod open_text;
 mod pipeline;
 mod progressive;
 mod resource_diff;
@@ -64,6 +66,7 @@ pub use live::{
 pub use manifest_editor::{ManifestEditor, ManifestEditorParts};
 pub use model::{Accepted, ManifestModel, PassStats, Problems};
 pub use notice::{Notice, NoticeLevel};
+pub use open_text::{OpenText, line_start};
 pub use progressive::{Coverage, LARGE_BUFFER_BYTES};
 pub use resource_diff::{
     DiffData, DiffState, DiffTargetDialog, ResourceDiffView, register_diff_command,

@@ -367,6 +367,11 @@ impl CommandId {
     pub const POD_VIEW_LOGS: CommandId = CommandId::new("pod::ViewLogs");
     /// `pvc::Resize`: grow a PersistentVolumeClaim (patch its requested storage).
     pub const PVC_RESIZE: CommandId = CommandId::new("pvc::Resize");
+    /// `apply::Directory`: open the apply panel on a manifest file or directory (E20-S05).
+    pub const APPLY_DIRECTORY: CommandId = CommandId::new("apply::Directory");
+    /// `apply::Kustomize`: open the apply panel on a kustomize directory (E20-S05); needs a
+    /// `kustomize` (or `kubectl kustomize`).
+    pub const APPLY_KUSTOMIZE: CommandId = CommandId::new("apply::Kustomize");
     /// `resource::Apply`: apply a manifest.
     pub const RESOURCE_APPLY: CommandId = CommandId::new("resource::Apply");
     /// `resource::DiffWith`: compare a resource with the same kind in another cluster or
@@ -619,6 +624,24 @@ pub static COMMANDS: &[CommandMeta] = &[
         "Audit Log",
         CommandScope::Global,
         NONE,
+    ),
+    // Opens the apply panel (E20-S05) on a file or directory: loading reads local files and the
+    // panel's dry run and apply are `resource::ApplyPlan` dispatches, guarded one by one, so the
+    // command itself changes nothing and needs no confirmation of its own (a read-only cluster
+    // still shows the panel; its dry run and Apply are refused there by that guard).
+    CommandMeta::read(
+        CommandId::APPLY_DIRECTORY,
+        "Apply: Directory or File",
+        CommandScope::Cluster,
+        NONE,
+    ),
+    // The same panel on a kustomize overlay; hidden while neither `kustomize` nor
+    // `kubectl kustomize` exists (E20-S04's detection grants the capability).
+    CommandMeta::read(
+        CommandId::APPLY_KUSTOMIZE,
+        "Apply: Kustomize Directory",
+        CommandScope::Cluster,
+        Capabilities::KUSTOMIZE,
     ),
     // A binding is where RBAC privileges are handed out (E17-S06): risk medium like the roles, one
     // simple confirmation (a binding to cluster-admin or to everybody is called out in its text), a

@@ -22,6 +22,7 @@ use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::ids::{ClusterId, ResourceRef};
 use oxikube_domain::{OxiError, OxiResult};
 
+use super::open_text::OpenText;
 use crate::diff::MergeSide;
 use crate::json::Language;
 use crate::open::OpenMode;
@@ -145,6 +146,9 @@ pub enum EditorRequest {
         /// Working, failed or done.
         state: DiffState,
     },
+    /// "Open in editor" from the apply panel (E20-S05): this text in a new tab, the cursor on the
+    /// document's line. Not a command: the panel's own action sends it.
+    OpenText(OpenText),
 }
 
 impl EditorRequest {
