@@ -240,6 +240,10 @@ fn every_scenario_has_a_name_a_world_and_the_frame_budget() {
                     "idle is judged on the 150 MB two-cluster idle memory budget"
                 );
             }
+            Scenario::AuditLog => {
+                assert_eq!(world.audit_records, super::AUDIT_RECORDS);
+                assert!(!world.clusters[0].churn, "the load is the audit log");
+            }
             _ => {
                 assert_eq!(world.clusters[0].pods, super::PODS);
                 assert!(world.clusters[0].churn);

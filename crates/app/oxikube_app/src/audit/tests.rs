@@ -241,3 +241,44 @@ fn entries_carry_the_verb_of_their_command() {
     );
     assert_eq!(read.verb, None);
 }
+
+#[test]
+fn a_flush_that_stores_records_signals_the_viewer_once_per_flush() {
+    let f = fixture();
+    let signal = f.log.appended();
+    assert_eq!(signal.current().stored, 0);
+    assert!(!signal.has_pending());
+
+    f.log.enqueue(entry(&f.log, "one"));
+    f.log.enqueue(entry(&f.log, "two"));
+    f.log.flush().now_or_never().unwrap().unwrap();
+    assert!(signal.has_pending());
+    assert_eq!(
+        signal.current().stored,
+        2,
+        "both records of the batch are counted"
+    );
+
+    // An empty flush stores nothing and signals nothing.
+    let mut signal = signal;
+    signal.changed().now_or_never().unwrap();
+    f.log.flush().now_or_never().unwrap().unwrap();
+    assert!(!signal.has_pending());
+}
+
+#[test]
+fn a_failed_flush_does_not_signal() {
+    let f = fixture();
+    let signal = f.log.appended();
+    fail_next(&f.state);
+    assert!(
+        f.log
+            .record(entry(&f.log, "one"))
+            .now_or_never()
+            .unwrap()
+            .is_err()
+    );
+    assert!(!signal.has_pending(), "nothing was stored");
+    f.log.flush().now_or_never().unwrap().unwrap();
+    assert!(signal.has_pending());
+}

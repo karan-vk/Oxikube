@@ -11,6 +11,7 @@ use super::image::ImageChange;
 use super::kubeconfig::{KubeconfigSourceRef, NewKubeconfigSource};
 use super::meta::CommandMeta;
 use super::registry;
+use crate::audit::AuditExportFormat;
 use crate::cloud::CloudProvider;
 use crate::colour::ClusterColour;
 use crate::ids::{ClusterId, ContextName, Gvk, ResourceRef};
@@ -245,6 +246,25 @@ pub enum Command {
         /// `false` hides the values again (default: reveal).
         #[serde(default = "default_follow")]
         reveal: bool,
+    },
+    /// Open the audit log viewer (E19-S09) in the active cluster tab, or the one the cluster
+    /// names: every guarded mutation attempt, newest first, filterable by cluster, verb,
+    /// initiator and outcome. Reads the local audit log only; opening it again shows the open
+    /// viewer (with the cluster filter applied).
+    #[serde(rename = "audit::Open")]
+    AuditOpen {
+        /// Show only this cluster's records (the viewer's cluster filter); `None` keeps the
+        /// viewer's filters.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cluster: Option<ClusterId>,
+    },
+    /// Write the open audit viewer's filtered records to a file, as JSONL or CSV (E19-S09). The
+    /// user picks the destination; records carry no bodies and are already redacted. Reads only.
+    #[serde(rename = "audit::Export")]
+    AuditExport {
+        /// The file format.
+        #[serde(default)]
+        format: AuditExportFormat,
     },
     /// Open the Helm charts catalog (E16-S08): search across the configured repositories, chart
     /// cards, and a detail with README, versions and default values. Reads only.
@@ -2039,6 +2059,8 @@ impl Command {
             Command::HelmShowValues { .. } => CommandId::HELM_SHOW_VALUES,
             Command::HelmShowManifest { .. } => CommandId::HELM_SHOW_MANIFEST,
             Command::HelmRevealValues { .. } => CommandId::HELM_REVEAL_VALUES,
+            Command::AuditOpen { .. } => CommandId::AUDIT_OPEN,
+            Command::AuditExport { .. } => CommandId::AUDIT_EXPORT,
             Command::HelmOpenCharts => CommandId::HELM_OPEN_CHARTS,
             Command::HelmSearchCharts { .. } => CommandId::HELM_SEARCH_CHARTS,
             Command::HelmShowChart { .. } => CommandId::HELM_SHOW_CHART,
@@ -2525,6 +2547,16 @@ mod tests {
                 reveal: true,
             },
             Command::HelmOpenCharts,
+            Command::AuditOpen { cluster: None },
+            Command::AuditOpen {
+                cluster: Some(cluster()),
+            },
+            Command::AuditExport {
+                format: AuditExportFormat::Jsonl,
+            },
+            Command::AuditExport {
+                format: AuditExportFormat::Csv,
+            },
             Command::HelmSearchCharts {
                 keyword: "nginx".into(),
             },
@@ -3460,6 +3492,8 @@ mod tests {
                     | Command::HelmShowManifest { .. }
                     | Command::HelmRevealValues { .. }
                     | Command::HelmOpenCharts
+                    | Command::AuditOpen { .. }
+                    | Command::AuditExport { .. }
                     | Command::HelmSearchCharts { .. }
                     | Command::HelmShowChart { .. }
                     | Command::HelmInstallChart { .. }

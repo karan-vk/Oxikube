@@ -3,6 +3,7 @@
 //! its scripted phases. A script fails, rather than measure something else, when its input does
 //! not reach the view it is about (a scroll that does not scroll, a filter that does not filter).
 
+mod audit;
 mod catalog;
 mod drawer;
 mod logs;
@@ -72,6 +73,7 @@ pub async fn run(run: &WindowRun, driver: &mut Driver<'_>) -> Result<()> {
         Scenario::NodesTable => table::nodes_table(driver).await,
         Scenario::Overview => overview::run(driver).await,
         Scenario::OverviewGraphs => overview::graphs(driver).await,
+        Scenario::AuditLog => audit::run(driver).await,
         Scenario::Idle => table::idle(driver).await,
         Scenario::DetailDrawer => drawer::run(driver).await,
         Scenario::TabsPanes => tabs::run(driver).await,

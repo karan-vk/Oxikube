@@ -221,6 +221,12 @@ fn build_sample(command: CommandId, name: &str, missing: impl FnOnce(&str) -> Co
             reveal: true,
         },
         "helm::OpenCharts" => Command::HelmOpenCharts,
+        "audit::Open" => Command::AuditOpen {
+            cluster: Some(cluster),
+        },
+        "audit::Export" => Command::AuditExport {
+            format: oxikube_domain::audit::AuditExportFormat::Csv,
+        },
         "helm::SearchCharts" => Command::HelmSearchCharts {
             keyword: "nginx".to_owned(),
         },

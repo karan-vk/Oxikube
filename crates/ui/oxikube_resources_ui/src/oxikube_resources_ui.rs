@@ -6,6 +6,7 @@
 //! | Module | Story | Holds |
 //! |---|---|---|
 //! | [`actions`] | E07-S08 | row actions in the table: the context menu and the palette's list from the `CommandBus` registry ([`actions::ResourceActions`]), disabled in read-only mode, the delete key and [`actions::DeleteDialog`] (propagation choice, type-the-name, bulk delete with per-object results) |
+//! | [`audit`] | E19-S09 | [`audit::AuditView`]: the audit log in a virtualised table (cluster / verb / initiator / outcome / time filters pushed into the store query, keyset paging, a live "N new" pill from the `AuditLog` signal, a detail panel with the batch and "Show resource"), `audit::Open` and `audit::Export` (JSONL or CSV) |
 //! | [`crds`] | E07-S07 | CRD browsing: [`crds::CrdInfo`] (a CRD read for browsing, the version a table opens), [`crds::served_versions`] (the version switcher's list), [`crds::SchemaTree`] (the `openAPIV3Schema` as a lazy collapsible tree) and the CRD list's row actions |
 //! | [`describe_settings`] | E07-S06 | the `describe` setting: which backend renders the Describe tab (`auto`, `native`, `kubectl`) and where `kubectl` is |
 //! | [`detail`] | E07-S05 | [`DetailView`](detail::DetailView): the generic detail of one object (header, metadata, owners, conditions, status, YAML and Describe tabs (E07-S06), events), as the right-hand [`DetailDrawer`](detail::DetailDrawer) of a cluster tab or, pinned, a workspace tab |
@@ -29,6 +30,7 @@
 //! dependency direction. `cargo xtask lint-deps` enforces it.
 
 pub mod actions;
+pub mod audit;
 pub mod bulk;
 pub mod crds;
 pub mod describe_settings;

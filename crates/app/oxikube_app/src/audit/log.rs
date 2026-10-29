@@ -11,8 +11,10 @@ use oxikube_domain::redact::redact;
 use oxikube_domain::safety::MutationVerb;
 use oxikube_ports::{ClockPort, StatePort};
 use parking_lot::Mutex;
+use tokio::sync::watch;
 
 use super::attempt::AuditAttempt;
+use super::signal::{AuditAppended, AuditListener};
 
 /// Most records kept in memory while the store refuses writes.
 ///
@@ -37,6 +39,9 @@ pub struct AuditLog {
     backlog: Mutex<VecDeque<AuditRecord>>,
     /// Serialises appends; held across `append_audit`.
     writer: futures::lock::Mutex<()>,
+    /// Tells the audit viewer that records were stored; a `watch`, so a burst of flushes is one
+    /// wake-up of each listener.
+    appended: watch::Sender<AuditAppended>,
 }
 
 impl std::fmt::Debug for AuditLog {
@@ -53,7 +58,14 @@ impl AuditLog {
             clock,
             backlog: Mutex::new(VecDeque::new()),
             writer: futures::lock::Mutex::new(()),
+            appended: watch::Sender::new(AuditAppended::default()),
         }
+    }
+
+    /// A listener for [`AuditAppended`]: it changes after every flush that stored records, so the
+    /// audit viewer shows a new mutation without polling. Changes between two looks coalesce.
+    pub fn appended(&self) -> AuditListener {
+        AuditListener::new(self.appended.subscribe())
     }
 
     /// Builds a record stamped now. `who` is redacted; `cmd` is a command id.
@@ -208,6 +220,8 @@ impl AuditLog {
                 // Only the holder of `writer` removes records, and new ones are pushed
                 // at the back, so the batch is still the front of the queue.
                 self.backlog.lock().drain(..batch.len());
+                self.appended
+                    .send_modify(|signal| signal.record_stored(batch.len() as u64));
                 Ok(())
             }
             Err(err) => {

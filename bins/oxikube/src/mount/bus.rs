@@ -55,6 +55,7 @@
 //! | `oxikube_overview_ui` | `cluster::ShowPulses` (the cluster's pulses page, `:pulses`; E13-S10) |
 //! | `oxikube_overview_ui` | `cluster::ShowOverview` (the cluster's overview, a tab of its tab; reads only; E13-S09) |
 //! | `oxikube_rbac_ui` | `rbac::CanI` (the can-i dialog, prefilled from the selection; asks a `SelfSubjectAccessReview` or `SubjectAccessReview`, which create nothing; E17-S08) |
+//! | `oxikube_resources_ui::audit` | `audit::Open` (the audit log viewer, a tab of the active cluster's tab), `audit::Export` (its filtered records as JSONL or CSV); both read the local audit log only (E19-S09) |
 //! | `oxikube_events_ui` | `events::Open` (the cluster's events view, `:ev`, the sidebar's Events heading), `events::ToggleFaults`, `TogglePause`, `CopyRow`, `CopyRowJson`, `ExportJson` (the open view's; read the app's `EventService`, never the cluster; E14-S03) |
 //! | `oxikube_rbac_ui::subjects` | `rbac::OpenUsers` (`:usr`, the sidebar's Access Control > Users), `rbac::OpenGroups` (`:grp`, Groups), `rbac::ShowSubject` (`:rbac <subject>`: the per-verb policy matrix of a user, group or ServiceAccount, each cell traced to its bindings and roles) and `rbac::CopyMatrix` (the open matrix as tab-separated text); read the Roles and bindings through the cluster's store, never change a cluster (E17-S07) |
 //! | `oxikube_editor::diff` | `resource::DiffWith` (E20-S09): reads two objects of one kind through `oxikube_app::diff::DiffService` (connecting a cluster that is not connected), opens the diff tab for a user and returns the changed-path summary to an agent; read-only, no guard tier |
@@ -219,6 +220,8 @@ pub struct BusParts {
     pub can_i_dialogs: oxikube_rbac_ui::can_i::CanIRequestSink,
     /// Where the `events::*` commands send their requests (applied on the UI thread; E14-S03).
     pub events_views: oxikube_events_ui::EventsCommandSink,
+    /// Where the `audit::*` commands send their requests (applied on the UI thread; E19-S09).
+    pub audit_views: oxikube_resources_ui::audit::AuditCommandSink,
     /// Where the `rbac::*` commands send their requests (applied on the UI thread; E17-S07).
     pub rbac_views: oxikube_rbac_ui::subjects::SubjectsRequestSink,
     /// The notification centre (`notifications::MarkRead`, `MarkAllRead`, `MuteCluster`,
@@ -432,6 +435,9 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     })?;
     registry.install("oxikube_events_ui", |r| {
         oxikube_events_ui::register_commands(r, parts.events_views)
+    })?;
+    registry.install("oxikube_resources_ui::audit", |r| {
+        oxikube_resources_ui::audit::register_commands(r, parts.audit_views)
     })?;
     registry.install("oxikube_rbac_ui", |r| {
         oxikube_rbac_ui::subjects::register_commands(r, parts.rbac_views)

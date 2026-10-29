@@ -1146,6 +1146,17 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `SubjectAccessReview`) are copyable with the equivalent `kubectl auth can-i`; a new ask aborts the review in flight
   (`spawn_kube`). The same `oxikube_app::tools::rbac::CanIService` backs the read-only agent tool `k8s.can_i` and the
   `@rbac/sa/<ns>/<name>` context provider (bindings + a `SubjectAccessReview` verb summary, size-bounded).
+- `oxikube_resources_ui::audit` (E19-S09) — the audit log viewer (palette "Audit Log", `audit::Open`, tool `app.audit_open`; optional
+  cluster filter): `AuditView`, a workspace item of the active cluster's tab (key `audit`) with a virtualised table (Time (UTC),
+  Cluster, Namespace, Verb, Kind, Name, Outcome, Initiator, Dry-run, Who; newest first). It reads one keyset page
+  (`oxikube_app::audit::query::PAGE_SIZE`) at a time through `AuditReader` on the Tokio bridge, asks for the next page as the visible
+  rows near the end, and pushes the cluster / verb / initiator / outcome / time-window filters into the `StatePort::query_audit` query.
+  New records arrive through `AuditLog::appended()` (an `AuditAppended` watch signal after every flush that stored records, no
+  polling): scrolled to the top they are prepended, otherwise an "N new" pill counts them. A row opens a detail panel (every field,
+  the other records of its `batch_id`, "Show resource" = `resource::Open`); empty, no-match, loading and database-unavailable (with
+  Retry) states. `audit::Export` (tool `app.audit_export`; JSONL or CSV, `oxikube_app::audit::export`) streams the filtered log
+  through `FsPort::write_stream` a page at a time; CSV neutralises a leading `=`, `+`, `-`, `@`, tab or CR. Both commands only read
+  the local audit log (no guard tier, allowed on read-only clusters).
 - `oxikube_events_ui` (E14-S03) — the cluster's events view (`:ev` / `:event` / `:events`, the sidebar's Events heading, the
   palette's "Show Events"; `events::Open`, tool `k8s.events_open`): `EventsView`, a workspace item of the cluster's tab (key
   `events`, key context `EventsView`) with a virtualised table (Type, Reason, Namespace, Object, Source, Count, Age, Last seen,

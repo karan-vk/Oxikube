@@ -24,6 +24,10 @@ impl CommandId {
     pub const APP_SEND_TEST_NOTIFICATION: CommandId = CommandId::new("app::SendTestNotification");
     /// `app::ToggleOsNotifications`: turn desktop (OS) notifications on or off (the opt-in).
     pub const APP_TOGGLE_OS_NOTIFICATIONS: CommandId = CommandId::new("app::ToggleOsNotifications");
+    /// `audit::Open`: open the audit log viewer, optionally filtered to one cluster (E19-S09).
+    pub const AUDIT_OPEN: CommandId = CommandId::new("audit::Open");
+    /// `audit::Export`: write the audit viewer's filtered records to a JSONL or CSV file (E19-S09).
+    pub const AUDIT_EXPORT: CommandId = CommandId::new("audit::Export");
     /// `charts::OpenGallery`: open the chart gallery, every chart state on one page (a reference
     /// page for the metrics views and their reviewers).
     pub const CHARTS_OPEN_GALLERY: CommandId = CommandId::new("charts::OpenGallery");
@@ -585,6 +589,23 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::APP_TOGGLE_OS_NOTIFICATIONS,
         "Toggle OS Notifications",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Writes the viewer's filtered records to a file the user picks (E19-S09). Reads the local audit
+    // log (already redacted at write time, no bodies) and changes no cluster, so it runs on a
+    // read-only cluster and has no guard tier.
+    CommandMeta::read(
+        CommandId::AUDIT_EXPORT,
+        "Audit Log: Export…",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Opens the audit log viewer in the active cluster tab, with a cluster filter when asked
+    // (E19-S09). Reads the local audit log only.
+    CommandMeta::read(
+        CommandId::AUDIT_OPEN,
+        "Audit Log",
         CommandScope::Global,
         NONE,
     ),

@@ -362,6 +362,7 @@ another Space): the run then stops after 5 s without a refresh and says so.
 | `nodes-table` (E12-S09) | 10 000 pods churning on the synthetic cluster's nodes, the Nodes table open and nothing else: its Pods column leases the cluster-wide Pod feed and turns the pods-by-node index on | `churn` (30 s, every refresh watched, nothing driven; fails unless Pod deltas reached the store through the lease) |
 | `overview` (E13-S09) | 100 nodes and 3 000 pods in 8 namespaces, 1 % recycled every 5 s; the cluster overview (the first screen) and nothing else, with no metrics-server or Prometheus in the synthetic world (the `metrics unavailable` state; the charts' repaint is the headless `charts` scenario) | `churn` (30 s, every refresh watched, nothing driven; fails unless the churn reached the overview's numbers) |
 | `overview-graphs` (E13-S09-F1) | the same cluster, with a metrics-server and a Prometheus-compatible endpoint in the synthetic world: the usage bars, the top consumers and the last hour of CPU and memory as graphs | `churn` (30 s, every refresh watched, nothing driven; fails unless the usage and the graphs are on screen and the churn reached the overview's numbers) |
+| `audit-log` (E19-S09) | one quiet 100-pod cluster and a real SQLite state database seeded with 100 000 audit records; the audit viewer (`audit::Open`) and nothing else | `scroll` (20 s: a fling of 720 px, about 25 rows, per refresh through the log, so the table keeps asking for the next keyset page, reversing at either end), `filters` (15 s: verb, initiator, outcome and none, twice a second, each a new indexed query), `still` (5 s idle); fails unless the scroll got past the first page |
 | `logs` | a pod writing 5 000 lines/s (the mixed JSON / plain stream of the headless `logs-stream`) | `stream-json` (10 s, JSON mode, the default), `type-search` (10 s: `logs::Find`, then `slow` typed and erased), `stream-raw` (10 s, `logs::ToggleJsonMode` off) |
 | `terminal` | a real shell: `LocalPty` running `/bin/sh` (`SHELL=/bin/sh` from xtask), or `pod::Shell` in a busybox pod on kind | `yes-flood` (until a 50 MB `yes` ends), `redraw-60hz` (8 s: an `awk` script rewriting every row in colour 60 times a second), `resize` (8 s, the window swept every refresh during the redraw) |
 | `idle` | two clusters, 1 000 pods each, no churn, both pods tables open | `idle` (30 s): the idle CPU and idle memory (< 150 MB, judged on the run's peak RSS) budgets |
@@ -1771,3 +1772,15 @@ keystroke or the faults toggle within a frame.
   dropped, 120 notifies (at most 1 per frame); rss 91 MiB.
 - Not measured here: the kind cluster at 200 events/s (the scenario streams 240/s through the service's real buffer, dedupe
   and coalescing, on fakes).
+
+**Audit viewer over 100 000 records (E19-S09).** The `audit-log` scenario, `cargo xtask perf
+--windowed audit-log --samples 3` (macOS aarch64, release-fast, real window, all 3 runs valid, the
+state database a real SQLite file seeded with 100 000 records, not the in-memory fake): frame p50
+5.05 to 5.43 ms, p95 6.08 to 6.46 ms, p99 6.45 to 7.19 ms, max 8.41 to 15.22 ms (one frame over
+8.33 ms in each run, three in the worst), 1 to 5 refreshes dropped in 4 200, input latency p95 6.1
+ms, 1 notify per view per frame, peak RSS 206.9 to 207.2 MiB (the scroll loads about 60 000 rows
+into memory), idle CPU 0.56 %. The p95 and p99 are inside the frame budget; the isolated frames
+over it (the worst one 15.2 ms, once during the scroll and once at a filter change) are not
+explained and are not below the ADR 0016 "every frame" line yet. No earlier baseline exists: this
+is the first measurement of the viewer. Reads (one 200-row keyset page, or a filtered first page) run
+on the Tokio bridge and cost no UI-thread time beyond placing the rows.

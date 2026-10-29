@@ -47,6 +47,7 @@ How to read the **Lives in** column:
 |---|---|---|
 | **OxiError / OxiResult** | The error every port returns: `{kind, message, source, retryable}`. Branch on `kind()` and `is_retryable()`, never on the message. | `oxikube_domain::error` |
 | **ErrorKind** | `Auth`, `Forbidden`, `NotFound`, `Conflict`, `Network`, `Timeout`, `Validation`, `Unsupported`, `Internal`, `BudgetExceeded` (the watch budget refused a new feed). Adapter mapping rules are in `docs/ARCHITECTURE.md`. | `oxikube_domain::error` |
+| **Audit viewer / AuditAppended** | The workspace tab that lists the audit log (`audit::Open`, palette "Audit Log"): newest first, keyset-paged, filtered by cluster, verb, initiator, outcome and time window in the store query. **AuditAppended** is the coalescing signal `AuditLog` sends after a flush stored records; the viewer reads the newest page when it fires, so a guarded mutation shows within a second without polling. `audit::Export` writes the filtered log as JSONL or CSV (formula-injection neutralised, no bodies). | `oxikube_resources_ui::audit`, `oxikube_app::audit` (E19-S09) |
 | **Redaction** | Removing tokens and Secret data from text before it is logged, audited or put in an error. `oxikube_domain::redact` holds the pure scrubber (`redact(&str) -> Cow<str>`, `Redacted<T>`); adapters redact before building an error and `oxikube_logging` scrubs every log line with it. | `oxikube_domain::redact` |
 
 ## Sessions and state
