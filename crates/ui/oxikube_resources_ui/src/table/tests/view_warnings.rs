@@ -23,6 +23,9 @@ fn pod_with_uid(name: &str) -> oxikube_domain::Resource {
         .namespace("x")
         .name(name)
         .uid(format!("uid-{name}"))
+        // Ten and a half days old, so the Age column reads "10d" however the real clock stands and
+        // the test's one-hour skew never moves it (the table redraws when a drawn cell moves).
+        .created((jiff::Timestamp::now() - SignedDuration::from_hours(10 * 24 + 12)).to_string())
         .build();
     p.meta.resource_version = Some("1".into());
     p
