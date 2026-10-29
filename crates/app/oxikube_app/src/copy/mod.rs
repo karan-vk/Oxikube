@@ -17,7 +17,9 @@
 //!
 //! | File | Holds |
 //! |---|---|
-//! | `service` | [`CopyService`]: clusters to pick, connect on demand, namespaces, [`preview`](CopyService::preview), [`copy`](CopyService::copy); [`ReviewAnswer`], the review's confirmation |
+//! | `service` | [`CopyService`]: clusters to pick, connect on demand, namespaces, [`preview`](CopyService::preview), [`copy`](CopyService::copy) |
+//! | `answer` | [`ReviewAnswer`], the review's confirmation, and the dry run's own |
+//! | `classify` | dispatch and port failures turned into [`CopyError`] |
 //! | `handler` | [`register_commands`]: the `resource::CopyTo` handler, the only code that writes a copy (through the apply pipeline's `ObjectWrite`) |
 //! | `object` | the source object turned into the request body: sanitised, renamed, in the target namespace |
 //! | `target` | what the target must have: the kind, the apiVersion, the namespace |
@@ -48,7 +50,9 @@
 //! writer. Immutable fields (a Deployment's `spec.selector`) are refused by the server on an
 //! overwrite and shown as it says ([`CopyError::Invalid`]).
 
+mod answer;
 mod audit;
+mod classify;
 mod handler;
 mod object;
 mod references;
@@ -60,8 +64,9 @@ mod types;
 #[cfg(test)]
 mod tests;
 
+pub use answer::ReviewAnswer;
 pub use handler::register_commands;
-pub use service::{ClusterChoice, CopyService, ReviewAnswer};
+pub use service::{ClusterChoice, CopyService};
 pub use types::{CopyChoice, CopyError, CopyOutcome, CopyPreview, CopyRequest, MissingReference};
 
 pub(crate) use audit::{detail as audit_detail, summary};

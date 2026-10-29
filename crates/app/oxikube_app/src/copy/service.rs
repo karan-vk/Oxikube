@@ -4,22 +4,22 @@
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use oxikube_domain::audit::Initiator;
 use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::ids::{ClusterId, Gvk};
 use oxikube_domain::safety::ConfirmTier;
-use oxikube_domain::{ConflictReason, OxiError};
 use oxikube_ports::ListOptions;
 use serde_json::Value;
 
-use super::refusal::{Refusal, validate_name};
+use super::answer::DryRunAnswer;
+use super::classify::{classify_dispatch, classify_oxi};
+use super::refusal::validate_name;
 use super::types::{
     CopyChoice, CopyError, CopyOutcome, CopyPreview, CopyRequest, MissingReference,
 };
 use crate::apply::FieldConflict;
-use crate::command_bus::{CommandOutput, DispatchContext, DispatchError, Outcome};
-use crate::guard::{ConfirmationProvider, ConfirmationRequest, Decision};
+use crate::command_bus::{CommandOutput, DispatchContext, Outcome};
+use crate::guard::ConfirmationProvider;
 use crate::namespaces::NamespaceCreator;
 use crate::{ClusterCatalog, ClusterSessionManager, CommandBus};
 
@@ -184,7 +184,7 @@ impl CopyService {
         self.namespaces
             .create(cluster, name, Default::default())
             .await
-            .map_err(|error| self.classify_oxi(&error, name))
+            .map_err(|error| classify_oxi(&error, name))
     }
 
     /// The target's dry run of `request`: the object as it would be stored next to the one there
@@ -230,7 +230,7 @@ impl CopyService {
             .bus
             .execute(command, context, &DryRunAnswer)
             .await
-            .map_err(|error| self.classify(request, error))?;
+            .map_err(|error| classify_dispatch(request, error))?;
         match outcome {
             Outcome::Completed(output) => Ok(output),
             Outcome::NeedsConfirmation(_) => Err(CopyError::Unconfirmed),
@@ -343,7 +343,7 @@ impl CopyService {
             .bus
             .execute(command, self.context(&request), confirm.as_ref())
             .await
-            .map_err(|error| self.classify(&request, error))?;
+            .map_err(|error| classify_dispatch(&request, error))?;
         let Outcome::Completed(output) = outcome else {
             return Err(CopyError::Unconfirmed);
         };
@@ -373,105 +373,5 @@ impl CopyService {
     fn context(&self, request: &CopyRequest) -> DispatchContext {
         DispatchContext::new(Initiator::Ui, self.who.clone())
             .with_cluster(request.target.cluster.clone())
-    }
-
-    fn classify(&self, request: &CopyRequest, error: DispatchError) -> CopyError {
-        match error {
-            DispatchError::ReadOnly { context, .. } => CopyError::ReadOnly {
-                context: context.to_string(),
-            },
-            DispatchError::Declined(_) => CopyError::Declined,
-            other => self.classify_oxi(
-                &OxiError::from(other),
-                &crate::actions::object_label(&request.target),
-            ),
-        }
-    }
-
-    fn classify_oxi(&self, error: &OxiError, label: &str) -> CopyError {
-        if let Some(refusal) = Refusal::of(error) {
-            return match refusal.clone() {
-                Refusal::KindNotServed(message) => CopyError::KindNotServed(message),
-                Refusal::VersionNotServed(message) => CopyError::VersionNotServed(message),
-                Refusal::NamespaceMissing(namespace) => CopyError::NamespaceMissing(namespace),
-                Refusal::SourceUnavailable(message) => CopyError::SourceUnavailable(message),
-                Refusal::InvalidName(message) => CopyError::InvalidName(message),
-            };
-        }
-        if let Some(details) = error.conflict_details() {
-            match details.reason {
-                ConflictReason::FieldOwnership => {
-                    return CopyError::Conflicts(
-                        details
-                            .causes
-                            .iter()
-                            .map(|cause| FieldConflict {
-                                field: cause.field.clone(),
-                                manager: cause.manager.clone(),
-                                applied_at: None,
-                            })
-                            .collect(),
-                    );
-                }
-                ConflictReason::AlreadyExists => return CopyError::Exists(label.to_owned()),
-                ConflictReason::StaleVersion | ConflictReason::Other => {}
-            }
-        }
-        if error.kind() == oxikube_domain::ErrorKind::Validation {
-            return CopyError::Invalid {
-                message: error.message().to_owned(),
-                causes: error
-                    .validation_details()
-                    .map(|details| details.causes.clone())
-                    .unwrap_or_default(),
-            };
-        }
-        CopyError::Failed(error.to_string())
-    }
-}
-
-/// Answers the confirmation of a copy's dry run: the click, and the expected name for a
-/// type-the-name tier. The dry run changes nothing.
-struct DryRunAnswer;
-
-#[async_trait]
-impl ConfirmationProvider for DryRunAnswer {
-    async fn confirm(&self, request: &ConfirmationRequest) -> Decision {
-        match &request.expected_name {
-            Some(name) => Decision::typed(name.clone()),
-            None => Decision::confirm(),
-        }
-    }
-}
-
-/// Answers the guard's confirmation of the real copy from the review: the click, and for a
-/// type-the-name tier what the user typed (the guard compares it).
-#[derive(Debug, Clone, Default)]
-pub struct ReviewAnswer {
-    typed: Option<String>,
-}
-
-impl ReviewAnswer {
-    /// The review's click.
-    pub fn click() -> Arc<Self> {
-        Arc::new(Self::default())
-    }
-
-    /// The click and the name the user typed.
-    pub fn typed(name: impl Into<String>) -> Arc<Self> {
-        Arc::new(Self {
-            typed: Some(name.into()),
-        })
-    }
-}
-
-#[async_trait]
-impl ConfirmationProvider for ReviewAnswer {
-    async fn confirm(&self, request: &ConfirmationRequest) -> Decision {
-        match (&request.expected_name, &self.typed) {
-            (Some(_), Some(typed)) => Decision::typed(typed.clone()),
-            (Some(_), None) => Decision::Decline,
-            (None, _) => Decision::confirm(),
-        }
     }
 }
