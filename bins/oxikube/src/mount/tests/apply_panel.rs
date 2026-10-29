@@ -104,8 +104,10 @@ fn apply_directory_opens_the_panel_in_the_cluster_tab_and_applies_through_the_gu
     let audited = block_on(state.ports().state.query_audit(&Default::default())).expect("audit");
     assert!(
         audited
+            .records
             .iter()
             .any(|record| &*record.cmd == "resource::ApplyPlan"),
-        "{audited:?}"
+        "{:?}",
+        audited.records
     );
 }
