@@ -7,28 +7,31 @@
 //! confirmation dialog and the MCP tool stubs all read one table (ADR 0012).
 
 use super::{Command, CommandId, CommandMeta, Propagation};
-use crate::ids::Gvk;
-use crate::safety::Risk;
+use crate::ids::{Gvk, Scope};
+use crate::safety::{MutationFlags, MutationVerb, Risk, classify};
 
 /// The risk of deleting one object of kind `gvk` with `propagation`.
 ///
 /// | Target | Risk | Confirmation |
 /// |---|---|---|
 /// | `Namespace`, `PersistentVolume` | [`Risk::Irreversible`] | type the name |
-/// | `Node`, or any object with [`Propagation::Foreground`] (a cascading delete) | [`Risk::High`] | type the name |
+/// | `Node`, `CustomResourceDefinition`, or any object with [`Propagation::Foreground`] (a cascading delete) | [`Risk::High`] | type the name |
 /// | anything else | [`Risk::Medium`] | simple confirm |
 ///
-/// The kind is matched on group and kind only (not version), so `v1` and any future version of
+/// This is [`classify`] for [`MutationVerb::Delete`]. The kind is matched on group and kind only (not version), so `v1` and any future version of
 /// the core kinds match, and a custom resource that happens to be named `Node` in another group
 /// does not.
 pub fn delete_risk(gvk: &Gvk, propagation: Propagation) -> Risk {
-    let core = gvk.group.is_empty();
-    match &*gvk.kind {
-        "Namespace" | "PersistentVolume" if core => Risk::Irreversible,
-        "Node" if core => Risk::High,
-        _ if propagation == Propagation::Foreground => Risk::High,
-        _ => Risk::Medium,
-    }
+    // A delete is classified by kind alone, so the scope passed here never changes the result.
+    classify(
+        MutationVerb::Delete,
+        Scope::Namespaced,
+        gvk,
+        MutationFlags {
+            cascading: propagation == Propagation::Foreground,
+            ..MutationFlags::default()
+        },
+    )
 }
 
 impl Command {
