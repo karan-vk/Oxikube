@@ -138,7 +138,14 @@ fn type_name_needs_the_exact_name() {
     h.allow_deletes("a", 1);
     let cmd = sample(CommandId::NODE_DRAIN);
 
-    for wrong in [Confirmation::simple, |t| Confirmation::typed(t, "worker-2")] {
+    // Exact: no trimming and no case folding, so "almost" never approves a typed-name mutation.
+    for wrong in [
+        Confirmation::simple,
+        |t| Confirmation::typed(t, "worker-2"),
+        |t| Confirmation::typed(t, " worker-1"),
+        |t| Confirmation::typed(t, "worker-1 "),
+        |t| Confirmation::typed(t, "Worker-1"),
+    ] {
         let request = h.ask(cmd.clone(), ctx(Initiator::Ui));
         let err = h
             .dispatch(

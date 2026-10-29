@@ -1,4 +1,5 @@
-//! The guard pipeline itself: admission (synchronous), then execute and audit.
+//! The guard pipeline itself: admission (synchronous), the dry run an `Irreversible` command
+//! needs before it is confirmed (see `rehearsal`), then execute and audit.
 
 use std::sync::Arc;
 
@@ -8,25 +9,38 @@ use oxikube_domain::ids::{ClusterId, ContextName, ResourceRef};
 use oxikube_domain::safety::ConfirmTier;
 use oxikube_ports::ResourceWriter;
 
-use super::confirm::{ConfirmationError, ConfirmationRequest, ConfirmationToken, Pending};
+use super::confirm::{ConfirmationRequest, Pending};
 use super::gate::ReadOnlyGate;
+use super::rehearsal::{needs_rehearsal, require_rehearsal};
 use super::{Mutation, MutationGuard, policy};
 use crate::audit::AuditLog;
 use crate::command_bus::{CommandHandler, DispatchContext, DispatchError, HandlerContext, Outcome};
 
+/// What the synchronous checks let through: where the command will write and what its audit
+/// record names.
+pub(super) struct Admitted {
+    pub(super) cluster: ClusterId,
+    pub(super) context: ContextName,
+    pub(super) target: ResourceRef,
+    pub(super) writer: Arc<dyn ResourceWriter>,
+    /// What the audit record adds to the target ([`policy::audit_detail`]).
+    pub(super) detail: Option<String>,
+}
+
+/// A confirmation to ask for, before its token is issued.
+struct Question {
+    admitted: Admitted,
+    pending: Pending,
+    tier: ConfirmTier,
+    summary: String,
+}
+
 /// The result of the synchronous checks.
 enum Admission {
-    /// Run the handler.
-    Proceed {
-        cluster: ClusterId,
-        context: ContextName,
-        target: ResourceRef,
-        writer: Arc<dyn ResourceWriter>,
-        /// What the audit record adds to the target ([`policy::audit_detail`]).
-        detail: Option<String>,
-    },
-    /// Ask the user first; nothing ran.
-    Confirm(ConfirmationRequest),
+    /// Run the handler. `rehearsed`: the confirmation redeemed followed the guard's dry run.
+    Proceed { admitted: Admitted, rehearsed: bool },
+    /// Ask the user first; nothing ran. The token is issued once any dry run is done.
+    Confirm(Question),
     /// Refused; `record` is written before the error is returned.
     Deny {
         error: DispatchError,
@@ -45,16 +59,15 @@ impl MutationGuard {
     ) -> Result<Outcome, DispatchError> {
         let resolved = self.resolved_target(&command, ctx.cluster.as_ref()).await;
         let resolved_detail = self.resolved_detail(&command, ctx.cluster.as_ref()).await;
-        let (cluster, context, target, writer, detail) =
+        let (admitted, rehearsed) =
             match self.admit(meta, &command, &ctx, resolved, resolved_detail) {
                 Admission::Proceed {
-                    cluster,
-                    context,
-                    target,
-                    writer,
-                    detail,
-                } => (cluster, context, target, writer, detail),
-                Admission::Confirm(request) => return Ok(Outcome::NeedsConfirmation(request)),
+                    admitted,
+                    rehearsed,
+                } => (admitted, rehearsed),
+                Admission::Confirm(question) => {
+                    return self.ask(meta, &command, &ctx, question, handler).await;
+                }
                 Admission::Deny { error, record } => {
                     if let Some(record) = record
                         && let Err(err) = self.audit.record(record).await
@@ -67,13 +80,28 @@ impl MutationGuard {
                 }
             };
 
-        dry_run_stage(command.effective_risk());
+        // The dry-run stage: a command that needs the guard's dry run got it before it was
+        // confirmed (`ask`), or it does not run.
+        if let Err(error) = require_rehearsal(meta, &command, &ctx, rehearsed) {
+            let record = self.refusal(meta, &ctx, &admitted, &error);
+            if let Err(err) = self.audit.record(record).await {
+                tracing::warn!(error = %err, "could not audit a refused mutation");
+            }
+            return Err(error);
+        }
 
         self.audit
             .ensure_writable()
             .await
             .map_err(DispatchError::AuditUnavailable)?;
 
+        let Admitted {
+            cluster,
+            context,
+            target,
+            writer,
+            detail,
+        } = admitted;
         // Armed before the handler: if this future is dropped while the handler runs,
         // the attempt still lands in the audit backlog (as `Cancelled`).
         let attempt = self.audit.begin_described(
@@ -123,47 +151,77 @@ impl MutationGuard {
             .map_err(DispatchError::Handler)
     }
 
-    /// Declines a pending confirmation and audits it as `Cancelled`.
-    pub(crate) async fn decline(&self, token: ConfirmationToken) -> Result<(), DispatchError> {
-        let pending = self
-            .confirmations
-            .take(token)
-            .ok_or(ConfirmationError::Unknown)?;
-        let target = match self
-            .resolved_target(&pending.command, Some(&pending.cluster))
-            .await
-        {
-            Some(target) => target,
-            None => policy::audit_target(&pending.command, &pending.cluster),
+    /// Answers the first dispatch of a command that needs confirming: dry-runs it first when its
+    /// risk requires that (see `rehearsal`), then issues the token and returns the request.
+    async fn ask(
+        &self,
+        meta: &CommandMeta,
+        command: &Command,
+        ctx: &DispatchContext,
+        question: Question,
+        handler: Arc<dyn CommandHandler>,
+    ) -> Result<Outcome, DispatchError> {
+        let Question {
+            admitted,
+            pending,
+            tier,
+            summary,
+        } = question;
+        let preview = if needs_rehearsal(command, ctx) {
+            Some(
+                self.rehearse(meta, command, ctx, &admitted, handler)
+                    .await?,
+            )
+        } else {
+            None
         };
-        let detail = match self
-            .resolved_detail(&pending.command, Some(&pending.cluster))
-            .await
-        {
-            Some(detail) => Some(detail),
-            None => policy::audit_detail(&pending.command),
-        };
+        let expected_name = pending.expected_name.clone();
+        let token = self.confirmations.issue(Pending {
+            rehearsed: preview.is_some(),
+            ..pending
+        });
+        Ok(Outcome::NeedsConfirmation(ConfirmationRequest {
+            token,
+            command: meta.id,
+            tier,
+            risk: command.effective_risk(),
+            cluster: admitted.cluster,
+            summary,
+            expected_name,
+            initiator: ctx.initiator,
+            preview,
+        }))
+    }
+
+    /// The `Denied` record of `error` refusing an admitted command.
+    fn refusal(
+        &self,
+        meta: &CommandMeta,
+        ctx: &DispatchContext,
+        admitted: &Admitted,
+        error: &DispatchError,
+    ) -> AuditRecord {
         let record = AuditLog::describe(
             self.audit.entry(
-                &pending.who,
-                pending.initiator,
-                pending.command.id().as_str(),
-                target,
-                pending.dry_run,
-                AuditOutcome::Cancelled,
+                &ctx.who,
+                ctx.initiator,
+                meta.id.as_str(),
+                admitted.target.clone(),
+                ctx.dry_run,
+                AuditOutcome::Denied,
             ),
-            detail.as_deref(),
+            admitted.detail.as_deref(),
         );
-        self.audit
-            .record(record)
-            .await
-            .map_err(DispatchError::AuditFailed)
+        match error.audit_denial() {
+            Some(denial) => record.with_denial(denial),
+            None => record,
+        }
     }
 
     /// The audit target of a `resource::Apply`, placed by the cluster's discovery as the handler
     /// places the object (an object given no namespace is in `default`); `None` for any other
     /// command, which [`policy::audit_target`] names from its payload.
-    async fn resolved_target(
+    pub(super) async fn resolved_target(
         &self,
         command: &Command,
         context_cluster: Option<&ClusterId>,
@@ -174,7 +232,7 @@ impl MutationGuard {
 
     /// What a `pvc::Resize` that does not name its old size should say in its audit record: the
     /// live size, read as the handler reads it; `None` for any other command.
-    async fn resolved_detail(
+    pub(super) async fn resolved_detail(
         &self,
         command: &Command,
         context_cluster: Option<&ClusterId>,
@@ -208,9 +266,8 @@ impl MutationGuard {
         let detail = resolved_detail
             .clone()
             .or_else(|| policy::audit_detail(command));
-        let deny = |error: DispatchError, outcome: AuditOutcome| Admission::Deny {
-            error,
-            record: Some(AuditLog::describe(
+        let deny = |error: DispatchError, outcome: AuditOutcome| {
+            let record = AuditLog::describe(
                 self.audit.entry(
                     &ctx.who,
                     ctx.initiator,
@@ -220,7 +277,15 @@ impl MutationGuard {
                     outcome,
                 ),
                 detail.as_deref(),
-            )),
+            );
+            let record = match error.audit_denial() {
+                Some(denial) if outcome == AuditOutcome::Denied => record.with_denial(denial),
+                _ => record,
+            };
+            Admission::Deny {
+                error,
+                record: Some(record),
+            }
         };
 
         let Some(session) = self.sessions.get(&cluster) else {
@@ -241,61 +306,53 @@ impl MutationGuard {
         };
 
         let tier = policy::confirm_tier_for(meta, command);
-        if tier != ConfirmTier::None {
-            match &ctx.confirmation {
-                None => {
-                    let expected_name = (tier == ConfirmTier::TypeName)
-                        .then(|| policy::expected_name(command, context.as_str()));
-                    let token = self.confirmations.issue(Pending {
-                        command: command.clone(),
-                        initiator: ctx.initiator,
-                        who: ctx.who.clone(),
-                        cluster: cluster.clone(),
-                        expected_name: expected_name.clone(),
-                        dry_run: ctx.dry_run,
-                    });
-                    return Admission::Confirm(ConfirmationRequest {
-                        token,
-                        command: meta.id,
-                        tier,
-                        risk: command.effective_risk(),
-                        cluster,
-                        summary: policy::summary_in(
-                            meta,
-                            command,
-                            context.as_str(),
-                            session.prefs(),
-                        ),
-                        expected_name,
-                    });
-                }
-                Some(answer) => {
-                    if let Err(err) =
-                        self.confirmations
-                            .redeem(answer, command, ctx.initiator, ctx.dry_run)
-                    {
-                        return deny(DispatchError::Confirmation(err), AuditOutcome::Denied);
-                    }
+        let mut rehearsed = false;
+        if tier != ConfirmTier::None
+            && let Some(answer) = &ctx.confirmation
+        {
+            match self
+                .confirmations
+                .redeem(answer, command, ctx.initiator, ctx.dry_run)
+            {
+                Ok(dry_ran) => rehearsed = dry_ran,
+                Err(err) => {
+                    return deny(DispatchError::Confirmation(err), AuditOutcome::Denied);
                 }
             }
         }
 
-        let detail = resolved_detail.or_else(|| policy::audit_detail_in(command, session.prefs()));
-        Admission::Proceed {
+        let summary = (tier != ConfirmTier::None && ctx.confirmation.is_none())
+            .then(|| policy::summary_in(meta, command, context.as_str(), session.prefs()));
+        let admitted = Admitted {
+            detail: resolved_detail.or_else(|| policy::audit_detail_in(command, session.prefs())),
             cluster,
             context,
             target,
             writer,
-            detail,
+        };
+        match summary {
+            Some(summary) => {
+                let expected_name = (tier == ConfirmTier::TypeName)
+                    .then(|| policy::expected_name(command, admitted.context.as_str()));
+                Admission::Confirm(Question {
+                    pending: Pending {
+                        command: command.clone(),
+                        initiator: ctx.initiator,
+                        who: ctx.who.clone(),
+                        cluster: admitted.cluster.clone(),
+                        expected_name,
+                        dry_run: ctx.dry_run,
+                        rehearsed: false,
+                    },
+                    admitted,
+                    tier,
+                    summary,
+                })
+            }
+            None => Admission::Proceed {
+                admitted,
+                rehearsed,
+            },
         }
-    }
-}
-
-/// The dry-run stage. E19 runs a server-side dry run and shows its diff before every
-/// command whose risk [requires it](oxikube_domain::safety::Risk::requires_dry_run_diff);
-/// this story only marks the place in the pipeline.
-fn dry_run_stage(risk: Option<oxikube_domain::safety::Risk>) {
-    if risk.is_some_and(|r| r.requires_dry_run_diff()) {
-        tracing::debug!("dry-run diff stage is a stub until E19");
     }
 }

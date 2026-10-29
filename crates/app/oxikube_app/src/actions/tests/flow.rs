@@ -155,10 +155,11 @@ fn a_wrong_phrase_sends_nothing() {
     }
     assert!(h.writes("a").is_empty());
     assert!(h.audit().is_empty());
-    h.allow_deletes("a", 2);
+    // An irreversible delete: the guard's dry run before it asks, the handler's own, the delete.
+    h.allow_deletes("a", 3);
     let report = run(&flow, &plan, Some("payments")).unwrap();
     assert_eq!(report.succeeded(), 1);
-    assert_eq!(h.writes("a").len(), 2);
+    assert_eq!(h.writes("a").len(), 3);
 }
 
 #[test]
@@ -234,7 +235,8 @@ fn bulk_delete_reports_each_object_and_audits_each() {
 fn a_selection_with_a_namespace_confirms_it_with_the_typed_cluster_name() {
     let h = Harness::with_delete_handler();
     h.connect("a", false);
-    h.allow_deletes("a", 4);
+    // Two requests for the pod, three for the namespace (the guard dry-runs it before asking).
+    h.allow_deletes("a", 5);
     let flow = flow(&h);
     let plan = flow
         .plan(
@@ -249,7 +251,7 @@ fn a_selection_with_a_namespace_confirms_it_with_the_typed_cluster_name() {
     assert!(h.writes("a").is_empty());
     let report = run(&flow, &plan, Some("a")).unwrap();
     assert_eq!(report.succeeded(), 2);
-    assert_eq!(h.writes("a").len(), 4);
+    assert_eq!(h.writes("a").len(), 5);
 }
 
 #[test]

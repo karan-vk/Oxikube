@@ -188,6 +188,7 @@ fn every_pod_gets_its_own_audit_record_under_one_batch_id() {
             record.detail.as_deref(),
             Some(format!("batch={batch} via=pod::Sanitize").as_str())
         );
+        assert_eq!(record.batch_id.as_deref(), Some(batch.as_str()));
         assert!(!record.dry_run);
     }
     // The command itself is one record too, naming the batch and the size of the sweep.
@@ -200,6 +201,7 @@ fn every_pod_gets_its_own_audit_record_under_one_batch_id() {
         umbrella.detail.as_deref(),
         Some(format!("batch={batch} pods=3").as_str())
     );
+    assert_eq!(umbrella.batch_id.as_deref(), Some(batch.as_str()));
     assert_eq!(
         &*umbrella.target.name, "default",
         "recorded against the namespace"

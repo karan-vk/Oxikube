@@ -92,15 +92,26 @@ impl AuditLog {
         detail: &str,
         outcome: AuditOutcome,
     ) -> AuditRecord {
-        self.entry(who, initiator, cmd, target, false, outcome)
-            .with_detail(&redact(detail))
+        Self::describe(
+            self.entry(who, initiator, cmd, target, false, outcome),
+            Some(detail),
+        )
     }
 
     /// `record` with `detail` (redacted like `who`) when there is one: the way a guarded mutation
     /// adds what a plain record does not say (the image of a debug container).
+    ///
+    /// A detail that names a batch (`batch=<id>`, the word every record of a bulk operation
+    /// carries: a selection, a sweep, a drain) also sets the record's
+    /// [`batch_id`](AuditRecord::batch_id), so the records of one batch can be found by that
+    /// field rather than by searching text.
     pub fn describe(record: AuditRecord, detail: Option<&str>) -> AuditRecord {
-        match detail {
-            Some(detail) => record.with_detail(&redact(detail)),
+        let Some(detail) = detail else {
+            return record;
+        };
+        let record = record.with_detail(&redact(detail));
+        match batch_of(detail) {
+            Some(batch) => record.with_batch_id(&redact(batch)),
             None => record,
         }
     }
@@ -216,7 +227,7 @@ impl AuditLog {
 
     /// Queues `record` behind the backlog without writing it. Synchronous, so it is
     /// safe from `Drop`.
-    pub(super) fn enqueue(&self, record: AuditRecord) {
+    pub(crate) fn enqueue(&self, record: AuditRecord) {
         self.backlog.lock().push_back(record);
     }
 
@@ -224,6 +235,14 @@ impl AuditLog {
     pub(super) fn stamp(&self, record: &mut AuditRecord) {
         record.ts = self.clock.now();
     }
+}
+
+/// The batch id a record's detail names (`batch=<id>`), if any.
+fn batch_of(detail: &str) -> Option<&str> {
+    detail
+        .split_whitespace()
+        .find_map(|word| word.strip_prefix("batch="))
+        .filter(|batch| !batch.is_empty())
 }
 
 /// Cuts `backlog` down to [`MAX_AUDIT_BACKLOG`]: the oldest `Denied` records go first,

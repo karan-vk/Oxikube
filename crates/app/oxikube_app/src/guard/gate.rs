@@ -5,7 +5,13 @@
 //! the writer a handler receives is wrapped: every write re-reads the session's flag first and
 //! refuses with `Forbidden` when read-only mode went on in the meantime. The read is one short
 //! in-memory lock, so the gate costs nothing next to the request it guards.
+//!
+//! The writer the guard hands a handler for its **rehearsal** (the mandatory dry run before an
+//! `Irreversible` command is confirmed, see `rehearsal`) is the same gate in rehearsal mode: it
+//! also forces `dry_run` on every request, so a rehearsal cannot change the cluster even if a
+//! handler forgot to pass [`Mutation::write_options`](super::Mutation::write_options).
 
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -25,6 +31,8 @@ pub(super) struct ReadOnlyGate {
     cluster: ClusterId,
     context: ContextName,
     inner: Arc<dyn ResourceWriter>,
+    /// Every request is sent as a server-side dry run, whatever its options say.
+    rehearsal: bool,
 }
 
 impl ReadOnlyGate {
@@ -39,6 +47,44 @@ impl ReadOnlyGate {
             cluster,
             context,
             inner,
+            rehearsal: false,
+        }
+    }
+
+    /// The gate in rehearsal mode: it also sends every request as a server-side dry run.
+    pub(super) fn rehearsal(
+        sessions: ClusterSessionManager,
+        cluster: ClusterId,
+        context: ContextName,
+        inner: Arc<dyn ResourceWriter>,
+    ) -> Self {
+        Self {
+            rehearsal: true,
+            ..Self::new(sessions, cluster, context, inner)
+        }
+    }
+
+    /// `options`, as a dry run in rehearsal mode.
+    fn write_options<'a>(&self, options: &'a WriteOptions) -> Cow<'a, WriteOptions> {
+        if self.rehearsal && !options.dry_run {
+            Cow::Owned(WriteOptions {
+                dry_run: true,
+                ..options.clone()
+            })
+        } else {
+            Cow::Borrowed(options)
+        }
+    }
+
+    /// `options`, as a dry run in rehearsal mode.
+    fn delete_options<'a>(&self, options: &'a DeleteOptions) -> Cow<'a, DeleteOptions> {
+        if self.rehearsal && !options.dry_run {
+            Cow::Owned(DeleteOptions {
+                dry_run: true,
+                ..options.clone()
+            })
+        } else {
+            Cow::Borrowed(options)
         }
     }
 
@@ -64,7 +110,9 @@ impl ResourceWriter for ReadOnlyGate {
         options: &WriteOptions,
     ) -> OxiResult<Resource> {
         self.check()?;
-        self.inner.create(kind, namespace, object, options).await
+        self.inner
+            .create(kind, namespace, object, &self.write_options(options))
+            .await
     }
 
     async fn replace(
@@ -77,7 +125,7 @@ impl ResourceWriter for ReadOnlyGate {
     ) -> OxiResult<Resource> {
         self.check()?;
         self.inner
-            .replace(kind, namespace, name, object, options)
+            .replace(kind, namespace, name, object, &self.write_options(options))
             .await
     }
 
@@ -91,7 +139,7 @@ impl ResourceWriter for ReadOnlyGate {
     ) -> OxiResult<Resource> {
         self.check()?;
         self.inner
-            .patch(kind, namespace, name, patch, options)
+            .patch(kind, namespace, name, patch, &self.write_options(options))
             .await
     }
 
@@ -103,7 +151,9 @@ impl ResourceWriter for ReadOnlyGate {
         options: &DeleteOptions,
     ) -> OxiResult<DeleteOutcome> {
         self.check()?;
-        self.inner.delete(kind, namespace, name, options).await
+        self.inner
+            .delete(kind, namespace, name, &self.delete_options(options))
+            .await
     }
 
     async fn delete_collection(
@@ -115,7 +165,7 @@ impl ResourceWriter for ReadOnlyGate {
     ) -> OxiResult<DeleteCollectionOutcome> {
         self.check()?;
         self.inner
-            .delete_collection(kind, namespace, selection, options)
+            .delete_collection(kind, namespace, selection, &self.delete_options(options))
             .await
     }
 
@@ -129,13 +179,21 @@ impl ResourceWriter for ReadOnlyGate {
     ) -> OxiResult<Scale> {
         self.check()?;
         self.inner
-            .scale(kind, namespace, name, replicas, options)
+            .scale(
+                kind,
+                namespace,
+                name,
+                replicas,
+                &self.write_options(options),
+            )
             .await
     }
 
     async fn evict(&self, namespace: &str, pod: &str, options: &DeleteOptions) -> OxiResult<()> {
         self.check()?;
-        self.inner.evict(namespace, pod, options).await
+        self.inner
+            .evict(namespace, pod, &self.delete_options(options))
+            .await
     }
 
     async fn create_subresource(
@@ -149,7 +207,14 @@ impl ResourceWriter for ReadOnlyGate {
     ) -> OxiResult<Value> {
         self.check()?;
         self.inner
-            .create_subresource(kind, namespace, name, subresource, body, options)
+            .create_subresource(
+                kind,
+                namespace,
+                name,
+                subresource,
+                body,
+                &self.write_options(options),
+            )
             .await
     }
 
@@ -164,7 +229,14 @@ impl ResourceWriter for ReadOnlyGate {
     ) -> OxiResult<Value> {
         self.check()?;
         self.inner
-            .patch_subresource(kind, namespace, name, subresource, patch, options)
+            .patch_subresource(
+                kind,
+                namespace,
+                name,
+                subresource,
+                patch,
+                &self.write_options(options),
+            )
             .await
     }
 
@@ -179,7 +251,14 @@ impl ResourceWriter for ReadOnlyGate {
     ) -> OxiResult<Value> {
         self.check()?;
         self.inner
-            .replace_subresource(kind, namespace, name, subresource, body, options)
+            .replace_subresource(
+                kind,
+                namespace,
+                name,
+                subresource,
+                body,
+                &self.write_options(options),
+            )
             .await
     }
 }

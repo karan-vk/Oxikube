@@ -161,8 +161,8 @@ pub use exec::{
     check_name, plan_debug, split_command,
 };
 pub use guard::{
-    Confirmation, ConfirmationRequest, ConfirmationToken, Mutation, MutationGuard, PrefsPatch,
-    PrefsWriter,
+    Confirmation, ConfirmationProvider, ConfirmationRequest, ConfirmationRouter, ConfirmationToken,
+    Decision, DryRunPreview, Mutation, MutationGuard, PrefsPatch, PrefsWriter,
 };
 pub use helm::{
     HelmService, KindScopes, PlannedResource, ReleaseResource, ReleaseResourcesLease, ResourcePlan,

@@ -93,7 +93,7 @@ impl Outcome {
 
 /// What a handler returns: an optional message for a toast or the agent, and optional
 /// structured data (the tool's `structuredContent`).
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct CommandOutput {
     /// A short human message.
     pub message: Option<String>,

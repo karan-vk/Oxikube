@@ -76,6 +76,10 @@ impl MutationGuard {
                 &detail,
                 outcome,
             );
+            let record = match error.audit_denial() {
+                Some(denial) if outcome == AuditOutcome::Denied => record.with_denial(denial),
+                _ => record,
+            };
             (error, record)
         };
 

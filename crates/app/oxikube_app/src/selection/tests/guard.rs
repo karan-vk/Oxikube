@@ -149,7 +149,17 @@ fn a_wrong_typed_name_sends_nothing() {
         matches!(denied, Err(DispatchError::Confirmation(_))),
         "{denied:?}"
     );
-    assert!(t.writes().is_empty());
+    // A namespace makes the batch irreversible: the guard dry-ran it before asking, and that is
+    // all that was sent.
+    let Some(crate::guard::DryRunPreview::Rehearsed(preview)) = &request.preview else {
+        panic!("the batch is dry-run before it is asked: {request:?}");
+    };
+    assert!(preview.data.is_some(), "the dry run's per-object report");
+    assert!(
+        t.writes().iter().all(|(_, _, dry_run)| *dry_run),
+        "{:?}",
+        t.writes()
+    );
     assert_eq!(t.port().objects().len(), 2);
 }
 
