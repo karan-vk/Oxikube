@@ -3,7 +3,9 @@
 //! The diff is the live object against the object as the server would store it (defaults and
 //! admission included), normalised like the diff vs live. Its rows are a `uniform_list`: a large
 //! object costs one screen of rows. Enter applies, Escape (or a click outside) cancels; nothing
-//! is written until Apply.
+//! is written until Apply. When the server cannot dry-run the object (an aggregated API, an
+//! admission webhook with side effects: E19-S07) a banner says so in place of the diff, and Apply
+//! is still offered: a missing preview never blocks.
 
 use std::ops::Range;
 use std::sync::Arc;
@@ -104,9 +106,20 @@ impl ApplyPreviewDialog {
         format!("{verb} {}?", self.preview.label()).into()
     }
 
+    /// The banner shown in place of the diff when the server could not dry-run the apply.
+    pub fn no_preview_banner(&self) -> Option<String> {
+        let reason = self.preview.no_preview.as_deref()?;
+        Some(format!(
+            "This API does not support dry run, so there is no preview: review the manifest \
+             yourself before you apply it. The server said: {reason}"
+        ))
+    }
+
     /// The line under the title: what changes, and how it will be sent.
     pub fn description(&self) -> String {
-        let what = if self.preview.creates() {
+        let what = if self.preview.no_preview.is_some() {
+            "The server cannot dry-run this object".to_owned()
+        } else if self.preview.creates() {
             "The server dry run creates the object".to_owned()
         } else if self.diff.is_empty() {
             "The server dry run changes nothing".to_owned()
@@ -231,7 +244,18 @@ impl Render for ApplyPreviewDialog {
                     .text_color(colors.text_muted)
                     .child(self.description()),
             )
-            .child(self.rows(cx))
+            .child(match self.no_preview_banner() {
+                Some(banner) => div()
+                    .debug_selector(|| "apply-preview-no-preview".into())
+                    .p(u(tokens.spacing.md))
+                    .border_1()
+                    .border_color(colors.warning)
+                    .rounded(u(tokens.radius.md))
+                    .text_color(colors.warning)
+                    .child(banner)
+                    .into_any_element(),
+                None => self.rows(cx).into_any_element(),
+            })
             .child(
                 DialogFooter::new()
                     .child(

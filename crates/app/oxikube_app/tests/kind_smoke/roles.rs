@@ -83,7 +83,8 @@ async fn run(
     command: Command,
     ctx: DispatchContext,
 ) -> Result<Outcome, DispatchError> {
-    let Ok(Outcome::NeedsConfirmation(request)) = bus.dispatch(command.clone(), ctx.clone()).await
+    // A request the server refuses to dry-run is refused before anything is asked (E19-S07).
+    let Outcome::NeedsConfirmation(request) = bus.dispatch(command.clone(), ctx.clone()).await?
     else {
         panic!("expected a confirmation request");
     };

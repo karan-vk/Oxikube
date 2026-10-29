@@ -23,6 +23,7 @@
 //! | `resource_diff` | the cross-cluster resource diff (E20-S09): `resource::DiffWith` reads two objects (connecting a cluster on demand) and opens a tab with the changed-path summary and the side-by-side line diff; the "Diff with..." picker; read-only |
 //! | `open_text` | "Open in editor" from the apply panel (E20-S05): [`OpenText`], a document's text in a new tab with the cursor on its line |
 //! | `apply` | applying the buffer (E10-S08): `resource::Apply` (`cmd-s` / `ctrl-s`, the palette, the toolbar), the dry run, [`ApplyPreviewDialog`], [`ConflictDialog`], the server's errors on their fields |
+//! | `dry_run` | [`DryRunDiff`]: the guard's dry run of one object (E19-S07) as this diff, installed in the workspace's confirmation dialog |
 //!
 //! The editor never writes its buffer anywhere: not to the layout, not to logs. Applying it to a
 //! cluster is `resource::Apply` (E10-S08), through `oxikube_app::ApplyService` and the
@@ -33,6 +34,7 @@ mod commands;
 mod controller;
 mod convert;
 mod create;
+mod dry_run;
 mod host;
 mod item;
 mod live;
@@ -58,6 +60,7 @@ pub use apply::{ApplyPreviewDialog, ApplyStage, BatchPreviewDialog, BatchSession
 pub use commands::{EDITOR_COMMANDS, EditorRequest, EditorViewSink, register_commands};
 pub use controller::{EditorViews, EditorViewsDeps};
 pub use create::Create;
+pub use dry_run::DryRunDiff;
 pub use host::{ClusterEditorHost, EditorHost};
 pub use live::{
     DIFF_DEBOUNCE, DiffLayout, LiveSource, ROW_HEIGHT as DIFF_ROW_HEIGHT, SessionLive,
@@ -124,9 +127,11 @@ struct EditorDispatcher(Rc<dyn CommandDispatcher>);
 impl Global for EditorDispatcher {}
 
 /// Registers the global `editor::NewManifest` and `resource::Create` actions (each dispatches its
-/// bus command through the dispatcher [`install`] set). Called by [`crate::init`]. The toggles are handled by the focused
+/// bus command through the dispatcher [`install`] set) and installs [`DryRunDiff`] in the
+/// confirmation dialog. Called by [`crate::init`]. The toggles are handled by the focused
 /// [`ManifestEditor`] itself.
 pub(crate) fn init(cx: &mut App) {
+    dry_run::init(cx);
     cx.on_action(|_: &NewManifest, cx| {
         if let Some(dispatcher) = cx.try_global::<EditorDispatcher>().map(|d| d.0.clone()) {
             dispatcher.dispatch(Command::EditorNewManifest { cluster: None }, cx);

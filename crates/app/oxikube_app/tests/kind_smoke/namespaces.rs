@@ -201,7 +201,10 @@ async fn create_delete_read_only_and_conflict_on_a_real_cluster() {
     assert_eq!(&*deleted[0].target.name, name);
     let created: Vec<_> = audit
         .iter()
-        .filter(|r| &*r.cmd == "namespace::Create" && r.outcome == AuditOutcome::Succeeded)
+        // The commit's record: the guard's dry run before it asks (E19-S07) is its own.
+        .filter(|r| {
+            &*r.cmd == "namespace::Create" && r.outcome == AuditOutcome::Succeeded && !r.dry_run
+        })
         .collect();
     assert_eq!(created.len(), 1, "{audit:?}");
     assert!(

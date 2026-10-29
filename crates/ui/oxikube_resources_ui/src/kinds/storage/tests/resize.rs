@@ -137,8 +137,10 @@ fn a_valid_size_resizes_through_the_guard_and_audits_both_sizes(cx: &mut TestApp
         .condition("FileSystemResizePending", "True", "Waiting for the kubelet")
         .build();
     let resources = f.ports().resources;
-    resources.script().patch.push_ok(grown.clone());
-    resources.script().patch.push_ok(grown);
+    // The guard's dry run before it asks (E19-S07), the handler's, the patch.
+    for _ in 0..3 {
+        resources.script().patch.push_ok(grown.clone());
+    }
     let dialog = press_resize(&mut f, 0);
     with(&mut f, &dialog, |d, window, cx| {
         d.type_size("20Gi", window, cx)
@@ -154,13 +156,22 @@ fn a_valid_size_resizes_through_the_guard_and_audits_both_sizes(cx: &mut TestApp
                 json!({"spec": {"resources": {"requests": {"storage": "20Gi"}}}})
             ),
             (
+                true,
+                json!({"spec": {"resources": {"requests": {"storage": "20Gi"}}}})
+            ),
+            (
                 false,
                 json!({"spec": {"resources": {"requests": {"storage": "20Gi"}}}})
             ),
         ],
         "a rehearsal, then the patch"
     );
-    let audit = f.state.audit_log();
+    let audit: Vec<_> = f
+        .state
+        .audit_log()
+        .into_iter()
+        .filter(|r| !r.dry_run)
+        .collect();
     assert_eq!(audit.len(), 1);
     assert_eq!(&*audit[0].cmd, "pvc::Resize");
     assert_eq!(audit[0].outcome, AuditOutcome::Succeeded);

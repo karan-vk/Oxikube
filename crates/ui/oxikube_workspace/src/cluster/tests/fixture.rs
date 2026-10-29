@@ -205,6 +205,8 @@ pub(crate) struct Fixture {
     pub triggers: Arc<Mutex<usize>>,
     /// The objects `resource::Open` was dispatched for.
     pub opened: Arc<Mutex<Vec<oxikube_domain::ids::ResourceRef>>>,
+    /// The resource port of `prod-eu`'s connection.
+    pub resources: Arc<oxikube_testkit::FakeResourcePort>,
 }
 
 pub(crate) fn bounds(
@@ -225,7 +227,7 @@ pub(crate) fn fixture(cx: &mut TestAppContext) -> Fixture {
         FakeClusterSourcePort::new().with_contexts([context(PROD, "prod-eu"), context(LAB, "lab")]),
     );
     let clock = Arc::new(FakeClockPort::default());
-    let manager = ClusterSessionManager::new(connector, source, clock.clone());
+    let manager = ClusterSessionManager::new(connector.clone(), source, clock.clone());
     manager.open(&context(PROD, "prod-eu"), SessionOptions::default());
     manager.open(&context(LAB, "lab"), SessionOptions::default());
     manager
@@ -320,8 +322,10 @@ pub(crate) fn fixture(cx: &mut TestAppContext) -> Fixture {
             move |_: Command, cx: HandlerContext| {
                 let counter = counter.clone();
                 async move {
-                    cx.require_mutation()?;
-                    *counter.lock() += 1;
+                    // The guard's dry run before it asks (E19-S07) is not a trigger.
+                    if !cx.require_mutation()?.dry_run() {
+                        *counter.lock() += 1;
+                    }
                     let job = oxikube_domain::ids::ResourceRef::namespaced(
                         id(PROD),
                         oxikube_domain::ids::Gvk::new("batch", "v1", "Job"),
@@ -333,6 +337,34 @@ pub(crate) fn fixture(cx: &mut TestAppContext) -> Fixture {
                         data: Some(serde_json::json!({ "open": job })),
                     })
                 }
+            },
+        )
+        .unwrap();
+    // `cronjob::Suspend` (E12-S08): a patch the guard previews (E19-S07), merge-patched through
+    // the guard's writer onto the fake resource port.
+    registry
+        .register(
+            *command::lookup(CommandId::CRONJOB_SUSPEND).unwrap(),
+            move |command: Command, cx: HandlerContext| async move {
+                let mutation = cx.require_mutation()?;
+                let target = command.target().expect("a CronJob").clone();
+                mutation
+                    .writer()
+                    .patch(
+                        &target.gvk,
+                        target.namespace(),
+                        &target.name,
+                        &oxikube_ports::Patch::merge(
+                            serde_json::json!({"spec": {"suspend": true}}),
+                        ),
+                        &mutation.write_options(),
+                    )
+                    .await?;
+                Ok(CommandOutput::message(if mutation.dry_run() {
+                    "Dry run: CronJob default/nightly can be suspended"
+                } else {
+                    "Suspended CronJob default/nightly"
+                }))
             },
         )
         .unwrap();
@@ -415,5 +447,6 @@ pub(crate) fn fixture(cx: &mut TestAppContext) -> Fixture {
         node_shells,
         triggers,
         opened,
+        resources: connector.ports_for(&id(PROD)).resources,
     }
 }

@@ -24,6 +24,7 @@ use super::types::ApplyMethod;
 use super::write::{ObjectWrite, Preview, version_of};
 use crate::actions::object_label;
 use crate::command_bus::{CommandOutput, CommandRegistry, HandlerContext, RegisterError};
+use crate::guard::no_preview_reason;
 use crate::session::ClusterSessionManager;
 
 /// The field manager when the command names none.
@@ -92,7 +93,17 @@ async fn handle(
     if mutation.dry_run() {
         return rehearse(&write, writer, reader.as_ref()).await;
     }
-    let (method, object) = write.send(writer, reader.as_ref(), Preview::First).await?;
+    let (method, object) = match write.send(writer, reader.as_ref(), Preview::First).await {
+        Ok(done) => done,
+        // The API cannot dry-run the apply (an aggregated API, a webhook with side effects): sent
+        // without the rehearsal; a missing preview never blocks what the user confirmed (E19-S07).
+        Err(error) if no_preview_reason(&error).is_some() => {
+            write
+                .send(writer, reader.as_ref(), Preview::Unavailable)
+                .await?
+        }
+        Err(error) => return Err(error),
+    };
     let label = object_label(&write.target);
     let message = match method {
         ApplyMethod::ServerSide => format!("Applied {label}"),

@@ -6,6 +6,7 @@ mod echo;
 mod fixture;
 mod guard;
 mod menu;
+mod preview;
 mod runner;
 
 pub(super) use fixture::{Fixture, bounds, fixture};

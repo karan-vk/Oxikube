@@ -10,7 +10,7 @@
 use futures::executor::block_on;
 use gpui::TestAppContext;
 use oxikube_app::command_bus::{DispatchContext, DispatchError, Outcome};
-use oxikube_app::guard::Confirmation;
+use oxikube_app::guard::{Confirmation, preview_verb};
 use oxikube_domain::Capabilities;
 use oxikube_domain::audit::{AuditOutcome, Initiator};
 use oxikube_domain::command::{COMMANDS, CommandId};
@@ -167,41 +167,48 @@ fn every_kinds_mutations_are_guarded_audited_and_tools(cx: &mut TestAppContext) 
             assert!(bus.tool(id).is_some(), "{what}: an MCP tool stub");
             let command = action.command_for(&target);
 
-            // Asked first, at the declared tier; nothing ran.
+            // Asked first, at the declared tier; nothing ran. An irreversible command (a
+            // PersistentVolume's delete) and a create, update, patch or apply (E19-S07) are
+            // dry-run by the guard before they are asked, and that dry run is audited as one;
+            // nothing else is. A row's bare command may be one the server refuses to dry-run (a
+            // set image naming no container): then nothing is asked at all.
+            let rehearsed = preview_verb(&command).is_some()
+                || command
+                    .effective_risk()
+                    .is_some_and(Risk::requires_dry_run_diff);
             let audited = app.ports.state.audit_log().len();
             let request = match block_on(bus.dispatch(command.clone(), ui())) {
-                Ok(Outcome::NeedsConfirmation(request)) => request,
+                Ok(Outcome::NeedsConfirmation(request)) => Some(request),
+                Err(DispatchError::Handler(_)) if rehearsed => None,
                 other => panic!("{what}: expected a confirmation request, got {other:?}"),
             };
-            assert_eq!(request.tier, tier, "{what}");
-            assert_eq!(request.command, id, "{what}");
-            // An irreversible command (a PersistentVolume's delete) is dry-run by the guard
-            // before it is asked, and that dry run is audited as one; nothing else is.
-            let rehearsed = command
-                .effective_risk()
-                .is_some_and(Risk::requires_dry_run_diff);
-            assert_eq!(request.preview.is_some(), rehearsed, "{what}");
             let asked = &app.ports.state.audit_log()[audited..];
             assert_eq!(asked.len(), usize::from(rehearsed), "{what}");
             assert!(asked.iter().all(|r| r.dry_run), "{what}");
             let audited = audited + asked.len();
 
-            // Confirmed: it runs (the fakes may refuse it) and leaves its audit record.
-            let confirmation = match tier {
-                ConfirmTier::TypeName => Confirmation::typed(
-                    request.token,
-                    request.expected_name.clone().expect("a name to type"),
-                ),
-                _ => Confirmation::simple(request.token),
-            };
-            let _ = block_on(bus.dispatch(command.clone(), ui().with_confirmation(confirmation)));
-            let records = app.ports.state.audit_log();
-            assert!(
-                records[audited..]
-                    .iter()
-                    .any(|r| r.cmd.as_ref() == id.as_str() && r.outcome != AuditOutcome::Denied),
-                "{what}: a confirmed dispatch is audited"
-            );
+            if let Some(request) = request {
+                assert_eq!(request.tier, tier, "{what}");
+                assert_eq!(request.command, id, "{what}");
+                assert_eq!(request.preview.is_some(), rehearsed, "{what}");
+                // Confirmed: it runs (the fakes may refuse it) and leaves its audit record.
+                let confirmation = match tier {
+                    ConfirmTier::TypeName => Confirmation::typed(
+                        request.token,
+                        request.expected_name.clone().expect("a name to type"),
+                    ),
+                    _ => Confirmation::simple(request.token),
+                };
+                let _ =
+                    block_on(bus.dispatch(command.clone(), ui().with_confirmation(confirmation)));
+                let records = app.ports.state.audit_log();
+                assert!(
+                    records[audited..].iter().any(
+                        |r| r.cmd.as_ref() == id.as_str() && r.outcome != AuditOutcome::Denied
+                    ),
+                    "{what}: a confirmed dispatch is audited"
+                );
+            }
 
             // Read-only: refused for the user and for an agent, before any request, audited.
             sessions.set_read_only(&cluster, true).expect("a session");

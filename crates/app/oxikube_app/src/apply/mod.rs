@@ -58,6 +58,7 @@ pub use plan::{
     ApplyOptions, ClusterPlan, MAX_PLAN_OBJECTS, ObjectResult, ObjectStatus, PlanReport,
     PlanStream, PlanTarget,
 };
+pub(crate) use mask::SecretMask;
 pub use service::ApplyService;
 pub use types::{
     ApplyError, ApplyMethod, ApplyPreview, ApplyReport, ApplyRequest, FieldConflict,

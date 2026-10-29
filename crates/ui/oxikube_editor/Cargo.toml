@@ -99,6 +99,15 @@ path = "tests/create_screenshot.rs"
 harness = false
 required-features = ["screenshot"]
 
+# The guard's dry run in the confirmation dialog (E19-S07): the diff of a previewed patch with a
+# server warning, and the banner of an API that cannot dry-run.
+# `cargo test -p oxikube_editor --features screenshot --test dry_run_screenshot`
+[[test]]
+name = "dry_run_screenshot"
+path = "tests/dry_run_screenshot.rs"
+harness = false
+required-features = ["screenshot"]
+
 # `cargo bench -p oxikube_editor --bench yaml_parse` (E10-S02, reused by E10-S11): parse time of a
 # 2k-line manifest and a 5 MB dump.
 [[bench]]

@@ -120,11 +120,18 @@ impl Rollouts {
         self.h.resources("a")
     }
 
-    /// Scripts the answers of the dry run and the real patch.
+    /// Scripts the answers of the guard's dry run before it asks (E19-S07), the handler's dry
+    /// run and the real patch.
     pub fn answer_patches(&self) {
+        self.answer_dry_runs(3);
+    }
+
+    /// Scripts `n` answers to patches (one per guard dry run when only asking).
+    pub fn answer_dry_runs(&self, n: usize) {
         let answer = deployment_object(4, "answer", false);
-        self.port().script().patch.push_ok(answer.clone());
-        self.port().script().patch.push_ok(answer);
+        for _ in 0..n {
+            self.port().script().patch.push_ok(answer.clone());
+        }
     }
 
     /// The patches the port received, as `(dry_run, kind, body)`.

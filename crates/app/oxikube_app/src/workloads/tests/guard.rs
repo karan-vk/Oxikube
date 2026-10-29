@@ -63,8 +63,12 @@ fn every_command_asks_before_it_does_anything() {
         assert_eq!(request.tier, ConfirmTier::Simple, "{}", command.id());
         assert_eq!(request.risk, Some(Risk::Low));
     }
+    // The guard's dry runs (E19-S07) are all that is sent before the answer.
     assert!(
-        t.port().recorded_calls().is_empty(),
+        t.port()
+            .mutating_calls()
+            .iter()
+            .all(oxikube_testkit::ResourceCall::is_dry_run),
         "no request before the answer"
     );
 }
@@ -101,8 +105,9 @@ fn a_trigger_is_audited_with_the_initiator_and_the_job_it_created() {
     t.run(trigger("nightly"), Initiator::Agent)
         .expect("trigger");
     let audit = t.h.audit();
-    assert_eq!(audit.len(), 1);
-    let record = &audit[0];
+    assert_eq!(audit.len(), 2, "the guard's dry run, then the trigger");
+    assert!(audit[0].dry_run);
+    let record = &audit[1];
     assert_eq!(record.cmd.as_ref(), "cronjob::Trigger");
     assert_eq!(record.initiator, Initiator::Agent);
     assert_eq!(record.outcome, AuditOutcome::Succeeded);
@@ -140,7 +145,8 @@ fn a_suspend_is_audited_against_the_object_with_no_body() {
         Initiator::Command,
     )
     .expect("suspend");
-    let record = &t.h.audit()[0];
+    let record = &t.h.audit()[1];
+    assert!(!record.dry_run);
     assert_eq!(record.cmd.as_ref(), "cronjob::Suspend");
     assert_eq!(record.initiator, Initiator::Command);
     assert_eq!(record.detail, None);
@@ -155,8 +161,16 @@ fn a_declined_confirmation_sends_nothing_and_is_audited() {
     futures::FutureExt::now_or_never(t.h.bus.decline(request.token))
         .expect("answers")
         .expect("declined");
-    assert!(t.port().recorded_calls().is_empty());
-    assert_eq!(t.h.audit()[0].outcome, AuditOutcome::Cancelled);
+    assert!(
+        t.port()
+            .mutating_calls()
+            .iter()
+            .all(oxikube_testkit::ResourceCall::is_dry_run),
+        "only the guard's dry run"
+    );
+    let audit = t.h.audit();
+    assert!(audit[0].dry_run);
+    assert_eq!(audit[1].outcome, AuditOutcome::Cancelled);
 }
 
 #[test]

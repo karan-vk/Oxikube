@@ -105,7 +105,17 @@ fn create_is_medium_risk_with_one_simple_confirmation_naming_binding_role_and_su
         assert!(asked.summary.contains(part), "{part}: {}", asked.summary);
     }
     assert!(!asked.summary.contains("WARNING"));
-    assert!(h.writes("a").is_empty(), "asking writes nothing");
+    // Asking sends the guard's dry run only (E19-S07), and the question carries its result.
+    let writes = h.writes("a");
+    assert!(
+        !writes.is_empty() && writes.iter().all(ResourceCall::is_dry_run),
+        "asking writes nothing: {writes:?}"
+    );
+    let Some(crate::guard::DryRunPreview::Rehearsed(preview)) = &asked.preview else {
+        panic!("a create is previewed: {asked:?}");
+    };
+    assert_eq!(preview.changes.len(), 1);
+    assert_eq!(preview.changes[0].change, crate::apply::Change::Create);
 }
 
 #[test]
@@ -139,9 +149,10 @@ fn create_dry_runs_then_creates_and_audits_role_and_count_never_names() {
     assert_eq!(data["outcome"], "created");
     let writes = h.writes("a");
     let dry: Vec<bool> = writes.iter().map(ResourceCall::is_dry_run).collect();
-    assert_eq!(dry, [true, false], "rehearsed first: {writes:?}");
+    // The guard's dry run before it asks, the handler's own rehearsal, the create.
+    assert_eq!(dry, [true, true, false], "rehearsed first: {writes:?}");
     // The server-owned fields of a body that was read are not sent on a create.
-    let ResourceCall::Create { object, .. } = &writes[1] else {
+    let ResourceCall::Create { object, .. } = &writes[2] else {
         panic!("a create: {writes:?}");
     };
     assert!(object["metadata"].get("resourceVersion").is_none());
@@ -237,9 +248,16 @@ fn edit_replaces_in_place_at_the_read_version_and_a_stale_one_is_a_conflict() {
             _ => None,
         })
         .collect();
-    assert_eq!(replaces.len(), 2);
-    assert_eq!(replaces[1].0["metadata"]["resourceVersion"], "7");
+    assert_eq!(
+        replaces.len(),
+        3,
+        "the guard's dry run, the handler's, the replace"
+    );
+    assert_eq!(replaces[2].0["metadata"]["resourceVersion"], "7");
+    assert!(!replaces[2].1);
 
+    // The object changed since it was read: the guard's dry run already says so, and nothing is
+    // asked.
     h.resources("a")
         .script()
         .replace
@@ -282,22 +300,25 @@ fn a_new_role_ref_is_a_delete_and_a_create_as_one_audited_intent() {
         "{}",
         asked.summary
     );
-    let data = completed(h.confirm_and_run(edit(&new, Some(&old)), c));
+    // The guard's dry run before it asked deleted nothing.
+    assert!(h.writes("a").iter().all(ResourceCall::is_dry_run));
+    let before = h.writes("a").len();
+    let answer = crate::guard::Confirmation::simple(asked.token);
+    let data = completed(h.dispatch(edit(&new, Some(&old)), c.with_confirmation(answer)));
     assert_eq!(data["outcome"], "recreated");
     let now = stored(&h, "RoleBinding", "readers").expect("the binding exists");
     assert_eq!(role_ref_of(&now), "edit");
     let audit = h.audit();
     let records: Vec<_> = audit
         .iter()
-        .filter(|r| r.outcome == AuditOutcome::Succeeded)
+        .filter(|r| r.outcome == AuditOutcome::Succeeded && !r.dry_run)
         .collect();
     assert_eq!(records.len(), 1, "one intent, one record: {audit:?}");
     assert_eq!(
         records[0].detail.as_deref(),
         Some("role=ClusterRole/edit subjects=2 recreate=delete+create")
     );
-    let kinds: Vec<&str> = h
-        .writes("a")
+    let kinds: Vec<&str> = h.writes("a")[before..]
         .iter()
         .map(|call| match call {
             ResourceCall::Delete { .. } => "delete",

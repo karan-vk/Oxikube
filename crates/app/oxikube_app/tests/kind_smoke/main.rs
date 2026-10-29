@@ -28,6 +28,7 @@ mod crd_watch;
 mod debug;
 mod delete;
 mod drain;
+mod dry_run_preview;
 mod events;
 mod events_agent;
 mod events_chain;

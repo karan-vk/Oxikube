@@ -154,7 +154,11 @@ fn a_wrong_typed_name_sends_nothing() {
     let Some(crate::guard::DryRunPreview::Rehearsed(preview)) = &request.preview else {
         panic!("the batch is dry-run before it is asked: {request:?}");
     };
-    assert!(preview.data.is_some(), "the dry run's per-object report");
+    assert!(preview.message.is_some(), "the dry run's report");
+    assert!(
+        preview.changes.is_empty(),
+        "a delete writes no object to compare"
+    );
     assert!(
         t.writes().iter().all(|(_, _, dry_run)| *dry_run),
         "{:?}",

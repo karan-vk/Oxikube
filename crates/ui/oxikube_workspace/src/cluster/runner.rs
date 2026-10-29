@@ -19,7 +19,10 @@
 //! * needs confirmation: a [`ConfirmDialog`] rendering the guard's request; confirming
 //!   dispatches the same command again with the answer, cancelling declines it (audited);
 //! * refused: a toast naming the cluster ([`denial_toast`]). A read-only refusal also pulses the
-//!   status bar badge once. The refusal came from the guard; the UI only reports it.
+//!   status bar badge once. The refusal came from the guard; the UI only reports it. A conflict on
+//!   the commit (the object changed since the preview, HTTP 409) offers "Preview again": the
+//!   command is dispatched once more without an answer, so the guard dry-runs it against the
+//!   object as it is now and asks again (E19-S07).
 
 use std::sync::Arc;
 
@@ -180,7 +183,13 @@ impl ClusterCommandRunner {
                 {
                     status.update(cx, |item, cx| item.pulse(&cluster, cx));
                 }
-                self.toast(denial_toast(&error), cx);
+                let toast = denial_toast(&error);
+                let toast = if error.offers_new_preview() {
+                    self.preview_again(toast, command)
+                } else {
+                    toast
+                };
+                self.toast(toast, cx);
             }
         }
     }
@@ -199,6 +208,15 @@ impl ClusterCommandRunner {
                 target: target.clone(),
             };
             runner.run(command, window, cx);
+        }))
+    }
+
+    /// `toast` with a "Preview again" button that dispatches `command` anew: the guard dry-runs it
+    /// against the live object and asks again.
+    fn preview_again(&self, toast: Toast, command: Command) -> Toast {
+        let runner = self.clone();
+        toast.action(ToastAction::new("Preview again", move |window, cx| {
+            runner.run(command.clone(), window, cx);
         }))
     }
 

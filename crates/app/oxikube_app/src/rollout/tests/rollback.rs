@@ -38,9 +38,16 @@ fn undo_to_the_previous_revision_replaces_the_template_without_the_hash_label() 
     );
     assert_eq!(data["outcome"], "rolled_back");
 
-    // The server rehearses the patch, then the same patch is sent for real.
+    // The guard's dry run before it asked (E19-S07); then the server rehearses the patch, and the
+    // same patch is sent for real.
     let patches = t.patches();
-    assert_eq!(patches.len(), 2);
+    assert_eq!(patches.len(), 3);
+    assert!(patches[0].0);
+    assert_eq!(
+        patches[0].2, patches[2].2,
+        "the guard previewed the same patch"
+    );
+    let patches = &patches[1..];
     assert_eq!((patches[0].0, patches[1].0), (true, false));
     assert_eq!(patches[0].2, patches[1].2);
     let (_, kind, body) = &patches[1];
@@ -70,7 +77,7 @@ fn undo_to_a_given_revision_restores_that_one() {
             .unwrap();
     assert_eq!(output.data.unwrap()["to_revision"], 1);
     assert_eq!(
-        t.patches()[1].2[0]["value"]["spec"]["containers"][0]["image"],
+        t.patches()[2].2[0]["value"]["spec"]["containers"][0]["image"],
         "web:v1"
     );
 }

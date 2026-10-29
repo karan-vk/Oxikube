@@ -28,14 +28,16 @@ fn suspending_a_cronjob_merge_patches_spec_suspend_after_a_dry_run() {
     let output = t
         .run(suspend(cronjob_ref("nightly")), Initiator::Ui)
         .expect("suspend");
+    // The guard's dry run before it asks (E19-S07), the handler's, the patch.
     assert_eq!(
         t.writes(),
         [
             ("CronJob".to_owned(), "patch", true),
+            ("CronJob".to_owned(), "patch", true),
             ("CronJob".to_owned(), "patch", false)
         ]
     );
-    assert_eq!(t.body(1), json!({"spec": {"suspend": true}}));
+    assert_eq!(t.body(2), json!({"spec": {"suspend": true}}));
     assert_eq!(
         output.message.as_deref(),
         Some("Suspended CronJob default/nightly")
@@ -62,7 +64,7 @@ fn resuming_a_cronjob_patches_it_back() {
     let output = t
         .run(resume(cronjob_ref("nightly")), Initiator::Ui)
         .expect("resume");
-    assert_eq!(t.body(3), json!({"spec": {"suspend": false}}));
+    assert_eq!(t.body(5), json!({"spec": {"suspend": false}}));
     assert_eq!(
         output.message.as_deref(),
         Some("Resumed CronJob default/nightly")
@@ -84,12 +86,12 @@ fn a_running_job_can_be_suspended_and_a_suspended_one_resumed() {
     ));
     t.run(suspend(job_ref("import")), Initiator::Ui)
         .expect("suspend");
-    assert_eq!(t.body(1), json!({"spec": {"suspend": true}}));
+    assert_eq!(t.body(2), json!({"spec": {"suspend": true}}));
     t.run(resume(job_ref("import")), Initiator::Ui)
         .expect("resume");
-    assert_eq!(t.body(3), json!({"spec": {"suspend": false}}));
+    assert_eq!(t.body(5), json!({"spec": {"suspend": false}}));
     let kinds: Vec<_> = t.writes().into_iter().map(|w| w.0).collect();
-    assert_eq!(kinds, ["Job"; 4]);
+    assert_eq!(kinds, ["Job"; 6]);
 }
 
 #[test]
@@ -126,7 +128,11 @@ fn suspending_a_job_that_is_already_finished_is_left_to_the_server() {
     ));
     t.run(suspend(job_ref("done")), Initiator::Ui)
         .expect("sent");
-    assert_eq!(t.writes().len(), 2);
+    assert_eq!(
+        t.writes().len(),
+        3,
+        "the guard's dry run, the handler's, the patch"
+    );
 }
 
 #[test]

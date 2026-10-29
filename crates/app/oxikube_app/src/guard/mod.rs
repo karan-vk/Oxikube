@@ -29,12 +29,14 @@
 //!   through a [`ConfirmationProvider`] (an agent's permission prompt), routed by initiator with
 //!   [`ConfirmationRouter`].
 //! * **Dry run**: [`DispatchContext::dry_run`](crate::command_bus::DispatchContext::dry_run)
-//!   reaches the handler through [`Mutation::write_options`]. A command whose risk
-//!   [requires it](oxikube_domain::safety::Risk::requires_dry_run_diff) (`Irreversible`) is
-//!   dry-run by the guard before the confirmation is asked, and the request carries the result
-//!   ([`DryRunPreview`], or `NoPreviewAvailable` when the server cannot dry-run it, which never
-//!   blocks); a refused dry run refuses the command, and a confirmation issued without the dry
-//!   run cannot approve it. See the `rehearsal` module.
+//!   reaches the handler through [`Mutation::write_options`]. A create, update, patch or apply
+//!   ([`preview_verb`], E19-S07) and a command whose risk
+//!   [requires it](oxikube_domain::safety::Risk::requires_dry_run_diff) (`Irreversible`) are
+//!   dry-run by the guard (`dryRun=All`) before the confirmation is asked, and the request carries
+//!   the result ([`DryRunPreview`]: each object written next to the live one, Secret values
+//!   masked, and the server's warnings; or `NoPreviewAvailable` when the server cannot dry-run
+//!   it, which never blocks); a refused dry run refuses the command, and a confirmation issued
+//!   without the dry run cannot approve it. See the `rehearsal` and `preview` modules.
 //! * **Execute**: the handler gets a [`Mutation`], the only way to a `ResourceWriter`.
 //! * **Audit**: one [`AuditRecord`](oxikube_domain::audit::AuditRecord) per attempt
 //!   (`Succeeded`, `Failed`, `Denied`, `Cancelled`) through [`AuditLog`]; a refusal says why
@@ -60,6 +62,7 @@ mod mutation;
 mod pipeline;
 pub mod policy;
 pub mod posture;
+mod preview;
 mod provider;
 mod rehearsal;
 mod selection_policy;
@@ -78,6 +81,9 @@ pub use confirm::{
 };
 pub use mutation::Mutation;
 pub use posture::{PrefsPatch, PrefsWriter, register_commands};
+pub use preview::{
+    DryRunResult, MAX_PREVIEW_OBJECTS, PreviewChange, no_preview_reason, preview_verb,
+};
 pub use provider::{ConfirmationProvider, ConfirmationRouter, Decision};
 pub use rehearsal::DryRunPreview;
 

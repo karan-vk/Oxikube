@@ -11,11 +11,16 @@
 //!   until the field holds the expected text exactly ([`typed_matches`]: case-sensitive, no
 //!   trimming, as the guard compares). The check is one string compare per keystroke.
 //! - **Bulk**: the objects are listed in a virtualised list, with their own risk when they differ.
+//! - **Preview** (E19-S07): the guard's server dry run, as a banner (or "no preview available"
+//!   when the server cannot dry-run the request, which never blocks), each object it would write
+//!   drawn by the E10 diff view (installed by the editor, [`set_preview_diff_builder`]) and the
+//!   server's warnings.
 //!
 //! Every way the dialog goes away answers it: Confirm and Cancel directly, and Esc, a click on the
 //! scrim, a replacement modal or a closing window by releasing the entity, which declines (the
 //! flag-and-release pattern, no task involved). A request is therefore never left pending.
 
+mod preview;
 mod prompt;
 mod render;
 pub(crate) mod request;
@@ -26,6 +31,7 @@ use gpui::{
 };
 use oxikube_ui::input::{InputEvent, InputState};
 
+pub use preview::{PreviewDiffBuilder, heading as preview_heading, set_preview_diff_builder};
 pub use prompt::{ConfirmItem, ConfirmPrompt, PreviewNote, typed_matches};
 
 use super::{ModalPlacement, ModalView};
@@ -46,6 +52,8 @@ struct TypedField {
 /// The guard's confirmation dialog. See the module docs.
 pub struct ConfirmDialog {
     prompt: ConfirmPrompt,
+    /// The objects of the guard's dry run, with their diff views.
+    previews: Vec<preview::PreviewEntry>,
     typed: Option<TypedField>,
     on_confirm: Option<ConfirmHandler>,
     on_decline: Option<DeclineHandler>,
@@ -85,8 +93,10 @@ impl ConfirmDialog {
             }
         })
         .detach();
+        let previews = preview::entries(&prompt.changes, window, cx);
         Self {
             prompt,
+            previews,
             typed,
             on_confirm: Some(Box::new(on_confirm)),
             on_decline: Some(Box::new(on_decline)),
@@ -117,6 +127,15 @@ impl ConfirmDialog {
     /// The confirm button's label.
     pub fn confirm_text(&self) -> &SharedString {
         &self.prompt.confirm_label
+    }
+
+    /// The headings of the objects the guard's dry run would write ("Update CronJob
+    /// default/nightly"), in order.
+    pub fn preview_headings(&self) -> Vec<SharedString> {
+        self.previews
+            .iter()
+            .map(|entry| entry.heading().clone())
+            .collect()
     }
 
     /// The text the user has to type, when the dialog asks for one.

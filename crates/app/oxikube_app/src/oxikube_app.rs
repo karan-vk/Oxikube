@@ -166,7 +166,8 @@ pub use exec::{
 };
 pub use guard::{
     Confirmation, ConfirmationProvider, ConfirmationRequest, ConfirmationRouter, ConfirmationToken,
-    Decision, DryRunPreview, Mutation, MutationGuard, PrefsPatch, PrefsWriter,
+    Decision, DryRunPreview, DryRunResult, Mutation, MutationGuard, PrefsPatch, PrefsWriter,
+    PreviewChange,
 };
 pub use helm::{
     HelmService, KindScopes, PlannedResource, ReleaseResource, ReleaseResourcesLease, ResourcePlan,

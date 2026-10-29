@@ -55,8 +55,9 @@ pub enum DispatchError {
     /// The confirmation in the context was not accepted.
     #[error(transparent)]
     Confirmation(#[from] ConfirmationError),
-    /// The confirmation was asked for without the server-side dry run the command's risk
-    /// requires ([`Risk::requires_dry_run_diff`](oxikube_domain::safety::Risk::requires_dry_run_diff)),
+    /// The confirmation was asked for without the server-side dry run the command needs (its risk
+    /// [requires one](oxikube_domain::safety::Risk::requires_dry_run_diff), or it is a create,
+    /// update, patch or apply the guard previews, [`preview_verb`](crate::guard::preview_verb)),
     /// so it cannot approve it. Dispatch the command again without a confirmation: the guard
     /// runs the dry run and asks again.
     #[error("{0} needs a server dry run before it is confirmed")]
@@ -99,6 +100,20 @@ impl DispatchError {
             | DispatchError::AuditUnavailable(_)
             | DispatchError::AuditFailed(_)
             | DispatchError::Handler(_) => None,
+        }
+    }
+
+    /// Whether the user should be offered a new preview: dispatching the same command again,
+    /// without a confirmation, has the guard dry-run it against the object as it is now and ask
+    /// again (E19-S07). True for a conflict (HTTP 409) on the commit, whatever the server said:
+    /// the object changed since it was previewed, an object of that name was made since, or
+    /// fields were taken by another manager (the server's message names them); and for a
+    /// confirmation that was issued without the dry run the command needs.
+    pub fn offers_new_preview(&self) -> bool {
+        match self {
+            DispatchError::Handler(error) => error.kind() == ErrorKind::Conflict,
+            DispatchError::DryRunRequired(_) => true,
+            _ => false,
         }
     }
 

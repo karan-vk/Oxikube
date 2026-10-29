@@ -78,6 +78,14 @@ fn patches(h: &Harness) -> Vec<(String, Value, bool)> {
         .collect()
 }
 
+/// The patches that were not dry runs: what the confirmed command changed.
+fn sent(h: &Harness) -> Vec<(String, Value, bool)> {
+    patches(h)
+        .into_iter()
+        .filter(|(_, _, dry_run)| !dry_run)
+        .collect()
+}
+
 fn script_patches(h: &Harness, names: &[&str]) {
     for name in names {
         h.resources("a").script().patch.push_ok(class(name, true));
@@ -101,12 +109,22 @@ fn set_default_annotates_the_class_after_a_low_risk_confirmation() {
         "{}",
         request.summary
     );
+    // Only the guard's dry run is sent before the answer (E19-S07), and the question carries
+    // the class as the server would store it.
     assert!(
-        h.writes("a").is_empty(),
+        sent(&h).is_empty() && !patches(&h).is_empty(),
         "nothing is sent before the answer"
     );
+    let Some(crate::guard::DryRunPreview::Rehearsed(preview)) = &request.preview else {
+        panic!("a patch is previewed: {request:?}");
+    };
+    assert_eq!(&*preview.changes[0].target.name, "nginx");
+    assert_eq!(preview.changes[0].change, crate::apply::Change::Update);
 
-    let out = h.confirm_and_run(cmd, ctx(Initiator::Ui)).unwrap();
+    let answer = crate::guard::Confirmation::simple(request.token);
+    let out = h
+        .dispatch(cmd, ctx(Initiator::Ui).with_confirmation(answer))
+        .unwrap();
     let Outcome::Completed(output) = out else {
         panic!("expected completion");
     };
@@ -114,11 +132,19 @@ fn set_default_annotates_the_class_after_a_low_risk_confirmation() {
         output.message.as_deref(),
         Some("IngressClass nginx is the default Ingress class")
     );
-    assert_eq!(patches(&h), [("nginx".to_owned(), json!("true"), false)]);
+    assert_eq!(sent(&h), [("nginx".to_owned(), json!("true"), false)]);
     let audit = h.audit();
-    assert_eq!(h.outcomes(), [(AuditOutcome::Succeeded, Initiator::Ui)]);
-    assert_eq!(&*audit[0].cmd, "ingressclass::SetDefault");
-    assert_eq!(audit[0].target.name.as_ref(), "nginx");
+    assert_eq!(
+        h.outcomes(),
+        [
+            (AuditOutcome::Succeeded, Initiator::Ui),
+            (AuditOutcome::Succeeded, Initiator::Ui)
+        ],
+        "the guard's dry run, then the patch"
+    );
+    assert!(audit[0].dry_run && !audit[1].dry_run);
+    assert_eq!(&*audit[1].cmd, "ingressclass::SetDefault");
+    assert_eq!(audit[1].target.name.as_ref(), "nginx");
 }
 
 #[test]
@@ -137,7 +163,7 @@ fn the_class_that_was_the_default_loses_the_flag() {
     };
     // The new default first, so there is never a moment without one; then the old ones, whose
     // annotation a null merge-patch value removes.
-    let sent = patches(&h);
+    let sent = sent(&h);
     assert_eq!(sent[0], ("nginx".to_owned(), json!("true"), false));
     let mut cleared: Vec<_> = sent[1..].to_vec();
     cleared.sort_by(|a, b| a.0.cmp(&b.0));
@@ -171,7 +197,7 @@ fn without_clear_previous_only_the_target_is_patched_and_nothing_is_listed() {
     script_patches(&h, &["nginx"]);
     h.confirm_and_run(set_default("a", "nginx", false), ctx(Initiator::Ui))
         .unwrap();
-    assert_eq!(patches(&h).len(), 1);
+    assert_eq!(sent(&h).len(), 1);
     let listed = h
         .resources("a")
         .recorded_calls()
@@ -186,7 +212,7 @@ fn the_class_that_is_already_the_default_is_not_cleared_from_itself() {
     script_patches(&h, &["nginx"]);
     h.confirm_and_run(set_default("a", "nginx", true), ctx(Initiator::Ui))
         .unwrap();
-    assert_eq!(patches(&h), [("nginx".to_owned(), json!("true"), false)]);
+    assert_eq!(sent(&h), [("nginx".to_owned(), json!("true"), false)]);
 }
 
 #[test]
@@ -234,21 +260,21 @@ fn a_refused_patch_is_an_error_and_clears_nothing() {
         .script()
         .patch
         .push_err(OxiError::forbidden("ingressclasses nginx is forbidden"));
+    // The server refuses the guard's dry run: the command is refused before anything is asked.
     let err = h
-        .confirm_and_run(set_default("a", "nginx", true), ctx(Initiator::Ui))
+        .dispatch(set_default("a", "nginx", true), ctx(Initiator::Ui))
         .unwrap_err();
     assert!(matches!(err, DispatchError::Handler(_)), "{err:?}");
-    assert_eq!(patches(&h), [("nginx".to_owned(), json!("true"), false)]);
+    assert_eq!(patches(&h), [("nginx".to_owned(), json!("true"), true)]);
     assert_eq!(h.outcomes(), [(AuditOutcome::Failed, Initiator::Ui)]);
+    assert!(h.audit()[0].dry_run);
 }
 
 #[test]
 fn a_flag_that_cannot_be_cleared_is_reported_with_the_class_that_is_now_default() {
     let h = harness_with([class("nginx", false), class("traefik", true)]);
-    h.resources("a")
-        .script()
-        .patch
-        .push_ok(class("nginx", true));
+    // The guard's dry run passes; then the new default is set and the old one cannot be cleared.
+    script_patches(&h, &["nginx", "traefik", "nginx"]);
     h.resources("a")
         .script()
         .patch

@@ -46,29 +46,46 @@ fn one_confirm_then_a_dry_run_and_the_create() {
     let request = h.ask(command.clone(), ctx(Initiator::Ui));
     assert_eq!(request.tier, ConfirmTier::Simple);
     assert_eq!(request.risk, Some(Risk::Low));
-    assert!(
-        h.writes("a").is_empty(),
+    // Only the guard's dry run is sent before the answer (E19-S07); the question previews it.
+    assert_eq!(
+        creates(&h),
+        [(true, "team-a".to_owned())],
         "nothing is sent before the answer"
     );
+    let Some(crate::guard::DryRunPreview::Rehearsed(preview)) = &request.preview else {
+        panic!("a create is previewed: {request:?}");
+    };
+    assert_eq!(&*preview.changes[0].target.name, "team-a");
 
-    let out = h.confirm_and_run(command, ctx(Initiator::Ui)).unwrap();
+    let answer = crate::guard::Confirmation::simple(request.token);
+    let out = h
+        .dispatch(command, ctx(Initiator::Ui).with_confirmation(answer))
+        .unwrap();
     let Outcome::Completed(output) = out else {
         panic!("expected completion");
     };
     assert_eq!(output.message.as_deref(), Some("Created namespace team-a"));
     assert_eq!(
         creates(&h),
-        [(true, "team-a".to_owned()), (false, "team-a".to_owned())]
+        [
+            (true, "team-a".to_owned()),
+            (true, "team-a".to_owned()),
+            (false, "team-a".to_owned())
+        ]
     );
     // The object that was sent has the labels.
-    let ResourceCall::Create { object, .. } = &h.writes("a")[1] else {
+    let ResourceCall::Create { object, .. } = &h.writes("a")[2] else {
         panic!("a create");
     };
     assert_eq!(object["metadata"]["labels"]["team"], "a");
 
-    // One audit record, naming the new namespace (not the cluster), with the label count.
+    // The guard's dry run, then the create, naming the new namespace (not the cluster), with the
+    // label count.
     let audit = h.audit();
-    assert_eq!(audit.len(), 1);
+    assert_eq!(audit.len(), 2);
+    assert!(audit[0].dry_run);
+    let audit = &audit[1..];
+    assert!(!audit[0].dry_run);
     assert_eq!(audit[0].outcome, AuditOutcome::Succeeded);
     assert_eq!(&*audit[0].cmd, "namespace::Create");
     assert_eq!(&*audit[0].target.name, "team-a");
@@ -168,9 +185,20 @@ fn the_creator_dispatches_as_the_user_and_answers_the_one_click_confirm() {
     assert_eq!(message, "Created namespace team-a");
     assert_eq!(
         creates(&h),
-        [(true, "team-a".to_owned()), (false, "team-a".to_owned())]
+        [
+            (true, "team-a".to_owned()),
+            (true, "team-a".to_owned()),
+            (false, "team-a".to_owned())
+        ]
     );
-    assert_eq!(h.outcomes(), [(AuditOutcome::Succeeded, Initiator::Ui)]);
+    // The guard's dry run, then the create.
+    assert_eq!(
+        h.outcomes(),
+        [
+            (AuditOutcome::Succeeded, Initiator::Ui),
+            (AuditOutcome::Succeeded, Initiator::Ui)
+        ]
+    );
 }
 
 #[test]

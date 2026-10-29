@@ -123,11 +123,13 @@ fn ctrl_l_on_a_deployment_shows_its_history_and_the_button_rolls_back_through_th
 
     // The user confirms: the server rehearses the patch, then it is sent for real.
     let answer = oxikube_testkit::fixtures::deployment_ready();
-    app.cluster_resources()
-        .script()
-        .patch
-        .push_ok(answer.clone());
-    app.cluster_resources().script().patch.push_ok(answer);
+    // The guard's dry run before it asks (E19-S07), the handler's, the patch.
+    for _ in 0..3 {
+        app.cluster_resources()
+            .script()
+            .patch
+            .push_ok(answer.clone());
+    }
     app.vcx
         .update(|_, cx| dialog.update(cx, |d, cx| d.submit(cx)));
     app.tick();
@@ -139,16 +141,23 @@ fn ctrl_l_on_a_deployment_shows_its_history_and_the_button_rolls_back_through_th
         matches!(
             &writes[..],
             [
+                ResourceCall::Patch { options: preview, .. },
                 ResourceCall::Patch { options: dry, .. },
                 ResourceCall::Patch { name, patch, options, .. },
-            ] if dry.dry_run && !options.dry_run && name == "web"
+            ] if preview.dry_run && dry.dry_run && !options.dry_run && name == "web"
                 && patch.body[0]["path"] == "/spec/template"
                 && patch.body[0]["value"]["spec"]["containers"][0]["image"]
                     == "registry.example/app:0.9"
         ),
         "{writes:?}"
     );
-    let audit = app.ports.state.audit_log();
+    let audit: Vec<_> = app
+        .ports
+        .state
+        .audit_log()
+        .into_iter()
+        .filter(|r| !r.dry_run)
+        .collect();
     assert_eq!(audit.len(), 1, "{audit:?}");
     assert_eq!(&*audit[0].cmd, "workload::Rollback");
     assert_eq!(audit[0].outcome, AuditOutcome::Succeeded);
