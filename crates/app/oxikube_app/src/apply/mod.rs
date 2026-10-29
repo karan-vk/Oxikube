@@ -12,6 +12,7 @@
 //! |---|---|
 //! | `service` | [`ApplyService`]: [`preview`](ApplyService::preview) and [`apply`](ApplyService::apply), the guard's confirmation answered by the preview, errors sorted into [`ApplyError`] (conflicts with their managers and times) |
 //! | `handler` | [`register_commands`]: the `resource::Apply` handler, the only code that writes a manifest (server-side apply under the field manager, the replace / create fallback) |
+//! | `load` | [`load_path`] / [`load_text`]: files, directories (recursive, sorted, capped) and text read into `oxikube_domain::manifests` documents (E20-S01) |
 //! | `manifest` | the manifest read as one object, its namespace, the request body |
 //! | `mask` | Secret values replaced by keyed fingerprints before anything leaves this module |
 //! | `batch` | [`ApplyService::preview_batch`] / [`apply_batch`](ApplyService::apply_batch): many documents (E10-S09), each the same `resource::Apply`: all dry-run first, then applied in buffer order, per-document results, a failure not stopping the rest (as `kubectl apply`) except for the documents that need it |
@@ -27,6 +28,7 @@
 mod batch;
 mod change;
 mod handler;
+mod load;
 mod manifest;
 mod mask;
 mod service;
@@ -46,6 +48,7 @@ pub use batch::{
 };
 pub use change::{Change, SERVER_OWNED_FIELDS};
 pub use handler::{DEFAULT_FIELD_MANAGER, register_commands};
+pub use load::{LoadLimits, LoadNote, LoadedManifests, load_path, load_text};
 pub use service::ApplyService;
 pub use types::{
     ApplyError, ApplyMethod, ApplyPreview, ApplyReport, ApplyRequest, FieldConflict,

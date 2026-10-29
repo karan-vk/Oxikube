@@ -69,6 +69,7 @@ pub(crate) mod intern;
 pub mod json;
 pub mod kinds;
 pub mod log;
+pub mod manifests;
 pub mod metric_query;
 pub mod metrics;
 pub mod metrics_provider;
