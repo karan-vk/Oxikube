@@ -65,6 +65,38 @@ pub enum AuditDenial {
     Policy,
 }
 
+/// The file format of an audit export (`audit::Export`, E19-S09).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AuditExportFormat {
+    /// One JSON object per line, the record's own serde shape.
+    #[default]
+    Jsonl,
+    /// Comma-separated values with a header row; cells that start like a formula are neutralised.
+    Csv,
+}
+
+impl AuditExportFormat {
+    /// Every format.
+    pub const ALL: [AuditExportFormat; 2] = [AuditExportFormat::Jsonl, AuditExportFormat::Csv];
+
+    /// The file extension, without the dot.
+    pub const fn extension(self) -> &'static str {
+        match self {
+            AuditExportFormat::Jsonl => "jsonl",
+            AuditExportFormat::Csv => "csv",
+        }
+    }
+
+    /// The name shown to the user.
+    pub const fn label(self) -> &'static str {
+        match self {
+            AuditExportFormat::Jsonl => "JSONL",
+            AuditExportFormat::Csv => "CSV",
+        }
+    }
+}
+
 /// One audited mutation attempt.
 ///
 /// See the [module docs](self); there is intentionally no body field.

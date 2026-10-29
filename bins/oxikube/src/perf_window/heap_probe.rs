@@ -81,6 +81,7 @@ fn world(pods: usize) -> WorldSpec {
             ClusterSpec::still("perf-b", pods),
         ],
         listed_only: 0,
+        audit_records: 0,
     }
 }
 

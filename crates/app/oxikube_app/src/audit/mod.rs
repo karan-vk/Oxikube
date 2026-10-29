@@ -40,6 +40,10 @@
 mod attempt;
 mod log;
 mod retention;
+mod signal;
+
+pub mod export;
+pub mod query;
 
 #[cfg(test)]
 mod tests;
@@ -47,3 +51,4 @@ mod tests;
 pub use attempt::AuditAttempt;
 pub use log::{AuditLog, MAX_AUDIT_BACKLOG};
 pub use retention::{AuditRetention, MAX_RETENTION_DAYS, PRUNE_INTERVAL};
+pub use signal::{AuditAppended, AuditListener};

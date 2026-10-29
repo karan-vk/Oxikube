@@ -137,7 +137,7 @@ pub use apply::{
     BatchPreview, BatchReport, Change, DocumentPreview, DocumentResult, DocumentStatus,
     FieldConflict, PreviewOutcome,
 };
-pub use audit::{AuditLog, AuditRetention};
+pub use audit::{AuditAppended, AuditListener, AuditLog, AuditRetention};
 pub use catalog::{
     CatalogEntry, ClusterCatalog, ClusterCommandOutcome, ClusterCommands, FavouriteChanged,
     FavouritesLagged,

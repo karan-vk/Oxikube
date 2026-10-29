@@ -23,6 +23,7 @@
 //! | `nodes-table` | the Nodes table with its pods-by-node index on, under 10 000-pod churn |
 //! | `overview` | the cluster overview of a 100-node, 3 000-pod cluster under churn (E13-S09) |
 //! | `overview-graphs` | the same overview with live metrics and Prometheus graphs (E13-S09-F1) |
+//! | `audit-log` | the audit viewer over a real SQLite log of 100 000 records: fling through it (paging as it goes), then cycle its filters (E19-S09) |
 //! | `logs` | stream 5 000 lines/s; type a search; JSON mode |
 //! | `terminal` | a 50 MB `yes` flood; a full-screen redraw at 60 Hz; resize |
 //! | `idle` | two clusters connected, nothing moving: CPU |
@@ -77,6 +78,8 @@ pub enum Scenario {
     Overview,
     /// The same overview, with live metrics and Prometheus graphs (E13-S09-F1).
     OverviewGraphs,
+    /// The audit viewer over 100 000 records: scroll, then change filters.
+    AuditLog,
     /// Stream 5 000 log lines a second; search typing; JSON mode.
     Logs,
     /// `yes` flood, full-screen redraws, resize.
@@ -89,6 +92,8 @@ pub enum Scenario {
 pub const MAIN_CONTEXT: &str = "perf-a";
 /// Pods of the main synthetic cluster (the budget's 10 000).
 pub const PODS: usize = 10_000;
+/// Records in the `audit-log` scenario's SQLite audit log (E19-S09).
+pub const AUDIT_RECORDS: usize = 100_000;
 /// Nodes of the `overview` scenario's cluster (E13-S09's fixture).
 pub const OVERVIEW_NODES: usize = 100;
 /// Pods of the `overview` scenario's cluster.
@@ -96,7 +101,7 @@ pub const OVERVIEW_PODS: usize = 3_000;
 
 impl Scenario {
     /// Every scenario, in report order.
-    pub const ALL: [Scenario; 14] = [
+    pub const ALL: [Scenario; 15] = [
         Scenario::PodsTable,
         Scenario::TableFilter,
         Scenario::Namespaces,
@@ -108,6 +113,7 @@ impl Scenario {
         Scenario::NodesTable,
         Scenario::Overview,
         Scenario::OverviewGraphs,
+        Scenario::AuditLog,
         Scenario::Logs,
         Scenario::Terminal,
         Scenario::Idle,
@@ -127,6 +133,7 @@ impl Scenario {
             Scenario::NodesTable => "nodes-table",
             Scenario::Overview => "overview",
             Scenario::OverviewGraphs => "overview-graphs",
+            Scenario::AuditLog => "audit-log",
             Scenario::Logs => "logs",
             Scenario::Terminal => "terminal",
             Scenario::Idle => "idle",
@@ -152,12 +159,14 @@ impl Scenario {
             | Scenario::Logs => WorldSpec {
                 clusters: vec![main()],
                 listed_only: 0,
+                audit_records: 0,
             },
             Scenario::Overview => WorldSpec {
                 clusters: vec![
                     ClusterSpec::churning(MAIN_CONTEXT, OVERVIEW_PODS).with_nodes(OVERVIEW_NODES),
                 ],
                 listed_only: 0,
+                audit_records: 0,
             },
             // The same cluster, with a metrics-server and a Prometheus-compatible endpoint
             // (E13-S09-F1): the usage bars, the top consumers and the history graphs have data.
@@ -169,6 +178,13 @@ impl Scenario {
                         .with_prometheus(),
                 ],
                 listed_only: 0,
+                audit_records: 0,
+            },
+            // A quiet cluster and a real SQLite audit log of 100 000 records (E19-S09).
+            Scenario::AuditLog => WorldSpec {
+                clusters: vec![ClusterSpec::still(MAIN_CONTEXT, 100)],
+                listed_only: 0,
+                audit_records: AUDIT_RECORDS,
             },
             Scenario::TabsPanes => WorldSpec {
                 clusters: vec![
@@ -177,10 +193,12 @@ impl Scenario {
                     ClusterSpec::churning("perf-c", 3_000),
                 ],
                 listed_only: 0,
+                audit_records: 0,
             },
             Scenario::Catalog => WorldSpec {
                 clusters: vec![ClusterSpec::still(MAIN_CONTEXT, 100)],
                 listed_only: 49,
+                audit_records: 0,
             },
             Scenario::Terminal => WorldSpec::default(),
             Scenario::Idle => WorldSpec {
@@ -189,6 +207,7 @@ impl Scenario {
                     ClusterSpec::still("perf-b", 1_000),
                 ],
                 listed_only: 0,
+                audit_records: 0,
             },
         }
     }

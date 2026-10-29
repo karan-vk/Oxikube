@@ -79,5 +79,12 @@ path = "tests/overview_screenshot.rs"
 harness = false
 required-features = ["screenshot"]
 
+# The audit viewer with mixed outcomes and a selected record, E19-S09.
+[[test]]
+name = "audit_screenshot"
+path = "tests/audit_screenshot.rs"
+harness = false
+required-features = ["screenshot"]
+
 [lints]
 workspace = true

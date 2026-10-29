@@ -20,6 +20,7 @@
 //! | `metrics` | [`WorldMetrics`]: the synthetic metrics-server (a cluster with `metrics`) |
 //! | `prometheus` | [`WorldPromql`], [`WorldDetector`]: the synthetic Prometheus (a cluster with `prometheus`) |
 
+mod audit;
 mod describe;
 mod fixed;
 mod hub;
@@ -40,7 +41,7 @@ use oxikube_domain::OxiResult;
 use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_ports::{
     ClockPort, ClusterConnection, ClusterConnectorPort, ClusterContext, ClusterSource,
-    ConnectRequest, SourceId, SourceKind,
+    ConnectRequest, SourceId, SourceKind, StatePort,
 };
 use oxikube_testkit::{
     FakeClusterConnectorPort, FakeClusterSourcePort, FakeFsPort, FakeResourcePort,
@@ -156,6 +157,9 @@ pub struct WorldSpec {
     pub clusters: Vec<ClusterSpec>,
     /// Further contexts the catalog lists that are never connected (the catalog scenario's 50).
     pub listed_only: usize,
+    /// Audit records seeded into a real SQLite state database (the `audit-log` scenario's
+    /// 100 000), instead of the in-memory fake: the viewer's reads then cost what the app's do.
+    pub audit_records: usize,
 }
 
 struct Cluster {
@@ -269,8 +273,13 @@ pub fn ports_with(
         describe: DescribePreference::default(),
         kubeconfig_origins: Default::default(),
     };
-    let mut ports = AppPorts::new(Arc::new(FakeStatePort::new()), adapters)
-        .with_secrets(Arc::new(FakeSecretStorePort::new()));
+    let state: Arc<dyn StatePort> = if spec.audit_records > 0 {
+        audit::seeded_state(spec)
+    } else {
+        Arc::new(FakeStatePort::new())
+    };
+    let mut ports =
+        AppPorts::new(state, adapters).with_secrets(Arc::new(FakeSecretStorePort::new()));
     if let Some(prometheus) = prometheus_ports(spec) {
         ports = ports.with_prometheus(prometheus);
     }

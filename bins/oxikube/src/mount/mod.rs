@@ -92,6 +92,11 @@
 //!     app's `EventService`; its `events::*` commands (faults only, pause, copy, export) are on the
 //!     bus with their tool stubs.
 //!
+//! The audit log viewer (E19-S09, `mount::audit`): `audit::Open` (the palette's "Audit Log")
+//! opens it in the active cluster's tab over the guard's own `AuditLog`: a mutation shows up
+//! the moment its record is stored (the log's `appended` signal, no polling); `audit::Export`
+//! writes the filtered records as JSONL or CSV.
+//!
 //! 19. the RBAC subject pages (E17-S07, `mount::rbac`): `rbac::OpenUsers` (`:usr`, the sidebar's
 //!     Access Control > Users), `rbac::OpenGroups` (`:grp`) and `rbac::ShowSubject` (`:rbac
 //!     <subject>`) open the cluster's users, groups and a subject's per-verb policy matrix in its
@@ -113,6 +118,7 @@
 //! (ADR 0013, `startup::deferred`). What must live as long as the window is held by a
 //! [`Wiring`] entity the workspace keeps.
 
+mod audit;
 pub mod bus;
 mod cloud;
 mod describe;
@@ -260,6 +266,8 @@ pub struct Wiring {
     _notification_clicks: Task<()>,
     /// Opens the events views and applies the `events::*` requests (E14-S03).
     _events_views: Entity<oxikube_events_ui::EventsViews>,
+    /// Opens the audit log viewer and applies the `audit::*` requests (E19-S09).
+    _audit_views: Entity<oxikube_resources_ui::audit::AuditViews>,
     /// Opens the can-i dialog for `rbac::CanI` (E17-S08).
     _can_i_dialogs: gpui::Task<()>,
     /// Opens the RBAC subject pages and applies the `rbac::*` requests (E17-S07).
@@ -300,6 +308,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let dispatcher_for_pulses = dispatcher.clone();
     let dispatcher_for_notifications = dispatcher.clone();
     let dispatcher_for_events = dispatcher.clone();
+    let dispatcher_for_audit = dispatcher.clone();
     let dispatcher_for_rbac = dispatcher.clone();
     let dispatcher_for_port_forwards = dispatcher.clone();
 
@@ -454,6 +463,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (pulses_sink, pulses_rx) = oxikube_overview_ui::pulses::PulsesRequestSink::channel();
     let (overview_sink, overview_rx) = oxikube_overview_ui::OverviewRequestSink::channel();
     let (events_sink, events_rx) = oxikube_events_ui::EventsCommandSink::channel();
+    let (audit_sink, audit_rx) = oxikube_resources_ui::audit::AuditCommandSink::channel();
     let (can_i_sink, can_i_rx) = oxikube_rbac_ui::can_i::CanIRequestSink::channel();
     // The RBAC subject pages (E17-S07): the subject names `:rbac` completes are shared with the jump bar.
     let rbac_subjects = oxikube_app::rbac_subjects::SubjectsService::new();
@@ -526,6 +536,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         ),
         can_i_dialogs: can_i_sink,
         events_views: events_sink,
+        audit_views: audit_sink,
         rbac_views: rbac_sink,
         notifications: services.notifications.clone(),
         notification_panel: panel_sink,
@@ -894,6 +905,22 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         window,
         cx,
     );
+    // The audit log viewer (E19-S09): `audit::Open` (the palette's "Audit Log") opens it in the
+    // active cluster tab; it listens to the guard's own audit log, so a mutation shows at once.
+    let audit_views = audit::start_views(
+        audit::AuditWiring {
+            log: bus.guard().audit_handle(),
+            state: ports.state.clone(),
+            sessions: services.sessions.clone(),
+            dispatcher: dispatcher_for_audit,
+            fs: ports.clusters.fs.clone(),
+            clock: ports.clusters.clock.clone(),
+        },
+        tabs.downgrade(),
+        audit_rx,
+        window,
+        cx,
+    );
     // The can-i dialog (E17-S08): `rbac::CanI` (palette "RBAC: Can I?", prefilled from the selected
     // object) opens it in the cluster tab.
     let can_i_dialogs = oxikube_rbac_ui::can_i::CanIViews::start(
@@ -956,6 +983,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _follow_overviews: follow_overviews,
         _notification_clicks: notification_clicks,
         _events_views: events_views,
+        _audit_views: audit_views,
         _can_i_dialogs: can_i_dialogs,
         _rbac_views: rbac_views,
         _notification_centre: centre,

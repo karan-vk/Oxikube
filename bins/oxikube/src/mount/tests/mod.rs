@@ -8,6 +8,7 @@
 mod actions;
 mod agent;
 mod apply;
+mod audit_view;
 mod bindings;
 mod bulk;
 mod charts;

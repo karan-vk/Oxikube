@@ -146,7 +146,7 @@ pub struct Args {
     pub skip_budgets: bool,
     /// Run the real-window scenarios of ADR 0016 (`oxikube --perf-scenario-window`; pods-table,
     /// table-filter, namespaces, detail-drawer, tabs-panes, theme, catalog, sidebar,
-    /// nodes-table, overview, logs, terminal, idle) instead of the headless ones; `--samples` is the runs per scenario.
+    /// nodes-table, overview, audit-log, logs, terminal, idle) instead of the headless ones; `--samples` is the runs per scenario.
     #[arg(long, conflicts_with_all = ["check", "update_baseline", "from_report"])]
     pub windowed: bool,
     /// With `--windowed`: the context the terminal scenario's shell pod runs on when it answers
@@ -523,7 +523,7 @@ mod tests {
         assert!(Cli::try_parse_from(["perf", "--windowed", "--all", "--check"]).is_err());
         assert!(Cli::try_parse_from(["perf", "--all", "--enforce"]).is_err());
         assert!(
-            windowed::SCENARIOS.contains(&"terminal") && windowed::SCENARIOS.len() == 14,
+            windowed::SCENARIOS.contains(&"terminal") && windowed::SCENARIOS.len() == 15,
             "the list oxikube's Scenario::ALL has"
         );
         assert!(windowed::SCENARIOS.contains(&"overview-graphs"));

@@ -260,6 +260,8 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::PortForwardTogglePanel { .. }
         | Command::HelmShowRepos
         | Command::HelmOpenCharts
+        | Command::AuditOpen { .. }
+        | Command::AuditExport { .. }
         | Command::HelmSearchCharts { .. }
         | Command::HelmShowChart { .. }
         | Command::HelmInstallChart { .. }

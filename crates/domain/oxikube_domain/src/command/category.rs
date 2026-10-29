@@ -54,13 +54,15 @@ pub enum CommandCategory {
     Helm,
     /// Access reviews and RBAC tooling (`rbac::*`).
     Rbac,
+    /// The audit log viewer and its export (`audit::*`).
+    Audit,
     /// A namespace no category claims (an extension's command, until it declares one).
     Other,
 }
 
 impl CommandCategory {
     /// Every category, in display order.
-    pub const ALL: [CommandCategory; 19] = [
+    pub const ALL: [CommandCategory; 20] = [
         CommandCategory::App,
         CommandCategory::Window,
         CommandCategory::View,
@@ -79,12 +81,13 @@ impl CommandCategory {
         CommandCategory::Events,
         CommandCategory::Helm,
         CommandCategory::Rbac,
+        CommandCategory::Audit,
         CommandCategory::Other,
     ];
 
     /// The category of the command `id`, from its namespace.
     pub const fn of(id: CommandId) -> Self {
-        const NAMESPACES: [(&str, CommandCategory); 37] = [
+        const NAMESPACES: [(&str, CommandCategory); 38] = [
             ("app", CommandCategory::App),
             ("notifications", CommandCategory::App),
             ("window", CommandCategory::Window),
@@ -122,6 +125,7 @@ impl CommandCategory {
             ("events", CommandCategory::Events),
             ("helm", CommandCategory::Helm),
             ("rbac", CommandCategory::Rbac),
+            ("audit", CommandCategory::Audit),
         ];
         let mut i = 0;
         while i < NAMESPACES.len() {
@@ -154,6 +158,7 @@ impl CommandCategory {
             CommandCategory::Events => "Events",
             CommandCategory::Helm => "Helm",
             CommandCategory::Rbac => "RBAC",
+            CommandCategory::Audit => "Audit",
             CommandCategory::Other => "Other",
         }
     }
