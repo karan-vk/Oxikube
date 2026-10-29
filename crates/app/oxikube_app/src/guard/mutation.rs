@@ -16,8 +16,20 @@ use oxikube_ports::{DeleteOptions, ResourceWriter, WriteOptions};
 /// of read commands never get one. Nothing else in the app exposes a `ResourceWriter`:
 /// [`ClusterSession::resources`](crate::ClusterSession::resources) is read-only.
 ///
-/// A lint that rejects `ResourceWriter` calls outside handlers is an `xtask` follow-up;
-/// until then this type and review are the enforcement.
+/// `cargo xtask lint-deps` scans every `ui`, `platform` and `bins` crate's non-test sources
+/// (`xtask/src/lint_mutation`) and fails on any mention of this type, on holding a
+/// `ResourceWriter` (implementing one is allowed), and on mutating calls on a writer handle.
+/// There is no allow-list.
+///
+/// Outside this crate the constructor is unreachable:
+///
+/// ```compile_fail,E0624
+/// use std::sync::Arc;
+/// use oxikube_app::guard::Mutation;
+/// fn forge(writer: Arc<dyn oxikube_ports::ResourceWriter>, cluster: oxikube_domain::ids::ClusterId) {
+///     let _ = Mutation::new(cluster, writer, false);
+/// }
+/// ```
 pub struct Mutation {
     cluster: ClusterId,
     writer: Arc<dyn ResourceWriter>,

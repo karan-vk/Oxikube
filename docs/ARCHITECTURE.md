@@ -29,6 +29,11 @@ bins/oxikube              (wires adapters into app, mounts ui)
 `cargo xtask lint-deps` parses `cargo metadata` and fails CI on any violation. Dev-dependencies
 are exempt so tests can use `oxikube_testkit` freely.
 
+The same command also runs the mutation-door lint (`xtask/src/lint_mutation`, E19-S03): it parses
+the non-test sources of every `ui`, `platform` and `bins` crate with `syn` and fails on naming
+`Mutation`, holding a `ResourceWriter` (implementing one is fine) or calling a mutating method on a
+writer handle. There is no allow-list; route the action through a `Command`.
+
 Why so strict: multiple agent teams work in parallel. The layer rules are what let a team
 replace an adapter (kube-rs → something else, gpui-component → in-house) or add an integration
 (Argo CD, Flux) without touching the core, and let the domain/app layers be tested with fakes
