@@ -112,6 +112,23 @@ pub(crate) const RED: ClusterColour = ClusterPreset::PROD_COLOUR;
 /// each. A command added to `oxikube_domain::command` without a sample here fails that test
 /// with the message below, so a new mutating command can never ship unchecked.
 pub(crate) fn sample(command: CommandId, name: &str) -> Command {
+    build_sample(command, name, |other| {
+        panic!(
+            "no sample for the declared command {other}: add one to testing_posture::sample; the \
+             read-only enforcement test iterates every declared command"
+        )
+    })
+}
+
+/// [`sample`] for a caller that wants to list every missing sample instead of stopping at the
+/// first: `None` when the command has no arm in the table.
+pub(crate) fn try_sample(command: CommandId, name: &str) -> Option<Command> {
+    // `app::Quit` has an arm, so the stand-in for a missing one can never be mistaken for a hit.
+    let built = build_sample(command, name, |_| Command::AppQuit);
+    (built.id() == command).then_some(built)
+}
+
+fn build_sample(command: CommandId, name: &str, missing: impl FnOnce(&str) -> Command) -> Command {
     let cluster = id(name);
     let manifest = || "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: x\n".to_owned();
     let target = || pod(name, "web-0");
@@ -770,10 +787,7 @@ pub(crate) fn sample(command: CommandId, name: &str) -> Command {
         "job::Resume" => Command::JobResume {
             target: batch(name, "Job", "import"),
         },
-        other => panic!(
-            "no sample for the declared command {other}: add one to testing_posture::sample; the \
-             read-only enforcement test iterates every declared command"
-        ),
+        other => missing(other),
     }
 }
 

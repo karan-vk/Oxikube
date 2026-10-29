@@ -109,7 +109,7 @@ fn read_commands_still_run_on_a_read_only_cluster() {
 
 /// What an MCP server does with a `tools/call`: the tool name picks the command, the arguments
 /// are its payload, and the dispatch is `Initiator::Agent`.
-fn tool_call(tool: &str, arguments: Value) -> Command {
+pub(super) fn tool_call(tool: &str, arguments: Value) -> Command {
     let meta = COMMANDS
         .iter()
         .find(|m| m.id.tool_name() == tool)
