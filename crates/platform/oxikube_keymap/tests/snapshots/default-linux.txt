@@ -301,6 +301,18 @@
   escape           helm_releases::CloseDetail
 [HelmReleases && Editing]
   escape           helm_releases::FocusTable
+[ApplyResults && !Editing]
+  down             apply_results::SelectNext
+  e                apply_results::ToggleErrorsOnly
+  end              apply_results::SelectLast
+  enter            apply_results::ToggleExpand
+  g                apply_results::SelectFirst
+  home             apply_results::SelectFirst
+  j                apply_results::SelectNext
+  k                apply_results::SelectPrevious
+  o                apply_results::OpenInEditor
+  shift-g          apply_results::SelectLast
+  up               apply_results::SelectPrevious
 [RbacSubjects && !Editing]
   /                rbac_subjects::FocusFilter
   down             rbac_subjects::SelectNext

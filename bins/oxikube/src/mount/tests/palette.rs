@@ -81,6 +81,10 @@ fn the_palette_lists_exactly_what_the_bus_lists_for_the_view(cx: &mut TestAppCon
             .update(|_, cx| oxikube_helm_ui::HelmGateState::current(cx)),
         ctx.capabilities,
     );
+    // ... and kustomize's commands only while a tool was detected (none in a test).
+    ctx.capabilities = app
+        .vcx
+        .update(|_, cx| crate::mount::kustomize::palette_capabilities(cx, ctx.capabilities));
     let mut expected: Vec<CommandId> = bus.list(&ctx).iter().map(|info| info.id()).collect();
     expected.sort();
     let mut listed_sorted = listed.clone();
