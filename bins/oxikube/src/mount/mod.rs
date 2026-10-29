@@ -128,6 +128,7 @@ mod helm_upgrade;
 mod help;
 mod jump;
 mod keymap;
+mod kustomize;
 mod logs;
 mod metrics;
 mod notifications;
@@ -423,6 +424,9 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     // adapter backs the repositories, the charts and installs below, so `helm.path` reaches
     // them too.
     let helm = helm::install(cx, helm_targets);
+    // Kustomize (E20-S04): detects `kustomize` / `kubectl kustomize` in the background; the
+    // palette and the apply UI read the answer.
+    let _kustomize = kustomize::install(cx);
     // The chart repositories in Helm's own configuration (E16-S07): one service, the page and the
     // `helm::Repo*` commands share it.
     let helm_services = helm_repos::services(helm.cli.clone(), ports.clusters.clock.clone(), cx);

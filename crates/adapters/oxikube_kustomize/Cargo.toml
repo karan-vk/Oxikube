@@ -1,0 +1,27 @@
+[package]
+name = "oxikube_kustomize"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "KustomizePort adapter: detects the user's kustomize (or kubectl kustomize) and builds overlays with it, without exec plugins or Helm."
+
+[lib]
+path = "src/oxikube_kustomize.rs"
+doctest = false
+
+[dependencies]
+async-trait.workspace = true
+oxikube_domain.workspace = true
+oxikube_ports.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+futures.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
+
+[lints]
+workspace = true

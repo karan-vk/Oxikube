@@ -5841,6 +5841,7 @@ dependencies = [
  "oxikube_helm_ui",
  "oxikube_keymap",
  "oxikube_kube",
+ "oxikube_kustomize",
  "oxikube_logging",
  "oxikube_logs_ui",
  "oxikube_notify_os",
@@ -6204,6 +6205,19 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "uuid",
+]
+
+[[package]]
+name = "oxikube_kustomize"
+version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "futures",
+ "oxikube_domain",
+ "oxikube_ports",
+ "tempfile",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

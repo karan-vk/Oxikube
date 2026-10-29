@@ -31,6 +31,8 @@ bitflags::bitflags! {
         const ARGO = 1 << 5;
         /// Live metrics (metrics-server or Prometheus) are available.
         const METRICS = 1 << 6;
+        /// A `kustomize` (or `kubectl kustomize`) binary is installed, so overlays can be built.
+        const KUSTOMIZE = 1 << 7;
     }
 }
 
@@ -114,11 +116,13 @@ pub enum Capability {
     Argo,
     /// See [`Capabilities::METRICS`].
     Metrics,
+    /// See [`Capabilities::KUSTOMIZE`].
+    Kustomize,
 }
 
 impl Capability {
     /// Every capability, in declaration order.
-    pub const ALL: [Capability; 7] = [
+    pub const ALL: [Capability; 8] = [
         Capability::Mutate,
         Capability::Exec,
         Capability::Logs,
@@ -126,6 +130,7 @@ impl Capability {
         Capability::Helm,
         Capability::Argo,
         Capability::Metrics,
+        Capability::Kustomize,
     ];
 
     /// The matching single-bit [`Capabilities`] flag.
@@ -138,6 +143,7 @@ impl Capability {
             Capability::Helm => Capabilities::HELM,
             Capability::Argo => Capabilities::ARGO,
             Capability::Metrics => Capabilities::METRICS,
+            Capability::Kustomize => Capabilities::KUSTOMIZE,
         }
     }
 
@@ -152,6 +158,7 @@ impl Capability {
             Capability::Helm => "helm",
             Capability::Argo => "argo",
             Capability::Metrics => "metrics",
+            Capability::Kustomize => "kustomize",
         }
     }
 }

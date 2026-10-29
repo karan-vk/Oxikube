@@ -14,6 +14,7 @@
 //! | [`ServiceProxyPort`] (a request to a Service through the API server) | [`service_proxy`] | `oxikube_kube` |
 //! | [`DescribePort`] | [`describe`] | `oxikube_describe` |
 //! | [`HelmPort`] | [`helm`] | `oxikube_helm` |
+//! | [`KustomizePort`] | [`kustomize`] | `oxikube_kustomize` |
 //! | [`StatePort`] | [`state`] | `oxikube_state_sqlite` (ADR 0010) |
 //! | [`SecretStorePort`] | [`secrets`] | `oxikube_keychain` |
 //! | [`NotifierPort`] | [`notifier`] | `oxikube_notify_os` |
@@ -109,6 +110,7 @@ pub mod feed_stats;
 pub mod fs;
 pub mod helm;
 pub mod integration;
+pub mod kustomize;
 pub mod log;
 pub mod metrics;
 pub mod notification_source;
@@ -185,6 +187,7 @@ pub use helm::{
 pub use integration::{
     IntegrationPort, IntegrationSession, SidebarItem, SidebarModel, SidebarSection,
 };
+pub use kustomize::{BuildOutput, KustomizeError, KustomizePort, KustomizeTool, KustomizeToolKind};
 pub use log::{LogOptions, LogPort, LogSince, LogStream};
 pub use metrics::{MetricsOutcome, MetricsPort};
 pub use notification_source::NotificationSourcePort;
@@ -249,6 +252,7 @@ mod tests {
         service_proxy: Arc<dyn ServiceProxyPort>,
         describe: Arc<dyn DescribePort>,
         helm: Arc<dyn HelmPort>,
+        kustomize: Arc<dyn KustomizePort>,
         helm_repos: Arc<dyn HelmRepoPort>,
         state: Arc<dyn StatePort>,
         secrets: Arc<dyn SecretStorePort>,
@@ -281,6 +285,7 @@ mod tests {
         assert_send_sync::<dyn DescribePort>();
         assert_send_sync::<dyn HelmPort>();
         assert_send_sync::<dyn HelmRepoPort>();
+        assert_send_sync::<dyn KustomizePort>();
         assert_send_sync::<dyn StatePort>();
         assert_send_sync::<dyn SecretStorePort>();
         assert_send_sync::<dyn NotifierPort>();
@@ -300,7 +305,7 @@ mod tests {
     /// Every port's source file must name the adapter expected to implement it.
     #[test]
     fn every_port_docs_name_an_adapter() {
-        let ports: [(&str, &str, &str); 20] = [
+        let ports: [(&str, &str, &str); 21] = [
             (
                 "cluster_source",
                 include_str!("cluster_source.rs"),
@@ -326,6 +331,11 @@ mod tests {
             ),
             ("describe", include_str!("describe.rs"), "oxikube_describe"),
             ("helm", include_str!("helm.rs"), "oxikube_helm"),
+            (
+                "kustomize",
+                include_str!("kustomize.rs"),
+                "oxikube_kustomize",
+            ),
             ("state", include_str!("state.rs"), "oxikube_state_sqlite"),
             ("secrets", include_str!("secrets.rs"), "oxikube_keychain"),
             ("notifier", include_str!("notifier.rs"), "oxikube_notify_os"),

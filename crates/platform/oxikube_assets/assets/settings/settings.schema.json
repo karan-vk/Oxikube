@@ -363,6 +363,9 @@
         "kubeconfig": {
           "$ref": "#/$defs/KubeconfigSettingsContent"
         },
+        "kustomize": {
+          "$ref": "#/$defs/KustomizeSettingsContent"
+        },
         "log": {
           "$ref": "#/$defs/LogSettingsContent"
         },
@@ -973,6 +976,20 @@
           "type": "string"
         }
       ]
+    },
+    "KustomizeSettingsContent": {
+      "additionalProperties": false,
+      "description": "What one settings layer says about kustomize.",
+      "properties": {
+        "path": {
+          "description": "The `kustomize` (or `kubectl`) binary. Empty autodetects.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
     },
     "LogSettingsContent": {
       "additionalProperties": false,
@@ -2024,6 +2041,9 @@
     },
     "kubeconfig": {
       "$ref": "#/$defs/KubeconfigSettingsContent"
+    },
+    "kustomize": {
+      "$ref": "#/$defs/KustomizeSettingsContent"
     },
     "log": {
       "$ref": "#/$defs/LogSettingsContent"

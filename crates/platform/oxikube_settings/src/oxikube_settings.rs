@@ -20,6 +20,7 @@
 //! - [`aliases`]: the user's `aliases.json` (E11-S04): parse with line-numbered diagnostics, hot reload.
 //! - [`cluster`]: the per-cluster settings (`clusters.<id>`: name, colour, read-only, ...), E06-S08.
 //! - [`cloud`]: the `cloud` setting, providers, CLI paths, scan lists, cache TTL, parallelism (E18-S07).
+//! - [`kustomize`]: the `kustomize` setting, the binary that builds overlays (E20-S04).
 //! - [`helm`]: the `helm` setting, binary path, server-side apply, default repositories (E16-S11).
 //! - [`kubeconfig`]: the `kubeconfig.sources` setting, the kubeconfig files and folders to read (E06-S05).
 //! - [`metrics`]: the `metrics` setting, which extended resources count as GPUs (E13-S02).
@@ -45,6 +46,7 @@ pub mod helm;
 pub mod json_edit;
 pub mod jsonc;
 pub mod kubeconfig;
+pub mod kustomize;
 pub mod metrics;
 pub mod paths;
 pub mod portforward;
@@ -62,6 +64,7 @@ pub use diagnostics::SettingsDiagnostic;
 pub use global::{init, init_with_dir, update_user_settings};
 pub use helm::{HelmRepoContent, HelmSettings, HelmSettingsContent};
 pub use kubeconfig::{KubeconfigSettings, KubeconfigSettingsContent};
+pub use kustomize::{KustomizeSettings, KustomizeSettingsContent};
 pub use metrics::{
     DEFAULT_HISTORY_REFRESH_SECS, MAX_HISTORY_REFRESH_SECS, MIN_HISTORY_REFRESH_SECS,
     MetricsSettings, MetricsSettingsContent,

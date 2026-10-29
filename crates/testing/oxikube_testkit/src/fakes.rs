@@ -37,6 +37,7 @@
 //! | `ServiceProxyPort` | [`FakeServiceProxyPort`] |
 //! | `DescribePort` | [`FakeDescribePort`] |
 //! | `HelmPort` | [`FakeHelmPort`] |
+//! | `KustomizePort` | [`FakeKustomizePort`] |
 //! | `StatePort` | [`FakeStatePort`] |
 //! | `SecretStorePort` | [`FakeSecretStorePort`] |
 //! | `NotifierPort` | [`FakeNotifierPort`] |
@@ -91,6 +92,7 @@ mod forward_start;
 mod helm;
 mod infra;
 mod integration;
+mod kustomize;
 mod merge;
 mod notification_source;
 mod notifier;
@@ -130,6 +132,7 @@ pub use integration::{
     ContextProviderCall, ContextProviderScripts, FakeContextProviderPort, FakeIntegrationPort,
     FakeToolPort, IntegrationCall, IntegrationScripts, ToolCall, ToolScripts,
 };
+pub use kustomize::{FakeKustomizePort, KustomizeCall, KustomizeScripts};
 pub use notification_source::{
     FakeNotificationSourcePort, SourceCall, agent_permission, emit_agent_permission,
     emit_portforward_drop, emit_portforward_recovery, emit_update_available, hook_cluster,
