@@ -195,7 +195,8 @@ impl Model {
     /// Marks every object that has no answer yet as skipped, for a run that ended early (a
     /// refusal of the whole plan, or a cancel).
     pub fn skip_unanswered(&mut self, reason: &str) {
-        let applying = self.stage == Stage::Result;
+        // The running activity decides the slot, not the tab on screen.
+        let applying = self.activity == Activity::Applying;
         for row in &mut self.rows {
             let slot = if applying {
                 &mut row.done

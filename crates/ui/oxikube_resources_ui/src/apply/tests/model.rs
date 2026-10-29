@@ -209,3 +209,23 @@ fn a_run_that_ends_early_marks_what_has_no_answer_skipped() {
     assert_eq!(model.count("skipped"), 2);
     assert_eq!(model.count("created"), 1);
 }
+
+#[test]
+fn skipping_follows_the_running_activity_not_the_visible_stage() {
+    let mut model = Model::new();
+    model.planned(&plan());
+    model.begin_dry_run();
+    model.show(Stage::Result);
+    model.skip_unanswered("cancelled");
+    assert!(
+        model
+            .rows()
+            .iter()
+            .all(|row| row.dry.is_some() && row.done.is_none())
+    );
+
+    model.begin_apply();
+    model.show(Stage::Review);
+    model.skip_unanswered("nothing was sent");
+    assert!(model.rows().iter().all(|row| row.done.is_some()));
+}
