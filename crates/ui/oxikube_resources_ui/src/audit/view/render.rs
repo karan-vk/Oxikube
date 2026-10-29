@@ -13,21 +13,10 @@ use oxikube_ui::menu::DropdownMenu as _;
 use oxikube_ui::table::Table;
 use oxikube_ui::{ActiveTokens as _, Sizable as _, u};
 
+use crate::filter::thousands;
+
 use super::filters::menu_row_for_export;
 use super::{AuditView, Phase, tagged};
-
-/// `4812` as `4,812`.
-pub fn thousands(n: usize) -> String {
-    let digits = n.to_string();
-    let mut out = String::with_capacity(digits.len() + digits.len() / 3);
-    for (i, c) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i).is_multiple_of(3) {
-            out.push(',');
-        }
-        out.push(c);
-    }
-    out
-}
 
 impl AuditView {
     fn toolbar(&self, cx: &mut Context<Self>) -> AnyElement {
