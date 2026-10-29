@@ -92,22 +92,34 @@ fn the_wrong_name_deletes_nothing_the_right_one_deletes_and_audits_the_counts(
     });
     env.f.settle();
 
-    // The server rehearses the delete, then it runs.
+    // The guard dry-runs the irreversible delete before it asks, the handler rehearses it once
+    // more, then it runs.
     assert_eq!(
         deletes(&env.f),
-        [(true, "team-a".to_owned()), (false, "team-a".to_owned())]
+        [
+            (true, "team-a".to_owned()),
+            (true, "team-a".to_owned()),
+            (false, "team-a".to_owned())
+        ]
     );
     let audit = env.f.state.audit_log();
-    assert_eq!(audit.len(), 1);
-    assert_eq!(audit[0].outcome, AuditOutcome::Succeeded);
-    assert_eq!(audit[0].initiator, Initiator::Ui);
-    assert_eq!(&*audit[0].cmd, "namespace::Delete");
-    assert_eq!(&*audit[0].target.name, "team-a");
     assert_eq!(
-        audit[0].detail.as_deref(),
-        Some("contents=Deployment:0,Pod:2"),
-        "the record says what was in it (deployments are watched too, and there are none)"
+        audit.len(),
+        2,
+        "the guard's dry run, then the delete: {audit:?}"
     );
+    assert!(audit[0].dry_run && !audit[1].dry_run);
+    for record in &audit {
+        assert_eq!(record.outcome, AuditOutcome::Succeeded);
+        assert_eq!(record.initiator, Initiator::Ui);
+        assert_eq!(&*record.cmd, "namespace::Delete");
+        assert_eq!(&*record.target.name, "team-a");
+        assert_eq!(
+            record.detail.as_deref(),
+            Some("contents=Deployment:0,Pod:2"),
+            "the record says what was in it (deployments are watched too, and there are none)"
+        );
+    }
     // One object that went well closes the dialog with a toast.
     assert!(dialog(&mut env.f).is_none());
     assert!(

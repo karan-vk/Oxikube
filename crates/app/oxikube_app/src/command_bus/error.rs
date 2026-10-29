@@ -1,6 +1,6 @@
 //! [`DispatchError`]: why a dispatch did not complete.
 
-use oxikube_domain::audit::Initiator;
+use oxikube_domain::audit::{AuditDenial, Initiator};
 use oxikube_domain::command::CommandId;
 use oxikube_domain::ids::{ClusterId, ContextName};
 use oxikube_domain::{ErrorKind, OxiError};
@@ -55,6 +55,17 @@ pub enum DispatchError {
     /// The confirmation in the context was not accepted.
     #[error(transparent)]
     Confirmation(#[from] ConfirmationError),
+    /// The confirmation was asked for without the server-side dry run the command's risk
+    /// requires ([`Risk::requires_dry_run_diff`](oxikube_domain::safety::Risk::requires_dry_run_diff)),
+    /// so it cannot approve it. Dispatch the command again without a confirmation: the guard
+    /// runs the dry run and asks again.
+    #[error("{0} needs a server dry run before it is confirmed")]
+    DryRunRequired(CommandId),
+    /// The [`ConfirmationProvider`](crate::guard::ConfirmationProvider) declined the
+    /// confirmation (the user dismissed the dialog, an agent's permission prompt said no).
+    /// Nothing ran; the attempt is audited as cancelled by the user.
+    #[error("{0} was declined")]
+    Declined(CommandId),
     /// The audit log cannot be written, so the mutation was refused before it ran.
     #[error("the audit log is unavailable, mutation refused: {0}")]
     AuditUnavailable(OxiError),
@@ -68,6 +79,29 @@ pub enum DispatchError {
 }
 
 impl DispatchError {
+    /// Why the audit record of a refusal says it was denied: [`AuditDenial::ReadOnly`] for the
+    /// read-only block, [`AuditDenial::UserCancelled`] for a declined confirmation,
+    /// [`AuditDenial::Policy`] for the guard's other refusals (no open session, an initiator the
+    /// command does not allow, a confirmation that does not match, a missing dry run). `None`
+    /// for an error that is not a refusal.
+    pub fn audit_denial(&self) -> Option<AuditDenial> {
+        match self {
+            DispatchError::ReadOnly { .. } => Some(AuditDenial::ReadOnly),
+            DispatchError::Declined(_) => Some(AuditDenial::UserCancelled),
+            DispatchError::NoSession(_)
+            | DispatchError::NotPermitted { .. }
+            | DispatchError::Confirmation(_)
+            | DispatchError::DryRunRequired(_) => Some(AuditDenial::Policy),
+            DispatchError::UnknownCommand(_)
+            | DispatchError::NotImmediate(_)
+            | DispatchError::NoCluster(_)
+            | DispatchError::NotConnected { .. }
+            | DispatchError::AuditUnavailable(_)
+            | DispatchError::AuditFailed(_)
+            | DispatchError::Handler(_) => None,
+        }
+    }
+
     /// The cluster a [`ReadOnly`](Self::ReadOnly) error names.
     pub fn read_only_cluster(&self) -> Option<&ClusterId> {
         match self {
@@ -78,16 +112,18 @@ impl DispatchError {
 }
 
 impl From<DispatchError> for OxiError {
-    /// `ReadOnly` and `NotPermitted` are `Forbidden` (the user, not the cluster, said
+    /// `ReadOnly`, `NotPermitted` and `Declined` are `Forbidden` (the user, not the cluster, said
     /// no; `ErrorKind` has no `ReadOnly` variant, see `docs/CONTEXT.md`).
     fn from(err: DispatchError) -> Self {
         let kind = match err {
             DispatchError::Handler(inner) => return inner,
             DispatchError::UnknownCommand(_) | DispatchError::NoSession(_) => ErrorKind::NotFound,
-            DispatchError::NotPermitted { .. } | DispatchError::ReadOnly { .. } => {
-                ErrorKind::Forbidden
-            }
-            DispatchError::NoCluster(_) | DispatchError::Confirmation(_) => ErrorKind::Validation,
+            DispatchError::NotPermitted { .. }
+            | DispatchError::ReadOnly { .. }
+            | DispatchError::Declined(_) => ErrorKind::Forbidden,
+            DispatchError::NoCluster(_)
+            | DispatchError::Confirmation(_)
+            | DispatchError::DryRunRequired(_) => ErrorKind::Validation,
             DispatchError::NotImmediate(_) => ErrorKind::Unsupported,
             DispatchError::NotConnected { .. } => ErrorKind::Conflict,
             DispatchError::AuditUnavailable(_) | DispatchError::AuditFailed(_) => {

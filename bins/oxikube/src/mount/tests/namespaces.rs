@@ -254,7 +254,11 @@ fn create_and_delete_are_guarded_commands_on_the_bus(cx: &mut TestAppContext) {
         panic!("a delete is confirmed first");
     };
     assert_eq!(request.expected_name.as_deref(), Some("prod"));
-    assert!(ports.resources.mutating_calls().is_empty());
+    // Irreversible: the guard dry-ran it before asking, and that is all that went out.
+    assert!(request.preview.is_some(), "{request:?}");
+    let calls = ports.resources.mutating_calls();
+    assert_eq!(calls.len(), 1, "{calls:?}");
+    assert!(calls[0].is_dry_run(), "{calls:?}");
 }
 
 #[gpui::test]

@@ -3,8 +3,8 @@
 use std::sync::Arc;
 
 use oxikube_domain::ClusterPreset;
-use oxikube_domain::audit::AuditOutcome;
 use oxikube_domain::audit::Initiator;
+use oxikube_domain::audit::{AuditDenial, AuditOutcome};
 use oxikube_domain::command::{Command, CommandMeta};
 use oxikube_domain::safety::ConfirmTier;
 
@@ -33,14 +33,17 @@ impl MutationGuard {
         // person's explicit choice; an agent or a plugin may not.
         let unflags = unflags_production(&command, &posture);
         if unflags && matches!(ctx.initiator, Initiator::Agent | Initiator::Plugin) {
-            let record = self.audit.entry(
-                &ctx.who,
-                ctx.initiator,
-                meta.id.as_str(),
-                target,
-                ctx.dry_run,
-                AuditOutcome::Denied,
-            );
+            let record = self
+                .audit
+                .entry(
+                    &ctx.who,
+                    ctx.initiator,
+                    meta.id.as_str(),
+                    target,
+                    ctx.dry_run,
+                    AuditOutcome::Denied,
+                )
+                .with_denial(AuditDenial::Policy);
             if let Err(audit) = self.audit.record(record).await {
                 tracing::warn!(error = %audit, "could not audit a refused posture change");
             }
@@ -65,6 +68,7 @@ impl MutationGuard {
                         cluster: cluster.clone(),
                         expected_name: None,
                         dry_run: ctx.dry_run,
+                        rehearsed: false,
                     });
                     return Ok(Outcome::NeedsConfirmation(ConfirmationRequest {
                         token,
@@ -80,6 +84,8 @@ impl MutationGuard {
                             format!("Turn off read-only mode on {label}")
                         },
                         expected_name: None,
+                        initiator: ctx.initiator,
+                        preview: None,
                     }));
                 }
                 Some(answer) => {
@@ -87,14 +93,17 @@ impl MutationGuard {
                         self.confirmations
                             .redeem(answer, &command, ctx.initiator, ctx.dry_run)
                     {
-                        let record = self.audit.entry(
-                            &ctx.who,
-                            ctx.initiator,
-                            meta.id.as_str(),
-                            target,
-                            ctx.dry_run,
-                            AuditOutcome::Denied,
-                        );
+                        let record = self
+                            .audit
+                            .entry(
+                                &ctx.who,
+                                ctx.initiator,
+                                meta.id.as_str(),
+                                target,
+                                ctx.dry_run,
+                                AuditOutcome::Denied,
+                            )
+                            .with_denial(AuditDenial::Policy);
                         if let Err(audit) = self.audit.record(record).await {
                             tracing::warn!(error = %audit, "could not audit a refused posture change");
                         }

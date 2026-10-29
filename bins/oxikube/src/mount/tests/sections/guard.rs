@@ -91,13 +91,19 @@ fn documented(id: CommandId) -> (Risk, ConfirmTier) {
     (risk, tier)
 }
 
-/// Where the guard raises a tier for the object a command names (`delete_risk`): deleting a Node
-/// or a PersistentVolume asks for the name typed.
+/// Where the guard raises a tier for the object a command names (`delete_risk`): deleting a Node,
+/// a PersistentVolume or a CustomResourceDefinition asks for the name typed.
 const RAISED_BY_TARGET: &[(CommandId, &str, ConfirmTier)] = &[
     (CommandId::RESOURCE_DELETE, "Node", ConfirmTier::TypeName),
     (
         CommandId::RESOURCE_DELETE,
         "PersistentVolume",
+        ConfirmTier::TypeName,
+    ),
+    // E19-S01's classify table: deleting a CRD deletes every object of its kind.
+    (
+        CommandId::RESOURCE_DELETE,
+        "CustomResourceDefinition",
         ConfirmTier::TypeName,
     ),
 ];
@@ -162,7 +168,16 @@ fn every_kinds_mutations_are_guarded_audited_and_tools(cx: &mut TestAppContext) 
             };
             assert_eq!(request.tier, tier, "{what}");
             assert_eq!(request.command, id, "{what}");
-            assert_eq!(app.ports.state.audit_log().len(), audited, "{what}");
+            // An irreversible command (a PersistentVolume's delete) is dry-run by the guard
+            // before it is asked, and that dry run is audited as one; nothing else is.
+            let rehearsed = command
+                .effective_risk()
+                .is_some_and(Risk::requires_dry_run_diff);
+            assert_eq!(request.preview.is_some(), rehearsed, "{what}");
+            let asked = &app.ports.state.audit_log()[audited..];
+            assert_eq!(asked.len(), usize::from(rehearsed), "{what}");
+            assert!(asked.iter().all(|r| r.dry_run), "{what}");
+            let audited = audited + asked.len();
 
             // Confirmed: it runs (the fakes may refuse it) and leaves its audit record.
             let confirmation = match tier {

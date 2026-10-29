@@ -41,7 +41,8 @@ fn the_plan_asks_what_the_namespace_guard_asks() {
 fn running_it_needs_the_typed_name_and_audits_the_counts() {
     let h = harness();
     h.connect("a", false);
-    h.allow_deletes("a", 2);
+    // The guard's dry run before it asks, the handler's own, then the delete.
+    h.allow_deletes("a", 3);
     let flow = flow(&h, &[("payments", &[("Pod", 4)])]);
     let plan = flow
         .plan(&[namespace_ref("a", "payments")], Propagation::Background)
@@ -54,10 +55,14 @@ fn running_it_needs_the_typed_name_and_audits_the_counts() {
     let report = futures::executor::block_on(flow.run(&plan, Some("payments"))).unwrap();
     assert_eq!(report.items[0].status, ItemStatus::Deleted);
     let audit = h.audit();
-    assert_eq!(audit.len(), 1);
-    assert_eq!(audit[0].outcome, AuditOutcome::Succeeded);
-    assert_eq!(&*audit[0].cmd, "namespace::Delete");
-    assert_eq!(audit[0].detail.as_deref(), Some("contents=Pod:4"));
+    assert_eq!(audit.len(), 2, "the guard's dry run and the delete");
+    assert!(audit[0].dry_run, "the dry run is audited as one");
+    assert!(!audit[1].dry_run);
+    for record in &audit {
+        assert_eq!(record.outcome, AuditOutcome::Succeeded);
+        assert_eq!(&*record.cmd, "namespace::Delete");
+        assert_eq!(record.detail.as_deref(), Some("contents=Pod:4"));
+    }
 }
 
 #[test]

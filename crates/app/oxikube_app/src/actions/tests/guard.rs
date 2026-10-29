@@ -1,6 +1,6 @@
 //! `resource::Delete` through the guard: tiers, propagation, read-only, audit, the tool stub.
 
-use oxikube_domain::audit::{AuditOutcome, Initiator};
+use oxikube_domain::audit::{AuditDenial, AuditOutcome, Initiator};
 use oxikube_domain::command::{CommandId, Propagation};
 use oxikube_domain::safety::{ConfirmTier, Risk};
 use oxikube_ports::{DeleteOutcome, PropagationPolicy};
@@ -115,6 +115,8 @@ fn the_propagation_choice_reaches_the_request() {
 fn namespaces_nodes_and_volumes_need_the_name_typed() {
     let h = Harness::with_delete_handler();
     h.connect("a", false);
+    // The namespace and the volume are irreversible: the guard dry-runs each before it asks.
+    h.allow_deletes("a", 2);
     for (kind, name, risk) in [
         ("Namespace", "payments", Risk::Irreversible),
         ("Node", "worker-1", Risk::High),
@@ -127,7 +129,19 @@ fn namespaces_nodes_and_volumes_need_the_name_typed() {
         assert_eq!(request.tier, ConfirmTier::TypeName, "{kind}");
         assert_eq!(request.expected_name.as_deref(), Some(name), "{kind}");
         assert_eq!(request.risk, Some(risk), "{kind}");
+        assert_eq!(
+            request.preview.is_some(),
+            risk == Risk::Irreversible,
+            "{kind}: only an irreversible delete is dry-run before it is asked"
+        );
     }
+    assert!(
+        h.writes("a").iter().all(|call| matches!(
+            call,
+            ResourceCall::Delete { options, .. } if options.dry_run
+        )),
+        "nothing but dry runs before a confirmation"
+    );
 }
 
 #[test]
@@ -150,7 +164,8 @@ fn a_cascading_delete_of_an_ordinary_object_needs_the_name_typed() {
 fn a_wrong_name_deletes_nothing() {
     let h = Harness::with_delete_handler();
     h.connect("a", false);
-    h.allow_deletes("a", 2);
+    // Each ask dry-runs the namespace's delete first; the confirmed run sends two more.
+    h.allow_deletes("a", 4);
     let cmd = delete(
         cluster_scoped("a", "Namespace", "payments"),
         Propagation::Background,
@@ -166,8 +181,17 @@ fn a_wrong_name_deletes_nothing() {
         err,
         DispatchError::Confirmation(ConfirmationError::NameMismatch { .. })
     ));
-    assert!(h.writes("a").is_empty());
-    assert_eq!(h.outcomes(), [(AuditOutcome::Denied, Initiator::Ui)]);
+    assert_eq!(deletes(&h), [(true, Some(PropagationPolicy::Background))]);
+    assert_eq!(
+        h.outcomes(),
+        [
+            (AuditOutcome::Succeeded, Initiator::Ui),
+            (AuditOutcome::Denied, Initiator::Ui)
+        ],
+        "the dry run, then the refusal"
+    );
+    assert!(h.audit()[0].dry_run);
+    assert_eq!(h.audit()[1].denial, Some(AuditDenial::Policy));
 
     // The right name goes through.
     let request = h.ask(cmd.clone(), ctx(Initiator::Ui));
@@ -176,7 +200,7 @@ fn a_wrong_name_deletes_nothing() {
         ctx(Initiator::Ui).with_confirmation(Confirmation::typed(request.token, "payments")),
     )
     .unwrap();
-    assert_eq!(h.writes("a").len(), 2);
+    assert_eq!(h.writes("a").len(), 4);
 }
 
 #[test]

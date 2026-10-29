@@ -186,11 +186,16 @@ async fn create_delete_read_only_and_conflict_on_a_real_cluster() {
     .await;
 
     let audit = state.audit_log();
-    let deleted: Vec<_> = audit
+    let (rehearsed, deleted): (Vec<_>, Vec<_>) = audit
         .iter()
         .filter(|r| &*r.cmd == "namespace::Delete" && r.outcome == AuditOutcome::Succeeded)
-        .collect();
+        .partition(|r| r.dry_run);
     assert_eq!(deleted.len(), 1, "{audit:?}");
+    assert_eq!(
+        rehearsed.len(),
+        1,
+        "the guard dry-ran the irreversible delete before asking: {audit:?}"
+    );
     assert_eq!(deleted[0].initiator, Initiator::Ui);
     assert_eq!(deleted[0].detail.as_deref(), Some("contents=Pod:0"));
     assert_eq!(&*deleted[0].target.name, name);

@@ -161,6 +161,13 @@ fn each_object_has_an_audit_record_and_they_share_one_batch_id() {
         detail.ends_with(&format!("batch={batch} ok=3 skipped=0 failed=0")),
         "{detail}"
     );
+    // Every record of the batch, the command's own included, carries the id as a field too.
+    assert!(
+        audit
+            .iter()
+            .all(|r| r.batch_id.as_deref() == Some(batch.as_str())),
+        "{audit:?}"
+    );
 }
 
 #[test]

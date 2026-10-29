@@ -402,15 +402,21 @@ async fn a_namespace_in_the_selection_makes_the_batch_type_the_cluster_name() {
     assert!(left.is_none_or(|n| n.metadata.deletion_timestamp.is_some()));
 
     let audit = rig.state.audit_log();
-    assert_eq!(
+    let per_object = |dry_run: bool| {
         audit
             .iter()
-            .filter(
-                |r| matches!(&*r.cmd, "resource::Delete") && r.outcome == AuditOutcome::Succeeded
-            )
-            .count(),
+            .filter(|r| {
+                matches!(&*r.cmd, "resource::Delete")
+                    && r.outcome == AuditOutcome::Succeeded
+                    && r.dry_run == dry_run
+            })
+            .count()
+    };
+    assert_eq!(per_object(false), 4, "a record per object: {audit:?}");
+    assert_eq!(
+        per_object(true),
         4,
-        "a record per object: {audit:?}"
+        "the guard dry-ran the irreversible batch before asking, object by object: {audit:?}"
     );
 }
 

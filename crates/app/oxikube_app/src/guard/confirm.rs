@@ -16,6 +16,8 @@ use oxikube_domain::ids::ClusterId;
 use oxikube_domain::safety::{ConfirmTier, Risk};
 use parking_lot::Mutex;
 
+use super::rehearsal::DryRunPreview;
+
 /// Most confirmations waiting for an answer. Issuing one more forgets the oldest, whose
 /// token then fails as [`ConfirmationError::Unknown`].
 pub const MAX_PENDING_CONFIRMATIONS: usize = 64;
@@ -26,6 +28,10 @@ pub const MAX_PENDING_CONFIRMATIONS: usize = 64;
 pub struct ConfirmationToken(u64);
 
 /// What the guard needs the user to confirm before a mutation runs.
+///
+/// Everything here is output: the token alone is bound to the command, payload, initiator and
+/// dry-run flag (see [`ConfirmationToken`]), so the [`preview`](Self::preview) of one payload can
+/// never approve another.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConfirmationRequest {
     /// Pass back in [`Confirmation::token`].
@@ -42,6 +48,14 @@ pub struct ConfirmationRequest {
     pub summary: String,
     /// For [`ConfirmTier::TypeName`]: the text the user must type.
     pub expected_name: Option<String>,
+    /// Who asked: routes the request to the right
+    /// [`ConfirmationProvider`](super::ConfirmationProvider) (an agent's permission prompt, the
+    /// UI's dialog) and lets the dialog say who is asking.
+    pub initiator: Initiator,
+    /// The server-side dry run the guard ran before asking, for a command whose risk
+    /// [requires one](Risk::requires_dry_run_diff) (an `Irreversible` delete); `None` for any
+    /// other command.
+    pub preview: Option<DryRunPreview>,
 }
 
 /// The user's answer to a [`ConfirmationRequest`], carried in the second dispatch.
@@ -98,6 +112,8 @@ pub(crate) struct Pending {
     pub(crate) cluster: ClusterId,
     pub(crate) expected_name: Option<String>,
     pub(crate) dry_run: bool,
+    /// Whether the guard ran the command's dry run before asking ([`DryRunPreview`]).
+    pub(crate) rehearsed: bool,
 }
 
 /// The guard's table of pending confirmations.
@@ -124,14 +140,15 @@ impl PendingConfirmations {
         self.pending.lock().shift_remove(&token)
     }
 
-    /// Consumes `answer` for `command` dispatched by `initiator` (as a dry run or not).
+    /// Consumes `answer` for `command` dispatched by `initiator` (as a dry run or not) and
+    /// returns whether the guard dry-ran the command before it asked.
     pub(crate) fn redeem(
         &self,
         answer: &Confirmation,
         command: &Command,
         initiator: Initiator,
         dry_run: bool,
-    ) -> Result<(), ConfirmationError> {
+    ) -> Result<bool, ConfirmationError> {
         let pending = self.take(answer.token).ok_or(ConfirmationError::Unknown)?;
         if pending.command != *command
             || pending.initiator != initiator
@@ -143,7 +160,7 @@ impl PendingConfirmations {
             Some(expected) if answer.typed_name.as_deref() != Some(expected.as_str()) => {
                 Err(ConfirmationError::NameMismatch { expected })
             }
-            _ => Ok(()),
+            _ => Ok(pending.rehearsed),
         }
     }
 

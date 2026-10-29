@@ -207,6 +207,12 @@ fn a_drain_runs_the_algorithm_with_the_flags_and_audits_each_pod_in_one_batch() 
     );
     let batch = batch_of(&audit[2]);
     assert!(audit.iter().all(|r| batch_of(r) == batch));
+    assert!(
+        audit
+            .iter()
+            .all(|r| r.batch_id.as_deref() == Some(batch.as_str())),
+        "the batch id is a field of every record too"
+    );
     assert_eq!(audit[0].target.namespace(), Some("shop"));
     assert!(audit[0].detail.as_deref().unwrap().contains("node=n1"));
     let drain_detail = audit[2].detail.as_deref().unwrap();

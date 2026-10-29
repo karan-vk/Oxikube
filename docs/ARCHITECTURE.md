@@ -398,7 +398,15 @@ crate's `README.md` for its allowed dependencies. Highlights:
   (`cluster::ToggleReadOnly`, `cluster::SetColour`, `cluster::ApplyPreset`; confirm when lifting
   read-only on a production-flagged cluster, audited, persisted through the `PrefsWriter` the binary
   implements over `ClusterSettings::update_cluster`), and every `Mutation` writer re-checks the
-  read-only flag before each request.
+  read-only flag before each request. E19-S02 hardened the pipeline: `guard::rehearsal` dry-runs an
+  `Irreversible` command (the command's own handler, its writer forced to `dry_run`) before the
+  confirmation is asked and attaches the `DryRunPreview` (`Rehearsed`, or `NoPreviewAvailable` for a
+  server that cannot dry-run it, which never blocks) to the `ConfirmationRequest`; a refused dry run
+  refuses the command, and a token issued without one cannot approve it (`DispatchError::DryRunRequired`).
+  `guard::provider` adds `CommandBus::execute(command, ctx, &dyn ConfirmationProvider)`, the round trip
+  as one call for agents (E26/E27), with `ConfirmationRouter` picking the provider by `Initiator`;
+  a declined or dropped wait is audited as `Cancelled` / `AuditDenial::UserCancelled`. Every refusal
+  records its `AuditDenial`, and a record whose detail names `batch=<id>` carries it as `batch_id`.
 - `oxikube_app::logs` (E08-S01) — `LogService`: `open(port, target, options)` returns a `LogSession` for one
   container of one pod (`LogTarget`; the port's `LogOptions` carry follow / since / tail / previous /
   timestamps) and returns at once; the stream is opened and read by one task on the service's `Spawner`

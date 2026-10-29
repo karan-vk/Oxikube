@@ -76,6 +76,8 @@ fn the_same_commands_reach_the_guard_on_a_writable_cluster() {
     // read-only, so the denial really is the flag and not a missing sample or handler.
     let h = Harness::with_every_command();
     h.connect("a", false);
+    // An irreversible command is dry-run before it is asked: let those dry runs succeed.
+    h.allow_deletes("a", mutating().len());
     for command in mutating() {
         let out = h.dispatch(sample(command, "a"), ctx(Initiator::Agent));
         assert!(
