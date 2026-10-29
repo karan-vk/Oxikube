@@ -211,10 +211,7 @@ async fn read_file(
     };
     if let Some(size) = size {
         if size > limits.max_file_bytes {
-            loaded.errors.push(file_error(format!(
-                "the file is larger than the {} MiB limit",
-                limits.max_file_bytes / (1024 * 1024)
-            )));
+            loaded.errors.push(file_error(too_big_message(limits)));
             return Ok(());
         }
         if total_bytes.saturating_add(size) > limits.max_total_bytes {
@@ -224,10 +221,7 @@ async fn read_file(
     let bytes = fs.read(path).await?;
     let len = bytes.len() as u64;
     if len > limits.max_file_bytes {
-        loaded.errors.push(file_error(format!(
-            "the file is larger than the {} MiB limit",
-            limits.max_file_bytes / (1024 * 1024)
-        )));
+        loaded.errors.push(file_error(too_big_message(limits)));
         return Ok(());
     }
     *total_bytes = total_bytes.saturating_add(len);
@@ -245,6 +239,13 @@ async fn read_file(
     loaded.docs.extend(docs);
     loaded.errors.extend(errors);
     Ok(())
+}
+
+fn too_big_message(limits: LoadLimits) -> String {
+    format!(
+        "the file is larger than the {} MiB limit",
+        limits.max_file_bytes / (1024 * 1024)
+    )
 }
 
 fn total_error(limits: LoadLimits) -> OxiError {
