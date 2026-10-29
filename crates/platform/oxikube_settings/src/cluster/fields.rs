@@ -131,8 +131,12 @@ impl JsonSchema for SecretName {
 pub(super) fn colour_schema(_: &mut SchemaGenerator) -> Schema {
     json_schema!({
         "type": ["string", "null"],
-        "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$",
-        "examples": ["#e5484d"]
+        "anyOf": [
+            { "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$" },
+            { "enum": ["red", "orange", "green", "blue", "purple", "gray", "grey"] },
+            { "type": "null" }
+        ],
+        "examples": ["#e5484d", "red"]
     })
 }
 

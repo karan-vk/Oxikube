@@ -1,9 +1,10 @@
-//! The production preset in light and dark (E06-S09): a cluster tab with its red dot and lock, the
+//! The production preset in light and dark (E06-S09), and the guard-mode status item in each
+//! state plus five palette-coloured tabs (E19-S05): a cluster tab with its red dot and lock, the
 //! status bar item "prod-eu, Read-only", and the toast a refused mutation shows.
 //!
 //! Same harness and gate as `screenshot.rs` (`harness = false`, needs a GPU device, feature
 //! `screenshot`, nightly job): `cargo test -p oxikube_workspace --features screenshot --test
-//! cluster_screenshot`. Goldens live in `tests/goldens/<os>/cluster_prod_{dark,light}.png`;
+//! cluster_screenshot`. Goldens live in `tests/goldens/<os>/cluster_*.png`;
 //! regenerate with `OXIKUBE_UPDATE_GOLDENS=1`.
 
 #![allow(
@@ -16,7 +17,7 @@ use std::{path::Path, process::ExitCode, sync::Arc};
 
 use gpui::{AppContext as _, HeadlessAppContext, px, size};
 use oxikube_app::{ClusterSessionManager, session::SessionOptions};
-use oxikube_domain::{ClusterPreset, ids::ContextName};
+use oxikube_domain::{ClusterPalette, ClusterPreset, ids::ContextName};
 use oxikube_ports::{ClusterContext, SourceId};
 use oxikube_testkit::{
     FakeClockPort, FakeClusterConnectorPort, FakeClusterSourcePort,
@@ -25,7 +26,7 @@ use oxikube_testkit::{
 };
 use oxikube_ui::{Tokens, root::new_root};
 use oxikube_workspace::{
-    ClusterMark, ClusterStatusItem, StatusSide, Workspace, cluster::denial_toast,
+    ClusterMark, ClusterStatusItem, GuardStatusItem, StatusSide, Workspace, cluster::denial_toast,
     test_support::TestItem,
 };
 
@@ -40,7 +41,18 @@ fn headless() -> HeadlessAppContext {
     })
 }
 
-fn render(tokens: Tokens) -> anyhow::Result<RgbaImage> {
+/// What a frame shows beyond the tab and the left status item.
+#[derive(Clone, Copy)]
+enum Scene {
+    /// The E06-S09 production frame: refused-mutation toast, no guard item.
+    Prod,
+    /// The right-hand guard item for a cluster that is (not) read-only.
+    Guard { read_only: bool },
+    /// One tab per palette colour (plus a plain one).
+    Palette,
+}
+
+fn render(tokens: Tokens, scene: Scene) -> anyhow::Result<RgbaImage> {
     let context = ClusterContext::new(
         PROD.parse()?,
         ContextName::new("prod-eu"),
@@ -52,10 +64,14 @@ fn render(tokens: Tokens) -> anyhow::Result<RgbaImage> {
         Arc::new(FakeClockPort::default()),
     );
     // What the "Production" preset writes: red, read-only on.
+    let read_only = match scene {
+        Scene::Guard { read_only } => read_only,
+        Scene::Prod | Scene::Palette => ClusterPreset::Prod.read_only().unwrap_or(false),
+    };
     manager.open(
         &context,
         SessionOptions {
-            read_only: ClusterPreset::Prod.read_only().unwrap_or(false),
+            read_only,
             colour: ClusterPreset::Prod.colour(),
             ..SessionOptions::default()
         },
@@ -74,15 +90,43 @@ fn render(tokens: Tokens) -> anyhow::Result<RgbaImage> {
         status.update(cx, |item, cx| {
             item.set_cluster(Some(context.cluster.clone()), cx)
         });
+        let guard = cx.new(|cx| GuardStatusItem::new(manager.clone(), cx));
+        guard.update(cx, |item, cx| {
+            item.set_cluster(Some(context.cluster.clone()), cx)
+        });
+        let palette_tabs: Vec<_> = ClusterPalette::ALL
+            .into_iter()
+            .map(|p| {
+                let mark = ClusterMark {
+                    colour: Some(p.colour()),
+                    read_only: p == ClusterPalette::Red,
+                };
+                cx.new(|cx| TestItem::new(p.name(), cx).with_cluster(mark))
+            })
+            .collect();
         let refused = denial_toast(&oxikube_app::DispatchError::ReadOnly {
             cluster: context.cluster.clone(),
             context: context.context.clone(),
         });
         workspace.update(cx, |ws, cx| {
             ws.register_status_item(StatusSide::Left, 0, status, cx);
-            ws.show_toast(refused, cx);
-            ws.open_item(plain, window, cx);
-            ws.open_item(tab, window, cx);
+            match scene {
+                Scene::Prod => {
+                    ws.show_toast(refused, cx);
+                }
+                Scene::Guard { .. } => {
+                    ws.register_status_item(StatusSide::Right, 0, guard, cx);
+                }
+                Scene::Palette => {}
+            }
+            if matches!(scene, Scene::Palette) {
+                for item in palette_tabs {
+                    ws.open_item(item, window, cx);
+                }
+            } else {
+                ws.open_item(plain, window, cx);
+                ws.open_item(tab, window, cx);
+            }
         });
         new_root(workspace, window, cx)
     })?;
@@ -120,8 +164,23 @@ fn check(name: &str, image: RgbaImage) -> anyhow::Result<()> {
 }
 
 fn run() -> anyhow::Result<()> {
-    check("cluster_prod_dark", render(Tokens::dark())?)?;
-    check("cluster_prod_light", render(Tokens::light())?)
+    for (suffix, tokens) in [("dark", Tokens::dark()), ("light", Tokens::light())] {
+        check(
+            &format!("cluster_prod_{suffix}"),
+            render(tokens, Scene::Prod)?,
+        )?;
+        for (state, read_only) in [("guarded", false), ("readonly", true)] {
+            check(
+                &format!("cluster_guard_{state}_{suffix}"),
+                render(tokens, Scene::Guard { read_only })?,
+            )?;
+        }
+        check(
+            &format!("cluster_palette_{suffix}"),
+            render(tokens, Scene::Palette)?,
+        )?;
+    }
+    Ok(())
 }
 
 fn main() -> ExitCode {

@@ -4,6 +4,7 @@
 mod badges;
 mod echo;
 mod fixture;
+mod guard;
 mod menu;
 mod runner;
 

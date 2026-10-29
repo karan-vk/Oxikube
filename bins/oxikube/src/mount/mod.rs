@@ -167,7 +167,7 @@ use oxikube_workspace::cluster_tab::TabsDispatcher;
 use oxikube_workspace::window::MainView;
 use oxikube_workspace::{
     ClusterCommandRunner, ClusterStatusItem, ClusterTabs, ClusterTabsDeps, ClusterTabsEvent,
-    CommandDispatcher, StatusSide, Workspace,
+    CommandDispatcher, GuardStatusItem, StatusSide, Workspace,
 };
 
 use crate::app_state::AppState;
@@ -177,6 +177,9 @@ pub use views::ViewDeps;
 
 /// Where the active cluster's badge sits in the status bar: first on the left.
 const STATUS_PRIORITY: i32 = 0;
+
+/// Where the guard-mode indicator sits on the right: before the notification bell.
+const GUARD_PRIORITY: i32 = -10;
 
 /// What the mount keeps alive for as long as the window's workspace lives.
 pub struct Wiring {
@@ -641,19 +644,30 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     workspace.update(cx, |ws, cx| {
         ws.register_status_item(StatusSide::Left, STATUS_PRIORITY, status.clone(), cx);
     });
-    bus_dispatcher.set_runner(
-        ClusterCommandRunner::new(
-            bus.clone(),
-            services.sessions.clone(),
-            local_user(),
-            &workspace,
-        )
-        .with_status_item(&status),
-    );
+    let runner = ClusterCommandRunner::new(
+        bus.clone(),
+        services.sessions.clone(),
+        local_user(),
+        &workspace,
+    )
+    .with_status_item(&status);
+    // The guard-mode indicator on the right (E19-S05): its click runs `cluster::ToggleReadOnly`
+    // through the same runner as the tab menu, so confirmations and denials look the same.
+    let guard_runner = runner.clone();
+    let guard = cx.new(|cx| {
+        GuardStatusItem::new(services.sessions.clone(), cx).on_toggle(Rc::new(
+            move |command, window, cx| guard_runner.run(command, window, cx),
+        ))
+    });
+    workspace.update(cx, |ws, cx| {
+        ws.register_status_item(StatusSide::Right, GUARD_PRIORITY, guard.clone(), cx);
+    });
+    bus_dispatcher.set_runner(runner);
     let follow_active = cx.subscribe(&tabs, move |_, event: &ClusterTabsEvent, cx| {
         if let ClusterTabsEvent::ActiveChanged(active) = event {
             let active = active.clone();
             centre_for_tabs.set_active_cluster(active.clone(), cx);
+            guard.update(cx, |item, cx| item.set_cluster(active.clone(), cx));
             status.update(cx, |item, cx| item.set_cluster(active, cx));
         }
     });

@@ -77,7 +77,8 @@ pub mod workspace;
 
 pub use closed::{ClosedItem, ClosedItemStack};
 pub use cluster::{
-    BadgeSurface, ClusterBadge, ClusterCommandRunner, ClusterMark, ClusterStatusItem,
+    BadgeSurface, ClusterBadge, ClusterCommandRunner, ClusterMark, ClusterStatusItem, GuardMode,
+    GuardStatusItem,
 };
 pub use cluster_tab::{
     ClusterTab, ClusterTabEvent, ClusterTabInfo, ClusterTabs, ClusterTabsDeps, ClusterTabsEvent,

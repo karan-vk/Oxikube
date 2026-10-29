@@ -1,22 +1,53 @@
 //! The colour a cluster's badge is drawn in, legible in the active theme.
 
 use gpui::Hsla;
-use oxikube_domain::{ClusterColour, ClusterPreset};
+use oxikube_domain::{ClusterColour, ClusterPalette};
 use oxikube_ui::{Appearance, Tokens};
 
 /// The badge colour for `colour` under `tokens`.
 ///
-/// The three preset colours (production red, staging amber, development green) are drawn with the
-/// theme's own status colours (`error`, `warning`, `success`), which every theme keeps legible on
-/// its surfaces. Any other colour the user picked is used as chosen, with its lightness pulled
-/// into the legible band of the theme (not too dark on a dark surface, not too light on a light
-/// one) so a `#000011` stripe does not vanish.
+/// The palette colours are drawn with the theme's own tokens, which every theme keeps legible on
+/// its surfaces: red `error`, orange `warning`, green `success`, blue `info`, gray `text_muted`
+/// (purple has no semantic token and is lightness-corrected like a custom colour). Any other
+/// colour the user picked is used as chosen, with its lightness pulled into the legible band of
+/// the theme (not too dark on a dark surface, not too light on a light one) so a `#000011`
+/// stripe does not vanish.
 pub fn badge_colour(colour: ClusterColour, tokens: &Tokens) -> Hsla {
-    match ClusterPreset::detect(Some(colour)) {
-        ClusterPreset::Prod => tokens.colors.error,
-        ClusterPreset::Staging => tokens.colors.warning,
-        ClusterPreset::Dev => tokens.colors.success,
-        ClusterPreset::None => legible(colour, tokens.appearance),
+    match ClusterPalette::of(colour) {
+        Some(ClusterPalette::Red) => tokens.colors.error,
+        Some(ClusterPalette::Orange) => tokens.colors.warning,
+        Some(ClusterPalette::Green) => tokens.colors.success,
+        Some(ClusterPalette::Blue) => tokens.colors.info,
+        Some(ClusterPalette::Gray) => tokens.colors.text_muted,
+        Some(ClusterPalette::Purple) | None => legible(colour, tokens.appearance),
+    }
+}
+
+/// The WCAG 2.x contrast ratio between two opaque colours: 1 (identical) to 21 (black on white).
+pub fn contrast_ratio(a: Hsla, b: Hsla) -> f32 {
+    fn channel(c: f32) -> f32 {
+        if c <= 0.039_28 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
+    }
+    fn luminance(colour: Hsla) -> f32 {
+        let rgb = gpui::Rgba::from(colour);
+        0.2126 * channel(rgb.r) + 0.7152 * channel(rgb.g) + 0.0722 * channel(rgb.b)
+    }
+    let (a, b) = (luminance(a), luminance(b));
+    (a.max(b) + 0.05) / (a.min(b) + 0.05)
+}
+
+/// The label colour for text drawn on `background`: the theme's text or window background
+/// colour, whichever contrasts more.
+pub fn label_colour(background: Hsla, tokens: &Tokens) -> Hsla {
+    let (light, dark) = (tokens.colors.text, tokens.colors.background);
+    if contrast_ratio(light, background) >= contrast_ratio(dark, background) {
+        light
+    } else {
+        dark
     }
 }
 
@@ -39,6 +70,7 @@ fn legible(colour: ClusterColour, appearance: Appearance) -> Hsla {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use oxikube_domain::ClusterPreset;
 
     #[test]
     fn presets_use_the_theme_status_colours() {
@@ -57,6 +89,49 @@ mod tests {
                 tokens.colors.success
             );
         }
+    }
+
+    #[test]
+    fn every_palette_name_maps_to_a_token_or_a_legible_colour() {
+        for tokens in [Tokens::dark(), Tokens::light()] {
+            let c = &tokens.colors;
+            let expected = [
+                (ClusterPalette::Red, c.error),
+                (ClusterPalette::Orange, c.warning),
+                (ClusterPalette::Green, c.success),
+                (ClusterPalette::Blue, c.info),
+                (ClusterPalette::Gray, c.text_muted),
+            ];
+            for (palette, token) in expected {
+                assert_eq!(
+                    badge_colour(palette.colour(), &tokens),
+                    token,
+                    "{palette:?}"
+                );
+            }
+            let purple = badge_colour(ClusterPalette::Purple.colour(), &tokens);
+            let (min, max) = band(tokens.appearance);
+            assert!((min..=max).contains(&purple.l));
+        }
+    }
+
+    #[test]
+    fn labels_on_every_badge_colour_meet_the_large_text_contrast() {
+        for tokens in [Tokens::dark(), Tokens::light()] {
+            for palette in ClusterPalette::ALL {
+                let fill = badge_colour(palette.colour(), &tokens);
+                let ratio = contrast_ratio(label_colour(fill, &tokens), fill);
+                assert!(ratio >= 3.0, "{palette:?}: {ratio}");
+            }
+        }
+    }
+
+    #[test]
+    fn contrast_ratio_matches_the_wcag_extremes() {
+        let black = gpui::rgb(0x000000).into();
+        let white = gpui::rgb(0xffffff).into();
+        assert!((contrast_ratio(black, white) - 21.0).abs() < 0.01);
+        assert!((contrast_ratio(white, white) - 1.0).abs() < 1e-6);
     }
 
     #[test]
