@@ -85,9 +85,9 @@ struct StateData {
 }
 
 /// Fake `StatePort` over in-memory maps, with the same semantics as the SQLite adapter:
-/// lists ordered by key, `kv_list` by prefix, audit append-only and queried newest first in keyset
-/// pages (`since` inclusive, `until` exclusive, then `limit`), and pruned by `prune_audit`. A scripted response replaces the
-/// in-memory behaviour for that call (the store is left unchanged).
+/// lists ordered by key, `kv_list` by prefix, audit append-only, queried newest first in keyset
+/// pages (`since` inclusive, `until` exclusive, then `limit`) and pruned by `prune_audit`. A
+/// scripted response replaces the in-memory behaviour for that call (the store is left unchanged).
 #[derive(Default)]
 pub struct FakeStatePort {
     script: StateScripts,
