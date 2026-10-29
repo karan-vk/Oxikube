@@ -17,7 +17,7 @@
 //! | `model` | [`Model`]: stage, activity, rows, filter, expansion, copy as text; no window |
 //! | `backend` | [`ApplyBackend`]: what the panel needs from outside |
 //! | `service` | [`ServiceBackend`]: the backend over `ApplyService`, `FsPort`, kustomize and the state port |
-//! | `view` / `flow` | [`ApplyView`]: the entity, and load / plan / dry run / apply / cancel / re-run / open in editor |
+//! | `view` / `flow` / `launch` | [`ApplyView`]: the entity; load / plan / dry run / apply / cancel / re-run; the picker and open in editor |
 //! | `render` | the header, the Load view, the virtualised table, the footer |
 //! | `open` | the `apply::Directory` / `apply::Kustomize` handlers and [`ApplyViews`], which open the panel in the cluster tab |
 //! | `keys` | the `ApplyResults` key context's actions |
@@ -35,6 +35,7 @@ mod backend;
 mod document;
 mod flow;
 mod keys;
+mod launch;
 mod model;
 mod open;
 mod render;
