@@ -148,6 +148,39 @@ pub(crate) fn register_reads(
     Ok(())
 }
 
+/// Registers a recording handler for every declared command `reg` does not have yet (each
+/// records its call; a mutating one writes through its permit).
+pub(crate) fn register_recording_rest(
+    reg: &mut CommandRegistry,
+    calls: &Calls,
+) -> Result<(), RegisterError> {
+    for meta in command::COMMANDS {
+        if reg.contains(meta.id) {
+            continue;
+        }
+        let calls = calls.clone();
+        reg.register(*meta, move |cmd: Command, cx: HandlerContext| {
+            record(&calls, &cx, cmd.id());
+            async move {
+                if cmd.is_mutating() {
+                    let mutation = cx.require_mutation()?;
+                    mutation
+                        .writer()
+                        .delete(
+                            &Gvk::new("", "v1", "Pod"),
+                            Some("default"),
+                            "x",
+                            &mutation.delete_options(),
+                        )
+                        .await?;
+                }
+                Ok(CommandOutput::none())
+            }
+        })?;
+    }
+    Ok(())
+}
+
 /// A bus with the test handlers over sessions for contexts `a` and `b`.
 pub(crate) struct Harness {
     pub manager: ClusterSessionManager,
@@ -199,33 +232,7 @@ impl Harness {
     /// its call; a mutating one writes through its permit), so a test can iterate the whole
     /// registry.
     pub fn with_every_command() -> Self {
-        Self::with_extra(|reg, calls, _| {
-            for meta in command::COMMANDS {
-                if reg.contains(meta.id) {
-                    continue;
-                }
-                let calls = calls.clone();
-                reg.register(*meta, move |cmd: Command, cx: HandlerContext| {
-                    record(&calls, &cx, cmd.id());
-                    async move {
-                        if cmd.is_mutating() {
-                            let mutation = cx.require_mutation()?;
-                            mutation
-                                .writer()
-                                .delete(
-                                    &Gvk::new("", "v1", "Pod"),
-                                    Some("default"),
-                                    "x",
-                                    &mutation.delete_options(),
-                                )
-                                .await?;
-                        }
-                        Ok(CommandOutput::none())
-                    }
-                })?;
-            }
-            Ok(())
-        })
+        Self::with_extra(|reg, calls, _| register_recording_rest(reg, calls))
     }
 
     /// The standard harness plus the commands `extra` registers.

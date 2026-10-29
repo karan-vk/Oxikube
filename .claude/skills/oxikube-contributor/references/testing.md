@@ -105,3 +105,24 @@ cargo test -p oxikube_terminal --features screenshot --test screenshot --test sc
   `docs/perf/baseline.json` (nightly gate: +20 %). A story that builds the view behind a stubbed
   scenario (table, palette, logs, editor) scripts it with `oxikube_runtime::perf::harness` and seeds
   its baseline (docs/PERFORMANCE.md, "Perf harness").
+
+## Read-only sweep (E19-S11)
+
+`cargo test -p oxikube_app read_only_sweep` (`guard/tests/read_only_sweep.rs`) runs every declared
+mutating command through every door (each `Initiator`, plus the MCP tool stub) against a
+read-only cluster, over the real handlers that can be built from fakes. It asserts `ReadOnly`, one
+`Denied` audit record, no handler run, and zero write-class calls on the resource, exec,
+port-forward and Helm fakes. A reverse check runs every non-mutating command on a writable cluster
+and fails if one wrote. Every violation of a run is listed at once.
+
+Adding a command:
+1. Declare it in `oxikube_domain::command` with the right `mutating` flag (a command that
+   writes but is not marked `mutating` fails the reverse check).
+2. Add its arm to `testing_posture::sample` (the argument factory); without one the sweep fails
+   and names the command.
+3. If its handler can be built from fakes, register it in `World::with_extra` in the sweep so
+   the real handler is swept, not a recording stub.
+4. Run `cargo test -p oxikube_app read_only_sweep`.
+
+The skip list (`SKIPPED`) is empty and a test keeps it visible; the MCP `ToolRegistry` (E26)
+extends `doors()`.
