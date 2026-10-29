@@ -9,8 +9,8 @@
 //! same answer to the palette as [`Capabilities::KUSTOMIZE`], so a command that needs it is
 //! hidden (and explained under "show all") while no tool exists.
 //!
-//! A user reaches it through the `kustomize` block of `settings.json` and, once E20-S05 lands,
-//! the Apply dialog's overlay action; the service is [`Installed::service`].
+//! A user reaches it through the `kustomize` block of `settings.json` and the apply panel's
+//! "Kustomize folder" action (E20-S05); the service is [`Installed::service`].
 
 use std::sync::Arc;
 
@@ -37,10 +37,6 @@ pub struct KustomizeState {
 #[derive(Clone)]
 pub struct Installed {
     /// Builds overlays through the app's one adapter.
-    #[expect(
-        dead_code,
-        reason = "the Apply dialog's overlay action reads it (E20-S05)"
-    )]
     pub service: KustomizeService,
     /// The detected tool.
     pub state: Entity<KustomizeState>,

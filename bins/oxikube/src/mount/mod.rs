@@ -122,6 +122,7 @@
 //! (ADR 0013, `startup::deferred`). What must live as long as the window is held by a
 //! [`Wiring`] entity the workspace keeps.
 
+mod apply_panel;
 mod audit;
 pub mod bus;
 mod cloud;
@@ -230,6 +231,8 @@ pub struct Wiring {
     _terminal_views: Entity<TerminalViews>,
     /// Opens the manifest editors and applies their toggles.
     _editor_views: Entity<oxikube_editor::view::EditorViews>,
+    /// Opens the apply panel for `apply::Directory` and `apply::Kustomize` (E20-S05).
+    _apply_pages: Task<()>,
     /// Applies `palette::Toggle` and `palette::ToggleShowAll` from the bus to this window's
     /// command palette (E11-S03).
     _palette: Task<()>,
@@ -439,6 +442,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (quit_sink, quit_rx) = oxikube_workspace::session::QuitSink::channel();
     let (help_sink, help_rx) = oxikube_palette::help::HelpSink::channel();
     let (editor_sink, editor_rx) = oxikube_editor::view::EditorViewSink::channel();
+    let editor_for_apply = editor_sink.clone();
+    let (apply_sink, apply_rx) = oxikube_resources_ui::apply::ApplyRequestSink::channel();
     let (metrics_sink, metrics_rx) = oxikube_settings_ui::metrics::MetricsRequestSink::channel();
     let (role_sink, role_rx) = oxikube_rbac_ui::role::RoleRequestSink::channel();
     let (binding_sink, binding_rx) = oxikube_rbac_ui::binding::BindingRequestSink::channel();
@@ -455,7 +460,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let helm = helm::install(cx, helm_targets);
     // Kustomize (E20-S04): detects `kustomize` / `kubectl kustomize` in the background; the
     // palette and the apply UI read the answer.
-    let _kustomize = kustomize::install(cx);
+    let kustomize_installed = kustomize::install(cx);
     // The chart repositories in Helm's own configuration (E16-S07): one service, the page and the
     // `helm::Repo*` commands share it.
     let helm_services = helm_repos::services(helm.cli.clone(), ports.clusters.clock.clone(), cx);
@@ -528,6 +533,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         jump: jump_sink,
         quit: quit_sink,
         editors: editor_sink,
+        apply_panel: apply_sink,
         metrics: services.metrics.provider.clone(),
         metrics_settings: Arc::new(crate::metrics_provider::SettingsMetricsWriter::new(cx)),
         metrics_pages: metrics_sink,
@@ -646,9 +652,27 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         cx,
     );
 
+    // The apply panel (E20-S05): `apply::Directory` / `apply::Kustomize` open it in the cluster's
+    // tab; its dry run and apply are `resource::ApplyPlan` through the guard.
+    let apply_service =
+        oxikube_app::ApplyService::new(bus.clone(), services.sessions.clone(), local_user());
+    let apply_pages = apply_panel::start_views(
+        apply_panel::PanelServices {
+            apply: apply_service.clone(),
+            fs: ports.clusters.fs.clone(),
+            kustomize: kustomize_installed.service,
+            state: ports.state.clone(),
+            sessions: services.sessions.clone(),
+        },
+        editor_for_apply,
+        tabs.downgrade(),
+        apply_rx,
+        window,
+        cx,
+    );
     let editor_views = editor::start_views(
         services.sessions.clone(),
-        oxikube_app::ApplyService::new(bus.clone(), services.sessions.clone(), local_user()),
+        apply_service,
         editor::templates(ports.clusters.fs.clone(), cx),
         services.catalog.clone(),
         tabs.downgrade(),
@@ -1001,6 +1025,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _jump: jump,
         _quit: quit,
         _editor_views: editor_views,
+        _apply_pages: apply_pages,
         _metrics_pages: metrics_pages,
         _helm_repos_pages: helm_repos_pages,
         _role_dialogs: role_dialogs,

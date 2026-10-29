@@ -177,6 +177,8 @@ pub struct BusParts {
     pub editors: EditorViewSink,
     /// The resource diff service (`resource::DiffWith`; E20-S09).
     pub diff: oxikube_app::diff::DiffService,
+    /// Where `apply::Directory` and `apply::Kustomize` send their request (E20-S05).
+    pub apply_panel: oxikube_resources_ui::apply::ApplyRequestSink,
     /// The metrics provider service (`cluster::RedetectMetrics`, `cluster::ToggleMetrics`; E13-S05).
     pub metrics: oxikube_app::MetricsProviderService,
     /// Where `cluster::ToggleMetrics` persists (`settings.json`).
@@ -340,6 +342,9 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     registry.install("oxikube_resources_ui", |r| {
         oxikube_resources_ui::navigate::register_commands(r, parts.kinds)?;
         oxikube_resources_ui::register_commands(r, parts.resources)
+    })?;
+    registry.install("oxikube_resources_ui::apply", |r| {
+        oxikube_resources_ui::apply::register_commands(r, parts.apply_panel)
     })?;
     registry.install("oxikube_logs_ui", |r| {
         oxikube_logs_ui::register_commands(r, parts.logs)

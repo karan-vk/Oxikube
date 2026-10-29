@@ -76,6 +76,13 @@ path = "tests/states_screenshot.rs"
 harness = false
 required-features = ["screenshot"]
 
+# The apply panel's review, result, error expansion and read-only states, E20-S05.
+[[test]]
+name = "apply_screenshot"
+path = "tests/apply_screenshot.rs"
+harness = false
+required-features = ["screenshot"]
+
 # The Workloads overview with mixed statuses, E12-S07.
 [[test]]
 name = "overview_screenshot"
