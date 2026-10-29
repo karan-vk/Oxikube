@@ -55,4 +55,4 @@ pub use kubeconfig::{KubeconfigSourceRef, NewKubeconfigSource, PastedText};
 pub use meta::{CommandMeta, CommandScope};
 pub use payload::{Command, DEFAULT_DEBUG_COMMAND, DEFAULT_DEBUG_IMAGE, Propagation};
 pub use registry::{COMMANDS, lookup, lookup_str};
-pub use risk::delete_risk;
+pub use risk::{copy_risk, delete_risk};

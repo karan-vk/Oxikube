@@ -381,6 +381,9 @@ impl CommandId {
     /// (E20-S03). One guarded command: one confirmation at the riskiest object's tier, one audit
     /// record per object under a shared batch id.
     pub const RESOURCE_APPLY_PLAN: CommandId = CommandId::new("resource::ApplyPlan");
+    /// `resource::CopyTo`: copy an object to another cluster or namespace (E20-S08). Guarded on
+    /// the target cluster; the source is only read.
+    pub const RESOURCE_COPY_TO: CommandId = CommandId::new("resource::CopyTo");
     /// `resource::CopyLabel`: copy a label or annotation of a resource as `key=value`.
     pub const RESOURCE_COPY_LABEL: CommandId = CommandId::new("resource::CopyLabel");
     /// `resource::CopyName`: copy a resource's name to the clipboard.
@@ -1944,6 +1947,19 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::Many),
+    // Copy to another cluster or namespace (E20-S08): the target cluster's guard decides (its
+    // read-only flag, confirmation and audit); the source is only read. The declared risk is the
+    // floor, `Command::effective_risk` raises it for a Secret, an RBAC, custom or cluster-scoped
+    // kind. A row and detail action on any kind, never a bulk one.
+    CommandMeta::mutation(
+        CommandId::RESOURCE_COPY_TO,
+        "Copy to…",
+        CommandScope::Selection,
+        Risk::Low,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::One),
     // Writes the user's clipboard, never the cluster: the text is what the YAML tab shows.
     CommandMeta::read(
         CommandId::RESOURCE_COPY_YAML,
@@ -2850,7 +2866,8 @@ mod tests {
                     || m.id == CommandId::SERVICEACCOUNT_GENERATE_KUBECONFIG
                     || m.id == CommandId::POD_UPLOAD_FILE
                     || m.id == CommandId::WORKLOAD_SCALE
-                    || m.id == CommandId::RESOURCE_APPLY_PLAN)
+                    || m.id == CommandId::RESOURCE_APPLY_PLAN
+                    || m.id == CommandId::RESOURCE_COPY_TO)
         );
     }
 

@@ -162,6 +162,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::SecretReveal { target, .. }
         | Command::SecretEditDecoded { target }
         | Command::ResourceDelete { target, .. }
+        | Command::ResourceCopyTo { target, .. }
         | Command::NamespaceDelete { target, .. }
         | Command::PodDelete { target, .. }
         | Command::PodEvict { target }
@@ -393,6 +394,9 @@ pub fn summary(meta: &CommandMeta, command: &Command, context: &str) -> String {
     if let Some(summary) = crate::apply::summary(command, context) {
         return summary;
     }
+    if let Some(summary) = crate::copy::summary(command, context) {
+        return summary;
+    }
     if let Some(summary) = crate::helm_install::summary(command, context) {
         return summary;
     }
@@ -533,6 +537,9 @@ pub fn audit_detail(command: &Command) -> Option<String> {
         return Some(detail);
     }
     if let Some(detail) = crate::files::audit_detail(command) {
+        return Some(detail);
+    }
+    if let Some(detail) = crate::copy::audit_detail(command) {
         return Some(detail);
     }
     if let Some(detail) = super::selection_policy::detail(command) {

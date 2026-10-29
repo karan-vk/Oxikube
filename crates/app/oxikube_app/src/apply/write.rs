@@ -26,7 +26,7 @@ use super::types::ApplyMethod;
 
 /// Whether the server rehearses a write before it is sent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Preview {
+pub(crate) enum Preview {
     /// A server dry run first (admission, validation, ownership), then the write.
     First,
     /// The server cannot dry-run the kind (the rehearsal said so): the write is sent without one.
@@ -34,19 +34,19 @@ pub(super) enum Preview {
 }
 
 /// One object to write, as a command describes it.
-pub(super) struct ObjectWrite {
+pub(crate) struct ObjectWrite {
     /// The object.
-    pub(super) target: ResourceRef,
+    pub(crate) target: ResourceRef,
     /// The request body (no `resourceVersion`, no `managedFields`).
-    pub(super) body: Value,
+    pub(crate) body: Value,
     /// The server-side apply field manager.
-    pub(super) manager: String,
+    pub(crate) manager: String,
     /// Take over other managers' fields.
-    pub(super) force: bool,
+    pub(crate) force: bool,
     /// The live object's version the change was reviewed against; the replace fallback carries it.
-    pub(super) resource_version: Option<String>,
+    pub(crate) resource_version: Option<String>,
     /// The change was reviewed against no live object: the fallback creates.
-    pub(super) reviewed_absent: bool,
+    pub(crate) reviewed_absent: bool,
 }
 
 impl ObjectWrite {
@@ -62,7 +62,7 @@ impl ObjectWrite {
     }
 
     /// The live object, `None` when it does not exist.
-    pub(super) async fn live(&self, reader: &dyn ResourceReader) -> OxiResult<Option<Resource>> {
+    pub(crate) async fn live(&self, reader: &dyn ResourceReader) -> OxiResult<Option<Resource>> {
         let target = &self.target;
         reader
             .get_opt(&target.gvk, self.namespace(), &target.name)
@@ -71,7 +71,7 @@ impl ObjectWrite {
 
     /// The server's dry run of the write, next to `live` (the object read just before): the
     /// server-side apply, or the fallback's where the server cannot server-side apply the kind.
-    pub(super) async fn rehearse(
+    pub(crate) async fn rehearse(
         &self,
         writer: &dyn ResourceWriter,
         live: Option<&Resource>,
@@ -93,7 +93,7 @@ impl ObjectWrite {
     /// The write itself. With [`Preview::First`] the server rehearses it first (admission,
     /// validation, ownership); with [`Preview::Unavailable`] it is sent straight away, the dry run
     /// being one the server cannot do.
-    pub(super) async fn send(
+    pub(crate) async fn send(
         &self,
         writer: &dyn ResourceWriter,
         reader: &dyn ResourceReader,
@@ -170,7 +170,7 @@ impl ObjectWrite {
 }
 
 /// `metadata.resourceVersion` of `live`.
-pub(super) fn version_of(live: Option<&Resource>) -> Option<String> {
+pub(crate) fn version_of(live: Option<&Resource>) -> Option<String> {
     live.and_then(|live| live.meta.resource_version.as_deref())
         .map(str::to_owned)
 }

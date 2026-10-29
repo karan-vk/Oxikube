@@ -65,6 +65,9 @@ const RISKS: &[(CommandId, Risk)] = &[
     // Many objects as one plan (E20-S03): the apply-directory dialog (E20-S05) and agents; low is
     // the floor, the riskiest object raises it (`effective_risk`). No row action.
     (CommandId::RESOURCE_APPLY_PLAN, Risk::Low),
+    // Copy to another cluster or namespace (E20-S08): classified as an apply on the target. The
+    // declared floor is low; a Secret, RBAC, custom or cluster-scoped object raises it.
+    (CommandId::RESOURCE_COPY_TO, Risk::Low),
     (CommandId::RESOURCE_DELETE, Risk::Medium),
     // Roles and ClusterRoles (E17-S05): the rule dialog's save and the detail panel's delete (which
     // counts the bindings first, so it is not a row action); an RBAC change is risk medium.
