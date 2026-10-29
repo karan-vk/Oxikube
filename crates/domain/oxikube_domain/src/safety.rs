@@ -1,8 +1,9 @@
 //! Safety vocabulary shared by commands, the `MutationGuard` and the audit
-//! log: [`Risk`], [`ConfirmTier`] and [`Initiator`].
+//! log: [`Risk`], [`ConfirmTier`], [`Initiator`], [`MutationVerb`], [`MutationIntent`] and the
+//! pure [`classify`] function that turns a verb, scope, kind and flags into a [`Risk`].
 //!
 //! These are plain data. The pipeline that applies them (read-only check,
-//! confirmation, dry-run, execute, audit) lives in `oxikube_app::mutation`;
+//! confirmation, dry-run, execute, audit) lives in `oxikube_app::guard`;
 //! see ADR 0012.
 //!
 //! # Risk to confirmation tier
@@ -15,6 +16,12 @@
 //! | `Irreversible` | `TypeName` | plus a mandatory server dry-run diff |
 //!
 //! Reads never confirm ([`ConfirmTier::None`]) and carry no risk.
+
+mod classify;
+mod intent;
+
+pub use classify::{MutationFlags, classify, verb_floor};
+pub use intent::{MutationIntent, MutationVerb};
 
 use std::fmt;
 
