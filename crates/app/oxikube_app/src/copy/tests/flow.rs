@@ -184,3 +184,19 @@ fn a_secret_is_copied_but_its_values_are_masked_in_the_preview() {
         .to_value();
     assert_eq!(stored["data"]["password"], "aHVudGVyMi12ZXJ5LXNlY3JldA==");
 }
+
+#[test]
+fn an_rbac_name_with_a_colon_or_capitals_is_copied_unchanged() {
+    use oxikube_testkit::kinds::{KindSpec, core_kinds};
+
+    let t = Copying::new(false);
+    let mut kinds = core_kinds();
+    kinds.push(KindSpec::new("rbac.authorization.k8s.io", "v1", "Role", "roles").build());
+    t.h.connector.ports_for(&id("b")).discovery.set_kinds(kinds);
+    let role = json!({"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "Role",
+        "metadata": {"name": "Foo:bar", "namespace": "shop"}, "rules": []});
+    let preview = t.preview(t.request(&role, "prod")).expect("preview");
+    t.copy(&preview, None)
+        .expect("a path-segment name is valid");
+    assert_eq!(t.target_writes(), [("patch", "Foo:bar".to_owned())]);
+}

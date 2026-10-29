@@ -14,14 +14,14 @@
 //! masked in everything returned.
 
 use oxikube_domain::command::{self, Command, CommandId};
-use oxikube_domain::ids::{Gvk, ResourceRef};
+use oxikube_domain::ids::ResourceRef;
 use oxikube_domain::{ConflictDetails, ConflictReason, OxiError, OxiResult};
 use serde_json::{Value, json};
 
 use super::audit::SourceRead;
 use super::object::prepare;
 use super::references;
-use super::refusal::{Refusal, validate_name};
+use super::refusal::{NameRule, Refusal, validate_name};
 use super::target::{namespace_exists, served_kind, unavailable};
 use crate::apply::DEFAULT_FIELD_MANAGER;
 use crate::apply::mask::SecretMask;
@@ -47,11 +47,6 @@ pub fn register_commands(
     })
 }
 
-/// Whether `gvk` names are labels (63 characters, no dots) rather than subdomains.
-pub(super) fn name_is_label(gvk: &Gvk) -> bool {
-    gvk.is_core() && matches!(&*gvk.kind, "Namespace" | "Service")
-}
-
 async fn handle(
     command: Command,
     cx: HandlerContext,
@@ -67,8 +62,12 @@ async fn handle(
         return Err(OxiError::validation("not a resource::CopyTo command"));
     };
     let mutation = cx.require_mutation()?;
-    validate_name(&target.name, name_is_label(&target.gvk))
-        .map_err(|message| Refusal::InvalidName(message).into_error())?;
+    // An unchanged name is valid at the source and the target's server judges it; only a
+    // new name is checked, by the rule of its kind.
+    if target.name != source.name {
+        validate_name(&target.name, NameRule::of(&source.gvk))
+            .map_err(|message| Refusal::InvalidName(message).into_error())?;
+    }
     let source_session = sessions
         .get(&source.cluster)
         .ok_or_else(|| OxiError::not_found("the source cluster is not open"))?;

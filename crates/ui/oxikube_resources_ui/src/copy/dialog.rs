@@ -260,6 +260,9 @@ impl CopyDialog {
         else {
             return false;
         };
+        if *preview.target.name != *self.name_text(cx) {
+            return false;
+        }
         let decided = match (preview.exists(), self.conflict) {
             (false, _) => true,
             (true, Some(Conflict::Skip)) => true,
@@ -394,8 +397,11 @@ impl CopyDialog {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let InputEvent::PressEnter { .. } = event {
-            self.review(cx);
+        match event {
+            InputEvent::PressEnter { .. } => self.review(cx),
+            // The button follows the name on screen: a stale review no longer enables it.
+            InputEvent::Change => cx.notify(),
+            InputEvent::Focus | InputEvent::Blur => {}
         }
     }
 

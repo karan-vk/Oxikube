@@ -4,6 +4,7 @@
 use std::error::Error as StdError;
 
 use oxikube_domain::OxiError;
+use oxikube_domain::ids::Gvk;
 
 /// A precondition of a copy that the target does not meet.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -38,14 +39,48 @@ impl Refusal {
     }
 }
 
-/// Whether `name` is a DNS-1123 subdomain (lowercase alphanumerics, `-` and `.`, starting and
-/// ending with an alphanumeric, at most 253 characters). A Namespace or Service name is the
-/// stricter label (no dots, at most 63), checked for those two kinds.
+/// How the API server validates the names of a kind.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum NameRule {
+    /// A DNS-1123 label (Namespace, Service): lowercase alphanumerics and `-`, at most 63.
+    Label,
+    /// A DNS-1123 subdomain (most kinds): also `.`, at most 253.
+    Subdomain,
+    /// A path segment (RBAC kinds): any text without `/` or `%`, not `.` or `..`.
+    PathSegment,
+}
+
+impl NameRule {
+    /// The rule for names of `gvk`.
+    pub(crate) fn of(gvk: &Gvk) -> Self {
+        if gvk.is_core() && matches!(&*gvk.kind, "Namespace" | "Service") {
+            Self::Label
+        } else if &*gvk.group == "rbac.authorization.k8s.io" {
+            Self::PathSegment
+        } else {
+            Self::Subdomain
+        }
+    }
+}
+
+/// Whether `name` is valid under `rule`: a DNS-1123 subdomain (lowercase alphanumerics, `-` and
+/// `.`, starting and ending with an alphanumeric, at most 253 characters), the stricter label
+/// (no dots, at most 63) or, for RBAC kinds, a path segment.
 ///
 /// # Errors
 ///
 /// The sentence that says what is wrong.
-pub(crate) fn validate_name(name: &str, label: bool) -> Result<(), String> {
+pub(crate) fn validate_name(name: &str, rule: NameRule) -> Result<(), String> {
+    if rule == NameRule::PathSegment {
+        return if name.is_empty() {
+            Err("the name is empty".to_owned())
+        } else if matches!(name, "." | "..") || name.contains(['/', '%']) {
+            Err(format!("{name:?} is not a valid path segment name"))
+        } else {
+            Ok(())
+        };
+    }
+    let label = rule == NameRule::Label;
     let (limit, what) = if label {
         (63, "DNS-1123 label")
     } else {
@@ -69,4 +104,24 @@ pub(crate) fn validate_name(name: &str, label: bool) -> Result<(), String> {
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod name_tests {
+    use super::*;
+
+    #[test]
+    fn the_rule_follows_the_kind() {
+        let gvk = |group: &str, kind: &str| Gvk::new(group, "v1", kind);
+        assert_eq!(NameRule::of(&gvk("", "Service")), NameRule::Label);
+        assert_eq!(NameRule::of(&gvk("", "ConfigMap")), NameRule::Subdomain);
+        assert_eq!(
+            NameRule::of(&gvk("rbac.authorization.k8s.io", "ClusterRole")),
+            NameRule::PathSegment
+        );
+        assert!(validate_name("system:aggregate-to-view", NameRule::PathSegment).is_ok());
+        assert!(validate_name("a/b", NameRule::PathSegment).is_err());
+        assert!(validate_name("..", NameRule::PathSegment).is_err());
+        assert!(validate_name("Foo:bar", NameRule::Subdomain).is_err());
+    }
 }

@@ -175,3 +175,29 @@ fn missing_references_are_listed_as_warnings(cx: &mut TestAppContext) {
     // Only warnings: the copy still goes ahead.
     assert!(can_copy(&mut rig, &dialog));
 }
+
+#[gpui::test]
+fn editing_the_name_without_enter_disables_the_copy_until_it_is_reviewed(cx: &mut TestAppContext) {
+    let mut rig = Rig::new(cx);
+    let source = rig.source(configmap());
+    let dialog = review(&mut rig, source);
+    assert!(can_copy(&mut rig, &dialog));
+    rig.vcx
+        .update(|window, cx| dialog.update(cx, |d, cx| d.set_name("settings-2", window, cx)));
+    rig.settle();
+    assert!(
+        !can_copy(&mut rig, &dialog),
+        "the review was made for the old name"
+    );
+    dialog.update(&mut rig.vcx, |dialog, cx| dialog.review(cx));
+    rig.settle();
+    assert!(can_copy(&mut rig, &dialog));
+    dialog.update(&mut rig.vcx, |dialog, cx| dialog.submit(cx));
+    rig.settle();
+    assert!(
+        rig.cluster("b")
+            .objects()
+            .iter()
+            .any(|o| o.name() == "settings-2")
+    );
+}

@@ -13,7 +13,7 @@ use serde_json::Value;
 
 use super::answer::DryRunAnswer;
 use super::classify::{classify_dispatch, classify_oxi};
-use super::refusal::validate_name;
+use super::refusal::{NameRule, validate_name};
 use super::types::{
     CopyChoice, CopyError, CopyOutcome, CopyPreview, CopyRequest, MissingReference,
 };
@@ -325,8 +325,8 @@ impl CopyService {
             }
             Some(CopyChoice::Overwrite { force }) => (preview.request.clone(), true, force),
             Some(CopyChoice::Rename(name)) => {
-                let label = super::handler::name_is_label(&preview.request.target.gvk);
-                validate_name(&name, label).map_err(CopyError::InvalidName)?;
+                let rule = NameRule::of(&preview.request.target.gvk);
+                validate_name(&name, rule).map_err(CopyError::InvalidName)?;
                 let renamed = preview.request.renamed(&name);
                 // The new name may be taken too: the review of it decides.
                 let again = self.preview(renamed.clone()).await?;
