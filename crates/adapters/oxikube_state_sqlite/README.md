@@ -21,3 +21,15 @@ See `docs/ARCHITECTURE.md` for the full dependency rules. `cargo xtask lint-deps
 ## Owning epics
 
 See `docs/ROADMAP.md` and the GitHub Project for the epics and stories that build this crate.
+
+## The audit log (E19-S08)
+
+`audit_log` is append-only: `record` (the `AuditRecord` JSON, no bodies) is the source of truth and
+`verb`, `initiator`, `outcome`, `batch_id`, `kind`, `namespace` and `name` are virtual generated
+columns over it (migration 0002), so they need no backfill. Indices, newest first:
+`(ts_ns, id)`, `(cluster, ts_ns, id)`, `(initiator, ts_ns, id)`, `(verb, ts_ns, id)` and a partial
+`(batch_id, id)`; `query_audit` builds its `WHERE` from the filters that are set so each can use
+its index, and pages by keyset on `(ts_ns, id)`. A trigger refuses every `UPDATE` and every
+`DELETE` except one inside `prune_audit`, which parks its cutoff in `audit_prune` and removes only
+older rows, then gives the pages back (`incremental_vacuum`; a database from before 0002 is
+converted to incremental auto-vacuum by its first prune).

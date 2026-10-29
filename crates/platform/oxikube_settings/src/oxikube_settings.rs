@@ -18,6 +18,7 @@
 //!
 //! Module map:
 //! - [`aliases`]: the user's `aliases.json` (E11-S04): parse with line-numbered diagnostics, hot reload.
+//! - [`audit`]: the `audit` setting, how many days the audit log keeps its records (E19-S08).
 //! - [`cluster`]: the per-cluster settings (`clusters.<id>`: name, colour, read-only, ...), E06-S08.
 //! - [`cloud`]: the `cloud` setting, providers, CLI paths, scan lists, cache TTL, parallelism (E18-S07).
 //! - [`kustomize`]: the `kustomize` setting, the binary that builds overlays (E20-S04).
@@ -38,6 +39,7 @@
 //! dependency direction. `cargo xtask lint-deps` enforces it.
 
 pub mod aliases;
+pub mod audit;
 pub mod cloud;
 pub mod cluster;
 pub mod diagnostics;
@@ -58,6 +60,7 @@ mod test_support;
 pub mod update;
 pub mod watcher;
 
+pub use audit::{AuditSettings, AuditSettingsContent};
 pub use cloud::{CloudSettings, CloudSettingsContent};
 pub use cluster::{ClusterSettings, ClusterSettingsContent};
 pub use diagnostics::SettingsDiagnostic;

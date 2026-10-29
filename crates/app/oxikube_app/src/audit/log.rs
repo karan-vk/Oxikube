@@ -8,6 +8,7 @@ use oxikube_domain::OxiResult;
 use oxikube_domain::audit::{AuditOutcome, AuditRecord, Initiator};
 use oxikube_domain::ids::ResourceRef;
 use oxikube_domain::redact::redact;
+use oxikube_domain::safety::MutationVerb;
 use oxikube_ports::{ClockPort, StatePort};
 use parking_lot::Mutex;
 
@@ -65,7 +66,7 @@ impl AuditLog {
         dry_run: bool,
         outcome: AuditOutcome,
     ) -> AuditRecord {
-        AuditRecord::new(
+        let record = AuditRecord::new(
             self.clock.now(),
             &redact(who),
             initiator,
@@ -73,7 +74,11 @@ impl AuditLog {
             target,
             dry_run,
             outcome,
-        )
+        );
+        match MutationVerb::for_command(cmd) {
+            Some(verb) => record.with_verb(verb),
+            None => record,
+        }
     }
 
     /// [`entry`](Self::entry) with a [`detail`](AuditRecord::detail) (redacted like `who`): the

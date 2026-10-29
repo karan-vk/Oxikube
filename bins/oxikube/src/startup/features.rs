@@ -81,6 +81,10 @@ pub const FEATURES: &[Feature] = &[
         init: crate::aliases::start,
     },
     Feature {
+        name: "audit_retention",
+        init: crate::audit_retention::start,
+    },
+    Feature {
         name: "history",
         init: crate::history::start,
     },

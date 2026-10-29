@@ -40,6 +40,7 @@
 pub mod access_follow;
 pub mod aliases;
 pub mod app_state;
+pub mod audit_retention;
 pub mod cluster_prefs;
 pub mod events;
 pub mod history;

@@ -4,8 +4,9 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use futures::channel::oneshot;
+use jiff::Timestamp;
 use oxikube_domain::{OxiResult, audit::AuditRecord};
-use oxikube_ports::{AuditQuery, StateKey, StatePort, StateTable};
+use oxikube_ports::{AuditPage, AuditQuery, StateKey, StatePort, StateTable};
 use oxikube_testkit::fakes::FakeStatePort;
 use serde_json::Value;
 
@@ -64,7 +65,11 @@ impl StatePort for GatedState {
     async fn append_audit(&self, records: &[AuditRecord]) -> OxiResult<()> {
         self.inner.append_audit(records).await
     }
-    async fn query_audit(&self, query: &AuditQuery) -> OxiResult<Vec<AuditRecord>> {
+    async fn query_audit(&self, query: &AuditQuery) -> OxiResult<AuditPage> {
         self.inner.query_audit(query).await
+    }
+
+    async fn prune_audit(&self, before: Timestamp) -> OxiResult<u64> {
+        self.inner.prune_audit(before).await
     }
 }

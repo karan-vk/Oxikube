@@ -220,7 +220,9 @@ pub use service_proxy::{
     ProxyMethod, ProxyRequest, ProxyResponse, ProxyScheme, ServicePort, ServiceProxyPort,
     ServiceRef,
 };
-pub use state::{AuditQuery, StateKey, StatePort, StatePortExt, StateTable};
+pub use state::{
+    AuditCursor, AuditPage, AuditQuery, StateKey, StatePort, StatePortExt, StateTable,
+};
 pub use table::{
     IncludeObject, Table, TableBatch, TableColumn, TableFeed, TableFeedPort, TableOptions,
     TableRow, TableSource,

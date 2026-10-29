@@ -346,6 +346,7 @@ impl EditorSession {
             |_| {
                 let mut records: Vec<AuditRecord> = block_on(state.state().query_audit(&query))
                     .expect("the audit log")
+                    .records
                     .into_iter()
                     .filter(|r| &*r.target.name == name)
                     .collect();

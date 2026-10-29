@@ -28,7 +28,7 @@
 //! | [`apply`] | E10-S08 | [`ApplyService`]: one object's manifest dry-run, previewed and applied through the guard (server-side apply under a field manager, conflicts with their managers and a force option, the replace fallback at the reviewed `resourceVersion`); the `resource::Apply` handler; Secret values masked |
 //! | [`templates`] | E10-S09 | [`TemplateService`]: the templates of the "Create resource" picker (the embedded manifests of the core kinds passed in by the editor, plus `~/.config/oxikube/templates/*.yaml` read through `FsPort` each time the picker opens, a user template overriding an embedded one of the same name, a broken file skipped with a warning) and [`Template::prefill`] (the selection's namespace in the `namespace: default` placeholders) |
 //! | [`ingress_class`] | E12-S14 | the Network section's one mutation: the `ingressclass::SetDefault` handler (annotation merge patch through the guard, the previous default cleared) |
-//! | [`audit`] | E06-S02 | [`AuditLog`]: redacted, batched, fail-closed audit appends through `StatePort` |
+//! | [`audit`] | E06-S02 | [`AuditLog`]: redacted, batched, fail-closed audit appends through `StatePort`; E19-S08: [`AuditRetention`] prunes records older than `audit.retention_days` on start, daily and on a settings change |
 //! | [`store`] | E07-S01 | [`ResourceStore`]: the per-session cache over reflector, metadata and Table feeds keyed by (gvk, scope), ref-counted feeds with grace teardown and a [`FeedBudget`](store::FeedBudget) hook, in-app sort / filter / name-namespace-label indices, and [`Subscription`] streams of coalesced [`StoreDelta`]s; [`ResourceStores`] keeps one per connected session |
 //! | [`exec`] | E09-S08 | [`ExecService`]: a shell (`bash`, else `sh`, probed with a quick exec), an attach or a command in a pod container over the `ExecPort`; [`PodContainers`] and [`ContainerPlan`] pick the container (the default-container annotation, the last choice per pod, a picker for several); the exec-class policy lives in the [`MutationGuard`] (blocked read-only by default, audited, no confirmation); E09-S10 adds debug containers (`pod::Debug`, a low-risk guarded mutation: [`DebugRequest`], [`plan_debug`], [`ExecService::open_debug`], [`DebugRunner`]) |
 //! | [`transfer`] | E20-S06 | [`TransferService`]: pod file download over the exec tar helpers (`oxikube_ports::ExecTransferExt`, with the `cat` fallback for one file in a container without `tar`) and the upload, which takes the guard's [`Mutation`]; [`safe_unpack`] (a tar stream onto disk through `FsPort`, refusing absolute paths, `..` and links) and [`tar_file_stream`] (one local file as a tar stream) |
@@ -135,7 +135,7 @@ pub use apply::{
     BatchPreview, BatchReport, Change, DocumentPreview, DocumentResult, DocumentStatus,
     FieldConflict, PreviewOutcome,
 };
-pub use audit::AuditLog;
+pub use audit::{AuditLog, AuditRetention};
 pub use catalog::{
     CatalogEntry, ClusterCatalog, ClusterCommandOutcome, ClusterCommands, FavouriteChanged,
     FavouritesLagged,

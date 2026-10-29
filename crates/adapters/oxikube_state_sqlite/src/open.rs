@@ -59,6 +59,13 @@ fn open_checked(path: &Path) -> Result<Connection, StateFailure> {
     // WAL: readers never block the single writer and a write is one append, which keeps the
     // debounced layout save cheap. NORMAL is durable enough for UI state under WAL.
     let _mode: String = conn.query_row("PRAGMA journal_mode = WAL", [], |r| r.get(0))?;
+    // A new file starts in incremental auto-vacuum mode (it has to be chosen before the first
+    // table exists) so retention pruning can return pages cheaply; an older file is converted
+    // by the first prune that frees something.
+    let pages: i64 = conn.query_row("PRAGMA page_count", [], |r| r.get(0))?;
+    if pages == 0 {
+        conn.pragma_update(None, "auto_vacuum", crate::audit::AUTO_VACUUM_INCREMENTAL)?;
+    }
     conn.pragma_update(None, "synchronous", "NORMAL")?;
     conn.pragma_update(None, "foreign_keys", true)?;
     conn.busy_timeout(std::time::Duration::from_secs(5))?;

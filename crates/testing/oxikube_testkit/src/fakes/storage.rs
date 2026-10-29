@@ -8,12 +8,13 @@ use async_trait::async_trait;
 use futures::StreamExt;
 use futures::channel::mpsc;
 use futures::stream::BoxStream;
+use jiff::Timestamp;
 use oxikube_domain::audit::AuditRecord;
 use oxikube_domain::{OxiError, OxiResult};
 use oxikube_ports::secrets::SecretString;
 use oxikube_ports::{
-    AuditQuery, DirEntry, EntryKind, FsEvent, FsEventKind, FsPort, SecretKey, SecretStorePort,
-    StateKey, StatePort, StateTable,
+    AuditCursor, AuditPage, AuditQuery, DirEntry, EntryKind, FsEvent, FsEventKind, FsPort,
+    SecretKey, SecretStorePort, StateKey, StatePort, StateTable,
 };
 use parking_lot::Mutex;
 use serde_json::Value;
@@ -44,7 +45,9 @@ pub struct StateScripts {
     /// `append_audit`.
     pub append_audit: Script<()>,
     /// `query_audit`.
-    pub query_audit: Script<Vec<AuditRecord>>,
+    pub query_audit: Script<AuditPage>,
+    /// `prune_audit`.
+    pub prune_audit: Script<u64>,
 }
 
 /// One call made on a [`FakeStatePort`].
@@ -70,6 +73,8 @@ pub enum StateCall {
     AppendAudit(Vec<AuditRecord>),
     /// `query_audit(query)`.
     QueryAudit(AuditQuery),
+    /// `prune_audit(before)`.
+    PruneAudit(Timestamp),
 }
 
 #[derive(Default)]
@@ -80,9 +85,9 @@ struct StateData {
 }
 
 /// Fake `StatePort` over in-memory maps, with the same semantics as the SQLite adapter:
-/// lists ordered by key, `kv_list` by prefix, audit append-only and queried newest first
-/// (`since` inclusive, `until` exclusive, then `limit`). A scripted response replaces the
-/// in-memory behaviour for that call (the store is left unchanged).
+/// lists ordered by key, `kv_list` by prefix, audit append-only, queried newest first in keyset
+/// pages (`since` inclusive, `until` exclusive, then `limit`) and pruned by `prune_audit`. A
+/// scripted response replaces the in-memory behaviour for that call (the store is left unchanged).
 #[derive(Default)]
 pub struct FakeStatePort {
     script: StateScripts,
@@ -220,26 +225,57 @@ impl StatePort for FakeStatePort {
         })
     }
 
-    async fn query_audit(&self, query: &AuditQuery) -> OxiResult<Vec<AuditRecord>> {
+    async fn query_audit(&self, query: &AuditQuery) -> OxiResult<AuditPage> {
         self.calls.record(StateCall::QueryAudit(query.clone()));
         self.script.query_audit.next_or_else(|| {
             let data = self.data.lock();
-            let mut hits: Vec<AuditRecord> = data
-                .audit
-                .iter()
-                .filter(|r| query.cluster.as_ref().is_none_or(|c| &r.cluster == c))
-                .filter(|r| query.since.is_none_or(|s| r.ts >= s))
-                .filter(|r| query.until.is_none_or(|u| r.ts < u))
-                .filter(|r| query.cmd.as_deref().is_none_or(|c| &*r.cmd == c))
-                .cloned()
+            // The row number is the append position, as in the SQLite adapter.
+            let mut hits: Vec<(u64, &AuditRecord)> = (1u64..)
+                .zip(data.audit.iter())
+                .filter(|(_, r)| matches(query, r))
                 .collect();
             // Newest first; equal timestamps keep "last appended first".
-            hits.reverse();
-            hits.sort_by_key(|r| std::cmp::Reverse(r.ts));
+            hits.sort_by_key(|(row, r)| std::cmp::Reverse((r.ts, *row)));
+            if let Some(cursor) = query.cursor {
+                hits.retain(|(row, r)| (r.ts, *row) < (cursor.ts(), cursor.row()));
+            }
+            let more = hits.len() > query.limit;
             hits.truncate(query.limit);
-            Ok(hits)
+            let next = hits
+                .last()
+                .filter(|_| more)
+                .map(|(row, r)| AuditCursor::new(r.ts, *row));
+            Ok(AuditPage {
+                records: hits.into_iter().map(|(_, r)| r.clone()).collect(),
+                next,
+            })
         })
     }
+
+    async fn prune_audit(&self, before: Timestamp) -> OxiResult<u64> {
+        self.calls.record(StateCall::PruneAudit(before));
+        self.script.prune_audit.next_or_else(|| {
+            let mut data = self.data.lock();
+            let kept = data.audit.len();
+            data.audit.retain(|r| r.ts >= before);
+            Ok((kept - data.audit.len()) as u64)
+        })
+    }
+}
+
+/// Whether `record` passes every filter of `query` (the cursor and limit aside).
+fn matches(query: &AuditQuery, record: &AuditRecord) -> bool {
+    query.cluster.as_ref().is_none_or(|c| &record.cluster == c)
+        && query.since.is_none_or(|s| record.ts >= s)
+        && query.until.is_none_or(|u| record.ts < u)
+        && query.cmd.as_deref().is_none_or(|c| &*record.cmd == c)
+        && query.verb.is_none_or(|v| record.verb == Some(v))
+        && query.initiator.is_none_or(|i| record.initiator == i)
+        && query.outcome.is_none_or(|o| record.outcome == o)
+        && query
+            .batch_id
+            .as_deref()
+            .is_none_or(|b| record.batch_id.as_deref() == Some(b))
 }
 
 // --- SecretStorePort ---------------------------------------------------------------------
@@ -655,7 +691,7 @@ mod tests {
         assert_eq!(fake.audit_log().len(), 3);
 
         let all = block_on(fake.query_audit(&AuditQuery::default())).unwrap();
-        let secs: Vec<i64> = all.iter().map(|r| r.ts.as_second()).collect();
+        let secs: Vec<i64> = all.records.iter().map(|r| r.ts.as_second()).collect();
         assert_eq!(secs, vec![30, 20, 10]);
         let only_a = AuditQuery {
             cluster: Some(a),
@@ -663,7 +699,7 @@ mod tests {
             until: Some(Timestamp::from_second(30).unwrap()),
             ..AuditQuery::default()
         };
-        let hits = block_on(fake.query_audit(&only_a)).unwrap();
+        let hits = block_on(fake.query_audit(&only_a)).unwrap().records;
         assert_eq!(hits.len(), 1);
         assert_eq!(&*hits[0].cmd, "pod.delete");
         let limited = AuditQuery {
@@ -672,11 +708,36 @@ mod tests {
             ..AuditQuery::default()
         };
         assert_eq!(
-            block_on(fake.query_audit(&limited)).unwrap()[0]
+            block_on(fake.query_audit(&limited)).unwrap().records[0]
                 .ts
                 .as_second(),
             20
         );
+    }
+
+    #[test]
+    fn state_audit_pages_by_cursor_and_prunes() {
+        let fake = FakeStatePort::new();
+        let a = ClusterId::new("/k", &ContextName::new("a"));
+        let batch: Vec<_> = (1..=5).map(|i| record(&a, "pod.delete", i * 10)).collect();
+        block_on(fake.append_audit(&batch)).unwrap();
+        let mut query = AuditQuery {
+            limit: 2,
+            ..AuditQuery::default()
+        };
+        let mut seen = Vec::new();
+        loop {
+            let page = block_on(fake.query_audit(&query)).unwrap();
+            seen.extend(page.records.iter().map(|r| r.ts.as_second()));
+            match page.next {
+                Some(cursor) => query.cursor = Some(cursor),
+                None => break,
+            }
+        }
+        assert_eq!(seen, [50, 40, 30, 20, 10]);
+        let removed = block_on(fake.prune_audit(Timestamp::from_second(30).unwrap())).unwrap();
+        assert_eq!(removed, 2);
+        assert_eq!(fake.audit_log().len(), 3);
     }
 
     #[test]

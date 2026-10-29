@@ -245,7 +245,9 @@ fn set_default_moves_the_flag_on_a_real_cluster_through_the_guard(cx: &mut TestA
         ..AuditQuery::default()
     };
     let records = wait_value(&mut app.vcx, "the audit records", |_| {
-        let records = block_on(state.state().query_audit(&query)).expect("the audit log");
+        let records = block_on(state.state().query_audit(&query))
+            .expect("the audit log")
+            .records;
         (records.len() >= 5).then_some(records)
     });
     let outcomes: Vec<_> = records.iter().map(|r| (r.dry_run, r.outcome)).collect();

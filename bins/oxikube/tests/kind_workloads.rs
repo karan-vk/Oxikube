@@ -245,7 +245,8 @@ fn t_and_s_on_a_cronjobs_row_trigger_and_suspend_it_through_the_guard(cx: &mut T
 
     // The guard audited each attempt, the trigger with the Job it made.
     let records = futures::executor::block_on(state.state().query_audit(&AuditQuery::default()))
-        .expect("the audit log");
+        .expect("the audit log")
+        .records;
     let ours: Vec<_> = records
         .iter()
         .filter(|r| &*r.target.name == name && r.cmd.starts_with("cronjob::"))

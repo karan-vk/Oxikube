@@ -135,7 +135,8 @@ fn a_shell_opens_in_a_pod_from_its_row_through_the_guard_and_runs_a_command(
     // The open was audited by the guard: initiator, the pod, the container, never the content.
     let app = vcx.update(|_, cx| AppState::global(cx));
     let records = futures::executor::block_on(app.state().query_audit(&AuditQuery::default()))
-        .expect("the audit log");
+        .expect("the audit log")
+        .records;
     let shells: Vec<_> = records.iter().filter(|r| &*r.cmd == "pod::Shell").collect();
     assert_eq!(shells.len(), 1, "{records:?}");
     assert_eq!(shells[0].outcome, AuditOutcome::Succeeded);
@@ -276,7 +277,8 @@ fn a_debug_container_is_added_from_the_pods_row_and_opens_a_terminal_in_it(
     // One guarded, audited mutation: the image and the target, never what was typed.
     let app = vcx.update(|_, cx| AppState::global(cx));
     let records = futures::executor::block_on(app.state().query_audit(&AuditQuery::default()))
-        .expect("the audit log");
+        .expect("the audit log")
+        .records;
     let debugs: Vec<_> = records.iter().filter(|r| &*r.cmd == "pod::Debug").collect();
     assert_eq!(debugs.len(), 1, "{records:?}");
     assert_eq!(debugs[0].outcome, AuditOutcome::Succeeded);
@@ -403,7 +405,8 @@ fn a_pod_with_two_containers_asks_in_the_picker_and_typing_chooses_the_container
 
     let app = vcx.update(|_, cx| AppState::global(cx));
     let records = futures::executor::block_on(app.state().query_audit(&AuditQuery::default()))
-        .expect("the audit log");
+        .expect("the audit log")
+        .records;
     let shells: Vec<_> = records.iter().filter(|r| &*r.cmd == "pod::Shell").collect();
     assert_eq!(shells.len(), 1, "{records:?}");
     assert_eq!(

@@ -26,6 +26,12 @@
 //!   when it is called. A dropped caller therefore never leaves a mutation without a
 //!   record; the next flush writes it.
 //!
+//! # Retention
+//!
+//! [`AuditRetention`] keeps the log within `audit.retention_days` (default 90; `0` keeps everything):
+//! it prunes when it starts, then daily, and at once when the setting changes, through
+//! [`StatePort::prune_audit`](oxikube_ports::StatePort::prune_audit), the one way the log shrinks.
+//!
 //! # Secrets
 //!
 //! Records carry no bodies by construction. The free-form `who` field is passed through
@@ -33,9 +39,11 @@
 
 mod attempt;
 mod log;
+mod retention;
 
 #[cfg(test)]
 mod tests;
 
 pub use attempt::AuditAttempt;
 pub use log::{AuditLog, MAX_AUDIT_BACKLOG};
+pub use retention::{AuditRetention, MAX_RETENTION_DAYS, PRUNE_INTERVAL};

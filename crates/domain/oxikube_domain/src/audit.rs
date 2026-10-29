@@ -31,6 +31,7 @@ use serde::{Deserialize, Serialize};
 use crate::bounds::char_boundary_prefix;
 use crate::ids::{ClusterId, ResourceRef};
 pub use crate::safety::Initiator;
+use crate::safety::MutationVerb;
 
 /// Longest `who` or `cmd` string kept, in bytes. Longer values are cut on a char boundary.
 pub const MAX_AUDIT_FIELD_BYTES: usize = 256;
@@ -100,6 +101,11 @@ pub struct AuditRecord {
     /// written before this field existed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub denial: Option<AuditDenial>,
+    /// What the mutation did to its target; absent for a record that did not come from a
+    /// [`MutationIntent`](crate::safety::MutationIntent) and for records written before this field
+    /// existed. The audit store indexes it for the viewer's verb filter.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verb: Option<MutationVerb>,
 }
 
 impl AuditRecord {
@@ -126,6 +132,7 @@ impl AuditRecord {
             detail: None,
             batch_id: None,
             denial: None,
+            verb: None,
         }
     }
 
@@ -146,6 +153,13 @@ impl AuditRecord {
             batch_id,
             MAX_AUDIT_FIELD_BYTES,
         )));
+        self
+    }
+
+    /// Adds [`verb`](Self::verb).
+    #[must_use]
+    pub fn with_verb(mut self, verb: MutationVerb) -> Self {
+        self.verb = Some(verb);
         self
     }
 

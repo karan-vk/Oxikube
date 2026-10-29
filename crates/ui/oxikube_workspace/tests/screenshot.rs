@@ -26,7 +26,7 @@ use std::{path::Path, process::ExitCode, sync::Arc};
 use async_trait::async_trait;
 use gpui::{AppContext as _, HeadlessAppContext, px, size};
 use oxikube_domain::{OxiResult, audit::AuditRecord};
-use oxikube_ports::{AuditQuery, StateKey, StatePort, StateTable};
+use oxikube_ports::{AuditPage, AuditQuery, StateKey, StatePort, StateTable};
 use oxikube_testkit::{
     headless::HEADLESS_SCALE_FACTOR,
     screenshot::{RgbaImage, Tolerance, check_golden, distinct_colors_at_least, golden_path},
@@ -80,7 +80,10 @@ impl StatePort for NeverReady {
     async fn append_audit(&self, _: &[AuditRecord]) -> OxiResult<()> {
         std::future::pending().await
     }
-    async fn query_audit(&self, _: &AuditQuery) -> OxiResult<Vec<AuditRecord>> {
+    async fn query_audit(&self, _: &AuditQuery) -> OxiResult<AuditPage> {
+        std::future::pending().await
+    }
+    async fn prune_audit(&self, _: jiff::Timestamp) -> OxiResult<u64> {
         std::future::pending().await
     }
 }
