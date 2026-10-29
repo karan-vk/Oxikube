@@ -52,6 +52,7 @@ pub mod access;
 pub mod age;
 pub mod agent;
 pub mod alias;
+pub mod apply;
 pub mod audit;
 mod bounds;
 pub mod build;
