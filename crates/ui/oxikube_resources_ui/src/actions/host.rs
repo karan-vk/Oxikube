@@ -81,6 +81,9 @@ pub struct ResourceActions {
     /// The cached access reviews that grey out actions the user may not run (E17-S03); `None`
     /// until the app gives them.
     access: Option<AccessRegistry>,
+    /// Runs the copy flow's reads and `resource::CopyTo` (E20-S08); `None` until the app gives
+    /// one.
+    copy: Option<oxikube_app::CopyService>,
 }
 
 impl ResourceActions {
@@ -136,6 +139,7 @@ impl ResourceActions {
             drain: None,
             forward: None,
             access: None,
+            copy: None,
         }
     }
 
@@ -146,6 +150,23 @@ impl ResourceActions {
     pub fn with_access(mut self, access: AccessRegistry) -> Self {
         self.access = Some(access);
         self
+    }
+
+    /// Lets "Copy to…" open the copy flow over `service` (the app's `CopyService` on the same
+    /// bus). Without it the action says copying is not available here.
+    #[must_use]
+    pub fn with_copy(mut self, service: oxikube_app::CopyService) -> Self {
+        self.copy = Some(service);
+        self
+    }
+
+    /// The flow that opens "Copy to…" in `workspace` (E20-S08): the table's menu and the palette.
+    /// `None` without a service.
+    pub fn copy_flow(
+        &self,
+        workspace: gpui::WeakEntity<oxikube_workspace::Workspace>,
+    ) -> Option<crate::copy::CopyFlow> {
+        Some(crate::copy::CopyFlow::new(self.copy.clone()?, workspace))
     }
 
     /// Lets the Forward buttons, `shift-f` and the palette open the start dialog over `starter`

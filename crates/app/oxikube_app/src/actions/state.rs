@@ -3,7 +3,7 @@
 use std::fmt;
 
 use oxikube_domain::Capabilities;
-use oxikube_domain::command::CommandMeta;
+use oxikube_domain::command::{CommandId, CommandMeta};
 
 use crate::ClusterSession;
 
@@ -56,7 +56,9 @@ impl ActionContext {
     /// Whether an action described by `meta` can run here: a mutation and, unless the cluster
     /// allows it, an exec-class command (a shell, an attach) are off on a read-only cluster.
     pub fn state_of(&self, meta: &CommandMeta) -> ActionState {
-        if meta.mutating && self.read_only {
+        // A copy only reads its source: the guard of the *target* cluster decides (E20-S08), so
+        // the source's read-only flag, which this context is, does not grey it out.
+        if meta.mutating && self.read_only && meta.id != CommandId::RESOURCE_COPY_TO {
             ActionState::Disabled(DisabledReason::ReadOnly)
         } else if meta.exec && self.read_only && !self.exec_in_read_only {
             ActionState::Disabled(DisabledReason::ExecReadOnly)

@@ -935,6 +935,23 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `ApplyOptions::cancel` (the ports' `CancellationToken`) skips what is not sent yet. Results stream as `PlanStream` items fed
   by `command_bus::Progress` (a sink and the token on the `DispatchContext`, handed to the handler as
   `HandlerContext::report` / `is_cancelled`); an agent's dispatch gets them all in the output. The UI is E20-S05.
+- `oxikube_app::copy` + `oxikube_resources_ui::copy` (E20-S08) — "Copy to…" on any resource, to another cluster or namespace.
+  `resource::CopyTo { source, target, overwrite, force }` (MCP tool `k8s.resource_copy_to`, mutating) names the **target** object,
+  so `cluster_of` is the target cluster and the target's guard decides: its read-only flag refuses the copy before the source is
+  read, its confirmation tier applies (`copy_risk` in `oxikube_domain::command`: `classify(Apply)` raised to medium for a Secret and
+  to high, the typed name, for a cluster-scoped kind; `force` is medium), and its audit record carries
+  `copied_from=<Kind ns/name> source_cluster=<id> overwrite force` plus `source_context= sanitized=N missing_references=N` (counts,
+  never values). The source cluster is only read, so its read-only flag does not grey the action
+  (`ActionContext::state_of`), and the handler writes a read record on the source's log (`copied_to=…`, same command id). The handler
+  reads the source, runs E20-S02's `sanitize_for_apply(Copy)`, renames and re-namespaces, checks the target (kind served via
+  discovery, apiVersion served — the error names the versions it does serve —, namespace exists; creating a namespace is a separate
+  guarded `namespace::Create`), scans the pod spec for ServiceAccount / ConfigMap / Secret / PVC references the target lacks
+  (warnings only) and writes through `apply::write::ObjectWrite`, the same server-side-apply code as `resource::Apply`: there is no
+  second writer. An object that exists is a conflict unless `overwrite`; `force` takes over other managers' fields. `CopyService`
+  (plain async) lists the clusters (connected first, then the catalog), connects the target on demand, lists namespaces, previews with
+  the target's dry run (`CopyPreview`: masked live and result, removed paths, missing references, field conflicts, tier) and copies
+  with a `CopyChoice` (Overwrite{force} / Skip / Rename, DNS-1123 checked). The UI is a cluster picker and a namespace picker (the
+  generic palette `Picker`) then the `CopyDialog` review, opened from the row menu, the palette and a detail's palette.
 - `oxikube_app::helm` (E16-S03) — manifest -> resources. `oxikube_domain::helm::parse_manifest` (pure, `serde-saphyr`) splits a
   rendered manifest into `ManifestObject`s (empty and comment-only documents skipped, `kind: List` expanded, `helm.sh/hook`
   objects apart, a broken document reported as a `ManifestError` with a position only, never a snippet). `HelmService` reads the

@@ -169,6 +169,11 @@ impl ResourceTable {
                     .unwrap_or_else(gpui::WeakEntity::new_invalid);
                 actions.set_image_flow(workspace).begin(target, window, cx);
             }
+        } else if command == CommandId::RESOURCE_COPY_TO {
+            // The pickers ask where to; `resource::CopyTo` is sent from the review's button.
+            if let Some(source) = targets.into_iter().next() {
+                self.begin_copy(&actions, source, window, cx);
+            }
         } else if command == CommandId::WORKLOAD_ROLLBACK {
             // The dialog shows the history and asks for the revision; the command is sent when
             // the user confirms it.
@@ -212,6 +217,28 @@ impl ResourceTable {
             }
         }
         true
+    }
+
+    /// Opens the copy flow (cluster, namespace, review) for `source`.
+    fn begin_copy(
+        &mut self,
+        actions: &ResourceActions,
+        source: ResourceRef,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let flow = self
+            .workspace
+            .clone()
+            .and_then(|workspace| actions.copy_flow(workspace));
+        match flow {
+            Some(flow) if flow.begin(source, window, cx) => {}
+            _ => self.toast(
+                Toast::info("Copying to another cluster is not available here.")
+                    .key("action-unavailable:copy"),
+                cx,
+            ),
+        }
     }
 
     /// Opens the port-forward start dialog for the first of `targets` (a Pod or a Service).

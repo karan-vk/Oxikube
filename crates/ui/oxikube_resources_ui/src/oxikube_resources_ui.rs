@@ -34,6 +34,7 @@ pub mod actions;
 pub mod apply;
 pub mod audit;
 pub mod bulk;
+pub mod copy;
 pub mod crds;
 pub mod describe_settings;
 pub mod detail;

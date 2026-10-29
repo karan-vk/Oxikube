@@ -146,3 +146,58 @@ fn an_object_that_cannot_be_read_from_the_source_is_reported() {
     );
     assert!(t.h.writes("b").is_empty());
 }
+
+#[test]
+fn a_target_that_is_not_connected_is_connected_on_demand() {
+    let h = Harness::with_extra(|registry, _, sessions| {
+        register_commands(registry, sessions.clone())?;
+        crate::namespaces::register_commands(registry)
+    });
+    // Only the source is connected; `b` is in the catalog (the fake source) and nowhere else.
+    h.connect("a", false);
+    for name in ["a", "b"] {
+        h.connector
+            .ports_for(&id(name))
+            .discovery
+            .set_kinds(oxikube_testkit::kinds::core_kinds());
+    }
+    h.resources("b").insert(namespace_object("prod"));
+    h.resources("a")
+        .insert(Resource::from_json(configmap()).unwrap());
+    assert!(h.manager.get(&id("b")).is_none());
+    let service = CopyService::new(h.bus.clone(), h.manager.clone(), "alice");
+    let request = CopyRequest::to(source_ref(&configmap()), id("b"), Some("prod"));
+    let preview = service
+        .preview(request)
+        .now_or_never()
+        .expect("the fakes answer at once")
+        .expect("preview");
+    assert!(h.manager.get(&id("b")).is_some_and(|s| s.is_connected()));
+    assert_eq!(preview.target.namespace(), Some("prod"));
+    // And a context the catalog does not have cannot be connected.
+    let nowhere = CopyRequest::to(source_ref(&configmap()), id("nowhere"), Some("prod"));
+    let error = service
+        .preview(nowhere)
+        .now_or_never()
+        .unwrap()
+        .unwrap_err();
+    assert!(matches!(error, CopyError::NotConnected(_)), "{error:?}");
+}
+
+#[test]
+fn the_clusters_to_pick_list_the_connected_ones_with_their_read_only_flag() {
+    let t = Copying::new(true);
+    let choices = t
+        .service
+        .clusters()
+        .now_or_never()
+        .expect("answers at once");
+    let summary: Vec<(String, bool, bool)> = choices
+        .iter()
+        .map(|c| (c.name.clone(), c.connected, c.read_only))
+        .collect();
+    assert_eq!(
+        summary,
+        [("a".to_owned(), true, false), ("b".to_owned(), true, true)]
+    );
+}
