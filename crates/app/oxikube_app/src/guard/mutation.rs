@@ -21,7 +21,9 @@ use oxikube_ports::{DeleteOptions, ResourceWriter, WriteOptions};
 /// `ResourceWriter` (implementing one is allowed), and on mutating calls on a writer handle.
 /// There is no allow-list.
 ///
-/// Outside this crate the constructor is unreachable:
+/// Outside this crate the constructor is unreachable (the doctest below documents it; this
+/// crate sets `doctest = false`, so the `constructor_stays_crate_private` unit test is what
+/// actually guards it):
 ///
 /// ```compile_fail,E0624
 /// use std::sync::Arc;
@@ -92,5 +94,34 @@ impl fmt::Debug for Mutation {
             .field("cluster", &self.cluster)
             .field("dry_run", &self.dry_run)
             .finish_non_exhaustive()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// The crate has `doctest = false`, so the `compile_fail` doctest never runs. This guards the
+    /// same two facts from source: the constructor is crate-private and the token is not `Clone`.
+    #[test]
+    fn constructor_stays_crate_private() {
+        let src = include_str!("mutation.rs");
+        // The needles are built from pieces so this test does not match its own text.
+        let private_ctor = concat!("pub(crate)", " fn new(");
+        let public_ctor = concat!("pub", " fn new(");
+        assert!(
+            src.contains(private_ctor),
+            "Mutation::new must be pub(crate)"
+        );
+        assert!(!src.contains(public_ctor), "Mutation::new must not be pub");
+        let decl = concat!("pub struct", " Mutation {");
+        let before = &src[..src.find(decl).expect("Mutation declaration")];
+        let attrs = before.rsplit("\n\n").next().unwrap_or_default();
+        assert!(
+            !attrs.contains("derive("),
+            "Mutation must not derive Clone, Default or anything else"
+        );
+        assert!(
+            !src.contains(concat!("impl Clone", " for Mutation")),
+            "Mutation must not be Clone"
+        );
     }
 }

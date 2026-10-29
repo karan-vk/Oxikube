@@ -143,3 +143,29 @@ fn module_resolution_skips_cfg_test_files() {
     std::fs::remove_dir_all(&dir).expect("cleanup");
     assert_eq!(names, ["lib.rs", "a/mod.rs", "a/inner.rs", "b.rs"]);
 }
+
+#[test]
+fn renaming_the_writer_trait_on_import_is_a_violation() {
+    flagged(
+        "use oxikube_ports::ResourceWriter as W;
+         struct V { w: std::sync::Arc<dyn W> }",
+        "renames `ResourceWriter`",
+    );
+}
+
+#[test]
+fn renaming_inside_a_use_group_is_a_violation() {
+    flagged(
+        "use oxikube_ports::{ResourceReader, ResourcePort as P};",
+        "renames `ResourcePort`",
+    );
+    flagged(
+        "use oxikube_app::guard::{Mutation as M};",
+        "renames `Mutation`",
+    );
+}
+
+#[test]
+fn renaming_an_unrelated_import_is_fine() {
+    clean("use oxikube_ports::ResourceReader as R;");
+}

@@ -5,8 +5,8 @@ use std::collections::BTreeSet;
 use syn::punctuated::Punctuated;
 use syn::visit::Visit;
 use syn::{
-    Attribute, Expr, ExprMethodCall, Field, ItemFn, ItemImpl, ItemMod, Local, Macro, Pat, PatType,
-    Path, Token, Type,
+    Attribute, Expr, ExprMethodCall, Field, ItemFn, ItemImpl, ItemMod, ItemUse, Local, Macro, Pat,
+    PatType, Path, Token, Type, UseTree,
 };
 
 /// Methods of `ResourceWriter` that change a cluster.
@@ -24,6 +24,9 @@ const MUTATING_METHODS: &[&str] = &[
 
 /// Names that produce a writer handle when called: `mutation.writer()`.
 const WRITER_GETTERS: &[&str] = &["writer", "writer_handle"];
+
+/// Names that may not be aliased on import.
+const PROTECTED_NAMES: &[&str] = &["Mutation", "ResourceWriter", "ResourcePort"];
 
 /// Scan one source file; one message per violation. A file that does not parse is reported
 /// as a violation so it cannot hide a bypass.
@@ -83,6 +86,28 @@ impl Scanner {
                         && self.is_writer_handle(&m.receiver))
             }
             _ => false,
+        }
+    }
+
+    /// A renamed import (`use ...::ResourceWriter as W;`) would hide the trait from every later
+    /// name check, so it is a violation. Plain imports are fine: their uses are checked.
+    fn check_use_tree(&mut self, tree: &UseTree) {
+        match tree {
+            UseTree::Path(p) => self.check_use_tree(&p.tree),
+            UseTree::Group(g) => {
+                for item in &g.items {
+                    self.check_use_tree(item);
+                }
+            }
+            UseTree::Rename(r) => {
+                let name = r.ident.to_string();
+                if PROTECTED_NAMES.contains(&name.as_str()) {
+                    self.report(format!(
+                        "renames `{name}` on import (an alias would hide it from this lint)"
+                    ));
+                }
+            }
+            UseTree::Name(_) | UseTree::Glob(_) => {}
         }
     }
 
@@ -148,6 +173,12 @@ impl<'ast> Visit<'ast> for Scanner {
     fn visit_impl_item_fn(&mut self, node: &'ast syn::ImplItemFn) {
         if !is_cfg_test(&node.attrs) {
             syn::visit::visit_impl_item_fn(self, node);
+        }
+    }
+
+    fn visit_item_use(&mut self, node: &'ast ItemUse) {
+        if !is_cfg_test(&node.attrs) {
+            self.check_use_tree(&node.tree);
         }
     }
 
