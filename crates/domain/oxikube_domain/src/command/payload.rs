@@ -1094,6 +1094,26 @@ pub enum Command {
         /// The object to show the users of.
         target: ResourceRef,
     },
+    /// Compare a resource with the same kind in another cluster or namespace (E20-S09): the two
+    /// objects are read side by side, normalised (server-owned fields, the `diff.ignore_paths`
+    /// setting) and shown in a diff tab with a changed-path summary above it. **Read-only**: no
+    /// guard tier, nothing is written. A Secret's values never appear, only `changed` or `same`
+    /// per key. Without `other`, the "Diff with..." picker asks for the second object.
+    #[serde(rename = "resource::DiffWith")]
+    ResourceDiffWith {
+        /// The object to compare (the left side).
+        target: ResourceRef,
+        /// The object to compare it with (the right side); the picker opens when `None`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        other: Option<ResourceRef>,
+        /// Compare `status` too (default: ignored, it always differs).
+        #[serde(default)]
+        include_status: bool,
+        /// Compare `metadata.name` and `metadata.namespace` too (default: ignored, they differ by
+        /// design when comparing across namespaces).
+        #[serde(default)]
+        compare_identity: bool,
+    },
     /// Request a token for a ServiceAccount and build a kubeconfig from it (E17-S09). **Mutating**
     /// (risk low): it creates a credential, so it is blocked on a read-only cluster, confirmed once
     /// and audited with the account and the lifetime, never the token. The result stays in memory
@@ -2141,6 +2161,7 @@ impl Command {
             Command::ServiceOpenInBrowser { .. } => CommandId::SERVICE_OPEN_IN_BROWSER,
             Command::ServiceShowPods { .. } => CommandId::SERVICE_SHOW_PODS,
             Command::ResourceShowUsedBy { .. } => CommandId::RESOURCE_SHOW_USED_BY,
+            Command::ResourceDiffWith { .. } => CommandId::RESOURCE_DIFF_WITH,
             Command::TableFocusFilter { .. } => CommandId::TABLE_FOCUS_FILTER,
             Command::TableSetFilter { .. } => CommandId::TABLE_SET_FILTER,
             Command::ResourceViewYaml { .. } => CommandId::RESOURCE_VIEW_YAML,
@@ -2309,6 +2330,7 @@ impl Command {
             | Command::ServiceOpenInBrowser { target, .. }
             | Command::ServiceShowPods { target }
             | Command::ResourceShowUsedBy { target }
+            | Command::ResourceDiffWith { target, .. }
             | Command::PodViewLogs { target, .. }
             | Command::LogsClear { target }
             | Command::LogsCopy { target }
@@ -2847,6 +2869,12 @@ mod tests {
             },
             Command::ServiceShowPods { target: service() },
             Command::ResourceShowUsedBy { target: pod() },
+            Command::ResourceDiffWith {
+                target: pod(),
+                other: Some(pod()),
+                include_status: true,
+                compare_identity: false,
+            },
             Command::TableFocusFilter {
                 cluster: cluster(),
                 gvk: Gvk::new("", "v1", "Pod"),
@@ -3376,6 +3404,7 @@ mod tests {
                     | Command::PortForwardTogglePanel { .. }
                     | Command::ServiceShowPods { .. }
                     | Command::ResourceShowUsedBy { .. }
+                    | Command::ResourceDiffWith { .. }
                     | Command::TableFocusFilter { .. }
                     | Command::TableSetFilter { .. }
                     | Command::ResourceViewYaml { .. }

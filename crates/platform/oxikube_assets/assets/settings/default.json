@@ -89,6 +89,20 @@
     "allowed_in_readonly": false,
     "annotations": false
   },
+  // Resource diff (E20-S09). Global; an edit applies to the next diff, no restart.
+  //   ignore_paths  what "Diff with..." leaves out, besides the fields the server owns (uid,
+  //                 resourceVersion, managedFields, ...) which are always left out. JSON
+  //                 pointers (RFC 6901: `~1` stands for a `/` inside a key) where `*` inside a
+  //                 segment matches any characters, for example
+  //                 "/metadata/annotations/kubectl.kubernetes.io~1*" or
+  //                 "/spec/template/spec/containers/*/resources". Setting the list replaces
+  //                 this default; entries that do not start with `/` are dropped with a warning.
+  "diff": {
+    "ignore_paths": [
+      "/metadata/annotations/kubectl.kubernetes.io~1*",
+      "/metadata/annotations/deployment.kubernetes.io~1revision"
+    ]
+  },
   // Helm (E16-S11). Global: the binary and the repositories belong to this machine. Edits apply
   // at once; changing `path` runs Helm detection again, no restart needed.
   //   path          the `helm` binary. Empty autodetects (PATH, then the usual install

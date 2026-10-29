@@ -57,6 +57,7 @@
 //! | `oxikube_rbac_ui` | `rbac::CanI` (the can-i dialog, prefilled from the selection; asks a `SelfSubjectAccessReview` or `SubjectAccessReview`, which create nothing; E17-S08) |
 //! | `oxikube_events_ui` | `events::Open` (the cluster's events view, `:ev`, the sidebar's Events heading), `events::ToggleFaults`, `TogglePause`, `CopyRow`, `CopyRowJson`, `ExportJson` (the open view's; read the app's `EventService`, never the cluster; E14-S03) |
 //! | `oxikube_rbac_ui::subjects` | `rbac::OpenUsers` (`:usr`, the sidebar's Access Control > Users), `rbac::OpenGroups` (`:grp`, Groups), `rbac::ShowSubject` (`:rbac <subject>`: the per-verb policy matrix of a user, group or ServiceAccount, each cell traced to its bindings and roles) and `rbac::CopyMatrix` (the open matrix as tab-separated text); read the Roles and bindings through the cluster's store, never change a cluster (E17-S07) |
+//! | `oxikube_editor::diff` | `resource::DiffWith` (E20-S09): reads two objects of one kind through `oxikube_app::diff::DiffService` (connecting a cluster that is not connected), opens the diff tab for a user and returns the changed-path summary to an agent; read-only, no guard tier |
 //! | `oxikube_editor` | `editor::NewManifest` (an empty manifest editor in the shown cluster's tab, its YAML checked against that cluster's schemas), `resource::Create` (the "Create resource" picker, or one template, opened in a new editor with the cluster's selected namespace filled in; E10-S09: it writes nothing, the objects are made by `resource::Apply`, one per document), `editor::ToggleReadOnly`, `editor::ToggleSoftWrap` (the focused editor's view toggles; E10-S04), `editor::TriggerCompletion` / `editor::ShowHover` (the focused editor's completion menu and field docs at the cursor, from the cluster's schema; E10-S05), `resource::Edit`, `resource::ViewYamlInEditor` (a `kind/name` editor tab on a freshly read object, E10-S06), `editor::ToggleManagedFields`, `editor::ToggleSecretMask` (E10-S06), `editor::ConvertToJson`, `editor::ConvertToYaml` (the buffer as the other language, one undo step), `editor::UseJson`, `editor::UseYaml` (the language the buffer is read as; E10-S10), `secret::EditDecoded` (a Secret in an editor tab with its values as text, base64-encoded again by `resource::Apply`; E12-S11), `secret::Create` (the "Create secret" dialog: Opaque, Docker registry or TLS, validated before an editor tab opens with the manifest; E12-S11), `editor::ShowDiff` / `ToggleDiffLayout` / `ReloadFromServer` / `MergeFromServer` / `KeepMine` / `TakeMine` / `TakeServer` / `AcceptMerge` (diff vs live and the changed-on-server banner of the focused editor: read the object, change the buffer only; E10-S07) |
 //! | `oxikube_terminal` | `terminal::OpenLink` (a terminal link's cmd/ctrl-click: a URL or local path, opened on the UI thread, E09-S05), `terminal::Copy` / `terminal::Paste` (dispatched to the focused terminal, E09-S06), `terminal::SelectAll` / `Clear` / `ScrollPageUp` / `ScrollPageDown` / `ScrollLineUp` / `ScrollLineDown` / `Search` / `SearchNext` / `SearchPrevious` / `SearchClose` (the same path, E09-S11), `terminal::New` / `Split` / `Close` (the window's terminal views: a shell in the shown cluster's bottom dock, a split, close the focused one; E09-S07) |
 //!
@@ -172,6 +173,8 @@ pub struct BusParts {
     pub quit: QuitSink,
     /// The manifest editors' queue (`editor::*`, applied on the UI thread).
     pub editors: EditorViewSink,
+    /// The resource diff service (`resource::DiffWith`; E20-S09).
+    pub diff: oxikube_app::diff::DiffService,
     /// The metrics provider service (`cluster::RedetectMetrics`, `cluster::ToggleMetrics`; E13-S05).
     pub metrics: oxikube_app::MetricsProviderService,
     /// Where `cluster::ToggleMetrics` persists (`settings.json`).
@@ -434,7 +437,10 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
         oxikube_rbac_ui::subjects::register_commands(r, parts.rbac_views)
     })?;
     registry.install("oxikube_editor", |r| {
-        oxikube_editor::view::register_commands(r, parts.editors)
+        oxikube_editor::view::register_commands(r, parts.editors.clone())
+    })?;
+    registry.install("oxikube_editor::diff", |r| {
+        oxikube_editor::view::register_diff_command(r, parts.editors.clone(), parts.diff)
     })?;
     registry.install("oxikube_terminal", |r| {
         oxikube_terminal::open_link::register_commands(r, parts.links)?;

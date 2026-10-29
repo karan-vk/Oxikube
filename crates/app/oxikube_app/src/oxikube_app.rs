@@ -25,6 +25,7 @@
 //! | [`kinds`] | E12-S01 | [`KindRegistry`]: each kind's [`KindMeta`] (columns, actions as command ids, sidebar slot, templates) registered by its module, looked up in O(1) with a generic fallback; [`SidebarTree`] by section rank; [`KindGate`]: discovery presence ([`ServedKinds`]) and the [`KindVisibility`] hook E17 implements |
 //! | [`integrations`] | E06-S10 | [`IntegrationRegistry`] (stub): registered integrations and the sidebar sections they append after the core ones |
 //! | [`actions`] | E07-S08 | row actions: [`RowActionRegistry`] / [`RowActions`] (the actions a table's context menu and the palette offer per kind, read from the `CommandBus` once), the `resource::Delete` handler, and [`DeleteFlow`] (plan and run a delete of one object or a selection through the guard, with per-object results) |
+//! | [`diff`] | E20-S09 | [`DiffService`](diff::DiffService): one object compared with the same kind in another cluster or namespace (both read in parallel, a cluster connected on demand), normalised (server fields, the `diff.ignore_paths` [`IgnorePaths`](diff::IgnorePaths), name and namespace, keys sorted, Secret values fingerprinted) into a [`ResourceDiff`](diff::ResourceDiff): changed paths (`spec.replicas: 2 -> 3`), per-key same / changed for ConfigMaps and Secrets, a missing side as all-added; read-only |
 //! | [`apply`] | E10-S08 | [`ApplyService`]: one object's manifest dry-run, previewed and applied through the guard (server-side apply under a field manager, conflicts with their managers and a force option, the replace fallback at the reviewed `resourceVersion`); the `resource::Apply` handler; Secret values masked |
 //! | [`templates`] | E10-S09 | [`TemplateService`]: the templates of the "Create resource" picker (the embedded manifests of the core kinds passed in by the editor, plus `~/.config/oxikube/templates/*.yaml` read through `FsPort` each time the picker opens, a user template overriding an embedded one of the same name, a broken file skipped with a warning) and [`Template::prefill`] (the selection's namespace in the `namespace: default` placeholders) |
 //! | [`ingress_class`] | E12-S14 | the Network section's one mutation: the `ingressclass::SetDefault` handler (annotation merge patch through the guard, the previous default cleared) |
@@ -76,6 +77,7 @@ pub mod cluster_overview;
 pub mod columns;
 pub mod command_bus;
 pub mod context;
+pub mod diff;
 pub mod events;
 pub mod exec;
 pub mod guard;

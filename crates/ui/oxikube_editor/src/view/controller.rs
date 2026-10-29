@@ -120,6 +120,10 @@ impl EditorViews {
                 this.open_resource(&target, OpenMode::EditDecoded, window, cx)
             }
             EditorRequest::CreateSecret { cluster } => this.create_secret(cluster, window, cx),
+            EditorRequest::PickDiffTarget { target } => this.pick_diff_target(target, window, cx),
+            EditorRequest::ShowResourceDiff { request, state } => {
+                this.show_resource_diff(request, state, window, cx)
+            }
             EditorRequest::ToggleManagedFields => {
                 this.on_target(window, cx, |editor, window, cx| {
                     editor.toggle_managed_fields(window, cx);

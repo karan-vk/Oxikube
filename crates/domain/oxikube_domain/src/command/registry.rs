@@ -358,6 +358,9 @@ impl CommandId {
     pub const PVC_RESIZE: CommandId = CommandId::new("pvc::Resize");
     /// `resource::Apply`: apply a manifest.
     pub const RESOURCE_APPLY: CommandId = CommandId::new("resource::Apply");
+    /// `resource::DiffWith`: compare a resource with the same kind in another cluster or
+    /// namespace (side-by-side diff, changed-path summary; read-only).
+    pub const RESOURCE_DIFF_WITH: CommandId = CommandId::new("resource::DiffWith");
     /// `resource::CopyLabel`: copy a label or annotation of a resource as `key=value`.
     pub const RESOURCE_COPY_LABEL: CommandId = CommandId::new("resource::CopyLabel");
     /// `resource::CopyName`: copy a resource's name to the clipboard.
@@ -1874,6 +1877,17 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::Many),
+    // Compares an object with the same kind in another cluster or namespace (E20-S09). Reads both
+    // objects and writes nothing, so no guard tier and no confirmation; allowed in read-only mode.
+    // The other cluster is connected on demand, which is a read as well.
+    CommandMeta::read(
+        CommandId::RESOURCE_DIFF_WITH,
+        "Diff With…",
+        CommandScope::Selection,
+        NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::One),
     // Opens the manifest in the editor; the change reaches the cluster only through
     // `resource::Apply`, which is guarded.
     CommandMeta::read(
@@ -2676,6 +2690,20 @@ mod tests {
         assert!(!meta.availability.requires_writable);
         assert!(meta.availability.selection.needs_selection());
         assert_eq!(id.tool_name(), "k8s.resource_view_events");
+    }
+
+    #[test]
+    fn diff_with_is_a_read_with_a_tool_stub() {
+        // E20-S09: it reads two objects and shows their difference; nothing is written, so no
+        // guard tier, no confirmation, and it works on a read-only cluster.
+        let id = CommandId::RESOURCE_DIFF_WITH;
+        let meta = lookup(id).expect("declared");
+        assert!(!meta.mutating && !meta.privileged && !meta.exec);
+        assert_eq!(meta.confirm, ConfirmTier::None);
+        assert_eq!(meta.risk, None);
+        assert!(!meta.availability.requires_writable);
+        assert!(meta.availability.selection.needs_selection());
+        assert_eq!(id.tool_name(), "k8s.resource_diff_with");
     }
 
     #[test]

@@ -5,7 +5,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{App, Entity, WeakEntity, Window};
-use oxikube_app::{ApplyService, ClusterSessionManager, TemplateService};
+use oxikube_app::{ApplyService, ClusterCatalog, ClusterSessionManager, TemplateService};
 use oxikube_domain::ids::ClusterId;
 use oxikube_domain::session::NamespaceSelection;
 use oxikube_ports::ResourceReader;
@@ -59,6 +59,16 @@ pub trait EditorHost: 'static {
     fn namespace_selection(&self, _cluster: &ClusterId) -> NamespaceSelection {
         NamespaceSelection::All
     }
+
+    /// How to call `cluster` in the picker: the session's title, else the id.
+    fn cluster_label(&self, cluster: &ClusterId) -> String {
+        cluster.to_string()
+    }
+
+    /// The cluster catalog, for the clusters the "Diff with..." picker offers (E20-S09).
+    fn catalog(&self) -> Option<ClusterCatalog> {
+        None
+    }
 }
 
 /// The app's [`EditorHost`]: the window's [`ClusterTabs`] and the sessions' schema ports.
@@ -68,6 +78,7 @@ pub struct ClusterEditorHost {
     sessions: ClusterSessionManager,
     apply: Option<ApplyService>,
     templates: Option<TemplateService>,
+    catalog: Option<ClusterCatalog>,
 }
 
 impl ClusterEditorHost {
@@ -78,6 +89,7 @@ impl ClusterEditorHost {
             sessions,
             apply: None,
             templates: None,
+            catalog: None,
         }
     }
 
@@ -85,6 +97,13 @@ impl ClusterEditorHost {
     #[must_use]
     pub fn with_apply(mut self, service: ApplyService) -> Self {
         self.apply = Some(service);
+        self
+    }
+
+    /// The same host, whose "Diff with..." picker offers the clusters of `catalog` (E20-S09).
+    #[must_use]
+    pub fn with_catalog(mut self, catalog: ClusterCatalog) -> Self {
+        self.catalog = Some(catalog);
         self
     }
 
@@ -142,6 +161,16 @@ impl EditorHost for ClusterEditorHost {
 
     fn templates(&self) -> Option<TemplateService> {
         self.templates.clone()
+    }
+
+    fn catalog(&self) -> Option<ClusterCatalog> {
+        self.catalog.clone()
+    }
+
+    fn cluster_label(&self, cluster: &ClusterId) -> String {
+        self.sessions
+            .get(cluster)
+            .map_or_else(|| cluster.to_string(), |session| session.title().to_owned())
     }
 
     fn namespace_selection(&self, cluster: &ClusterId) -> NamespaceSelection {

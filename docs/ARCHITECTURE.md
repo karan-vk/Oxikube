@@ -1414,6 +1414,29 @@ crate's `README.md` for its allowed dependencies. Highlights:
   removes the annotation from the class that carried it (`clear_previous`, on by default, named in the confirmation); the
   IngressClass row action, the palette entry and the panel's button are all that command, and its tool stub is
   `k8s.ingressclass_set_default`.
+- `oxikube_app::diff` + `oxikube_editor::view::resource_diff` + `oxikube_settings::diff` (E20-S09) — the cross-cluster resource
+  diff, `resource::DiffWith` (read-only: no guard tier, no audit; allowed on a read-only cluster; tool stub
+  `k8s.resource_diff_with`). The layering follows the dependency direction: `oxikube_editor` depends on `oxikube_app`, so the
+  parts that need no widget live in the app and the editor renders them. `oxikube_app::diff` holds `DiffService` (reads both
+  objects in parallel with `ResourceReader::get_opt` and connects a cluster that is not connected, with progress), `normalize`
+  (`SERVER_OWNED_FIELDS`, `status` unless asked for, name and namespace unless asked for, the ignore list, keys sorted, a
+  Secret's values replaced by `(value #n)` labels: equal exactly when the values are, numbered by first meeting, told apart by
+  a hash keyed at random once per comparison; the editor's diff vs live shares `sort_keys`, `is_secret` and `remove_path`),
+  `IgnorePaths` (RFC 6901 pointers, `~1` for a `/` inside a key, `*` inside a segment: `/metadata/annotations/kubectl.kubernetes.io~1*`),
+  `changes` (`spec.replicas: 2 -> 3`, added and removed keys, capped at 1 000 paths), `key_report` (a ConfigMap's or Secret's
+  keys as same / changed / only on one side) and `ResourceDiff` (a side that does not exist compares as an empty object: the
+  other reads as all added). Both versions are read at the second pick's apiVersion; a server that does not serve it is an
+  error that says so. `diff.ignore_paths` (`oxikube_settings::diff`, default `kubectl.kubernetes.io/*` and
+  `deployment.kubernetes.io/revision` annotations, schema, hot reload) reaches the service through `IgnoreList`, which the
+  binary keeps in step (`mount::diff`): an edit applies to the next diff. The editor side (`view::resource_diff`): the handler
+  (`register_diff_command`) runs the service on the bus's task, tells the tab its progress (`DiffState`), builds `DiffData`
+  (both sides written by the editor's YAML writer, `ManifestDiff::between`) off the UI thread and queues
+  `EditorRequest::ShowResourceDiff`; `ResourceDiffView` is a workspace `Item` (never saved with the layout) with the summary
+  block and the line diff as `uniform_list`s and the Status / Name and namespace / layout switches (a switch sends the
+  command again). Without a second object `EditorRequest::PickDiffTarget` opens `DiffTargetDialog` (cluster from the catalog,
+  namespace, name; the kind is the target's). An agent's call returns the changed-path summary (text and data) and opens no tab.
+  Reach it from a row's menu and the palette ("Diff With…") and the detail header's button. A Secret's values reach neither
+  the summary, the tool output, a log nor the disk.
 - `oxikube_app::templates` + `oxikube_editor::templates` + `oxikube_app::apply::batch` (E10-S09) — create from template and
   many documents in one apply. `resource::Create` (palette "Create Resource…", `cmd-alt-n` / `ctrl-shift-m`, the "New" button
   of every resource table; a read command like `editor::NewManifest`: it opens an editor and writes nothing) lists the

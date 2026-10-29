@@ -31,6 +31,9 @@
 //! - `notifications-burst` ([`notifications`]): 1 000 Warning events in one second reaching the
 //!   notification centre with its panel open, through the cluster's `EventService` feed: news
 //!   detection, grouping, the rate limit, the coalesced redraw, the toast cap (E14-S05).
+//! - `resource-diff` ([`resource_diff`]): the cross-cluster diff tab over a 1 MB ConfigMap: the
+//!   normalise-and-diff the handler runs off the UI thread, repaint, and scrolling an
+//!   every-line-different diff of 25 000 rows (E20-S09).
 //!
 //! The view-driving scenarios mount their view as the app's window does ([`window_root`]), so it
 //! is drawn with the app's text style; a sample fails if its text falls back to another family
@@ -46,6 +49,7 @@ mod logs_stream;
 mod notifications;
 mod palette;
 mod pulses;
+mod resource_diff;
 mod scroll_10k;
 mod startup;
 mod window_root;
@@ -82,11 +86,12 @@ pub fn run(name: &str, report: Option<&Path>, probe: bool, launched: Instant) ->
         helm_releases::NAME => helm_releases::run(probe),
         events_stream::NAME => events_stream::run(probe),
         notifications::NAME => notifications::run(probe),
+        resource_diff::NAME => resource_diff::run(probe),
         other => {
             eprintln!(
                 "oxikube: unknown perf scenario `{other}` (startup, scroll-10k or \
                  table-scroll-10k, palette, logs-stream, editor-5mb, charts, pulses, \
-                 helm-releases, events-stream, notifications-burst)"
+                 helm-releases, events-stream, notifications-burst, resource-diff)"
             );
             return ExitCode::from(2);
         }

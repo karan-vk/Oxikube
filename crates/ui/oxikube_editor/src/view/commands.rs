@@ -17,6 +17,7 @@
 
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use oxikube_app::command_bus::{CommandOutput, CommandRegistry, HandlerContext, RegisterError};
+use oxikube_app::diff::DiffRequest;
 use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::ids::{ClusterId, ResourceRef};
 use oxikube_domain::{OxiError, OxiResult};
@@ -24,6 +25,7 @@ use oxikube_domain::{OxiError, OxiResult};
 use crate::diff::MergeSide;
 use crate::json::Language;
 use crate::open::OpenMode;
+use crate::view::resource_diff::DiffState;
 
 /// The commands [`register_commands`] handles.
 pub const EDITOR_COMMANDS: [CommandId; 24] = [
@@ -129,6 +131,20 @@ pub enum EditorRequest {
     TriggerCompletion,
     /// `editor::ShowHover` on the focused editor, else the active pane's.
     ShowHover,
+    /// `resource::DiffWith` without a second object (E20-S09): the "Diff with..." picker over
+    /// `target`.
+    PickDiffTarget {
+        /// The object to compare, the left side.
+        target: ResourceRef,
+    },
+    /// `resource::DiffWith` with both objects (E20-S09): the resource diff tab for `request`
+    /// (opened, or updated when it is open already) in the state the comparison is in.
+    ShowResourceDiff {
+        /// The comparison.
+        request: DiffRequest,
+        /// Working, failed or done.
+        state: DiffState,
+    },
 }
 
 impl EditorRequest {

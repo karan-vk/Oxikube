@@ -175,6 +175,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::ServiceOpenInBrowser { target, .. }
         | Command::ServiceShowPods { target }
         | Command::ResourceShowUsedBy { target }
+        | Command::ResourceDiffWith { target, .. }
         | Command::PodViewLogs { target, .. }
         | Command::LogsClear { target }
         | Command::LogsCopy { target }

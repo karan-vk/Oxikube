@@ -30,6 +30,15 @@ fn run(scenario: &str) -> (std::process::Output, Option<Value>) {
             "OXIKUBE_PERF_NOTIFICATIONS_FRAMES",
             NOTIFICATIONS_FRAMES.to_string(),
         )
+        // `resource-diff` on a smaller ConfigMap and fewer frames.
+        .env(
+            "OXIKUBE_PERF_RESOURCE_DIFF_FRAMES",
+            RESOURCE_DIFF_FRAMES.to_string(),
+        )
+        .env(
+            "OXIKUBE_PERF_RESOURCE_DIFF_FILES",
+            RESOURCE_DIFF_FILES.to_string(),
+        )
         .args(["--perf-scenario", scenario, "--perf-report"])
         .arg(&report)
         .output()
@@ -250,6 +259,29 @@ fn a_notification_burst_reaches_the_centre_without_stacking_toasts() {
     // The centre's coalesced redraw reached the window, once a frame at most.
     assert!(stderr.contains("(at most 1 per frame)"), "{stderr}");
     assert!(s["counters"]["notifies"].as_u64() > Some(0), "{s}");
+}
+
+/// Frames per phase and files of the `resource-diff` smoke run.
+const RESOURCE_DIFF_FRAMES: u64 = 6;
+const RESOURCE_DIFF_FILES: u64 = 8;
+
+#[test]
+fn the_resource_diff_is_computed_repainted_and_scrolled() {
+    let (out, sample) = run("resource-diff");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "{stderr}");
+    let s = sample.expect("sample written");
+    assert_eq!(s["status"], "ok");
+    assert_eq!(s["scenario"], "resource-diff");
+    for prefix in ["", "scroll_"] {
+        let frames = s["metrics"][format!("{prefix}draw_ms")]["count"].as_u64();
+        assert_eq!(frames, Some(RESOURCE_DIFF_FRAMES), "{prefix}draw_ms");
+    }
+    for metric in ["compute_ms", "compute_worst_ms"] {
+        let p50 = s["metrics"][metric]["p50"].as_f64();
+        assert!(p50.is_some_and(|v| v > 0.0), "{metric}: {p50:?}");
+    }
+    assert!(stderr.contains("worst case:"), "{stderr}");
 }
 
 #[test]
