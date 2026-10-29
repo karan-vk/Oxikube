@@ -108,6 +108,15 @@
       { "name": "prometheus-community", "url": "https://prometheus-community.github.io/helm-charts" }
     ]
   },
+  // Kustomize (E20-S04). Global: the tools belong to this machine. Edits apply at once, no
+  // restart; changing `path` detects again.
+  //   path          the `kustomize` binary, or `kubectl` to build with `kubectl kustomize`. Empty
+  //                 autodetects (a standalone kustomize first, then kubectl; login shell PATH, app
+  //                 PATH, the usual install directories). Without either, the kustomize actions
+  //                 are hidden. Builds never enable exec plugins, alpha plugins or Helm.
+  "kustomize": {
+    "path": ""
+  },
   // Cloud discovery (E18): the Cloud section of the catalog finds EKS, GKE and AKS clusters through
   // the aws, gcloud and az CLIs you already use. Global; edits apply to the next refresh, and a
   // provider switched off disappears at once, no restart. Nothing here holds a credential.

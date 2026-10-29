@@ -11,6 +11,7 @@ members = [
     "crates/adapters/oxikube_helm",
     "crates/adapters/oxikube_prometheus",
     "crates/adapters/oxikube_cloud",
+    "crates/adapters/oxikube_kustomize",
     "crates/adapters/oxikube_argocd",
     "crates/adapters/oxikube_state_sqlite",
     "crates/adapters/oxikube_keychain",
@@ -220,6 +221,7 @@ oxikube_describe = { path = "crates/adapters/oxikube_describe" }
 oxikube_helm = { path = "crates/adapters/oxikube_helm" }
 oxikube_prometheus = { path = "crates/adapters/oxikube_prometheus" }
 oxikube_cloud = { path = "crates/adapters/oxikube_cloud" }
+oxikube_kustomize = { path = "crates/adapters/oxikube_kustomize" }
 oxikube_argocd = { path = "crates/adapters/oxikube_argocd" }
 oxikube_state_sqlite = { path = "crates/adapters/oxikube_state_sqlite" }
 oxikube_keychain = { path = "crates/adapters/oxikube_keychain" }

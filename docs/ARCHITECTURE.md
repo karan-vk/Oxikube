@@ -801,6 +801,18 @@ crate's `README.md` for its allowed dependencies. Highlights:
   Azure AD cluster is a `kubelogin get-token --login azurecli` exec user (CA from `az aks get-credentials` into a `0700` temp
   dir deleted immediately, never `--admin`); local-account-only and stopped clusters are `Unsupported`; context
   `aks:<subscription>:<resource-group>:<name>`.
+- `oxikube_kustomize` (E20-S04) — the `KustomizePort` adapter: `KustomizeCli` finds the user's standalone `kustomize`
+  (`kustomize version`), else `kubectl kustomize` (`kubectl kustomize --help` proves the subcommand, `kubectl version --client`
+  names the bundled kustomize), through the `kustomize.path` setting, the login shell's `PATH` and the usual install folders
+  (the `oxikube_cloud` lookup, copied, since adapters never depend on each other), and builds a directory with
+  `kustomize build --load-restrictor=LoadRestrictionsRootOnly -- <dir>` (or `kubectl kustomize ...`). It never passes
+  `--enable-exec`, `--enable-alpha-plugins` or `--enable-helm`; a build that fails because it needs one says so and gives the
+  terminal command. Stdout (the manifest stream, possibly with `secretGenerator` values) and stderr are read apart and never
+  logged; a 60 s deadline and `kill_on_drop` end the child, and dropping the `build` future is the cancellation. Its own crate
+  rather than a module of `oxikube_kube` (the story text's suggestion): that crate is kube-rs shaped and has no process
+  runner to share. `oxikube_app::kustomize::KustomizeService` parses the output with the E20-S01 loader under the source
+  label `kustomize:<dir>` and sets `Capabilities::KUSTOMIZE` (false when neither binary exists); the binary
+  (`mount::kustomize`) detects in the background, hot reloads `kustomize.path` and feeds the palette's capabilities.
 - `oxikube_helm` (E16) — the `HelmPort` adapters. Module `cli` (E16-S04): `HelmCli` drives the user's `helm` binary. It
   finds it (`HelmCliConfig::path`, the `helm.path` setting, else `PATH`, `/opt/homebrew/bin`, `/usr/local/bin`), requires
   `helm version --short` >= 3.10 (`BinaryMissing` / `VersionTooOld`, kind `Unsupported`) and caches the answer for the

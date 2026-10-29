@@ -88,6 +88,7 @@ pub mod helm_upgrade;
 pub mod ingress_class;
 pub mod integrations;
 pub mod kinds;
+pub mod kustomize;
 pub mod logs;
 pub mod metrics;
 pub mod metrics_history;

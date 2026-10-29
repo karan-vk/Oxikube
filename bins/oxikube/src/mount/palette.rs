@@ -35,6 +35,8 @@ impl PaletteEnv for MountEnv {
                 &oxikube_helm_ui::HelmGateState::current(cx),
                 context.capabilities,
             );
+            // Commands that need kustomize follow its detection (E20-S04).
+            context.capabilities = super::kustomize::palette_capabilities(cx, context.capabilities);
             context
         })
     }
