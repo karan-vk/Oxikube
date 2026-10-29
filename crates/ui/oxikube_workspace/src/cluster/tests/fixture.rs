@@ -190,6 +190,8 @@ pub(crate) struct Fixture {
     pub manager: ClusterSessionManager,
     pub state: Arc<FakeStatePort>,
     pub status: Entity<ClusterStatusItem>,
+    /// The right-hand guard-mode indicator, wired to `runner`.
+    pub guard: Entity<crate::cluster::GuardStatusItem>,
     pub tab: Entity<ClusterTab>,
     pub runner: ClusterCommandRunner,
     /// How many times the `pod::Debug` handler ran.
@@ -384,6 +386,19 @@ pub(crate) fn fixture(cx: &mut TestAppContext) -> Fixture {
     });
     let runner =
         ClusterCommandRunner::new(bus, manager.clone(), "me", &ws).with_status_item(&status);
+    let guard = vcx.update(|_, cx| {
+        let run = runner.clone();
+        let guard = cx.new(|cx| {
+            crate::cluster::GuardStatusItem::new(manager.clone(), cx).on_toggle(std::rc::Rc::new(
+                move |command, window, cx| run.run(command, window, cx),
+            ))
+        });
+        guard.update(cx, |item, cx| item.set_cluster(Some(id(PROD)), cx));
+        ws.update(cx, |ws, cx| {
+            ws.register_status_item(StatusSide::Right, -10, guard.clone(), cx);
+        });
+        guard
+    });
     vcx.run_until_parked();
     Fixture {
         ws,
@@ -391,6 +406,7 @@ pub(crate) fn fixture(cx: &mut TestAppContext) -> Fixture {
         manager,
         state,
         status,
+        guard,
         tab,
         runner,
         deletes,

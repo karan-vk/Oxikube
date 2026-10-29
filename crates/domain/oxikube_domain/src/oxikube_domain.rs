@@ -20,7 +20,7 @@
 //! | [`view`] | typed view-models for core kinds ([`PodSummary`], [`NodeSummary`], ...) |
 //! | [`quantity`], [`age`] | [`Quantity`] parsing/formatting and [`Age`] formatting |
 //! | [`session`] | the cluster session state machine, `NamespaceSelection`, `WatchScope` |
-//! | [`colour`] | [`ClusterColour`], a cluster's `#rrggbb` accent colour |
+//! | [`colour`] | [`ClusterColour`], a cluster's `#rrggbb` accent colour; [`ClusterPalette`], its six names |
 //! | [`preset`] | [`ClusterPreset`]: the prod / staging / dev / none postures (colour, read-only) |
 //! | [`command`] | [`Command`], [`CommandId`], [`CommandMeta`], [`Capability`] |
 //! | [`secret`] | [`SecretText`](secret::SecretText), [`DecodedSecret`](secret::DecodedSecret): a Secret's values decoded in memory, edited as plaintext and encoded back (E12-S11) |
@@ -93,7 +93,7 @@ pub mod view;
 
 pub use age::{Age, AgeStyle};
 pub use alias::AliasTarget;
-pub use colour::{ClusterColour, InvalidColour};
+pub use colour::{ClusterColour, ClusterPalette, InvalidColour};
 pub use command::{
     Capabilities, Capability, Command, CommandId, CommandMeta, CommandScope, Propagation,
 };

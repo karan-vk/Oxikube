@@ -43,7 +43,9 @@ pub struct ClusterSettingsContent {
     /// keep this next to the id to recognise the entry.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
-    /// Accent colour of the cluster's tab, hotbar dot and badges, as `#rrggbb` or `#rgb`.
+    /// Accent colour of the cluster's tab, hotbar dot and badges, as `#rrggbb`, `#rgb` or a palette name
+    /// (`red`, `orange`, `green`, `blue`, `purple`, `gray`). Anything else is refused with a
+    /// diagnostic and the last good value stays.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(schema_with = "colour_schema")]
     pub colour: Option<ClusterColour>,

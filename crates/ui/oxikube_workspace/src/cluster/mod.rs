@@ -9,6 +9,8 @@
 //! * [`ClusterStatusItem`]: the status bar item for the active cluster; follows the session by
 //!   itself ([`follow_session`], one redraw per change) and pulses at most once when a mutation
 //!   is refused.
+//! * [`GuardStatusItem`]: the guard mode ("Read-only" / "Guarded") on the right of the status
+//!   bar; a click dispatches `cluster::ToggleReadOnly` (E19-S05).
 //! * [`cluster_menu`]: the "Read-only" toggle and the prod / staging / dev / none presets for a
 //!   tab or hotbar context menu; each row is a [`Command`](oxikube_domain::command::Command).
 //! * [`ClusterCommandRunner`]: dispatches those commands through the `CommandBus` and shows the
@@ -22,6 +24,7 @@
 mod colour;
 mod echo;
 mod follow;
+mod guard;
 mod mark;
 mod menu;
 mod runner;
@@ -29,9 +32,10 @@ mod status;
 #[cfg(test)]
 mod tests;
 
-pub use colour::badge_colour;
+pub use colour::{badge_colour, contrast_ratio, label_colour};
 pub use echo::{EchoItem, SessionEcho, namespace_changed, observe_session_echo};
 pub use follow::follow_session;
+pub use guard::{GuardMode, GuardStatusItem, RunCommand};
 pub use mark::{BadgeSurface, ClusterBadge, ClusterMark};
 pub use menu::{MenuEntry, cluster_menu, cluster_menu_entries};
 pub use runner::{ClusterCommandRunner, denial_toast};

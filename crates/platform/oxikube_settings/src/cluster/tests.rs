@@ -314,7 +314,7 @@ fn a_type_error_keeps_the_previous_value_and_names_the_field() {
 
     store
         .set_user_settings(&format!(
-            r#"{{ "clusters": {{ "{PROD}": {{ "read_only": false, "colour": "red" }} }} }}"#
+            r#"{{ "clusters": {{ "{PROD}": {{ "read_only": false, "colour": "crimson" }} }} }}"#
         ))
         .unwrap();
 
@@ -343,7 +343,7 @@ fn a_type_error_keeps_the_previous_value_and_names_the_field() {
 #[test]
 fn a_typo_next_to_read_only_never_leaves_the_cluster_writable_on_a_first_load() {
     let store = load(&format!(
-        r##"{{ "clusters": {{ "{PROD}": {{ "read_only": true, "colour": "red" }} }} }}"##
+        r##"{{ "clusters": {{ "{PROD}": {{ "read_only": true, "colour": "crimson" }} }} }}"##
     ));
     assert!(prefs(&store, Some(&id(PROD))).read_only);
     assert!(
@@ -380,7 +380,7 @@ fn a_typo_next_to_a_new_read_only_true_takes_effect_on_a_reload() {
 
     store
         .set_user_settings(&format!(
-            r##"{{ "clusters": {{ "{PROD}": {{ "read_only": true, "colour": "red" }} }} }}"##
+            r##"{{ "clusters": {{ "{PROD}": {{ "read_only": true, "colour": "crimson" }} }} }}"##
         ))
         .unwrap();
 
@@ -406,7 +406,7 @@ fn a_read_only_that_is_not_a_bool_fails_closed() {
 fn an_explicit_false_with_a_typo_does_not_lift_a_global_read_only() {
     let store = load(&format!(
         r##"{{ "read_only": true,
-              "clusters": {{ "{PROD}": {{ "read_only": false, "colour": "red" }} }} }}"##
+              "clusters": {{ "{PROD}": {{ "read_only": false, "colour": "crimson" }} }} }}"##
     ));
     assert!(
         prefs(&store, Some(&id(PROD))).read_only,
@@ -696,4 +696,26 @@ fn a_toggled_flag_survives_a_restart_and_a_lift_survives_too() {
     })
     .unwrap();
     assert!(!prefs(&load(&off), Some(&id(PROD))).read_only);
+}
+
+#[test]
+fn a_palette_name_is_a_colour_and_a_bad_one_keeps_the_last_good_with_a_diagnostic() {
+    let mut store = load(&format!(
+        r#"{{ "clusters": {{ "{PROD}": {{ "colour": "Purple" }} }} }}"#
+    ));
+    let purple = oxikube_domain::ClusterPalette::Purple.colour();
+    assert_eq!(prefs(&store, Some(&id(PROD))).colour, Some(purple));
+    assert!(store.diagnostics().is_empty());
+
+    store
+        .set_user_settings(&format!(
+            r#"{{ "clusters": {{ "{PROD}": {{ "colour": "chartreuse" }} }} }}"#
+        ))
+        .unwrap();
+    assert_eq!(
+        prefs(&store, Some(&id(PROD))).colour,
+        Some(purple),
+        "falls back to the last good colour"
+    );
+    assert_eq!(store.diagnostics().len(), 1, "and says why");
 }
