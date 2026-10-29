@@ -222,3 +222,22 @@ fn a_record_is_queued_even_if_its_write_is_never_polled() {
     f.log.ensure_writable().now_or_never().unwrap().unwrap();
     assert_eq!(f.state.audit_log().len(), 1);
 }
+
+#[test]
+fn entries_carry_the_verb_of_their_command() {
+    let f = fixture();
+    let delete = entry(&f.log, "web-0");
+    assert_eq!(
+        delete.verb,
+        Some(oxikube_domain::safety::MutationVerb::Delete)
+    );
+    let read = f.log.entry(
+        "alice",
+        Initiator::Ui,
+        "pod::Logs",
+        pod("a", "web-0"),
+        false,
+        AuditOutcome::Succeeded,
+    );
+    assert_eq!(read.verb, None);
+}

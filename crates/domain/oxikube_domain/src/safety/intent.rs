@@ -59,6 +59,31 @@ impl MutationVerb {
         MutationVerb::Prune,
     ];
 
+    /// The verb a command id (`namespace::Verb`) performs, or `None` for a command that does
+    /// not map onto one verb (a read, a UI action). Used to stamp audit rows written without
+    /// a [`MutationIntent`], so the viewer's verb filter matches them.
+    pub fn for_command(command: &str) -> Option<MutationVerb> {
+        let name = command.split_once("::").map_or(command, |(_, verb)| verb);
+        Some(match name {
+            "Create" | "Add" | "Install" | "InstallChart" | "NewManifest" | "Debug" => {
+                MutationVerb::Create
+            }
+            "Edit" | "Save" | "SaveYaml" | "EditDecoded" | "Upgrade" | "UpgradeRelease"
+            | "Rollback" | "SetImage" | "Resize" | "Suspend" | "Resume" | "Label" => {
+                MutationVerb::Update
+            }
+            "Apply" => MutationVerb::Apply,
+            "Delete" | "ForceDelete" | "Remove" | "Uninstall" => MutationVerb::Delete,
+            "Scale" => MutationVerb::Scale,
+            "Restart" => MutationVerb::Restart,
+            "Evict" => MutationVerb::Evict,
+            "Cordon" => MutationVerb::Cordon,
+            "Uncordon" => MutationVerb::Uncordon,
+            "Drain" => MutationVerb::Drain,
+            _ => return None,
+        })
+    }
+
     /// Stable lowercase name, identical to the serde form.
     pub const fn as_str(self) -> &'static str {
         match self {
