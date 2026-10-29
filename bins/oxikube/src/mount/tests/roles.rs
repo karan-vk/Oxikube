@@ -13,7 +13,7 @@ use oxikube_resources_ui::detail::{DetailDrawer, DetailView};
 use oxikube_resources_ui::table::ResourceTable;
 use oxikube_testkit::kinds::core_kinds;
 use oxikube_testkit::{ResourceCall, TestPorts};
-use oxikube_workspace::modal::DialogModal;
+use oxikube_workspace::modal::ConfirmDialog;
 use oxikube_workspace::sidebar::SidebarPanel;
 use serde_json::json;
 
@@ -227,16 +227,10 @@ fn edit_rules_in_the_detail_opens_the_dialog_on_the_role_and_saving_asks_to_conf
             .read(cx)
             .modal_layer()
             .read(cx)
-            .active_modal::<DialogModal>()
+            .active_modal::<ConfirmDialog>()
             .expect("the guard's confirmation");
         let modal = modal.read(cx);
-        (
-            modal.title().to_string(),
-            modal
-                .message_text()
-                .map(ToString::to_string)
-                .unwrap_or_default(),
-        )
+        (modal.title().to_string(), modal.message_text().to_string())
     });
     assert_eq!(title, "Save the role?");
     assert!(
@@ -266,7 +260,11 @@ fn edit_rules_in_the_detail_opens_the_dialog_on_the_role_and_saving_asks_to_conf
         .collect();
     assert_eq!(
         replaces,
-        [(true, "4".to_owned()), (false, "4".to_owned())],
+        [
+            (true, "4".to_owned()),
+            (true, "4".to_owned()),
+            (false, "4".to_owned())
+        ],
         "{writes:?}"
     );
     let audit = app.ports.state.audit_log();

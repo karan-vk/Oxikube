@@ -15,7 +15,7 @@ use oxikube_ports::{PatchKind, ResourceReader as _};
 use oxikube_resources_ui::detail::DetailView;
 use oxikube_resources_ui::table::ResourceTable;
 use oxikube_testkit::{ResourceCall, TestPorts};
-use oxikube_workspace::modal::DialogModal;
+use oxikube_workspace::modal::ConfirmDialog;
 use serde_json::json;
 
 use super::App;
@@ -82,11 +82,11 @@ impl App {
                 .read(cx)
                 .modal_layer()
                 .read(cx)
-                .active_modal::<DialogModal>()?;
+                .active_modal::<ConfirmDialog>()?;
             let dialog = dialog.read(cx);
             Some((
                 dialog.title().to_string(),
-                dialog.message_text()?.to_string(),
+                dialog.message_text().to_string(),
             ))
         })
     }
