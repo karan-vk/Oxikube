@@ -5,6 +5,7 @@ use oxikube_app::command_bus::{DispatchContext, Outcome};
 use oxikube_app::{DispatchError, SubjectKind};
 use oxikube_domain::audit::Initiator;
 use oxikube_domain::command::CommandId;
+use oxikube_domain::error::ErrorKind;
 use oxikube_domain::ids::{Gvk, ResourceRef};
 use oxikube_domain::safety::ConfirmTier;
 use oxikube_resources_ui::warnings::BADGE_COLUMN;
@@ -149,6 +150,11 @@ pub fn kind(app: &mut Launched, context: &str, namespace: &str, case: &KindCase,
             command.clone(),
             DispatchContext::new(Initiator::Ui, "kind-sections"),
         );
+        // The row's command carries no input (no name, size or image), so the guard's preview
+        // (E19-S07) rejects it as invalid before it asks: refused, nothing sent.
+        if matches!(&asked, Err(DispatchError::Handler(e)) if e.kind() == ErrorKind::Validation) {
+            continue;
+        }
         let Ok(Outcome::NeedsConfirmation(request)) = asked else {
             panic!(
                 "{id} on a {}: expected a confirmation, got {asked:?}",
