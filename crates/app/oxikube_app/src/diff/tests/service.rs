@@ -182,3 +182,18 @@ fn the_summary_names_both_sides_and_stays_small() {
     assert_eq!(lines.len(), 2, "{lines:?}");
     assert!(lines[0].contains("differs"), "{lines:?}");
 }
+
+#[test]
+fn a_same_cluster_diff_on_an_unconnected_cluster_connects_it_once() {
+    let h = Harness::new();
+    // `b` is in the catalog but was never opened; both sides name it.
+    let request = DiffRequest::new(config_ref("b", "x", "app"), config_ref("b", "y", "app"));
+    let (result, progress) = run(&service(&h), &request);
+    // Neither object exists, but the connect succeeded: the error is NotFound, not "did not connect".
+    assert_eq!(result.expect_err("none").kind(), ErrorKind::NotFound);
+    let connects = progress
+        .iter()
+        .filter(|step| matches!(step, DiffProgress::Connecting(_)))
+        .count();
+    assert_eq!(connects, 1, "one connect for one cluster");
+}

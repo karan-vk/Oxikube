@@ -90,11 +90,18 @@ impl DiffService {
         progress: &(dyn Fn(DiffProgress) + Send + Sync),
     ) -> OxiResult<ResourceDiff> {
         same_kind(&request.left, &request.right)?;
-        let (left_reader, right_reader) = try_join(
-            self.reader(&request.left.cluster, progress),
-            self.reader(&request.right.cluster, progress),
-        )
-        .await?;
+        let (left_reader, right_reader) = if request.left.cluster == request.right.cluster {
+            // One connect for one cluster: two concurrent connects would leave the second caller
+            // with a `Connecting` state and a spurious "did not connect".
+            let reader = self.reader(&request.left.cluster, progress).await?;
+            (Arc::clone(&reader), reader)
+        } else {
+            try_join(
+                self.reader(&request.left.cluster, progress),
+                self.reader(&request.right.cluster, progress),
+            )
+            .await?
+        };
         progress(DiffProgress::Reading);
         let (left, right) = try_join(
             read(left_reader.as_ref(), &request.left, &request.right),
