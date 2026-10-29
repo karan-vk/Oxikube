@@ -7,8 +7,8 @@ use oxikube_domain::session::{ClusterSessionState, NamespaceSelection, SessionPh
 use oxikube_domain::{Capabilities, Capability, ClusterColour};
 use oxikube_ports::{
     AccessReviewPort, ClusterPorts, ClusterPrefs, CrdWatchStatus, DescribePort, DiscoveryPort,
-    EventsPort, ExecInteractivity, ExecPort, LogPort, MetricsPort, PortForwardPort, ResourceReader,
-    ResourceWriter, SchemaPort, ServiceProxyPort, TableFeedPort, WarningPort,
+    EventsPort, ExecInteractivity, ExecPort, ExecStreamPort, LogPort, MetricsPort, PortForwardPort,
+    ResourceReader, ResourceWriter, SchemaPort, ServiceProxyPort, TableFeedPort, WarningPort,
 };
 
 use super::reconnect::AutoReconnect;
@@ -183,6 +183,15 @@ impl ClusterSession {
     /// Exec and attach.
     pub fn exec(&self) -> Option<Arc<dyn ExecPort>> {
         self.ports.as_ref().map(|p| p.exec.clone())
+    }
+
+    /// The stream-level exec port, for file transfer (E20-S06).
+    ///
+    /// Crate-private on purpose: its upload writes into containers, so only
+    /// [`TransferService`](crate::transfer::TransferService) uses it, and its upload needs the
+    /// [`Mutation`](crate::guard::Mutation) the guard hands to a handler (non-negotiable 3).
+    pub(crate) fn exec_stream(&self) -> Option<Arc<dyn ExecStreamPort>> {
+        self.ports.as_ref().map(|p| p.exec_stream.clone())
     }
 
     /// Port-forwarding.

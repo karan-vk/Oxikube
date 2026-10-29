@@ -31,6 +31,7 @@
 //! | [`audit`] | E06-S02 | [`AuditLog`]: redacted, batched, fail-closed audit appends through `StatePort` |
 //! | [`store`] | E07-S01 | [`ResourceStore`]: the per-session cache over reflector, metadata and Table feeds keyed by (gvk, scope), ref-counted feeds with grace teardown and a [`FeedBudget`](store::FeedBudget) hook, in-app sort / filter / name-namespace-label indices, and [`Subscription`] streams of coalesced [`StoreDelta`]s; [`ResourceStores`] keeps one per connected session |
 //! | [`exec`] | E09-S08 | [`ExecService`]: a shell (`bash`, else `sh`, probed with a quick exec), an attach or a command in a pod container over the `ExecPort`; [`PodContainers`] and [`ContainerPlan`] pick the container (the default-container annotation, the last choice per pod, a picker for several); the exec-class policy lives in the [`MutationGuard`] (blocked read-only by default, audited, no confirmation); E09-S10 adds debug containers (`pod::Debug`, a low-risk guarded mutation: [`DebugRequest`], [`plan_debug`], [`ExecService::open_debug`], [`DebugRunner`]) |
+//! | [`transfer`] | E20-S06 | [`TransferService`]: pod file download over the exec tar helpers (`oxikube_ports::ExecTransferExt`, with the `cat` fallback for one file in a container without `tar`) and the upload, which takes the guard's [`Mutation`]; [`safe_unpack`] (a tar stream onto disk through `FsPort`, refusing absolute paths, `..` and links) and [`tar_file_stream`] (one local file as a tar stream) |
 //! | [`logs`] | E08-S01 | [`LogService`](logs::LogService): bounded, batched log sessions over the `LogPort` (`LogSession`, `LogBuffer` ring with seq index and a truncated marker, `LogDeltas`, `Connecting` / `Streaming` / `Ended` / `Failed`), cancelled on drop; `logs::aggregate` (E08-S04): the pods of a workload, Service or selector merged by server timestamp into one session |
 //! | [`context`] | E08-S09 | [`ContextRegistry`]: `@`-mentions routed to their [`ContextProviderPort`](oxikube_ports::ContextProviderPort) within a byte budget; [`LogContextProvider`] (`@logs`), [`MetricsContextProvider`] (`@metrics/pod/<ns>/<name>`, E13-S12), [`selection_context`] (the viewer's selection as a block) and the [`PendingContext`] queue "Send to agent" fills until the agent panel exists |
 //! | [`events`] | E14-S02 | [`EventService`]: every cluster's events from one feed per cluster in a bounded [`EventBuffer`] (`events.buffer`, default 10 000) de-duplicated by [`EventKey`] (count and last seen updated in place) and indexed by involved object, namespace and warnings; [`EventFilter`] queries newest first, [`EventsSubscription`] streams coalesced [`EventsChanged`]; it is the overview's [`RecentWarnings`] |
@@ -115,6 +116,7 @@ pub mod storage;
 pub mod store;
 pub mod templates;
 pub mod tools;
+pub mod transfer;
 pub mod warning_badges;
 pub mod workloads;
 
@@ -247,6 +249,10 @@ pub use templates::{
     Prefill, SkippedTemplate, Template, TemplateCatalog, TemplateOrigin, TemplateService,
 };
 pub use tools::ToolRegistry;
+pub use transfer::{
+    Download, DownloadFormat, RemoteEntry, Skipped, TransferService, UnpackReport, UploadReceipt,
+    safe_unpack, tar_file_stream,
+};
 pub use warning_badges::{
     BadgeChanges, BadgeTrack, ClusterBadges, DEFAULT_WARNING_WINDOW, ObjectEventsFeed,
     WarningBadge, WarningBadges,

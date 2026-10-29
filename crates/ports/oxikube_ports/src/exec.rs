@@ -12,6 +12,8 @@
 //! | [`NodeShellSpec`] and the pod and command it renders to ([`node_shell_manifest`]) | `node_shell` |
 //! | [`ExecStreamPort`]: the lower, stream-level exec ([`ExecSession`], [`ExecOptions`]) | `stream` |
 //! | [`SessionBackend`]: an [`ExecSession`] as a [`TerminalBackend`] | `session_backend` |
+//! | telling a program missing from the image from a failure ([`says_program_missing`]) | `missing` |
+//! | [`transfer`]: tar download and upload over exec ([`ExecTransferExt`], E20-S06) | `transfer` |
 //!
 //! [`ExecStreamPort`] mirrors kube's `Api<Pod>::exec` / `attach` with `AttachParams`
 //! (stdin writer, separate stdout/stderr readers, a resize sender, a status future). It
@@ -21,10 +23,12 @@
 //! consumes the backends).
 
 mod backend;
+mod missing;
 mod node_shell;
 mod session_backend;
 mod stream;
 mod target;
+pub mod transfer;
 
 use std::time::Duration;
 
@@ -32,6 +36,7 @@ use async_trait::async_trait;
 use oxikube_domain::OxiResult;
 
 pub use backend::{BackendEvent, ExitStatus, TerminalBackend, TerminalSize};
+pub use missing::{error_is_missing_program, says_program_missing};
 pub use node_shell::{
     CONTAINER_NAME as NODE_SHELL_CONTAINER, DEFAULT_NODE_SHELL_IMAGE, DEFAULT_NODE_SHELL_NAMESPACE,
     DEFAULT_NSENTER_ARGS, HEARTBEAT_ANNOTATION, NODE_ANNOTATION, NODE_SHELL_LABEL, NodeShellSpec,
@@ -40,6 +45,10 @@ pub use node_shell::{
 pub use session_backend::SessionBackend;
 pub use stream::{ExecOptions, ExecSession, OutputStream, ResizeSink, StdinSink};
 pub use target::{AttachTarget, DebugContainerSpec, ExecTarget};
+pub use transfer::{
+    ByteStream, CancellationToken, ExecTransferExt, ProgressFn, RemotePath, TransferOptions,
+    TransferProgress,
+};
 
 /// Opens terminal sessions into a connected cluster: exec, attach, debug containers and
 /// node shells. Each method returns a boxed [`TerminalBackend`] once the session is

@@ -137,6 +137,9 @@ base64 = "0.23"
 # (`oxikube_app::secrets::tls`, E12-S11). No `verify` feature: parsing only, no crypto provider.
 x509-parser = { version = "0.18", default-features = false }
 flate2 = "1"
+# Tar headers for pod file transfer (`oxikube_app::transfer`, E20-S06): parsing and building the
+# 512-byte blocks only; the streaming and the safe unpack are ours. No `xattr`: never applied.
+tar = { version = "0.4.46", default-features = false }
 sha2 = "0.11"
 hex = "0.4"
 semver = "1"

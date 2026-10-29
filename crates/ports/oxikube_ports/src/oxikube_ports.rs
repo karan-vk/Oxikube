@@ -60,7 +60,7 @@
 //! | [`DiscoveryPort`] | [`discovery`] |
 //! | [`TableFeedPort`] | [`table`] |
 //! | [`LogPort`] | [`log`] |
-//! | [`ExecPort`], [`ExecStreamPort`], [`TerminalBackend`] | [`exec`] |
+//! | [`ExecPort`], [`ExecStreamPort`], [`TerminalBackend`]; tar transfer ([`ExecTransferExt`]) | [`exec`] |
 //! | [`PortForwardPort`] | [`portforward`] |
 //!
 //! # Session ports (E06-S01)
@@ -169,11 +169,12 @@ pub use events::{
     EventsWatchOptions, ForbiddenScope,
 };
 pub use exec::{
-    AttachTarget, BackendEvent, DEFAULT_NODE_SHELL_IMAGE, DEFAULT_NODE_SHELL_NAMESPACE,
-    DEFAULT_NSENTER_ARGS, DebugContainerSpec, ExecOptions, ExecPort, ExecSession, ExecStreamPort,
-    ExecTarget, ExitStatus, HEARTBEAT_ANNOTATION, NODE_ANNOTATION, NODE_SHELL_CONTAINER,
-    NODE_SHELL_LABEL, NodeShellSpec, NodeShellToleration, SessionBackend, TerminalBackend,
-    TerminalSize, node_shell_command, node_shell_manifest,
+    AttachTarget, BackendEvent, CancellationToken, DEFAULT_NODE_SHELL_IMAGE,
+    DEFAULT_NODE_SHELL_NAMESPACE, DEFAULT_NSENTER_ARGS, DebugContainerSpec, ExecOptions, ExecPort,
+    ExecSession, ExecStreamPort, ExecTarget, ExecTransferExt, ExitStatus, HEARTBEAT_ANNOTATION,
+    NODE_ANNOTATION, NODE_SHELL_CONTAINER, NODE_SHELL_LABEL, NodeShellSpec, NodeShellToleration,
+    RemotePath, SessionBackend, TerminalBackend, TerminalSize, TransferOptions, TransferProgress,
+    node_shell_command, node_shell_manifest,
 };
 pub use feed::{Delta, DeltaBatch, WatchFeed};
 pub use feed_stats::{FeedStat, FeedStats, FeedVariant};

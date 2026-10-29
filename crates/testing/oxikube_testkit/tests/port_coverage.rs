@@ -68,6 +68,7 @@ const FAKES: &[(&str, &str)] = &[
 const NOT_PORTS: &[&str] = &[
     "ResourcePort",
     "StatePortExt",
+    "ExecTransferExt",
     "DuplexStream",
     "HealthReporter",
 ];

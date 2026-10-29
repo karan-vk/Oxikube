@@ -4,36 +4,15 @@
 use oxikube_domain::{ErrorKind, OxiError};
 use oxikube_ports::ExitStatus;
 
-/// Exit codes a shell returns when the program is not there (126: found but not executable,
-/// 127: not found).
-const MISSING_CODES: [i32; 2] = [126, 127];
-
-/// Text a runtime puts in the error when the program does not exist in the container.
-const MISSING_MARKERS: [&str; 5] = [
-    "executable file not found",
-    "not found in $path",
-    "no such file or directory",
-    "command not found",
-    "cannot find the file",
-];
-
-fn says_missing(text: &str) -> bool {
-    let text = text.to_ascii_lowercase();
-    MISSING_MARKERS.iter().any(|marker| text.contains(marker))
-}
-
 /// Whether a command that ended with `status` never ran because its program is not in the
-/// container (exit 126 / 127, or the runtime said `executable file not found`).
+/// container. The rule is shared with the tar transfer: [`ExitStatus::is_missing_program`].
 pub(super) fn is_missing_program(status: &ExitStatus) -> bool {
-    status
-        .code
-        .is_some_and(|code| MISSING_CODES.contains(&code))
-        || status.message.as_deref().is_some_and(says_missing)
+    status.is_missing_program()
 }
 
 /// Whether a failed open says the program is not in the container.
 pub(super) fn error_is_missing_program(error: &OxiError) -> bool {
-    says_missing(error.message())
+    oxikube_ports::exec::error_is_missing_program(error)
 }
 
 /// A failed open, as a message the user can act on. The adapter's messages already name the pod
