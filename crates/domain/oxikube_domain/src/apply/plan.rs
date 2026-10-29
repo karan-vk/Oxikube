@@ -66,10 +66,8 @@ impl ApplyPlan {
             .collect();
         // `sort_by_key` is stable.
         items.sort_by_key(|item| item.kind_rank);
-        let gvks: Vec<Gvk> = items.iter().map(|item| gvk_of(&item.doc)).collect();
-        let edges: Vec<Vec<usize>> = (0..items.len())
-            .map(|index| dependencies(&items, &gvks, index))
-            .collect();
+        let objects: Vec<&Value> = items.iter().map(|item| &item.doc.json).collect();
+        let edges = depends_on(&objects);
         for (item, depends_on) in items.iter_mut().zip(edges) {
             item.depends_on = depends_on;
         }
@@ -77,22 +75,32 @@ impl ApplyPlan {
     }
 }
 
+/// For each of `objects` (in the order given), the indices of the earlier ones it needs to exist
+/// first: the Namespace it names and the CustomResourceDefinition that defines its kind. The one
+/// implementation of [`PlanItem::depends_on`], also used where documents keep their own order (a
+/// multi-document editor buffer). An object needs nothing from later ones.
+pub fn depends_on(objects: &[&Value]) -> Vec<Vec<usize>> {
+    let gvks: Vec<Gvk> = objects.iter().map(|object| gvk_of_json(object)).collect();
+    (0..objects.len())
+        .map(|index| dependencies(objects, &gvks, index))
+        .collect()
+}
+
 fn gvk_of(doc: &ManifestDoc) -> Gvk {
-    let text = |key: &str| {
-        doc.json
-            .get(key)
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-    };
+    gvk_of_json(&doc.json)
+}
+
+fn gvk_of_json(object: &Value) -> Gvk {
+    let text = |key: &str| object.get(key).and_then(Value::as_str).unwrap_or_default();
     Gvk::from_api_version(text("apiVersion"), text("kind"))
 }
 
-fn name_of(doc: &ManifestDoc) -> Option<&str> {
-    doc.json.pointer("/metadata/name").and_then(Value::as_str)
+fn name_of(object: &Value) -> Option<&str> {
+    object.pointer("/metadata/name").and_then(Value::as_str)
 }
 
-fn namespace_of(doc: &ManifestDoc) -> Option<&str> {
-    doc.json
+fn namespace_of(object: &Value) -> Option<&str> {
+    object
         .pointer("/metadata/namespace")
         .and_then(Value::as_str)
         .filter(|namespace| !namespace.is_empty())
@@ -142,13 +150,13 @@ fn crd_scope(doc: &ManifestDoc) -> Option<(String, String, Scope)> {
     ))
 }
 
-/// The earlier items that `items[index]` needs.
-fn dependencies(items: &[PlanItem], gvks: &[Gvk], index: usize) -> Vec<usize> {
+/// The earlier objects that `objects[index]` needs.
+fn dependencies(objects: &[&Value], gvks: &[Gvk], index: usize) -> Vec<usize> {
     let gvk = &gvks[index];
-    let namespace = namespace_of(&items[index].doc);
+    let namespace = namespace_of(objects[index]);
     (0..index)
         .filter(|&earlier| {
-            let other = &items[earlier].doc;
+            let other = objects[earlier];
             let other_gvk = &gvks[earlier];
             if is_namespace(other_gvk) {
                 // A Namespace needs no namespace; a cluster-scoped object that names one ignores it
@@ -160,7 +168,7 @@ fn dependencies(items: &[PlanItem], gvks: &[Gvk], index: usize) -> Vec<usize> {
         .collect()
 }
 
-fn defines(crd: &ManifestDoc, gvk: &Gvk) -> bool {
-    let at = |pointer: &str| crd.json.pointer(pointer).and_then(Value::as_str);
+fn defines(crd: &Value, gvk: &Gvk) -> bool {
+    let at = |pointer: &str| crd.pointer(pointer).and_then(Value::as_str);
     at("/spec/group") == Some(&*gvk.group) && at("/spec/names/kind") == Some(&*gvk.kind)
 }

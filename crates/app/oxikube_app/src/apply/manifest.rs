@@ -53,6 +53,16 @@ impl Manifest {
                 )));
             }
         };
+        Self::from_object(object)
+    }
+
+    /// Reads `object` (already parsed: one object of a plan) as one object with `apiVersion`,
+    /// `kind` and `metadata.name`.
+    ///
+    /// # Errors
+    ///
+    /// A `Validation` error for a value that is not an object or lacks the fields that name it.
+    pub(crate) fn from_object(object: Value) -> OxiResult<Self> {
         let text_at = |pointer: &str| {
             object
                 .pointer(pointer)

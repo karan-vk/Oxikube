@@ -8,7 +8,8 @@
 //! | Module | Holds |
 //! |---|---|
 //! | `rank` | [`kind_rank`] and the one table of kind ranks |
-//! | `plan` | [`ApplyPlan`], [`PlanItem`]: ordering, namespace defaulting, `depends_on` edges |
+//! | `plan` | [`ApplyPlan`], [`PlanItem`]: ordering, namespace defaulting, `depends_on` edges ([`depends_on`]) |
+//! | `objects` | [`ManifestObjects`]: the objects a `resource::ApplyPlan` command carries, and [`object_apply_risk`] (E20-S03) |
 //! | `sanitize` | [`sanitize_for_apply`], [`SanitizeMode`], [`SanitizeReport`] |
 //! | `strips` | the table of fields each kind loses in [`SanitizeMode::Copy`] |
 //!
@@ -24,12 +25,14 @@
 //!
 //! A [`SanitizeReport`] holds paths only, never values: the object may be a Secret.
 
+mod objects;
 mod plan;
 mod rank;
 mod sanitize;
 mod strips;
 
-pub use plan::{ApplyPlan, PlanItem};
+pub use objects::{ManifestObjects, object_apply_risk};
+pub use plan::{ApplyPlan, PlanItem, depends_on};
 pub use rank::{UNKNOWN_KIND_RANK, kind_rank};
 pub use sanitize::{SanitizeMode, SanitizeReport, sanitize_for_apply};
 

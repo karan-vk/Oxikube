@@ -2,9 +2,13 @@
 
 use serde_json::{Value, json};
 
-use super::{ApplyPlan, SanitizeMode, kind_rank, sanitize_for_apply};
+use super::{
+    ApplyPlan, ManifestObjects, SanitizeMode, depends_on, kind_rank, object_apply_risk,
+    sanitize_for_apply,
+};
 use crate::ids::{Gvk, Scope};
 use crate::manifests::{ManifestDoc, SourceId};
+use crate::safety::Risk;
 
 fn doc(json: Value) -> ManifestDoc {
     ManifestDoc {
@@ -143,6 +147,49 @@ fn crd_in_plan_supplies_scope_for_its_custom_resources() {
         scopes,
     );
     assert_eq!(plan.items[1].doc.json["metadata"]["namespace"], "t");
+}
+
+#[test]
+fn depends_on_keeps_the_given_order() {
+    // Buffer order, no ranking: a ConfigMap before its Namespace needs nothing (only earlier
+    // objects count), the one after it needs it.
+    let mut before = obj("v1", "ConfigMap", "a");
+    before["metadata"]["namespace"] = json!("shop");
+    let namespace = obj("v1", "Namespace", "shop");
+    let after = before.clone();
+    let edges = depends_on(&[&before, &namespace, &after]);
+    assert_eq!(edges, [vec![], vec![], vec![1]]);
+}
+
+#[test]
+fn object_risk_follows_the_classify_table() {
+    let mut configmap = obj("v1", "ConfigMap", "web");
+    configmap["metadata"]["namespace"] = json!("default");
+    assert_eq!(object_apply_risk(&configmap, false), Risk::Low);
+    assert_eq!(object_apply_risk(&configmap, true), Risk::Medium, "force");
+    let cluster_role = obj("rbac.authorization.k8s.io/v1", "ClusterRole", "r");
+    assert_eq!(object_apply_risk(&cluster_role, false), Risk::Medium);
+    let mut widget = obj("example.com/v1", "Widget", "w");
+    widget["metadata"]["namespace"] = json!("default");
+    assert_eq!(object_apply_risk(&widget, false), Risk::Medium, "custom");
+    let objects = ManifestObjects(vec![configmap.clone(), cluster_role]);
+    assert_eq!(objects.apply_risk(false), Risk::Medium);
+    assert_eq!(ManifestObjects::default().apply_risk(false), Risk::Low);
+}
+
+#[test]
+fn manifest_objects_debug_names_kinds_never_data() {
+    let secret = json!({"apiVersion": "v1", "kind": "Secret", "metadata": {"name": "db"},
+        "stringData": {"password": "hunter2"}});
+    let objects = ManifestObjects(vec![secret]);
+    let text = format!("{objects:?}");
+    assert!(
+        text.contains("Secret") && text.contains("count: 1"),
+        "{text}"
+    );
+    assert!(!text.contains("hunter2") && !text.contains("db"), "{text}");
+    // A plain array on the wire.
+    assert!(serde_json::to_value(&objects).unwrap().is_array());
 }
 
 #[test]

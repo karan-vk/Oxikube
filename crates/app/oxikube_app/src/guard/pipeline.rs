@@ -127,7 +127,8 @@ impl MutationGuard {
             Some(cluster),
             Some(mutation),
         )
-        .with_audit(self.audit.clone());
+        .with_audit(self.audit.clone())
+        .with_progress(ctx.progress.clone());
         let note = cx.audit_note_slot();
         // A handler dropped mid-way (a cancelled drain) still leaves what it noted on the
         // `Cancelled` record.

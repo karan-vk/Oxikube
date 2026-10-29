@@ -126,7 +126,8 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::RoleEdit { cluster, .. }
         | Command::BindingCreate { cluster, .. }
         | Command::BindingEdit { cluster, .. }
-        | Command::ResourceApply { cluster, .. } => Some(cluster),
+        | Command::ResourceApply { cluster, .. }
+        | Command::ResourceApplyPlan { cluster, .. } => Some(cluster),
         Command::RoleOpenDialog {
             cluster, target, ..
         }
@@ -379,6 +380,9 @@ pub fn summary(meta: &CommandMeta, command: &Command, context: &str) -> String {
         return summary;
     }
     if let Some(summary) = super::selection_policy::summary(command, context) {
+        return summary;
+    }
+    if let Some(summary) = crate::apply::summary(command, context) {
         return summary;
     }
     if let Some(summary) = crate::helm_install::summary(command, context) {

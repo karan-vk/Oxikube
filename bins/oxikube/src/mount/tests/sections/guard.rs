@@ -58,6 +58,9 @@ const RISKS: &[(CommandId, Risk)] = &[
     (CommandId::PVC_RESIZE, Risk::Medium),
     // The manifest editor's apply (E10); a Secret's "Edit decoded" applies through it.
     (CommandId::RESOURCE_APPLY, Risk::Low),
+    // Many objects as one plan (E20-S03): the apply-directory dialog (E20-S05) and agents; low is
+    // the floor, the riskiest object raises it (`effective_risk`). No row action.
+    (CommandId::RESOURCE_APPLY_PLAN, Risk::Low),
     (CommandId::RESOURCE_DELETE, Risk::Medium),
     // Roles and ClusterRoles (E17-S05): the rule dialog's save and the detail panel's delete (which
     // counts the bindings first, so it is not a row action); an RBAC change is risk medium.

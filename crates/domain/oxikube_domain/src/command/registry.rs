@@ -365,6 +365,10 @@ impl CommandId {
     /// `resource::DiffWith`: compare a resource with the same kind in another cluster or
     /// namespace (side-by-side diff, changed-path summary; read-only).
     pub const RESOURCE_DIFF_WITH: CommandId = CommandId::new("resource::DiffWith");
+    /// `resource::ApplyPlan`: apply many objects as one plan, in kind order, dry run first
+    /// (E20-S03). One guarded command: one confirmation at the riskiest object's tier, one audit
+    /// record per object under a shared batch id.
+    pub const RESOURCE_APPLY_PLAN: CommandId = CommandId::new("resource::ApplyPlan");
     /// `resource::CopyLabel`: copy a label or annotation of a resource as `key=value`.
     pub const RESOURCE_COPY_LABEL: CommandId = CommandId::new("resource::CopyLabel");
     /// `resource::CopyName`: copy a resource's name to the clipboard.
@@ -1850,6 +1854,17 @@ pub static COMMANDS: &[CommandMeta] = &[
         NONE,
     )
     .in_views(EDITOR_VIEW),
+    // Many objects as one plan (E20-S03): ordered by kind, the whole plan dry-run first, then
+    // applied rank by rank. The declared risk is the floor; `Command::effective_risk` raises it to
+    // the riskiest object's (a cluster-scoped, RBAC or custom kind, or a forced apply). It has no
+    // view of its own: the apply-directory dialog (E20-S05) and agents send it with the objects.
+    CommandMeta::mutation(
+        CommandId::RESOURCE_APPLY_PLAN,
+        "Apply Manifests",
+        CommandScope::Cluster,
+        Risk::Low,
+        NONE,
+    ),
     // Writes the user's clipboard, never the cluster.
     CommandMeta::read(
         CommandId::RESOURCE_COPY_LABEL,
@@ -2772,7 +2787,8 @@ mod tests {
                     || m.id == CommandId::RESOURCE_DELETE
                     || m.id == CommandId::SELECTION_DELETE
                     || m.id == CommandId::SERVICEACCOUNT_GENERATE_KUBECONFIG
-                    || m.id == CommandId::WORKLOAD_SCALE)
+                    || m.id == CommandId::WORKLOAD_SCALE
+                    || m.id == CommandId::RESOURCE_APPLY_PLAN)
         );
     }
 

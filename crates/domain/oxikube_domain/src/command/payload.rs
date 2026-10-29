@@ -11,6 +11,7 @@ use super::image::ImageChange;
 use super::kubeconfig::{KubeconfigSourceRef, NewKubeconfigSource};
 use super::meta::CommandMeta;
 use super::registry;
+use crate::apply::ManifestObjects;
 use crate::audit::AuditExportFormat;
 use crate::cloud::CloudProvider;
 use crate::colour::ClusterColour;
@@ -1308,6 +1309,33 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         reviewed_absent: bool,
     },
+    /// Apply many objects as one plan (E20-S03): ordered by kind (`ApplyPlan`), the whole plan
+    /// dry-run first, then server-side applied rank by rank under the field manager, a few objects
+    /// of a rank at a time, waiting for each new CustomResourceDefinition to be `Established`
+    /// before its custom resources. A dry-run dispatch stops after the dry run. One confirmation
+    /// for the whole plan at the riskiest object's tier, one audit record per object.
+    #[serde(rename = "resource::ApplyPlan")]
+    ResourceApplyPlan {
+        /// Cluster to apply to.
+        cluster: ClusterId,
+        /// Default namespace for namespaced objects without one; `None` is `default`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        namespace: Option<String>,
+        /// The objects, as JSON. May hold secrets: their `Debug` names kinds only, and audit and
+        /// logs never carry them.
+        objects: ManifestObjects,
+        /// The server-side apply field manager; `None` is `oxikube`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        field_manager: Option<String>,
+        /// Take over the fields other field managers own instead of failing with a conflict.
+        /// Off unless the user chose it for this run after seeing the conflicts.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        force_conflicts: bool,
+        /// Stop at the first failure: a failed dry run applies nothing, and a failed apply skips
+        /// every later rank. Off (as `kubectl apply`): a failure skips only what needs it.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        stop_on_error: bool,
+    },
     /// Delete one pod.
     #[serde(rename = "pod::Delete")]
     PodDelete {
@@ -2199,6 +2227,7 @@ impl Command {
             Command::TableToggleWide { .. } => CommandId::TABLE_TOGGLE_WIDE,
             Command::ResourceDelete { .. } => CommandId::RESOURCE_DELETE,
             Command::ResourceApply { .. } => CommandId::RESOURCE_APPLY,
+            Command::ResourceApplyPlan { .. } => CommandId::RESOURCE_APPLY_PLAN,
             Command::PodDelete { .. } => CommandId::POD_DELETE,
             Command::PodEvict { .. } => CommandId::POD_EVICT,
             Command::PodForceDelete { .. } => CommandId::POD_FORCE_DELETE,
@@ -2978,6 +3007,18 @@ mod tests {
                 force: true,
                 resource_version: Some("42".into()),
                 reviewed_absent: true,
+            },
+            Command::ResourceApplyPlan {
+                cluster: cluster(),
+                namespace: Some("default".into()),
+                objects: ManifestObjects(vec![json!({
+                    "apiVersion": "v1",
+                    "kind": "ConfigMap",
+                    "metadata": {"name": "web"}
+                })]),
+                field_manager: Some("oxikube".into()),
+                force_conflicts: true,
+                stop_on_error: true,
             },
             Command::PodDelete {
                 target: pod(),

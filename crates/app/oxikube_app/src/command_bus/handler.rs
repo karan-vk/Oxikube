@@ -10,6 +10,7 @@ use oxikube_domain::ids::ClusterId;
 use oxikube_domain::{OxiError, OxiResult};
 
 use super::context::CommandOutput;
+use super::progress::Progress;
 use crate::audit::AuditLog;
 use crate::guard::Mutation;
 
@@ -54,6 +55,8 @@ pub struct HandlerContext {
     /// The guard's audit log, for a handler that acts on several objects and audits each one (see
     /// [`Self::audit`]). `None` outside the mutating pipeline.
     audit: Option<Arc<AuditLog>>,
+    /// The caller's [`Progress`], when it gave one.
+    progress: Option<Progress>,
 }
 
 impl HandlerContext {
@@ -71,7 +74,28 @@ impl HandlerContext {
             dry_run: false,
             audit_note: Arc::default(),
             audit: None,
+            progress: None,
         }
+    }
+
+    /// Gives the handler the caller's [`Progress`], if any.
+    pub(crate) fn with_progress(mut self, progress: Option<Progress>) -> Self {
+        self.progress = progress;
+        self
+    }
+
+    /// Reports one finished item to the caller (see [`Progress`]); nothing when the caller gave
+    /// no [`Progress`]. Names and statuses only, never an object's body.
+    pub fn report(&self, report: serde_json::Value) {
+        if let Some(progress) = &self.progress {
+            progress.report(report);
+        }
+    }
+
+    /// Whether the caller asked the handler to stop between items. A handler that sees it reports
+    /// what it did not do and returns normally.
+    pub fn is_cancelled(&self) -> bool {
+        self.progress.as_ref().is_some_and(Progress::is_cancelled)
     }
 
     /// Gives the handler the guard's audit log.

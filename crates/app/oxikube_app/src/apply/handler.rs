@@ -1,31 +1,27 @@
-//! The `resource::Apply` handler: the only code that writes a manifest to a cluster, through the
-//! guard's [`Mutation`].
+//! The `resource::Apply` handler: one object's apply, through the guard's [`Mutation`]. The write
+//! itself is [`ObjectWrite`] (`write`), shared with the `resource::ApplyPlan` handler.
 //!
 //! ```text
-//! dry-run dispatch:  read live ─> SSA dry run ─unsupported─> replace / create dry run ─> preview data
-//! real dispatch:     SSA dry run ─ok─> SSA ─────────────────────────────────────────────> applied
-//!                         └─unsupported─> replace / create dry run ─> replace / create ─> applied
+//! dry-run dispatch:  read live ─> ObjectWrite::rehearse ─> preview data (live + result, masked)
+//! real dispatch:     ObjectWrite::send (SSA dry run, SSA; or the replace / create fallback) ─> applied
 //! ```
 //!
-//! Server-side apply runs under the request's field manager (`oxikube` unless the
-//! `editor.field_manager` setting says otherwise) with `force` only when the user chose it. A
-//! server that cannot server-side apply the kind answers 415 (some aggregated APIs, old CRD
-//! setups), which the adapter reports as `Unsupported`: the object is then replaced (PUT) carrying
-//! the reviewed `resourceVersion`, so a change made since fails with a conflict instead of being
-//! overwritten, or created when it does not exist. A create the user reviewed stays a create: an
-//! object made since fails with `AlreadyExists` instead of being replaced unseen. A conflict with other managers comes back as a
-//! `Conflict` error with its [`ConflictDetails`](oxikube_domain::ConflictDetails); a rejected field
-//! as a `Validation` error with its causes. Secret values are masked in everything returned.
+//! The field manager is `oxikube` unless the command names one (the `editor.field_manager`
+//! setting). A conflict with other managers comes back as a `Conflict` error with its
+//! [`ConflictDetails`](oxikube_domain::ConflictDetails); a rejected field as a `Validation` error
+//! with its causes. Secret values are masked in everything returned.
+//!
+//! [`Mutation`]: crate::guard::Mutation
 
 use oxikube_domain::command::{self, Command, CommandId};
-use oxikube_domain::ids::ResourceRef;
-use oxikube_domain::{ErrorKind, OxiError, OxiResult, Resource};
-use oxikube_ports::{Patch, ResourceReader, ResourceWriter, WriteOptions};
-use serde_json::{Value, json};
+use oxikube_domain::{OxiError, OxiResult};
+use oxikube_ports::{ResourceReader, ResourceWriter};
+use serde_json::json;
 
-use super::manifest::{Manifest, with_resource_version};
+use super::manifest::Manifest;
 use super::mask::SecretMask;
 use super::types::ApplyMethod;
+use super::write::{ObjectWrite, Preview, version_of};
 use crate::actions::object_label;
 use crate::command_bus::{CommandOutput, CommandRegistry, HandlerContext, RegisterError};
 use crate::session::ClusterSessionManager;
@@ -33,93 +29,25 @@ use crate::session::ClusterSessionManager;
 /// The field manager when the command names none.
 pub const DEFAULT_FIELD_MANAGER: &str = "oxikube";
 
-/// Registers the `resource::Apply` handler on `registry` (the app installs it under
-/// `oxikube_app::apply`). `sessions` gives it the cluster's reader (the live object) and
-/// discovery (whether the kind is namespaced).
+/// Registers the `resource::Apply` and `resource::ApplyPlan` handlers on `registry` (the app
+/// installs them under `oxikube_app::apply`). `sessions` gives them the cluster's reader (the live
+/// object), discovery (whether the kind is namespaced) and clock (a new definition's wait).
 ///
 /// # Errors
 ///
-/// A [`RegisterError`] when the command is registered already.
+/// A [`RegisterError`] when a command is registered already.
 pub fn register_commands(
     registry: &mut CommandRegistry,
     sessions: ClusterSessionManager,
 ) -> Result<(), RegisterError> {
     let meta = *command::lookup(CommandId::RESOURCE_APPLY)
         .ok_or(RegisterError::Undeclared(CommandId::RESOURCE_APPLY))?;
+    let single = sessions.clone();
     registry.register(meta, move |command: Command, cx: HandlerContext| {
-        let sessions = sessions.clone();
+        let sessions = single.clone();
         async move { handle(command, cx, sessions).await }
-    })
-}
-
-/// One apply, as the command describes it.
-struct Plan {
-    target: ResourceRef,
-    body: Value,
-    manager: String,
-    force: bool,
-    resource_version: Option<String>,
-}
-
-impl Plan {
-    fn namespace(&self) -> Option<&str> {
-        self.target.namespace()
-    }
-
-    fn options(&self, dry_run: bool) -> WriteOptions {
-        WriteOptions {
-            dry_run,
-            field_manager: Some(self.manager.clone()),
-        }
-    }
-
-    /// The live object, `None` when it does not exist.
-    async fn live(&self, reader: &dyn ResourceReader) -> OxiResult<Option<Resource>> {
-        let target = &self.target;
-        reader
-            .get_opt(&target.gvk, self.namespace(), &target.name)
-            .await
-    }
-
-    async fn server_side(&self, writer: &dyn ResourceWriter, dry_run: bool) -> OxiResult<Resource> {
-        let patch = Patch::apply(self.body.clone(), self.manager.as_str(), self.force);
-        let target = &self.target;
-        writer
-            .patch(
-                &target.gvk,
-                self.namespace(),
-                &target.name,
-                &patch,
-                &self.options(dry_run),
-            )
-            .await
-    }
-
-    /// The fallback: a replace carrying `resource_version`, or a create without one.
-    async fn fallback(
-        &self,
-        writer: &dyn ResourceWriter,
-        resource_version: Option<&str>,
-        dry_run: bool,
-    ) -> OxiResult<(ApplyMethod, Resource)> {
-        let options = self.options(dry_run);
-        let target = &self.target;
-        match resource_version {
-            Some(version) => {
-                let body = with_resource_version(self.body.clone(), version);
-                let object = writer
-                    .replace(&target.gvk, self.namespace(), &target.name, &body, &options)
-                    .await?;
-                Ok((ApplyMethod::Replace, object))
-            }
-            None => {
-                let object = writer
-                    .create(&target.gvk, self.namespace(), &self.body, &options)
-                    .await?;
-                Ok((ApplyMethod::Create, object))
-            }
-        }
-    }
+    })?;
+    super::plan::register(registry, sessions)
 }
 
 async fn handle(
@@ -150,7 +78,7 @@ async fn handle(
     let namespace = manifest
         .resolve_namespace(&session, namespace.as_deref())
         .await;
-    let plan = Plan {
+    let write = ObjectWrite {
         target: manifest.target(cluster, namespace.as_deref()),
         body: manifest.body(namespace.as_deref()),
         manager: field_manager
@@ -158,32 +86,14 @@ async fn handle(
             .unwrap_or_else(|| DEFAULT_FIELD_MANAGER.to_owned()),
         force,
         resource_version,
+        reviewed_absent,
     };
     let writer = mutation.writer();
     if mutation.dry_run() {
-        return rehearse(&plan, writer, reader.as_ref()).await;
+        return rehearse(&write, writer, reader.as_ref()).await;
     }
-    // The server rehearses the apply first (admission, validation, ownership); then it is sent.
-    let (method, object) = match plan.server_side(writer, true).await {
-        Ok(_) => (
-            ApplyMethod::ServerSide,
-            plan.server_side(writer, false).await?,
-        ),
-        Err(error) if error.kind() == ErrorKind::Unsupported => {
-            // The reviewed version, else none for a reviewed create (an object made since then
-            // fails with `AlreadyExists`, never replaced unseen), else the live one for a
-            // caller that reviewed nothing.
-            let version = match (plan.resource_version.clone(), reviewed_absent) {
-                (Some(version), _) => Some(version),
-                (None, true) => None,
-                (None, false) => version_of(plan.live(reader.as_ref()).await?.as_ref()),
-            };
-            plan.fallback(writer, version.as_deref(), true).await?;
-            plan.fallback(writer, version.as_deref(), false).await?
-        }
-        Err(error) => return Err(error),
-    };
-    let label = object_label(&plan.target);
+    let (method, object) = write.send(writer, reader.as_ref(), Preview::First).await?;
+    let label = object_label(&write.target);
     let message = match method {
         ApplyMethod::ServerSide => format!("Applied {label}"),
         ApplyMethod::Replace => format!(
@@ -200,7 +110,7 @@ async fn handle(
         data: Some(json!({
             "outcome": "applied",
             "method": method.as_str(),
-            "target": plan.target,
+            "target": write.target,
             "object": mask.apply(object.to_value()),
         })),
     })
@@ -209,25 +119,13 @@ async fn handle(
 /// The dry-run dispatch: the live object and the server's dry run of the apply (or of the
 /// fallback), both masked with one key so they compare.
 async fn rehearse(
-    plan: &Plan,
+    write: &ObjectWrite,
     writer: &dyn ResourceWriter,
     reader: &dyn ResourceReader,
 ) -> OxiResult<CommandOutput> {
-    let target = &plan.target;
-    let live = plan.live(reader).await?;
-    let live_version = version_of(live.as_ref());
-    let (method, object) = match plan.server_side(writer, true).await {
-        Ok(object) => (ApplyMethod::ServerSide, object),
-        Err(error) if error.kind() == ErrorKind::Unsupported => {
-            let version = plan
-                .resource_version
-                .clone()
-                .or_else(|| live_version.clone())
-                .filter(|_| live.is_some());
-            plan.fallback(writer, version.as_deref(), true).await?
-        }
-        Err(error) => return Err(error),
-    };
+    let target = &write.target;
+    let live = write.live(reader).await?;
+    let (method, object) = write.rehearse(writer, live.as_ref()).await?;
     let mask = SecretMask::new();
     Ok(CommandOutput {
         message: Some(format!("Dry run: {} can be applied", object_label(target))),
@@ -236,14 +134,8 @@ async fn rehearse(
             "method": method.as_str(),
             "target": target,
             "object": mask.apply(object.to_value()),
+            "resource_version": version_of(live.as_ref()),
             "live": live.map(|live| mask.apply(live.to_value())),
-            "resource_version": live_version,
         })),
     })
-}
-
-/// `metadata.resourceVersion` of `live`.
-fn version_of(live: Option<&Resource>) -> Option<String> {
-    live.and_then(|live| live.meta.resource_version.as_deref())
-        .map(str::to_owned)
 }

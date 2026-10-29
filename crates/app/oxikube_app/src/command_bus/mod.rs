@@ -59,6 +59,7 @@ mod handler;
 pub mod immediate;
 mod index;
 pub mod invoke;
+mod progress;
 pub mod recents;
 mod registry;
 
@@ -73,5 +74,6 @@ pub use handler::{CommandHandler, HandlerContext, HandlerFuture};
 pub use immediate::{Immediate, ImmediateHandler};
 pub use index::{CommandIndex, CommandInfo, DuplicateCommand};
 pub use invoke::{CommandTarget, InvokeError, commands_for};
+pub use progress::Progress;
 pub use recents::{MemoryRecents, RECENTS_CAPACITY, RecentsStore};
 pub use registry::{CommandRegistry, RegisterError};

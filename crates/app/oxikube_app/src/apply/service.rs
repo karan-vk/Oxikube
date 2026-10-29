@@ -26,9 +26,9 @@ use crate::{ClusterSessionManager, CommandBus};
 /// `resource::Apply` dispatch through the guard (read-only check, confirmation, audit).
 #[derive(Clone)]
 pub struct ApplyService {
-    bus: CommandBus,
-    sessions: ClusterSessionManager,
-    who: Arc<str>,
+    pub(super) bus: CommandBus,
+    pub(super) sessions: ClusterSessionManager,
+    pub(super) who: Arc<str>,
 }
 
 impl std::fmt::Debug for ApplyService {
