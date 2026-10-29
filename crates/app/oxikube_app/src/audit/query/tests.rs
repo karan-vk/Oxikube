@@ -154,8 +154,14 @@ fn new_records_are_counted_against_the_head() {
         .collect();
     assert_eq!(count_new(Some(&fresh[2]), &fresh), NewRecords::Exactly(2));
     assert_eq!(count_new(Some(&fresh[0]), &fresh), NewRecords::Exactly(0));
-    let gone = record(99, "pod::Delete", Initiator::Ui, AuditOutcome::Failed);
+    let gone = record(-1, "pod::Delete", Initiator::Ui, AuditOutcome::Failed);
     assert_eq!(count_new(Some(&gone), &fresh), NewRecords::AtLeast(5));
+    // A head a sliding time window aged out: an empty or older-only page is no news.
+    let aged_out = record(99, "pod::Delete", Initiator::Ui, AuditOutcome::Failed);
+    assert_eq!(count_new(Some(&aged_out), &[]), NewRecords::Exactly(0));
+    assert_eq!(count_new(Some(&aged_out), &fresh), NewRecords::Exactly(0));
+    let mid = record(2, "pod::Other", Initiator::Ui, AuditOutcome::Failed);
+    assert_eq!(count_new(Some(&mid), &fresh), NewRecords::Exactly(2));
     assert_eq!(count_new(None, &fresh), NewRecords::Exactly(5));
     assert_eq!(NewRecords::AtLeast(5).label(), "5+");
     assert!(NewRecords::Exactly(0).is_none());

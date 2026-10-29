@@ -160,3 +160,11 @@ fn the_cluster_column_is_the_context_name(cx: &mut TestAppContext) {
     });
     assert_eq!(&*text, "kind");
 }
+
+#[test]
+fn replacing_the_page_hands_back_the_old_records_to_free_off_thread() {
+    let mut model = crate::audit::AuditModel::new();
+    let _ = model.replace(seed(5), None);
+    let old = model.replace(seed(2), None);
+    assert_eq!(old.len(), 5, "the caller frees the replaced page");
+}

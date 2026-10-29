@@ -64,3 +64,15 @@ fn a_failing_read_after_rows_are_shown_keeps_them_under_a_banner(cx: &mut TestAp
     assert!(fx.drawn("audit-banner"));
     assert_eq!(fx.names().len(), 3);
 }
+
+#[test]
+fn a_read_that_never_answers_becomes_an_error_when_the_timer_fires() {
+    let never = std::future::pending::<
+        Result<oxikube_domain::OxiResult<oxikube_ports::AuditPage>, oxikube_runtime::KubeTaskError>,
+    >();
+    let outcome = futures::executor::block_on(crate::audit::view::load::bounded(
+        never,
+        std::future::ready(()),
+    ));
+    assert!(outcome.expect_err("times out").contains("timed out"));
+}

@@ -206,13 +206,20 @@ impl AuditModel {
     }
 
     /// Replaces everything with the newest page (a new filter, a reload). The selection follows
-    /// the selected record when it is still there.
-    pub fn replace(&mut self, records: Vec<AuditRecord>, next: Option<AuditCursor>) {
+    /// the selected record when it is still there. Returns the records it replaced so the caller
+    /// can free them off the UI thread (tens of thousands of strings).
+    #[must_use = "drop the replaced records off the UI thread"]
+    pub fn replace(
+        &mut self,
+        records: Vec<AuditRecord>,
+        next: Option<AuditCursor>,
+    ) -> Vec<AuditRecord> {
         let selected = self.selected_record().cloned();
-        self.records = records;
+        let old = std::mem::replace(&mut self.records, records);
         self.cursor = next;
         self.exhausted = next.is_none();
         self.selected = selected.and_then(|s| self.records.iter().position(|r| *r == s));
+        old
     }
 
     /// Adds an older page at the end.

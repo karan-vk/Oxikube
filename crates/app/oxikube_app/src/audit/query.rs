@@ -194,14 +194,24 @@ pub fn count_new(head: Option<&AuditRecord>, fresh: &[AuditRecord]) -> NewRecord
     let Some(head) = head else {
         return NewRecords::Exactly(fresh.len());
     };
-    match fresh.iter().position(|record| record == head) {
-        Some(n) => NewRecords::Exactly(n),
-        None => NewRecords::AtLeast(fresh.len()),
+    if let Some(n) = fresh.iter().position(|record| record == head) {
+        return NewRecords::Exactly(n);
+    }
+    // The head is not in the page: a sliding time window aged it out, or retention pruned it.
+    // Only records strictly newer than it are new, so an empty or older-only page is no news.
+    let newer = fresh
+        .iter()
+        .take_while(|record| record.ts > head.ts)
+        .count();
+    if newer == fresh.len() && newer > 0 {
+        NewRecords::AtLeast(newer)
+    } else {
+        NewRecords::Exactly(newer)
     }
 }
 
-/// How long the viewer waits for the store before it says so; reads are off the UI thread, so
-/// this only bounds how long "Loading…" can show.
+/// How long the viewer waits for the store before it shows an error instead of "Loading…"; the
+/// view races each read against a timer of this length.
 pub const READ_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[cfg(test)]

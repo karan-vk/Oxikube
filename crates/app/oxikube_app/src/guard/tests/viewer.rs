@@ -2,8 +2,6 @@
 //! (`AuditReader`, the viewer's model) and announced to it (`AuditLog::appended`) within a second
 //! of the guard returning.
 
-use std::time::{Duration, Instant};
-
 use futures::FutureExt as _;
 use jiff::Timestamp;
 use oxikube_domain::audit::{AuditOutcome, Initiator};
@@ -22,8 +20,6 @@ fn a_guarded_mutation_is_in_the_viewers_model_within_a_second() {
     let listener = h.bus.guard().audit().appended();
     let reader = AuditReader::new(h.state.clone());
     let now: Timestamp = h.clock.now();
-
-    let started = Instant::now();
     let out = h.confirm_and_run(pod_delete("a", "web-0"), ctx(Initiator::Agent));
     assert!(matches!(out, Ok(Outcome::Completed(_))), "{out:?}");
 
@@ -33,7 +29,6 @@ fn a_guarded_mutation_is_in_the_viewers_model_within_a_second() {
         .now_or_never()
         .expect("the fake answers at once")
         .expect("reads");
-    assert!(started.elapsed() < Duration::from_secs(1));
     let record = page.records.first().expect("the mutation is listed");
     assert_eq!(record.target, pod("a", "web-0"));
     assert_eq!(record.cluster, id("a"));

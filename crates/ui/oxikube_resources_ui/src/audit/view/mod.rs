@@ -15,7 +15,7 @@ mod delegate;
 mod detail;
 mod export;
 mod filters;
-mod load;
+pub(super) mod load;
 mod render;
 
 use std::rc::Rc;
