@@ -28,8 +28,10 @@ oxikube_ui.workspace = true
 oxikube_workspace.workspace = true
 # The metrics slot the kinds' per-cluster column factories share with the views (E13-S03).
 parking_lot.workspace = true
+async-trait.workspace = true
 schemars.workspace = true
 serde.workspace = true
+serde-saphyr.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 
@@ -71,6 +73,13 @@ required-features = ["screenshot"]
 [[test]]
 name = "states_screenshot"
 path = "tests/states_screenshot.rs"
+harness = false
+required-features = ["screenshot"]
+
+# The apply panel's review, result, error expansion and read-only states, E20-S05.
+[[test]]
+name = "apply_screenshot"
+path = "tests/apply_screenshot.rs"
 harness = false
 required-features = ["screenshot"]
 

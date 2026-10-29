@@ -1309,6 +1309,35 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         reviewed_absent: bool,
     },
+    /// Open the apply panel (E20-S05) on a manifest file or a directory of them: load, review the
+    /// plan with the server's dry run, apply, read the result per object. Opening changes nothing;
+    /// the panel's dry run and apply are `resource::ApplyPlan` dispatches through the guard.
+    #[serde(rename = "apply::Directory")]
+    ApplyDirectory {
+        /// Cluster to apply to.
+        cluster: ClusterId,
+        /// The file or directory to load; `None` opens the panel and asks for one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        path: Option<String>,
+        /// Default namespace for namespaced objects that name none; `None` is the cluster tab's
+        /// selected namespace.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        namespace: Option<String>,
+    },
+    /// Open the apply panel (E20-S05) on a kustomize directory: build it with the user's own
+    /// `kustomize`, then continue as for [`ApplyDirectory`](Command::ApplyDirectory).
+    #[serde(rename = "apply::Kustomize")]
+    ApplyKustomize {
+        /// Cluster to apply to.
+        cluster: ClusterId,
+        /// The directory with a `kustomization.yaml`; `None` opens the panel and asks for one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        path: Option<String>,
+        /// Default namespace for namespaced objects that name none; `None` is the cluster tab's
+        /// selected namespace.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        namespace: Option<String>,
+    },
     /// Apply many objects as one plan (E20-S03): ordered by kind (`ApplyPlan`), the whole plan
     /// dry-run first, then server-side applied rank by rank under the field manager, a few objects
     /// of a rank at a time, waiting for each new CustomResourceDefinition to be `Established`
@@ -2285,6 +2314,8 @@ impl Command {
             Command::ResourceDelete { .. } => CommandId::RESOURCE_DELETE,
             Command::ResourceApply { .. } => CommandId::RESOURCE_APPLY,
             Command::ResourceApplyPlan { .. } => CommandId::RESOURCE_APPLY_PLAN,
+            Command::ApplyDirectory { .. } => CommandId::APPLY_DIRECTORY,
+            Command::ApplyKustomize { .. } => CommandId::APPLY_KUSTOMIZE,
             Command::PodDelete { .. } => CommandId::POD_DELETE,
             Command::PodEvict { .. } => CommandId::POD_EVICT,
             Command::PodForceDelete { .. } => CommandId::POD_FORCE_DELETE,
@@ -2648,6 +2679,16 @@ mod tests {
             },
             Command::AuditExport {
                 format: AuditExportFormat::Csv,
+            },
+            Command::ApplyDirectory {
+                cluster: cluster(),
+                path: Some("/work/manifests".into()),
+                namespace: Some("shop".into()),
+            },
+            Command::ApplyKustomize {
+                cluster: cluster(),
+                path: None,
+                namespace: None,
             },
             Command::HelmSearchCharts {
                 keyword: "nginx".into(),
@@ -3620,6 +3661,8 @@ mod tests {
                     | Command::HelmOpenCharts
                     | Command::AuditOpen { .. }
                     | Command::AuditExport { .. }
+                    | Command::ApplyDirectory { .. }
+                    | Command::ApplyKustomize { .. }
                     | Command::HelmSearchCharts { .. }
                     | Command::HelmShowChart { .. }
                     | Command::HelmInstallChart { .. }

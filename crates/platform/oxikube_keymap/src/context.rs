@@ -25,6 +25,7 @@
 //! | `Catalog` | the cluster catalog home (E06-S03) | `Editing` while its search field has focus |
 //! | `RbacSubjects` | the RBAC Users, Groups and subject matrix pages (E17-S07) | `Editing` while its filter field has focus |
 //! | `HelmReleases` | the cluster's Helm releases page (E16-S05) | `Editing` while its filter field has focus |
+//! | `ApplyResults` | the apply panel (E20-S05): load, review and the per-object results | `Editing` while its namespace field has focus |
 //! | `EventsView` | the cluster's events view (E14-S03) | `Editing` while a filter field has focus, `faults`, `paused` |
 //!
 //! The stack of a focused table is `Workspace > Dock > ClusterTab > Workspace > Pane >
@@ -110,6 +111,8 @@ pub mod contexts {
     pub const PORT_FORWARDS: &str = "PortForwards";
     /// The Helm releases page (E16-S05); carries `Editing` while its filter field has the focus.
     pub const HELM_RELEASES: &str = "HelmReleases";
+    /// The apply panel (E20-S05); carries `Editing` while its namespace field has the focus.
+    pub const APPLY_RESULTS: &str = "ApplyResults";
     /// The contexts of the Phase 1 views, the ones the default keymaps define sections for
     /// (E11-S07), in the order of the table in the [module docs](super). A new view that takes
     /// keys adds its name here so the defaults tests cover it.
