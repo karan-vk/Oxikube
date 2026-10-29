@@ -38,6 +38,25 @@ fn secrets_inside_a_list_are_found() {
 }
 
 #[test]
+fn kindless_secret_list_items_are_redacted() {
+    let out = redacted(json!({"kind": "SecretList", "items": [
+        {"metadata": {"name": "db"}, "type": "Opaque", "data": {"p": "aHVudGVyMg=="}},
+    ]}));
+    assert_eq!(out["items"][0]["data"]["p"], MARKER);
+    assert_eq!(out["items"][0]["metadata"]["name"], "db");
+}
+
+#[test]
+fn kindless_typed_object_with_data_is_a_secret() {
+    let out = redacted(json!({"type": "kubernetes.io/dockerconfigjson",
+        "data": {".dockerconfigjson": "e30="}, "stringData": {"a": "b"}}));
+    assert_eq!(out["data"][".dockerconfigjson"], MARKER);
+    assert_eq!(out["stringData"]["a"], MARKER);
+    let cm = redacted(json!({"kind": "ConfigMapList", "items": [{"data": {"k": "plain"}}]}));
+    assert_eq!(cm["items"][0]["data"]["k"], "plain");
+}
+
+#[test]
 fn sensitive_keys_are_replaced_whatever_the_type() {
     let out = redacted(json!({
         "users": [{"name": "u", "user": {

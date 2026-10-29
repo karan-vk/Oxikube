@@ -13,7 +13,9 @@ use std::borrow::Cow;
 /// - **Structural.** In an object whose `kind` is `Secret`, every value under `data`,
 ///   `stringData` and `secret_data` is replaced (key names stay). A value under any key that
 ///   [`is_sensitive_field`] accepts (`token`, `password`, `client-key-data`, ...) is replaced
-///   whole, whatever its type. A `List` is walked item by item, so Secrets inside it are found.
+///   whole, whatever its type. A `List` is walked item by item, so Secrets inside it are found; the kind-less items of a
+///   `SecretList`, and any kind-less object with a `type` and a `data`/`stringData` body, count
+///   as Secrets too.
 /// - **Pattern.** Every other string goes through [`redact`] (bearer tokens, JWTs, PEM
 ///   blocks, URL passwords, an embedded manifest in an annotation, ...).
 ///
@@ -21,6 +23,12 @@ use std::borrow::Cow;
 /// leaves `ConfigMap` data alone unless a string pattern matches, so structured output stays
 /// useful.
 pub fn redact_json(value: &mut Value) {
+    redact_walk(value, false);
+}
+
+/// Walks `value`; `items_are_secrets` is set for the `items` of a `SecretList`, whose
+/// elements carry no `kind` of their own on the wire.
+fn redact_walk(value: &mut Value, items_are_secrets: bool) {
     match value {
         Value::String(text) => {
             if let Cow::Owned(clean) = redact(text) {
@@ -29,21 +37,30 @@ pub fn redact_json(value: &mut Value) {
         }
         Value::Array(items) => {
             for item in items {
-                redact_json(item);
+                redact_walk(item, items_are_secrets);
             }
         }
         Value::Object(map) => {
-            let is_secret = map.get("kind").and_then(Value::as_str) == Some("Secret");
+            let kind = map.get("kind").and_then(Value::as_str);
+            let is_secret = kind == Some("Secret")
+                || (items_are_secrets && kind.is_none())
+                || (kind.is_none() && map.contains_key("type") && has_body_key(map));
+            let list_of_secrets = kind == Some("SecretList");
             for (key, child) in map.iter_mut() {
                 if is_sensitive_field(key) || (is_secret && is_body_key(key)) {
                     redact_all(child);
                 } else {
-                    redact_json(child);
+                    redact_walk(child, list_of_secrets && key == "items");
                 }
             }
         }
         Value::Null | Value::Bool(_) | Value::Number(_) => {}
     }
+}
+
+/// Whether the object carries a Secret body key (`data`, `stringData`, ...).
+fn has_body_key(map: &serde_json::Map<String, Value>) -> bool {
+    map.keys().any(|key| is_body_key(key))
 }
 
 /// `data` / `stringData` and the snake-case spellings of a Secret.
