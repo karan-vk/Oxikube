@@ -102,10 +102,10 @@ fn glob(pattern: &str, text: &str) -> bool {
     if !text.starts_with(first) || text.len() < first.len() + last.len() {
         return false;
     }
-    let mut rest = &text[first.len()..text.len() - last.len()];
     if !text.ends_with(last) {
         return false;
     }
+    let mut rest = &text[first.len()..text.len() - last.len()];
     for part in &parts[1..parts.len() - 1] {
         match rest.find(part) {
             Some(at) => rest = &rest[at + part.len()..],

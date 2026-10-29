@@ -307,3 +307,11 @@ fn a_one_megabyte_config_map_is_compared_quickly() {
     eprintln!("1 MB ConfigMap normalised and summarised in {elapsed:?}");
     assert!(elapsed.as_millis() < 2000, "{elapsed:?}");
 }
+
+#[test]
+fn a_wildcard_suffix_never_slices_inside_a_multibyte_key() {
+    let list = IgnorePaths::new(&["/spec/a*b"]);
+    let mut value = json!({"spec": {"aéé": 1, "axb": 2, "keep": 3}});
+    list.prune(&mut value);
+    assert_eq!(value, json!({"spec": {"aéé": 1, "keep": 3}}));
+}
