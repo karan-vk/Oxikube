@@ -23,6 +23,7 @@
 mod content;
 mod edit;
 pub mod fields;
+mod guard;
 mod node_shell;
 mod prometheus;
 #[cfg(test)]
@@ -33,6 +34,7 @@ mod tests;
 mod watch_budget;
 
 pub use content::ClusterSettingsContent;
+pub use guard::GuardContent;
 pub use node_shell::{
     ImagePullPolicy, NodeShellContent, TaintEffect, TolerationContent, TolerationOperator,
 };

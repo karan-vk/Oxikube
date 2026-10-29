@@ -622,3 +622,78 @@ fn the_watch_budget_merges_field_by_field_per_cluster() {
         "from the user layer"
     );
 }
+
+#[test]
+fn guard_default_read_only_is_off_unless_asked_for() {
+    let store = store();
+    assert!(!prefs(&store, None).read_only);
+    assert!(store.diagnostics().is_empty(), "{:?}", store.diagnostics());
+}
+
+#[test]
+fn guard_default_read_only_protects_a_cluster_that_never_had_the_flag_written() {
+    let store = load(&format!(
+        r##"{{ "guard": {{ "default_read_only": true }},
+              "clusters": {{ "{PROD}": {{ "colour": "#e5484d" }} }} }}"##
+    ));
+    assert!(prefs(&store, None).read_only, "global fallback");
+    assert!(
+        prefs(&store, Some(&id(LAB))).read_only,
+        "never-seen cluster"
+    );
+    assert!(
+        prefs(&store, Some(&id(PROD))).read_only,
+        "block without the flag"
+    );
+    assert!(store.diagnostics().is_empty(), "{:?}", store.diagnostics());
+}
+
+#[test]
+fn an_explicit_read_only_beats_the_guard_default_in_both_directions() {
+    let store = load(&format!(
+        r#"{{ "guard": {{ "default_read_only": true }},
+              "clusters": {{ "{PROD}": {{ "read_only": false }} }} }}"#
+    ));
+    assert!(
+        !prefs(&store, Some(&id(PROD))).read_only,
+        "the user lifted it"
+    );
+    assert!(prefs(&store, Some(&id(LAB))).read_only);
+
+    let store = load(&format!(
+        r#"{{ "read_only": false, "guard": {{ "default_read_only": true }},
+              "clusters": {{ "{PROD}": {{ "read_only": true }} }} }}"#
+    ));
+    assert!(
+        !prefs(&store, Some(&id(LAB))).read_only,
+        "top-level explicit wins"
+    );
+    assert!(prefs(&store, Some(&id(PROD))).read_only);
+}
+
+#[test]
+fn a_typo_never_drops_the_guard_default_on_a_first_load() {
+    let store =
+        load(r#"{ "guard": { "default_read_only": true }, "exec_interactivity": "bogus" }"#);
+    assert!(prefs(&store, None).read_only);
+    assert!(prefs(&store, Some(&id(LAB))).read_only);
+}
+
+/// The persistence round trip behind a restart: the toggle's write, read back by a store that
+/// knows nothing but the file.
+#[test]
+fn a_toggled_flag_survives_a_restart_and_a_lift_survives_too() {
+    let on = new_text_for_update::<ClusterSettings>("{}", Some(&id(PROD)), |content| {
+        content.read_only = Some(true);
+    })
+    .unwrap();
+    let restarted = load(&on);
+    assert!(prefs(&restarted, Some(&id(PROD))).read_only);
+    assert!(!prefs(&restarted, Some(&id(LAB))).read_only);
+
+    let off = new_text_for_update::<ClusterSettings>(&on, Some(&id(PROD)), |content| {
+        content.read_only = Some(false);
+    })
+    .unwrap();
+    assert!(!prefs(&load(&off), Some(&id(PROD))).read_only);
+}

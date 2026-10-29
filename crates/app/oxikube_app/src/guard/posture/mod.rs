@@ -8,7 +8,7 @@
 //!
 //! | Command | Effect | Initiators |
 //! |---|---|---|
-//! | `cluster::ToggleReadOnly` | sets or flips `clusters.<id>.read_only` | people only (privileged) |
+//! | `cluster::ToggleReadOnly` | sets or flips `clusters.<id>.read_only` | people only (privileged); lifting always asks |
 //! | `cluster::SetColour` | sets or clears `clusters.<id>.colour` | everyone (not off a production flag: people only) |
 //! | `cluster::ApplyPreset` | writes a [`ClusterPreset`]'s colour and, for production, read-only on | everyone (not off a production flag: people only) |
 //!
@@ -16,10 +16,12 @@
 //! mode (lifting it must be possible). They run through the guard's posture pipeline instead
 //! (`MutationGuard::run_posture`):
 //!
-//! 1. **Confirmation**: turning read-only *off* on a cluster flagged production (its colour is
-//!    the [`Prod`](ClusterPreset::Prod) red) answers
+//! 1. **Confirmation**: turning read-only *off* on any cluster answers
 //!    [`Outcome::NeedsConfirmation`](crate::command_bus::Outcome::NeedsConfirmation) with a
-//!    simple confirm first. No hidden state: the flag is read from the colour field.
+//!    simple confirm first (E19-S04); the summary adds "flagged as production" when the colour is
+//!    the [`Prod`](ClusterPreset::Prod) red. Agents and plugins never get that far: the toggle
+//!    is privileged, so the bus refuses them before any confirmation (stricter than a
+//!    confirm they could be offered). No hidden state: the flag is read from the colour field.
 //!    Taking the production colour off such a cluster (`SetColour` to anything else or to
 //!    nothing, or a preset other than production) removes that flag, so it is lowering
 //!    protection as well: people may do it (it is their explicit way around the confirm), agents
@@ -28,7 +30,9 @@
 //! 2. **Audit**: one record per attempt, like a mutation. When the command lowers protection
 //!    (lifts read-only or removes the production flag) the audit log must be writable first
 //!    (fail closed); raising protection is never refused because the log is down.
-//! 3. **Handler**: persists through the [`PrefsWriter`] (the comment-preserving settings
+//! 3. **Handler** (the single writer, E19-S04: the user's settings, not `StatePort`; the file
+//!    is the one truth, `guard.default_read_only` only the fallback for a cluster whose
+//!    `read_only` was never written, and a session starts from it at open): persists through the [`PrefsWriter`] (the comment-preserving settings
 //!    writer, supplied by the binary) and applies the change to the live session. Raising
 //!    protection goes live first and is persisted second, so a failing disk never leaves a
 //!    cluster less protected than the user asked for; lowering is persisted first and applied

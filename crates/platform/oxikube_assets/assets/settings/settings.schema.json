@@ -346,6 +346,17 @@
             "null"
           ]
         },
+        "guard": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardContent"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Guard defaults (E19-S04). `guard.default_read_only` decides the read-only mode of a\ncluster that never had `read_only` written, at either level; an explicit `read_only` wins."
+        },
         "helm": {
           "$ref": "#/$defs/HelmSettingsContent"
         },
@@ -517,6 +528,17 @@
             "string",
             "null"
           ]
+        },
+        "guard": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardContent"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Guard defaults (E19-S04). `guard.default_read_only` decides the read-only mode of a\ncluster that never had `read_only` written, at either level; an explicit `read_only` wins."
         },
         "node_shell": {
           "anyOf": [
@@ -780,6 +802,20 @@
           "maxItems": 64,
           "type": [
             "array",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "GuardContent": {
+      "additionalProperties": false,
+      "description": "Guard defaults, as one settings layer writes them.\n\n```json\n\"guard\": { \"default_read_only\": true }\n```",
+      "properties": {
+        "default_read_only": {
+          "description": "Start every cluster that has no explicit `read_only` in read-only mode. Toggling a\ncluster in the app writes `clusters.<id>.read_only`, which then wins. Default `false`.",
+          "type": [
+            "boolean",
             "null"
           ]
         }
@@ -1971,6 +2007,17 @@
         "string",
         "null"
       ]
+    },
+    "guard": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GuardContent"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Guard defaults (E19-S04). `guard.default_read_only` decides the read-only mode of a\ncluster that never had `read_only` written, at either level; an explicit `read_only` wins."
     },
     "helm": {
       "$ref": "#/$defs/HelmSettingsContent"
