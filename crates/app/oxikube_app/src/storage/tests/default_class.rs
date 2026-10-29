@@ -52,7 +52,8 @@ fn setting_the_default_annotates_the_class_and_clears_the_previous_one() {
             storage_class("cold").build(),
         ],
     );
-    script_patches(&h, &storage_class("fast").default_class().build(), 4);
+    // The guard's dry run before it asks (E19-S07), then the handler's rehearsed writes.
+    script_patches(&h, &storage_class("fast").default_class().build(), 6);
     let outcome = h
         .confirm_and_run(set_default("fast", true), ctx(Initiator::Ui))
         .unwrap();
@@ -64,9 +65,10 @@ fn setting_the_default_annotates_the_class_and_clears_the_previous_one() {
     assert_eq!(data["set"], "fast");
     assert_eq!(data["cleared"], json!(["old"]));
 
-    // Each write is rehearsed first; the new default is set before the old one is cleared.
+    // The guard's dry run; then each write is rehearsed first; the new default is set before the
+    // old one is cleared.
     assert_eq!(
-        patches(&h),
+        patches(&h)[2..],
         [
             ("fast".to_owned(), json!({DEFAULT: "true"}), true),
             ("old".to_owned(), json!({DEFAULT: "false"}), true),
@@ -74,7 +76,7 @@ fn setting_the_default_annotates_the_class_and_clears_the_previous_one() {
             ("old".to_owned(), json!({DEFAULT: "false"}), false),
         ]
     );
-    let record = &h.audit()[0];
+    let record = &h.audit()[1];
     assert_eq!(&*record.cmd, "storageclass::SetDefault");
     assert_eq!(record.outcome, AuditOutcome::Succeeded);
     assert_eq!(record.detail.as_deref(), Some("clear_previous=true"));
@@ -90,11 +92,15 @@ fn the_previous_default_can_be_left_alone() {
             storage_class("fast").build(),
         ],
     );
-    script_patches(&h, &storage_class("fast").default_class().build(), 2);
+    script_patches(&h, &storage_class("fast").default_class().build(), 3);
     h.confirm_and_run(set_default("fast", false), ctx(Initiator::Ui))
         .unwrap();
     let names: Vec<_> = patches(&h).into_iter().map(|(n, ..)| n).collect();
-    assert_eq!(names, ["fast", "fast"], "the old default is untouched");
+    assert_eq!(
+        names,
+        ["fast", "fast", "fast"],
+        "the old default is untouched"
+    );
 }
 
 #[test]

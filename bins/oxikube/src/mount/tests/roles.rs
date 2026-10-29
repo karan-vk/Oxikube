@@ -213,7 +213,14 @@ fn edit_rules_in_the_detail_opens_the_dialog_on_the_role_and_saving_asks_to_conf
         .connector
         .ports_for(&TestPorts::cluster_id())
         .resources;
-    assert!(resources.mutating_calls().is_empty(), "asked, not written");
+    // Asked, with the guard's dry run (E19-S07) the only request sent.
+    assert!(
+        resources
+            .mutating_calls()
+            .iter()
+            .all(oxikube_testkit::ResourceCall::is_dry_run),
+        "asked, not written"
+    );
     let ws = app.tab_workspace();
     let (title, message) = app.vcx.update(|_, cx| {
         let modal = ws

@@ -80,6 +80,8 @@ fn every_attempt_is_audited_with_the_object_and_never_the_manifest() {
         summary,
         [
             (true, AuditOutcome::Succeeded),
+            // The guard's own dry run before it asks (E19-S07) is an audited attempt too.
+            (true, AuditOutcome::Succeeded),
             (false, AuditOutcome::Succeeded),
             (true, AuditOutcome::Failed),
         ]
@@ -98,7 +100,7 @@ fn every_attempt_is_audited_with_the_object_and_never_the_manifest() {
     );
     // A new object: no reviewed version to carry, a create was reviewed.
     assert_eq!(
-        audit[1].detail.as_deref(),
+        audit[2].detail.as_deref(),
         Some("manager=team-a force=false reviewed=create")
     );
 }
@@ -135,7 +137,10 @@ fn the_audit_names_the_namespace_the_object_is_written_to() {
         [
             ("ConfigMap", Some("default"), AuditOutcome::Succeeded),
             ("ConfigMap", Some("default"), AuditOutcome::Succeeded),
+            ("ConfigMap", Some("default"), AuditOutcome::Succeeded),
             ("Namespace", None, AuditOutcome::Succeeded),
+            // The guard's dry run of the dispatch that is then declined.
+            ("ConfigMap", Some("default"), AuditOutcome::Succeeded),
             ("ConfigMap", Some("default"), AuditOutcome::Cancelled),
         ]
     );
@@ -144,14 +149,39 @@ fn the_audit_names_the_namespace_the_object_is_written_to() {
 #[test]
 fn an_agent_dispatch_is_rehearsed_by_the_server_first() {
     let t = Applying::new(false);
+    t.port().insert(live_configmap("7"));
     let command = t.request(CONFIGMAP).command(None);
     let ctx = DispatchContext::new(Initiator::Agent, "agent").with_cluster(id("a"));
-    let outcome = t.h.confirm_and_run(command, ctx).expect("applied");
+    // The guard dry-runs the apply before it asks, and the question carries the diff (E19-S07).
+    let asked = t.h.ask(command.clone(), ctx.clone());
+    let Some(crate::guard::DryRunPreview::Rehearsed(preview)) = &asked.preview else {
+        panic!("the agent's question carries the dry run: {asked:?}");
+    };
+    let [change] = preview.changes.as_slice() else {
+        panic!("one object: {preview:?}");
+    };
+    assert_eq!(change.change, crate::apply::Change::Update);
+    assert_eq!(change.live.as_deref().unwrap()["data"]["mode"], "green");
+    assert_eq!(change.result["data"]["mode"], "blue");
+    assert_eq!(
+        t.writes(),
+        [("patch", true)],
+        "asking sends the dry run only"
+    );
+
+    let answer = crate::guard::Confirmation::simple(asked.token);
+    let outcome =
+        t.h.dispatch(command, ctx.with_confirmation(answer))
+            .expect("applied");
     let Outcome::Completed(output) = outcome else {
         panic!("completed")
     };
     assert_eq!(output.data.unwrap()["outcome"], "applied");
-    assert_eq!(t.writes(), [("patch", true), ("patch", false)]);
+    assert_eq!(
+        t.writes(),
+        [("patch", true), ("patch", true), ("patch", false)],
+        "the guard's dry run, the handler's own, the apply"
+    );
     assert_eq!(t.h.audit()[0].initiator, Initiator::Agent);
 }
 

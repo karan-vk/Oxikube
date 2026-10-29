@@ -312,15 +312,16 @@ async fn trigger_suspend_and_resume_on_a_kind_cluster() {
         .collect();
     assert_eq!(
         triggers.len(),
-        3,
-        "a dry run, a trigger and the refused one: {audit:?}"
+        4,
+        "a dry run, the guard's dry run before the trigger (E19-S07), the trigger and the \
+         refused one: {audit:?}"
     );
-    assert!(triggers[0].dry_run);
+    assert!(triggers[0].dry_run && triggers[1].dry_run);
     assert_eq!(
-        triggers[1].detail.as_deref(),
+        triggers[2].detail.as_deref(),
         Some(format!("job={job_name}").as_str())
     );
-    assert_eq!(triggers[1].outcome, AuditOutcome::Succeeded);
-    assert_eq!(triggers[2].outcome, AuditOutcome::Denied);
-    assert_eq!(triggers[2].initiator, Initiator::Agent);
+    assert_eq!(triggers[2].outcome, AuditOutcome::Succeeded);
+    assert_eq!(triggers[3].outcome, AuditOutcome::Denied);
+    assert_eq!(triggers[3].initiator, Initiator::Agent);
 }

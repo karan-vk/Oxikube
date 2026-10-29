@@ -424,13 +424,18 @@ impl Harness {
         }
     }
 
-    /// Dispatches `cmd`, confirms it as the request asks, and returns the second result.
+    /// Dispatches `cmd`, confirms it as the request asks, and returns the second result. A first
+    /// dispatch that asks nothing (refused, or refused by the guard's dry run before it asks,
+    /// E19-S07) is returned as it is.
     pub fn confirm_and_run(
         &self,
         cmd: Command,
         ctx: DispatchContext,
     ) -> Result<Outcome, DispatchError> {
-        let request = self.ask(cmd.clone(), ctx.clone());
+        let request = match self.dispatch(cmd.clone(), ctx.clone())? {
+            Outcome::NeedsConfirmation(request) => request,
+            completed @ Outcome::Completed(_) => return Ok(completed),
+        };
         let answer = match request.expected_name {
             Some(name) => Confirmation::typed(request.token, name),
             None => Confirmation::simple(request.token),

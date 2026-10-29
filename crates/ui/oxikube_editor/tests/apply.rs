@@ -49,11 +49,17 @@ fn the_key_dry_runs_shows_the_diff_and_apply_sends_it(cx: &mut TestAppContext) {
 
     f.confirm(&dialog);
     assert!(f.modal::<ApplyPreviewDialog>().is_none());
+    // The preview's dry run, the guard's before it asks (E19-S07), the handler's, the apply.
     assert_eq!(
         f.writes(),
-        [("patch", true), ("patch", true), ("patch", false)]
+        [
+            ("patch", true),
+            ("patch", true),
+            ("patch", true),
+            ("patch", false)
+        ]
     );
-    let ResourceCall::Patch { patch, .. } = &f.resources.mutating_calls()[2] else {
+    let ResourceCall::Patch { patch, .. } = &f.resources.mutating_calls()[3] else {
         panic!("a patch")
     };
     assert_eq!(
@@ -83,9 +89,11 @@ fn the_key_dry_runs_shows_the_diff_and_apply_sends_it(cx: &mut TestAppContext) {
         .iter()
         .map(|r| (r.dry_run, r.outcome))
         .collect();
+    // The preview, the guard's dry run (E19-S07), the apply.
     assert_eq!(
         audit,
         [
+            (true, AuditOutcome::Succeeded),
             (true, AuditOutcome::Succeeded),
             (false, AuditOutcome::Succeeded)
         ]
@@ -260,7 +268,8 @@ fn a_conflict_lists_its_managers_and_force_applies_over_them(cx: &mut TestAppCon
             _ => None,
         })
         .collect();
-    assert_eq!(forces, [false, true, true, true]);
+    // The forced preview, the guard's dry run, the handler's, the apply.
+    assert_eq!(forces, [false, true, true, true, true]);
     assert_eq!(f.notice(&editor), "Applied ConfigMap shop/web");
 }
 
@@ -328,9 +337,12 @@ fn a_server_without_apply_is_previewed_as_a_replace(cx: &mut TestAppContext) {
         description.contains("replaced at resourceVersion 41"),
         "{description}"
     );
-    f.resources.script().patch.push_err(OxiError::unsupported(
-        "the body of the request was in an unknown format",
-    ));
+    // 415 again for the guard's dry run (E19-S07) and for the handler's.
+    for _ in 0..2 {
+        f.resources.script().patch.push_err(OxiError::unsupported(
+            "the body of the request was in an unknown format",
+        ));
+    }
     f.confirm(&dialog);
     let replaced = f.resources.mutating_calls();
     let ResourceCall::Replace {
@@ -342,4 +354,60 @@ fn a_server_without_apply_is_previewed_as_a_replace(cx: &mut TestAppContext) {
     assert!(!options.dry_run);
     assert_eq!(object["metadata"]["resourceVersion"], "41");
     assert!(f.notice(&editor).starts_with("Replaced ConfigMap shop/web"));
+}
+
+#[gpui::test]
+fn an_api_without_dry_run_shows_a_banner_and_still_applies(cx: &mut TestAppContext) {
+    let mut f = setup(cx, false);
+    f.resources.insert(
+        oxikube_domain::Resource::from_json(serde_json::json!({
+            "apiVersion": "v1", "kind": "ConfigMap",
+            "metadata": {"name": "web", "namespace": "shop", "resourceVersion": "41"},
+            "data": {"mode": "green"}
+        }))
+        .unwrap(),
+    );
+    let editor = f.editor_with(CONFIGMAP);
+    // An aggregated API that serves writes but no dry run (E19-S07): every dry run is refused.
+    let no_dry_run =
+        || OxiError::unsupported("the server does not allow this method on the requested resource");
+    f.resources.script().patch.push_err(no_dry_run());
+    f.resources.script().replace.push_err(no_dry_run());
+    f.press_apply();
+    let dialog = f
+        .modal::<ApplyPreviewDialog>()
+        .expect("the preview opens anyway");
+    let (banner, description) = f.vcx.read(|cx| {
+        let dialog = dialog.read(cx);
+        (dialog.no_preview_banner(), dialog.description())
+    });
+    let banner = banner.expect("a banner in place of the diff");
+    assert!(
+        banner.contains("does not support dry run") && banner.contains("does not allow"),
+        "{banner}"
+    );
+    assert!(
+        description.starts_with("The server cannot dry-run"),
+        "{description}"
+    );
+    f.vcx.update(|window, cx| window.draw(cx).clear(cx));
+    assert!(
+        f.vcx.debug_bounds("apply-preview-no-preview").is_some(),
+        "the banner is drawn"
+    );
+    assert!(
+        f.resources
+            .mutating_calls()
+            .iter()
+            .all(ResourceCall::is_dry_run)
+    );
+
+    // The guard's dry run and the handler's are refused the same way; the apply is sent.
+    for _ in 0..2 {
+        f.resources.script().patch.push_err(no_dry_run());
+        f.resources.script().replace.push_err(no_dry_run());
+    }
+    f.confirm(&dialog);
+    assert_eq!(f.writes().last(), Some(&("patch", false)));
+    assert_eq!(f.notice(&editor), "Applied ConfigMap shop/web");
 }

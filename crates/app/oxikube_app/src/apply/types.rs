@@ -137,7 +137,9 @@ impl ApplyMethod {
 
 /// The server's dry run of an apply: what to show before anything is written.
 ///
-/// Secret values are already masked in [`live`](Self::live) and [`result`](Self::result).
+/// Secret values are already masked in [`live`](Self::live) and [`result`](Self::result). When
+/// the server cannot dry-run the object ([`no_preview`](Self::no_preview), E19-S07) there is
+/// nothing to compare: the preview says so and the apply may still be sent.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ApplyPreview {
     /// The request it previews; [`ApplyService::apply`](super::ApplyService::apply) sends it.
@@ -152,6 +154,10 @@ pub struct ApplyPreview {
     pub result: Value,
     /// The live object's `metadata.resourceVersion`; the replace fallback carries it.
     pub resource_version: Option<String>,
+    /// Why the server could not dry-run the apply (an aggregated API without dry run, an
+    /// admission webhook with side effects), in its words; `None` when it could. With a reason,
+    /// [`live`](Self::live) is `None` and [`result`](Self::result) is `null`.
+    pub no_preview: Option<String>,
 }
 
 impl ApplyPreview {
@@ -160,13 +166,17 @@ impl ApplyPreview {
         object_label(&self.target)
     }
 
-    /// Whether the apply creates the object.
+    /// Whether the apply creates the object (never said without a dry run).
     pub fn creates(&self) -> bool {
-        self.live.is_none()
+        self.live.is_none() && self.no_preview.is_none()
     }
 
-    /// What the apply does to the object: create it, change it, or leave it as it is.
+    /// What the apply does to the object: create it, change it, or leave it as it is. Without a
+    /// dry run ([`no_preview`](Self::no_preview)) nothing is known, so it counts as a change.
     pub fn change(&self) -> Change {
+        if self.no_preview.is_some() {
+            return Change::Update;
+        }
         Change::between(self.live.as_ref(), &self.result)
     }
 }

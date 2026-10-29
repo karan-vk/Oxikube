@@ -52,9 +52,10 @@ pub struct ConfirmationRequest {
     /// [`ConfirmationProvider`](super::ConfirmationProvider) (an agent's permission prompt, the
     /// UI's dialog) and lets the dialog say who is asking.
     pub initiator: Initiator,
-    /// The server-side dry run the guard ran before asking, for a command whose risk
-    /// [requires one](Risk::requires_dry_run_diff) (an `Irreversible` delete); `None` for any
-    /// other command.
+    /// The server-side dry run the guard ran before asking: for a create, update, patch or apply
+    /// ([`preview_verb`](super::preview_verb)) the objects it would write next to the live ones,
+    /// and for a command whose risk [requires one](Risk::requires_dry_run_diff) (an
+    /// `Irreversible` delete) what the server said; `None` for any other command.
     pub preview: Option<DryRunPreview>,
 }
 

@@ -57,9 +57,11 @@ fn set_image_sends_a_strategic_patch_with_only_the_named_container() {
     let body = json!({"spec": {"template": {"spec": {
         "containers": [{"name": "web", "image": "nginx:1.27"}]
     }}}});
+    // The guard's dry run before it asked (E19-S07), the handler's, the patch.
     assert_eq!(
         patches(&h),
         [
+            (true, PatchKind::Strategic, body.clone()),
             (true, PatchKind::Strategic, body.clone()),
             (false, PatchKind::Strategic, body)
         ]
@@ -127,11 +129,11 @@ fn several_containers_change_in_one_patch() {
     .unwrap();
     assert_eq!(
         patches(&h).len(),
-        2,
-        "one rehearsal and one patch, not one per container"
+        3,
+        "the guard's dry run, one rehearsal and one patch, not one per container"
     );
     assert_eq!(
-        patches(&h)[1].2,
+        patches(&h)[2].2,
         json!({"spec": {"template": {"spec": {
             "initContainers": [{"name": "migrate", "image": "app:2"}],
             "containers": [
@@ -234,8 +236,21 @@ fn set_image_is_low_risk_with_one_simple_confirmation_that_names_the_images() {
             "{}",
             request.summary
         );
+        let Some(crate::guard::DryRunPreview::Rehearsed(preview)) = &request.preview else {
+            panic!("a patch is previewed: {request:?}");
+        };
+        assert_eq!(
+            preview.changes[0].result["spec"]["template"]["spec"]["containers"][0]["image"],
+            "nginx:1.27"
+        );
+        assert_eq!(
+            preview.changes[0].live.as_deref().unwrap()["spec"]["template"]["spec"]["containers"]
+                [0]["image"],
+            "nginx:1.26"
+        );
     }
-    assert!(h.writes("a").is_empty());
+    // Only the guard's dry runs before the answer.
+    assert!(h.writes("a").iter().all(ResourceCall::is_dry_run));
 }
 
 #[test]
@@ -386,9 +401,10 @@ fn the_runner_answers_the_simple_confirmation_and_reports() {
             .starts_with("Set the image of Deployment shop/web")
     );
     let audit = h.audit();
-    assert_eq!(audit.len(), 1);
-    assert_eq!(audit[0].initiator, Initiator::Ui);
-    assert_eq!(&*audit[0].who, "alice");
+    assert_eq!(audit.len(), 2, "the guard's dry run, then the patch");
+    assert!(audit[0].dry_run && !audit[1].dry_run);
+    assert_eq!(audit[1].initiator, Initiator::Ui);
+    assert_eq!(&*audit[1].who, "alice");
 
     // A read-only cluster refuses the runner too.
     let ro = Harness::with_workloads();

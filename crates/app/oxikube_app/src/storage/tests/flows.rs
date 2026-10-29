@@ -104,7 +104,8 @@ fn running_a_resize_sends_the_command_as_the_user_and_reports_the_conditions() {
             .requests("20Gi")
             .condition("FileSystemResizePending", "True", "Waiting for the kubelet")
             .build(),
-        2,
+        // The guard's dry run before it asks (E19-S07), the handler's, the patch.
+        3,
     );
     let flow = resize_flow(&h);
     let context = flow
@@ -126,7 +127,9 @@ fn running_a_resize_sends_the_command_as_the_user_and_reports_the_conditions() {
         Some("Waiting for the kubelet")
     );
     let records = h.audit();
-    assert_eq!(records.len(), 1);
+    assert_eq!(records.len(), 2, "the guard's dry run, then the resize");
+    assert!(records[0].dry_run);
+    let records = &records[1..];
     assert_eq!(records[0].initiator, oxikube_domain::audit::Initiator::Ui);
     assert_eq!(records[0].outcome, AuditOutcome::Succeeded);
     assert_eq!(records[0].detail.as_deref(), Some("from=10Gi to=20Gi"));

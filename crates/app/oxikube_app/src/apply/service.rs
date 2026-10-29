@@ -15,7 +15,7 @@ use super::types::{
     ApplyError, ApplyMethod, ApplyPreview, ApplyReport, ApplyRequest, FieldConflict,
 };
 use crate::command_bus::{CommandOutput, DispatchContext, DispatchError, Outcome};
-use crate::guard::Confirmation;
+use crate::guard::{Confirmation, no_preview_reason};
 use crate::{ClusterSessionManager, CommandBus};
 
 /// The one apply pipeline (plan review #397: E20 extends it for many objects). See the
@@ -52,6 +52,9 @@ impl ApplyService {
     /// for the preview. Nothing is written. Answers the guard's confirmation of the dry run
     /// itself: the user asked for this rehearsal, and it changes nothing.
     ///
+    /// A server that cannot dry-run the object (E19-S07) gives a preview with
+    /// [`ApplyPreview::no_preview`] set and nothing to compare: the apply may still be sent.
+    ///
     /// # Errors
     ///
     /// [`ApplyError::ReadOnly`] on a read-only cluster (audited as denied, nothing sent),
@@ -60,7 +63,14 @@ impl ApplyService {
     /// [`ApplyError::Failed`].
     pub async fn preview(&self, request: ApplyRequest) -> Result<ApplyPreview, ApplyError> {
         let command = request.command(None);
-        let output = self.dispatch(&request, command, true).await?;
+        let output = match self.send(&request, command, true).await {
+            Ok(Some(output)) => output,
+            Ok(None) => return Err(ApplyError::Unconfirmed),
+            Err(DispatchError::Handler(error)) if no_preview_reason(&error).is_some() => {
+                return self.unpreviewed(request, error.message().to_owned()).await;
+            }
+            Err(error) => return Err(self.classify(&request, error).await),
+        };
         let mut data = output.data.unwrap_or(Value::Null);
         let target = target_of(&data)?;
         Ok(ApplyPreview {
@@ -73,6 +83,34 @@ impl ApplyService {
                 .map(str::to_owned),
             target,
             request,
+            no_preview: None,
+        })
+    }
+
+    /// The preview of `request` when the server cannot dry-run it: the object it names, and why.
+    async fn unpreviewed(
+        &self,
+        request: ApplyRequest,
+        reason: String,
+    ) -> Result<ApplyPreview, ApplyError> {
+        let manifest = Manifest::parse(&request.manifest)
+            .map_err(|error| ApplyError::Failed(error.to_string()))?;
+        let namespace = match self.sessions.get(&request.cluster) {
+            Some(session) => {
+                manifest
+                    .resolve_namespace(&session, request.namespace.as_deref())
+                    .await
+            }
+            None => request.namespace.clone(),
+        };
+        Ok(ApplyPreview {
+            target: manifest.target(request.cluster.clone(), namespace.as_deref()),
+            method: ApplyMethod::ServerSide,
+            live: None,
+            result: Value::Null,
+            resource_version: None,
+            request,
+            no_preview: Some(reason),
         })
     }
 
@@ -91,7 +129,11 @@ impl ApplyService {
         // A preview that showed a create is applied as one: an object made since is not
         // replaced unseen.
         let command = request.reviewed_command(preview.resource_version.clone(), preview.creates());
-        let output = self.dispatch(request, command, false).await?;
+        let output = match self.send(request, command, false).await {
+            Ok(Some(output)) => output,
+            Ok(None) => return Err(ApplyError::Unconfirmed),
+            Err(error) => return Err(self.classify(request, error).await),
+        };
         let mut data = output.data.unwrap_or(Value::Null);
         Ok(ApplyReport {
             target: target_of(&data).unwrap_or_else(|_| preview.target.clone()),
@@ -101,12 +143,14 @@ impl ApplyService {
         })
     }
 
-    async fn dispatch(
+    /// Dispatches `command` for `request`, answering the guard's simple confirmation. `Ok(None)`
+    /// when the guard asked for more than that (nothing was sent).
+    async fn send(
         &self,
         request: &ApplyRequest,
         command: Command,
         dry_run: bool,
-    ) -> Result<CommandOutput, ApplyError> {
+    ) -> Result<Option<CommandOutput>, DispatchError> {
         let context = || {
             DispatchContext::new(Initiator::Ui, self.who.clone())
                 .with_cluster(request.cluster.clone())
@@ -116,7 +160,7 @@ impl ApplyService {
             Ok(Outcome::NeedsConfirmation(asked)) => {
                 if asked.tier > ConfirmTier::Simple {
                     let _ = self.bus.decline(asked.token).await;
-                    return Err(ApplyError::Unconfirmed);
+                    return Ok(None);
                 }
                 let answer = Confirmation::simple(asked.token);
                 self.bus
@@ -125,11 +169,7 @@ impl ApplyService {
             }
             other => other,
         };
-        match outcome {
-            Ok(Outcome::Completed(output)) => Ok(output),
-            Ok(Outcome::NeedsConfirmation(_)) => Err(ApplyError::Unconfirmed),
-            Err(error) => Err(self.classify(request, error).await),
-        }
+        outcome.map(Outcome::completed)
     }
 
     /// The [`ApplyError`] for a failed dispatch; a field conflict is given the time each manager

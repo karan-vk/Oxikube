@@ -1,5 +1,6 @@
 //! Turning the guard's [`ConfirmationRequest`] into a [`ConfirmPrompt`]: the words, the cluster,
-//! the dry-run banner and the objects of a bulk request.
+//! the dry-run banner, the objects the dry run would write and the server's warnings (E19-S07),
+//! and the objects of a bulk request.
 
 use oxikube_app::{ClusterSession, ConfirmationRequest, DryRunPreview, object_label};
 use oxikube_domain::command::{Command, delete_risk};
@@ -63,6 +64,11 @@ pub(crate) fn prompt_for(
         .with_risk(request.risk)
         .with_preview(request.preview.as_ref().map(preview_note))
         .with_items(items_of(command, request.risk));
+    if let Some(DryRunPreview::Rehearsed(result)) = &request.preview {
+        prompt = prompt
+            .with_changes(result.changes.clone(), result.omitted)
+            .with_warnings(result.warnings.iter().map(|w| w.clone().into()).collect());
+    }
     if request.tier == ConfirmTier::TypeName
         && let Some(expected) = &request.expected_name
     {
@@ -73,8 +79,8 @@ pub(crate) fn prompt_for(
 
 fn preview_note(preview: &DryRunPreview) -> PreviewNote {
     match preview {
-        DryRunPreview::Rehearsed(output) => {
-            PreviewNote::Rehearsed(output.message.clone().unwrap_or_default().into())
+        DryRunPreview::Rehearsed(result) => {
+            PreviewNote::Rehearsed(result.message.clone().unwrap_or_default().into())
         }
         DryRunPreview::NoPreviewAvailable { reason } => {
             PreviewNote::Unavailable(reason.clone().into())

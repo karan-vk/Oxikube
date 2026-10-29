@@ -23,10 +23,16 @@ fn the_dry_run_comes_before_the_apply_and_previews_both_sides() {
     let report = t.apply(&preview).expect("apply");
     assert_eq!(report.method, ApplyMethod::ServerSide);
     assert_eq!(report.message, "Applied ConfigMap default/web");
-    // The preview's dry run, the handler's own rehearsal, then the apply.
+    // The preview's dry run, the guard's dry run before it asks (E19-S07), the handler's own
+    // rehearsal, then the apply.
     assert_eq!(
         t.writes(),
-        [("patch", true), ("patch", true), ("patch", false)]
+        [
+            ("patch", true),
+            ("patch", true),
+            ("patch", true),
+            ("patch", false)
+        ]
     );
     let writes = t.h.writes("a");
     let ResourceCall::Patch {
@@ -34,7 +40,7 @@ fn the_dry_run_comes_before_the_apply_and_previews_both_sides() {
         options,
         namespace,
         ..
-    } = &writes[2]
+    } = &writes[3]
     else {
         panic!("a patch")
     };
@@ -136,7 +142,12 @@ fn a_conflict_lists_the_managers_and_force_applies_over_them() {
                 _ => None,
             })
             .collect();
-    assert_eq!(forced, [false, true, true, true], "force only once chosen");
+    // The forced preview, the guard's dry run, the handler's rehearsal, the apply.
+    assert_eq!(
+        forced,
+        [false, true, true, true, true],
+        "force only once chosen"
+    );
 }
 
 fn unsupported() -> OxiError {
@@ -153,8 +164,10 @@ fn a_server_without_apply_gets_a_replace_at_the_reviewed_version() {
     assert_eq!(preview.resource_version.as_deref(), Some("7"));
     assert_eq!(t.writes(), [("patch", true), ("replace", true)]);
 
-    // Someone changes the object after the review: the reviewed version still goes out.
+    // Someone changes the object after the review: the reviewed version still goes out. The
+    // server answers 415 to the guard's dry run and to the handler's.
     t.port().insert(live_configmap("8"));
+    t.port().script().patch.push_err(unsupported());
     t.port().script().patch.push_err(unsupported());
     let report = t.apply(&preview).expect("apply");
     assert_eq!(report.method, ApplyMethod::Replace);
@@ -163,9 +176,15 @@ fn a_server_without_apply_gets_a_replace_at_the_reviewed_version() {
     let writes = t.h.writes("a");
     assert_eq!(
         t.writes()[2..],
-        [("patch", true), ("replace", true), ("replace", false)]
+        [
+            ("patch", true),
+            ("replace", true),
+            ("patch", true),
+            ("replace", true),
+            ("replace", false)
+        ]
     );
-    for replace in &writes[3..] {
+    for replace in [&writes[5], &writes[6]] {
         assert_eq!(body(replace)["metadata"]["resourceVersion"], "7");
     }
 }
@@ -176,6 +195,7 @@ fn a_stale_replace_says_the_object_changed() {
     t.port().insert(live_configmap("7"));
     t.port().script().patch.push_err(unsupported());
     let preview = t.preview(t.request(CONFIGMAP)).expect("preview");
+    // The object changed since the review: the guard's dry run of the replace already says so.
     t.port().script().patch.push_err(unsupported());
     t.port().script().replace.push_err(
         OxiError::conflict("the object has been modified").with_source(ConflictDetails {
@@ -199,11 +219,12 @@ fn a_server_without_apply_creates_a_new_object() {
     assert_eq!(preview.method, ApplyMethod::Create);
     assert!(preview.creates());
     t.port().script().patch.push_err(unsupported());
+    t.port().script().patch.push_err(unsupported());
     let report = t.apply(&preview).expect("apply");
     assert_eq!(report.method, ApplyMethod::Create);
     assert_eq!(t.port().objects().len(), 1);
     assert!(
-        body(&t.h.writes("a")[3])["metadata"]
+        body(&t.h.writes("a")[5])["metadata"]
             .get("resourceVersion")
             .is_none()
     );
@@ -218,6 +239,7 @@ fn a_create_reviewed_is_not_turned_into_a_replace_of_an_object_made_since() {
     // Someone else creates the object before the user confirms.
     t.port().insert(live_configmap("9"));
     t.port().script().patch.push_err(unsupported());
+    t.port().script().patch.push_err(unsupported());
     t.port().script().create.push_err(
         OxiError::conflict("configmaps \"web\" already exists").with_source(ConflictDetails {
             reason: ConflictReason::AlreadyExists,
@@ -226,9 +248,16 @@ fn a_create_reviewed_is_not_turned_into_a_replace_of_an_object_made_since() {
     );
     let error = t.apply(&preview).unwrap_err();
     assert!(matches!(error, ApplyError::Stale(_)), "{error:?}");
+    // The guard's dry run sees the object that exists now; the handler holds to the create the
+    // user reviewed.
     assert_eq!(
         t.writes()[2..],
-        [("patch", true), ("create", true)],
+        [
+            ("patch", true),
+            ("replace", true),
+            ("patch", true),
+            ("create", true)
+        ],
         "no replace, nothing written"
     );
     assert_eq!(t.port().objects()[0].get_str("/data/mode"), Some("green"));
@@ -356,4 +385,65 @@ fn the_body_drops_what_a_server_side_apply_refuses() {
     let metadata = &body(&writes[0])["metadata"];
     assert!(metadata.get("resourceVersion").is_none());
     assert!(metadata.get("managedFields").is_none());
+}
+
+/// An aggregated API that serves writes but no dry run (E19-S07): 405 for every dry run.
+fn no_dry_run() -> OxiError {
+    OxiError::unsupported("the server does not allow this method on the requested resource")
+}
+
+#[test]
+fn an_api_without_dry_run_is_previewed_as_no_preview_and_still_applied() {
+    let t = Applying::new(false);
+    t.port().insert(live_configmap("7"));
+    // The preview: SSA and the replace fallback both refuse a dry run.
+    t.port().script().patch.push_err(no_dry_run());
+    t.port().script().replace.push_err(no_dry_run());
+    let preview = t
+        .preview(t.request(CONFIGMAP))
+        .expect("a preview without a diff");
+    assert_eq!(
+        preview.no_preview.as_deref(),
+        Some("the server does not allow this method on the requested resource")
+    );
+    assert_eq!(preview.label(), "ConfigMap default/web");
+    assert!(preview.live.is_none() && preview.result.is_null());
+    assert!(!preview.creates(), "nothing is known about the object");
+    assert!(t.port().objects()[0].get_str("/data/mode") == Some("green"));
+
+    // The apply: the guard's dry run and the handler's both fail the same way, and it is sent.
+    for _ in 0..2 {
+        t.port().script().patch.push_err(no_dry_run());
+        t.port().script().replace.push_err(no_dry_run());
+    }
+    let report = t
+        .apply(&preview)
+        .expect("a missing preview never blocks the apply");
+    assert_eq!(report.method, ApplyMethod::ServerSide);
+    assert_eq!(t.writes().last(), Some(&("patch", false)));
+    assert_eq!(t.port().objects()[0].get_str("/data/mode"), Some("blue"));
+}
+
+#[test]
+fn a_webhook_that_refuses_dry_runs_is_no_preview_not_an_invalid_manifest() {
+    let t = Applying::new(false);
+    let refusal =
+        || OxiError::validation("admission webhook \"audit.example.com\" does not support dry run");
+    t.port().script().patch.push_err(refusal());
+    let preview = t
+        .preview(t.request(CONFIGMAP))
+        .expect("a preview without a diff");
+    assert!(
+        preview
+            .no_preview
+            .as_deref()
+            .is_some_and(|reason| reason.contains("does not support dry run")),
+        "{preview:?}"
+    );
+    // The guard's dry run and the handler's are refused; the apply itself goes through.
+    t.port().script().patch.push_err(refusal());
+    t.port().script().patch.push_err(refusal());
+    let report = t.apply(&preview).expect("applied");
+    assert_eq!(report.method, ApplyMethod::ServerSide);
+    assert_eq!(t.port().objects().len(), 1);
 }

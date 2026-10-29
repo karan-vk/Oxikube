@@ -403,6 +403,14 @@ crate's `README.md` for its allowed dependencies. Highlights:
   confirmation is asked and attaches the `DryRunPreview` (`Rehearsed`, or `NoPreviewAvailable` for a
   server that cannot dry-run it, which never blocks) to the `ConfirmationRequest`; a refused dry run
   refuses the command, and a token issued without one cannot approve it (`DispatchError::DryRunRequired`).
+  E19-S07 extends the rehearsal to every create, update, patch and apply (`guard::preview`: `preview_verb`
+  names them; Helm, credentials, sessions and bulk labels are not previewed): the rehearsal writer keeps what
+  the server answered each write with, each object is read live and both sides are masked (`apply::SecretMask`),
+  so the `DryRunPreview::Rehearsed(DryRunResult)` carries `PreviewChange`s (live, result, `Change`), at most
+  `MAX_PREVIEW_OBJECTS`, and the server's `Warning:` headers seen meanwhile (`WarningPort`). An error that says
+  the server cannot dry-run (`Unsupported`: 405/406/415/501, or a message saying dry run is not supported: an
+  aggregated API, an admission webhook with side effects; `guard::no_preview_reason`) is `NoPreviewAvailable`.
+  A conflict on the commit (`DispatchError::offers_new_preview`) is offered a new preview.
   `guard::provider` adds `CommandBus::execute(command, ctx, &dyn ConfirmationProvider)`, the round trip
   as one call for agents (E26/E27), with `ConfirmationRouter` picking the provider by `Initiator`;
   a declined or dropped wait is audited as `Cancelled` / `AuditDenial::UserCancelled`. Every refusal
@@ -1433,6 +1441,10 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `ConfirmDialog` is deferred to follow-up #797). Every way out answers the request: Confirm and Cancel directly,
   Esc and a scrim click through `on_before_dismiss`, a replacing modal or a closing window through entity release (decline).
   The runner opens it for every `NeedsConfirmation`; the older `DialogModal` stays for non-guard prompts.
+  E19-S07: the dialog also draws each object of the guard's dry run (`ConfirmPrompt::with_changes`, the server's warnings with
+  `with_warnings`) with the view a `PreviewDiffBuilder` makes: `oxikube_editor::init` installs `view::DryRunDiff`, the E10
+  diff (`ManifestDiff::of_manifests`) computed on the background executor and drawn as a `uniform_list`. A conflict on the
+  commit shows a toast with "Preview again", which dispatches the command anew (a new dry run, a new question).
 - `oxikube_workspace::cluster::runner` and `modal::DialogModal` (E12-S03) — the runner answers a `TypeName` confirmation
   with a dialog that asks for the guard's `expected_name` (`DialogModal::require_typed`: the confirm button is disabled and
   Enter does nothing until the field holds exactly that text; the answer is `Confirmation::typed`). Pod commands have

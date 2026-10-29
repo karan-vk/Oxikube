@@ -6,10 +6,11 @@
 //! refuses with `Forbidden` when read-only mode went on in the meantime. The read is one short
 //! in-memory lock, so the gate costs nothing next to the request it guards.
 //!
-//! The writer the guard hands a handler for its **rehearsal** (the mandatory dry run before an
-//! `Irreversible` command is confirmed, see `rehearsal`) is the same gate in rehearsal mode: it
-//! also forces `dry_run` on every request, so a rehearsal cannot change the cluster even if a
-//! handler forgot to pass [`Mutation::write_options`](super::Mutation::write_options).
+//! The writer the guard hands a handler for its **rehearsal** (the dry run before a command is
+//! confirmed, see `rehearsal`) is the same gate in rehearsal mode: it also forces `dry_run` on
+//! every request, so a rehearsal cannot change the cluster even if a handler forgot to pass
+//! [`Mutation::write_options`](super::Mutation::write_options), and it keeps the object the server
+//! answered each create, replace and patch with, for the preview's diff (`preview::WriteLog`).
 
 use std::borrow::Cow;
 use std::sync::Arc;
@@ -23,6 +24,7 @@ use oxikube_ports::{
 };
 use serde_json::Value;
 
+use super::preview::WriteLog;
 use crate::session::ClusterSessionManager;
 
 /// A [`ResourceWriter`] that refuses every call while its cluster is read-only.
@@ -31,8 +33,9 @@ pub(super) struct ReadOnlyGate {
     cluster: ClusterId,
     context: ContextName,
     inner: Arc<dyn ResourceWriter>,
-    /// Every request is sent as a server-side dry run, whatever its options say.
-    rehearsal: bool,
+    /// In rehearsal mode, where the server's answers go: every request is then sent as a
+    /// server-side dry run, whatever its options say.
+    rehearsal: Option<Arc<WriteLog>>,
 }
 
 impl ReadOnlyGate {
@@ -47,26 +50,36 @@ impl ReadOnlyGate {
             cluster,
             context,
             inner,
-            rehearsal: false,
+            rehearsal: None,
         }
     }
 
-    /// The gate in rehearsal mode: it also sends every request as a server-side dry run.
+    /// The gate in rehearsal mode: it also sends every request as a server-side dry run, and
+    /// records what the server answered each object write with in `log`.
     pub(super) fn rehearsal(
         sessions: ClusterSessionManager,
         cluster: ClusterId,
         context: ContextName,
         inner: Arc<dyn ResourceWriter>,
+        log: Arc<WriteLog>,
     ) -> Self {
         Self {
-            rehearsal: true,
+            rehearsal: Some(log),
             ..Self::new(sessions, cluster, context, inner)
         }
     }
 
+    /// In rehearsal mode, records the server's answer `object` to a write of `kind`.
+    fn keep(&self, kind: &Gvk, created: bool, object: OxiResult<Resource>) -> OxiResult<Resource> {
+        if let (Some(log), Ok(object)) = (&self.rehearsal, &object) {
+            log.record(&self.cluster, kind, created, object);
+        }
+        object
+    }
+
     /// `options`, as a dry run in rehearsal mode.
     fn write_options<'a>(&self, options: &'a WriteOptions) -> Cow<'a, WriteOptions> {
-        if self.rehearsal && !options.dry_run {
+        if self.rehearsal.is_some() && !options.dry_run {
             Cow::Owned(WriteOptions {
                 dry_run: true,
                 ..options.clone()
@@ -78,7 +91,7 @@ impl ReadOnlyGate {
 
     /// `options`, as a dry run in rehearsal mode.
     fn delete_options<'a>(&self, options: &'a DeleteOptions) -> Cow<'a, DeleteOptions> {
-        if self.rehearsal && !options.dry_run {
+        if self.rehearsal.is_some() && !options.dry_run {
             Cow::Owned(DeleteOptions {
                 dry_run: true,
                 ..options.clone()
@@ -110,9 +123,11 @@ impl ResourceWriter for ReadOnlyGate {
         options: &WriteOptions,
     ) -> OxiResult<Resource> {
         self.check()?;
-        self.inner
+        let answer = self
+            .inner
             .create(kind, namespace, object, &self.write_options(options))
-            .await
+            .await;
+        self.keep(kind, true, answer)
     }
 
     async fn replace(
@@ -124,9 +139,11 @@ impl ResourceWriter for ReadOnlyGate {
         options: &WriteOptions,
     ) -> OxiResult<Resource> {
         self.check()?;
-        self.inner
+        let answer = self
+            .inner
             .replace(kind, namespace, name, object, &self.write_options(options))
-            .await
+            .await;
+        self.keep(kind, false, answer)
     }
 
     async fn patch(
@@ -138,9 +155,11 @@ impl ResourceWriter for ReadOnlyGate {
         options: &WriteOptions,
     ) -> OxiResult<Resource> {
         self.check()?;
-        self.inner
+        let answer = self
+            .inner
             .patch(kind, namespace, name, patch, &self.write_options(options))
-            .await
+            .await;
+        self.keep(kind, false, answer)
     }
 
     async fn delete(

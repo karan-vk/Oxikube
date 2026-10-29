@@ -54,6 +54,7 @@ pub use batch::{
 pub use change::{Change, SERVER_OWNED_FIELDS};
 pub use handler::{DEFAULT_FIELD_MANAGER, register_commands};
 pub use load::{LoadLimits, LoadNote, LoadedManifests, load_path, load_text};
+pub(crate) use mask::SecretMask;
 pub use plan::{
     ApplyOptions, ClusterPlan, MAX_PLAN_OBJECTS, ObjectResult, ObjectStatus, PlanReport,
     PlanStream, PlanTarget,

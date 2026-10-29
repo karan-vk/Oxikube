@@ -96,11 +96,10 @@ impl Rig {
 
     /// Dispatches `command`, answering the one confirmation as the UI does.
     async fn run(&self, command: Command, ctx: DispatchContext) -> Result<Outcome, DispatchError> {
-        let Outcome::NeedsConfirmation(asked) = self
-            .bus
-            .dispatch(command.clone(), ctx.clone())
-            .await
-            .expect("asks first")
+        // A request the server refuses to dry-run is refused before anything is asked
+        // (E19-S07).
+        let Outcome::NeedsConfirmation(asked) =
+            self.bus.dispatch(command.clone(), ctx.clone()).await?
         else {
             panic!("a rollout command asks for a confirmation");
         };
@@ -386,7 +385,10 @@ async fn the_strategic_patch_sets_only_the_named_containers_of_all_three_kinds()
     let audit = rig.state.audit_log();
     let details: Vec<_> = audit
         .iter()
-        .filter(|r| &*r.cmd == "workload::SetImage" && r.outcome == AuditOutcome::Succeeded)
+        // The commits' records: the guard's dry runs before it asks (E19-S07) are their own.
+        .filter(|r| {
+            &*r.cmd == "workload::SetImage" && r.outcome == AuditOutcome::Succeeded && !r.dry_run
+        })
         .map(|r| r.detail.clone().unwrap_or_default())
         .collect();
     assert_eq!(details.len(), 3, "{audit:?}");

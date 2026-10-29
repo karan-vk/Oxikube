@@ -118,17 +118,24 @@ fn a_valid_name_and_labels_create_the_namespace_through_the_guard(cx: &mut TestA
     env.f.settle();
 
     let sent = creates(&env.f);
-    assert_eq!(sent.len(), 2, "a rehearsal, then the create: {sent:?}");
-    assert!(sent[0].0 && !sent[1].0);
+    // The guard's dry run before it asks (E19-S07), the handler's rehearsal, the create.
+    assert_eq!(sent.len(), 3, "a rehearsal, then the create: {sent:?}");
+    assert!(sent[0].0 && sent[1].0 && !sent[2].0);
     assert_eq!(
-        sent[1].1,
+        sent[2].1,
         json!({
             "apiVersion": "v1",
             "kind": "Namespace",
             "metadata": { "name": "team-c", "labels": { "env": "dev", "team": "c" } },
         })
     );
-    let audit = env.f.state.audit_log();
+    let audit: Vec<_> = env
+        .f
+        .state
+        .audit_log()
+        .into_iter()
+        .filter(|r| !r.dry_run)
+        .collect();
     assert_eq!(audit.len(), 1);
     assert_eq!(&*audit[0].cmd, "namespace::Create");
     assert_eq!(&*audit[0].target.name, "team-c");

@@ -81,7 +81,8 @@ fn the_dialog_names_the_current_default_and_offers_to_clear_it(cx: &mut TestAppC
 fn confirming_sets_the_annotation_and_clears_the_previous_default(cx: &mut TestAppContext) {
     let mut f = window(cx);
     let resources = f.ports().resources;
-    for _ in 0..4 {
+    // The guard's dry run before it asks (E19-S07), then the handler's rehearsed writes.
+    for _ in 0..6 {
         resources
             .script()
             .patch
@@ -90,7 +91,7 @@ fn confirming_sets_the_annotation_and_clears_the_previous_default(cx: &mut TestA
     let dialog = press_default(&mut f, 0);
     with(&mut f, &dialog, |d, _, cx| d.confirm(cx));
     assert_eq!(
-        patches(&f),
+        patches(&f)[2..],
         [
             ("fast".to_owned(), true, json!({DEFAULT: "true"})),
             ("old".to_owned(), true, json!({DEFAULT: "false"})),
@@ -98,7 +99,12 @@ fn confirming_sets_the_annotation_and_clears_the_previous_default(cx: &mut TestA
             ("old".to_owned(), false, json!({DEFAULT: "false"})),
         ]
     );
-    let audit = f.state.audit_log();
+    let audit: Vec<_> = f
+        .state
+        .audit_log()
+        .into_iter()
+        .filter(|r| !r.dry_run)
+        .collect();
     assert_eq!(audit.len(), 1);
     assert_eq!(&*audit[0].cmd, "storageclass::SetDefault");
     assert_eq!(audit[0].outcome, AuditOutcome::Succeeded);
@@ -112,7 +118,7 @@ fn confirming_sets_the_annotation_and_clears_the_previous_default(cx: &mut TestA
 fn keeping_the_previous_default_leaves_its_annotation_alone(cx: &mut TestAppContext) {
     let mut f = window(cx);
     let resources = f.ports().resources;
-    for _ in 0..2 {
+    for _ in 0..3 {
         resources
             .script()
             .patch
@@ -124,7 +130,8 @@ fn keeping_the_previous_default_leaves_its_annotation_alone(cx: &mut TestAppCont
         d.confirm(cx);
     });
     let names: Vec<String> = patches(&f).into_iter().map(|(n, ..)| n).collect();
-    assert_eq!(names, ["fast", "fast"]);
+    // The guard's dry run, the handler's, the patch.
+    assert_eq!(names, ["fast", "fast", "fast"]);
 }
 
 #[gpui::test]

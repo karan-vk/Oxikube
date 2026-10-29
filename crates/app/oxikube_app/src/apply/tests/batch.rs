@@ -320,10 +320,11 @@ fn every_document_is_audited_on_its_own_without_its_values() {
     let preview = t.preview_batch(&[&a, secret]);
     t.apply_batch(&preview);
     let audit = t.h.audit();
-    // Two dry runs, then two applies (each one recorded once, whatever the handler rehearses).
-    assert_eq!(audit.len(), 4);
+    // Two dry runs, then two applies, each preceded by the guard's own dry run (E19-S07; each
+    // recorded once, whatever the handler rehearses).
+    assert_eq!(audit.len(), 6);
     let targets: Vec<String> = audit.iter().map(|r| r.target.name.to_string()).collect();
-    assert_eq!(targets, ["a", "db", "a", "db"]);
+    assert_eq!(targets, ["a", "db", "a", "a", "db", "db"]);
     let text = format!("{audit:?}");
     assert!(!text.contains("hunter2"), "{text}");
     // The previews hold the Secret masked.
@@ -395,8 +396,9 @@ fn a_long_buffer_is_dry_run_a_few_at_a_time_and_keeps_its_order() {
 fn an_applied_document_reports_the_resource_version_the_server_stored() {
     let t = Applying::new(false);
     let a = configmap("a", None, "x");
-    // The preview's dry run, the handler's rehearsal, then the apply: `a` is stored at version 5.
-    for _ in 0..3 {
+    // The preview's dry run, the guard's dry run, the handler's rehearsal, then the apply: `a` is
+    // stored at version 5.
+    for _ in 0..4 {
         t.port().script().patch.push_ok(live("a", "x"));
     }
     let report = t.apply_batch(&t.preview_batch(&[&a]));

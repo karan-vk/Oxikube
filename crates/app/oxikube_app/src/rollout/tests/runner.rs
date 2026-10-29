@@ -20,9 +20,11 @@ fn the_runner_answers_the_simple_confirmation_and_reports() {
         report.message,
         "Rolled back Deployment shop/web from revision 3 to revision 2"
     );
-    assert_eq!(t.h.audit().len(), 1);
+    // The guard's dry run before it asked, then the rollback.
+    assert_eq!(t.h.audit().len(), 2);
+    assert!(t.h.audit()[0].dry_run && !t.h.audit()[1].dry_run);
     assert_eq!(
-        t.h.audit()[0].initiator,
+        t.h.audit()[1].initiator,
         oxikube_domain::audit::Initiator::Ui
     );
 }

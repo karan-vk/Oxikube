@@ -99,7 +99,12 @@ fn create_is_medium_risk_with_one_simple_confirmation_naming_the_role() {
         "{}",
         asked.summary
     );
-    assert!(h.writes("a").is_empty(), "asking writes nothing");
+    // Asking sends the guard's dry run only (E19-S07).
+    let writes = h.writes("a");
+    assert!(
+        !writes.is_empty() && writes.iter().all(ResourceCall::is_dry_run),
+        "asking writes nothing: {writes:?}"
+    );
 }
 
 #[test]
@@ -110,9 +115,10 @@ fn create_dry_runs_then_creates_and_audits_a_rule_count_only() {
     assert_eq!(data["outcome"], "created");
     let writes = h.writes("a");
     let dry: Vec<bool> = writes.iter().map(ResourceCall::is_dry_run).collect();
+    // The guard's dry run before it asks, the handler's own rehearsal, the create.
     assert_eq!(
         dry,
-        [true, false],
+        [true, true, false],
         "the server rehearses it first: {writes:?}"
     );
     assert!(stored(&h, "Role", "reader").is_some());
@@ -160,9 +166,13 @@ fn edit_replaces_at_the_read_version_and_a_stale_one_is_a_conflict() {
             _ => None,
         })
         .collect();
-    assert_eq!(replaces.len(), 2);
-    assert_eq!(replaces[1].0["metadata"]["resourceVersion"], "7");
-    assert!(!replaces[1].1);
+    assert_eq!(
+        replaces.len(),
+        3,
+        "the guard's dry run, the handler's, the replace"
+    );
+    assert_eq!(replaces[2].0["metadata"]["resourceVersion"], "7");
+    assert!(!replaces[2].1);
 
     // The server answers a stale version with a conflict, which comes back as the error.
     h.resources("a")

@@ -83,7 +83,8 @@ async fn run(
     command: Command,
     ctx: DispatchContext,
 ) -> Result<Outcome, DispatchError> {
-    let Ok(Outcome::NeedsConfirmation(request)) = bus.dispatch(command.clone(), ctx.clone()).await
+    // A request the server refuses to dry-run is refused before anything is asked (E19-S07).
+    let Outcome::NeedsConfirmation(request) = bus.dispatch(command.clone(), ctx.clone()).await?
     else {
         panic!("expected a confirmation request");
     };
@@ -225,7 +226,10 @@ async fn bindings_round_trip_role_ref_recreate_dry_run_and_cluster_bindings() {
     );
     let recreate_records: Vec<_> = state.audit_log()[audited_before..]
         .iter()
-        .filter(|r| &*r.cmd == "binding::Edit" && r.outcome == AuditOutcome::Succeeded)
+        // The commit's record: the guard's dry run before it asks (E19-S07) is its own.
+        .filter(|r| {
+            &*r.cmd == "binding::Edit" && r.outcome == AuditOutcome::Succeeded && !r.dry_run
+        })
         .cloned()
         .collect();
     assert_eq!(recreate_records.len(), 1, "one intent, one record");

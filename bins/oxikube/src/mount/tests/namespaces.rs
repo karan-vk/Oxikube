@@ -234,7 +234,14 @@ fn create_and_delete_are_guarded_commands_on_the_bus(cx: &mut TestAppContext) {
         matches!(outcome, oxikube_app::Outcome::NeedsConfirmation(_)),
         "{outcome:?}"
     );
-    assert!(ports.resources.mutating_calls().is_empty());
+    // Only the guard's dry run before it asks (E19-S07).
+    assert!(
+        ports
+            .resources
+            .mutating_calls()
+            .iter()
+            .all(ResourceCall::is_dry_run)
+    );
 
     // Delete asks for the name.
     let delete = Command::NamespaceDelete {
@@ -254,11 +261,12 @@ fn create_and_delete_are_guarded_commands_on_the_bus(cx: &mut TestAppContext) {
         panic!("a delete is confirmed first");
     };
     assert_eq!(request.expected_name.as_deref(), Some("prod"));
-    // Irreversible: the guard dry-ran it before asking, and that is all that went out.
+    // Irreversible: the guard dry-ran it before asking, and that (with the create's dry run
+    // above, E19-S07) is all that went out.
     assert!(request.preview.is_some(), "{request:?}");
     let calls = ports.resources.mutating_calls();
-    assert_eq!(calls.len(), 1, "{calls:?}");
-    assert!(calls[0].is_dry_run(), "{calls:?}");
+    assert_eq!(calls.len(), 2, "{calls:?}");
+    assert!(calls.iter().all(ResourceCall::is_dry_run), "{calls:?}");
 }
 
 #[gpui::test]

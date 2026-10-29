@@ -48,7 +48,8 @@ fn a_resize_patches_the_requested_storage_after_a_dry_run() {
         .requests("20Gi")
         .condition("FileSystemResizePending", "True", "Waiting for the kubelet")
         .build();
-    script_patches(&h, &grown, 2);
+    // The guard's dry run before it asks (E19-S07), the handler's, the patch.
+    script_patches(&h, &grown, 3);
 
     let outcome = h
         .confirm_and_run(resize("shop", "20Gi", Some("10Gi")), ctx(Initiator::Ui))
@@ -63,14 +64,18 @@ fn a_resize_patches_the_requested_storage_after_a_dry_run() {
     assert_eq!(data["conditions"][0]["type"], "FileSystemResizePending");
 
     let calls = patches(&h);
-    assert_eq!(calls.len(), 2, "a rehearsal, then the patch");
+    assert_eq!(
+        calls.len(),
+        3,
+        "the guard's dry run, a rehearsal, then the patch"
+    );
     let ResourceCall::Patch {
         kind,
         namespace,
         name,
         patch,
         options,
-    } = &calls[1]
+    } = &calls[2]
     else {
         unreachable!()
     };
@@ -83,7 +88,11 @@ fn a_resize_patches_the_requested_storage_after_a_dry_run() {
         json!({"spec": {"resources": {"requests": {"storage": "20Gi"}}}})
     );
     assert!(!options.dry_run);
-    assert!(matches!(&calls[0], ResourceCall::Patch { options, .. } if options.dry_run));
+    assert!(
+        calls[..2]
+            .iter()
+            .all(|call| matches!(call, ResourceCall::Patch { options, .. } if options.dry_run))
+    );
 }
 
 #[test]
@@ -93,13 +102,13 @@ fn the_audit_record_has_the_old_and_the_new_size() {
     script_patches(
         &h,
         &pvc("data").namespace("shop").requests("20Gi").build(),
-        2,
+        3,
     );
     h.confirm_and_run(resize("shop", "20Gi", Some("10Gi")), ctx(Initiator::Ui))
         .unwrap();
     let records = h.audit();
-    assert_eq!(records.len(), 1);
-    let record = &records[0];
+    assert_eq!(records.len(), 2, "the guard's dry run, then the resize");
+    let record = &records[1];
     assert_eq!(&*record.cmd, "pvc::Resize");
     assert_eq!(record.outcome, AuditOutcome::Succeeded);
     assert_eq!(record.target.name.as_ref(), "data");
@@ -115,13 +124,14 @@ fn the_audit_record_has_the_old_size_when_the_caller_does_not_name_it() {
         script_patches(
             &h,
             &pvc("data").namespace("shop").requests("20Gi").build(),
-            2,
+            3,
         );
         h.confirm_and_run(resize("shop", "20Gi", from), ctx(Initiator::Agent))
             .unwrap();
     }
+    // Each resize and the guard's dry run before it say the same.
     let records = h.audit();
-    assert_eq!(records.len(), 2);
+    assert_eq!(records.len(), 4);
     for record in &records {
         assert_eq!(record.detail.as_deref(), Some("from=10Gi to=20Gi"));
     }
@@ -156,7 +166,19 @@ fn the_guard_asks_a_simple_confirmation_naming_the_claim_and_the_sizes() {
         "{}",
         request.summary
     );
-    assert!(patches(&h).is_empty(), "nothing is sent before the answer");
+    // Only the guard's dry run (E19-S07), whose result the question carries.
+    let sent = patches(&h);
+    assert!(
+        sent.len() == 1 && sent[0].is_dry_run(),
+        "nothing is sent before the answer: {sent:?}"
+    );
+    let Some(crate::guard::DryRunPreview::Rehearsed(preview)) = &request.preview else {
+        panic!("a patch is previewed: {request:?}");
+    };
+    assert_eq!(
+        preview.changes[0].result["spec"]["resources"]["requests"]["storage"],
+        "20Gi"
+    );
 }
 
 #[test]
@@ -224,11 +246,11 @@ fn a_class_that_cannot_be_read_does_not_block_the_server_decides() {
     script_patches(
         &h,
         &pvc("data").namespace("shop").requests("20Gi").build(),
-        2,
+        3,
     );
     h.confirm_and_run(resize("shop", "20Gi", Some("10Gi")), ctx(Initiator::Ui))
         .expect("the server's own check is the gate");
-    assert_eq!(patches(&h).len(), 2);
+    assert_eq!(patches(&h).len(), 3);
 }
 
 #[test]

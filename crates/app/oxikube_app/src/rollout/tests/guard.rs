@@ -20,6 +20,8 @@ fn it_is_a_guarded_medium_risk_command_with_a_tool_stub() {
 #[test]
 fn it_asks_once_at_medium_from_every_door_and_sends_nothing_before_the_answer() {
     let t = Rollouts::new(false);
+    // The guard's dry run before each question (E19-S07).
+    t.answer_dry_runs(Initiator::ALL.len() + 1);
     for initiator in Initiator::ALL {
         let request = t.h.ask(rollback(deployment_ref(), Some(2)), ctx(initiator));
         assert_eq!(request.risk, Some(Risk::Medium), "{initiator}");
@@ -40,8 +42,11 @@ fn it_asks_once_at_medium_from_every_door_and_sends_nothing_before_the_answer() 
         previous.summary
     );
     assert!(
-        t.port().recorded_calls().is_empty(),
-        "not even a read before the answer"
+        t.port()
+            .mutating_calls()
+            .iter()
+            .all(oxikube_testkit::ResourceCall::is_dry_run),
+        "nothing but the guard's dry runs before the answer"
     );
 }
 
@@ -76,8 +81,9 @@ fn the_audit_record_names_the_workload_the_initiator_and_the_revisions_without_s
     t.h.confirm_and_run(rollback(deployment_ref(), Some(1)), ctx(Initiator::Ui))
         .unwrap();
     let audit = t.h.audit();
-    assert_eq!(audit.len(), 1);
-    let record = &audit[0];
+    assert_eq!(audit.len(), 2, "the guard's dry run, then the rollback");
+    assert!(audit[0].dry_run);
+    let record = &audit[1];
     assert_eq!(&*record.cmd, "workload::Rollback");
     assert_eq!(record.target, deployment_ref());
     assert_eq!(record.initiator, Initiator::Ui);
@@ -99,16 +105,26 @@ fn a_refused_rollback_is_audited_as_failed_and_the_default_revision_is_named() {
 #[test]
 fn declining_rolls_nothing_back_and_is_audited_as_cancelled() {
     let t = Rollouts::new(false);
+    t.answer_dry_runs(1);
     let request =
         t.h.ask(rollback(deployment_ref(), Some(2)), ctx(Initiator::Ui));
     futures::executor::block_on(t.h.bus.decline(request.token)).unwrap();
-    assert!(t.port().mutating_calls().is_empty());
-    assert_eq!(t.h.audit()[0].outcome, AuditOutcome::Cancelled);
+    assert!(
+        t.port()
+            .mutating_calls()
+            .iter()
+            .all(oxikube_testkit::ResourceCall::is_dry_run),
+        "only the guard's dry run"
+    );
+    let audit = t.h.audit();
+    assert!(audit[0].dry_run, "the guard's dry run");
+    assert_eq!(audit[1].outcome, AuditOutcome::Cancelled);
 }
 
 #[test]
 fn a_replicasets_confirmation_says_its_deployment_is_what_goes_back() {
     let t = Rollouts::new(false);
+    t.answer_dry_runs(1);
     let request =
         t.h.ask(rollback(replicaset_ref("web-1"), None), ctx(Initiator::Ui));
     assert!(

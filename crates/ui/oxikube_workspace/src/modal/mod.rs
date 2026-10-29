@@ -33,7 +33,10 @@ use gpui::{
 use oxikube_ui::{ActiveTokens as _, dialog::Cancel, layout::h_flex, u};
 
 pub(crate) use confirm::request::prompt_for as confirm_prompt_for;
-pub use confirm::{ConfirmDialog, ConfirmItem, ConfirmPrompt, PreviewNote, typed_matches};
+pub use confirm::{
+    ConfirmDialog, ConfirmItem, ConfirmPrompt, PreviewDiffBuilder, PreviewNote, preview_heading,
+    set_preview_diff_builder, typed_matches,
+};
 pub use dialog::{DIALOG_KEY_CONTEXT, DialogModal};
 pub use view::{ModalPlacement, ModalView, ModalViewHandle};
 

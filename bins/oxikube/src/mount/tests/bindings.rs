@@ -243,7 +243,14 @@ fn saving_a_binding_to_cluster_admin_asks_to_confirm_with_a_warning_then_writes(
         .connector
         .ports_for(&TestPorts::cluster_id())
         .resources;
-    assert!(resources.mutating_calls().is_empty(), "asked, not written");
+    // Asked, with the guard's dry run (E19-S07) the only request sent.
+    assert!(
+        resources
+            .mutating_calls()
+            .iter()
+            .all(oxikube_testkit::ResourceCall::is_dry_run),
+        "asked, not written"
+    );
     let ws = app.tab_workspace();
     let (title, message) = app.vcx.update(|_, cx| {
         let modal = ws

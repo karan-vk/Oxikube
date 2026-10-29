@@ -12,15 +12,17 @@ fn a_trigger_creates_a_job_from_the_template_with_a_generated_name_and_an_owner(
     let t = Workloads::new(false);
     let output = t.run(trigger("nightly"), Initiator::Ui).expect("trigger");
 
-    // The server rehearsed the create, then it was sent.
+    // The guard's dry run before it asked (E19-S07); the server rehearsed the create, then it was
+    // sent.
     assert_eq!(
         t.writes(),
         [
             ("Job".to_owned(), "create", true),
+            ("Job".to_owned(), "create", true),
             ("Job".to_owned(), "create", false)
         ]
     );
-    let job = t.body(1);
+    let job = t.body(2);
     assert_eq!(
         job,
         json!({
@@ -94,6 +96,7 @@ fn the_cronjobs_concurrency_policy_is_not_consulted() {
     assert_eq!(
         t.writes(),
         [
+            ("Job".to_owned(), "create", true),
             ("Job".to_owned(), "create", true),
             ("Job".to_owned(), "create", false)
         ]

@@ -115,7 +115,8 @@ fn rollback_audit(f: &Fixture) -> Vec<(AuditOutcome, String)> {
     f.state
         .audit_log()
         .iter()
-        .filter(|r| &*r.cmd == "workload::Rollback")
+        // The commit's records: the guard's dry run before it asks (E19-S07) is its own.
+        .filter(|r| &*r.cmd == "workload::Rollback" && !r.dry_run)
         .map(|r| (r.outcome, r.detail.as_deref().unwrap_or("").to_owned()))
         .collect()
 }
@@ -136,17 +137,16 @@ fn confirm(f: &mut Fixture, dialog: &Entity<RollbackDialog>) {
     f.settle();
 }
 
+/// Scripts the answers of the guard's dry run before it asks (E19-S07), the handler's dry run and
+/// the real patch.
 fn answer_patches(f: &Fixture) {
-    f.ports()
-        .resources
-        .script()
-        .patch
-        .push_ok(deployment(false));
-    f.ports()
-        .resources
-        .script()
-        .patch
-        .push_ok(deployment(false));
+    for _ in 0..3 {
+        f.ports()
+            .resources
+            .script()
+            .patch
+            .push_ok(deployment(false));
+    }
 }
 
 #[gpui::test]
@@ -299,11 +299,11 @@ fn confirming_rolls_back_through_the_guard_audits_from_and_to_and_closes(cx: &mu
     let writes = f.ports().resources.mutating_calls();
     assert_eq!(
         writes.len(),
-        2,
-        "the server rehearses, then the real patch: {writes:?}"
+        3,
+        "the guard's dry run, the server rehearses, then the real patch: {writes:?}"
     );
     assert!(matches!(
-        &writes[1],
+        &writes[2],
         ResourceCall::Patch { name, patch, options, .. }
             if name == "web" && !options.dry_run
                 && patch.body[0]["value"]["spec"]["containers"][0]["image"] == "web:2"
@@ -361,7 +361,10 @@ fn a_refusal_stays_in_the_dialog_with_the_servers_message(cx: &mut TestAppContex
     assert_eq!(stage, RollbackStage::Choosing, "back to the table");
     assert!(error.expect("a message").contains("quota"));
     assert!(drawn(&mut f, "rollback-error"));
-    assert_eq!(rollback_audit(&f)[0].0, AuditOutcome::Failed);
+    // The webhook refused the guard's dry run (E19-S07): nothing was asked, nothing was sent.
+    let audit = f.state.audit_log();
+    assert!(audit.iter().all(|r| r.dry_run), "{audit:?}");
+    assert_eq!(audit[0].outcome, AuditOutcome::Failed);
 }
 
 #[gpui::test]

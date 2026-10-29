@@ -1,5 +1,5 @@
 //! Drawing the confirmation dialog: title and summary, the context panel (cluster, initiator,
-//! risk), the dry-run banner, the object list and the typed-name field.
+//! risk), the dry-run banner and diffs (`preview`), the object list and the typed-name field.
 
 use gpui::{
     AnyElement, Context, Hsla, InteractiveElement as _, IntoElement, ParentElement as _, Render,
@@ -223,7 +223,7 @@ impl Render for ConfirmDialog {
             .key_context(DIALOG_KEY_CONTEXT)
             .track_focus(&self.focus_handle)
             .tab_group()
-            .w(u(px(460.)))
+            .w(u(px(if self.shows_diffs() { 760. } else { 460. })))
             .gap(u(tokens.spacing.lg))
             .p(u(tokens.spacing.xxl))
             .bg(colors.elevated_surface)
@@ -241,6 +241,7 @@ impl Render for ConfirmDialog {
             )
             .child(self.context_panel(cx))
             .children(self.preview_banner(cx))
+            .children(self.preview_section(cx))
             .children(self.items_list(cx))
             .children(self.typed.as_ref().map(|typed| {
                 v_flex()

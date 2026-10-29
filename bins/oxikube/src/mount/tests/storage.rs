@@ -181,8 +181,15 @@ fn the_storage_section_opens_the_claims_table_and_shift_r_resizes_through_the_gu
             _ => None,
         })
         .collect();
-    assert_eq!(patches, [true, false], "a rehearsal, then the patch");
-    let audit = app.ports.state.audit_log();
+    // The guard's dry run before it asks (E19-S07), the handler's rehearsal, the patch.
+    assert_eq!(patches, [true, true, false], "a rehearsal, then the patch");
+    let audit: Vec<_> = app
+        .ports
+        .state
+        .audit_log()
+        .into_iter()
+        .filter(|r| !r.dry_run)
+        .collect();
     assert_eq!(audit.len(), 1, "{audit:?}");
     assert_eq!(&*audit[0].cmd, "pvc::Resize");
     assert_eq!(audit[0].outcome, AuditOutcome::Succeeded);

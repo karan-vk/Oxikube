@@ -120,6 +120,7 @@ fn ready(
             live,
             result,
             resource_version: Some("7".into()),
+            no_preview: None,
         }),
     }
 }

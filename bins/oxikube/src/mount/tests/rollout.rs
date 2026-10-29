@@ -184,10 +184,11 @@ fn i_opens_the_dialog_and_its_button_sends_a_strategic_patch_through_the_guard(
     app.tick();
     assert!(app.set_image_dialog().is_none(), "the dialog closed");
 
+    // The guard's dry run before it asks (E19-S07), the handler's rehearsal, the patch.
     let writes = app.writes_of_cluster();
-    assert_eq!(writes.len(), 2, "{writes:?}");
-    assert!(writes[0].is_dry_run() && !writes[1].is_dry_run());
-    let ResourceCall::Patch { patch, .. } = &writes[1] else {
+    assert_eq!(writes.len(), 3, "{writes:?}");
+    assert!(writes[0].is_dry_run() && writes[1].is_dry_run() && !writes[2].is_dry_run());
+    let ResourceCall::Patch { patch, .. } = &writes[2] else {
         panic!("a patch: {writes:?}");
     };
     assert_eq!(patch.kind, PatchKind::Strategic);
@@ -197,7 +198,13 @@ fn i_opens_the_dialog_and_its_button_sends_a_strategic_patch_through_the_guard(
             "containers": [{"name": "app", "image": "registry.example/app:1.1"}]
         }}}})
     );
-    let audit = app.ports.state.audit_log();
+    let audit: Vec<_> = app
+        .ports
+        .state
+        .audit_log()
+        .into_iter()
+        .filter(|r| !r.dry_run)
+        .collect();
     assert_eq!(audit.len(), 1, "{audit:?}");
     assert_eq!(&*audit[0].cmd, "workload::SetImage");
     assert_eq!(audit[0].outcome, AuditOutcome::Succeeded);

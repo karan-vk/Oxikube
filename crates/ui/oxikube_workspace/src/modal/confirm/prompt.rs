@@ -6,6 +6,7 @@
 //! or a screenshot without a guard.
 
 use gpui::SharedString;
+use oxikube_app::PreviewChange;
 use oxikube_domain::ClusterColour;
 use oxikube_domain::audit::Initiator;
 use oxikube_domain::safety::Risk;
@@ -50,6 +51,9 @@ pub struct ConfirmPrompt {
     pub(super) initiator: Initiator,
     pub(super) risk: Option<Risk>,
     pub(super) preview: Option<PreviewNote>,
+    pub(super) changes: Vec<PreviewChange>,
+    pub(super) omitted: usize,
+    pub(super) warnings: Vec<SharedString>,
     pub(super) items: Vec<ConfirmItem>,
 }
 
@@ -67,6 +71,9 @@ impl ConfirmPrompt {
             initiator: Initiator::Ui,
             risk: None,
             preview: None,
+            changes: Vec::new(),
+            omitted: 0,
+            warnings: Vec::new(),
             items: Vec::new(),
         }
     }
@@ -122,6 +129,24 @@ impl ConfirmPrompt {
     #[must_use]
     pub fn with_preview(mut self, preview: Option<PreviewNote>) -> Self {
         self.preview = preview;
+        self
+    }
+
+    /// What the guard's dry run says the request would write (E19-S07): each object next to its
+    /// live version (Secret values already fingerprints), drawn as a diff, and how many more
+    /// objects it wrote than `changes` holds.
+    #[must_use]
+    pub fn with_changes(mut self, changes: Vec<PreviewChange>, omitted: usize) -> Self {
+        self.changes = changes;
+        self.omitted = omitted;
+        self
+    }
+
+    /// The API server's warnings about the dry run (deprecations, unknown fields), shown next to
+    /// the diff.
+    #[must_use]
+    pub fn with_warnings(mut self, warnings: Vec<SharedString>) -> Self {
+        self.warnings = warnings;
         self
     }
 

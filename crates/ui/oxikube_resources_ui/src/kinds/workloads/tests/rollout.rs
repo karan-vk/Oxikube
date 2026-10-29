@@ -115,7 +115,8 @@ fn audit(f: &Fixture, cmd: &str) -> Vec<(AuditOutcome, String)> {
     f.state
         .audit_log()
         .iter()
-        .filter(|r| &*r.cmd == cmd)
+        // The commit's records: the guard's dry run before it asks (E19-S07) is its own.
+        .filter(|r| &*r.cmd == cmd && !r.dry_run)
         .map(|r| (r.outcome, r.detail.as_deref().unwrap_or("").to_owned()))
         .collect()
 }
@@ -311,9 +312,11 @@ fn confirming_sends_a_strategic_patch_with_only_the_changed_container_and_audits
     let body = json!({"spec": {"template": {"spec": {
         "containers": [{"name": "web", "image": "shop/web:2.2"}]
     }}}});
+    // The guard's dry run before it asks (E19-S07), the handler's, the patch.
     assert_eq!(
         patches,
         [
+            (true, PatchKind::Strategic, body.clone()),
             (true, PatchKind::Strategic, body.clone()),
             (false, PatchKind::Strategic, body)
         ]
@@ -356,7 +359,10 @@ fn a_refusal_stays_in_the_dialog_with_the_servers_message(cx: &mut TestAppContex
     assert_eq!(stage, SetImageStage::Editing, "back to the form");
     assert!(error.expect("a message").contains("image not allowed"));
     assert!(drawn(&mut f, "setimage-error"));
-    assert_eq!(audit(&f, "workload::SetImage")[0].0, AuditOutcome::Failed);
+    // The webhook refused the guard's dry run (E19-S07): nothing was asked, nothing was sent.
+    let audit = f.state.audit_log();
+    assert!(audit.iter().all(|r| r.dry_run), "{audit:?}");
+    assert_eq!(audit[0].outcome, AuditOutcome::Failed);
 }
 
 #[gpui::test]

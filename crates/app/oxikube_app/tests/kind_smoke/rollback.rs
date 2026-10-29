@@ -172,11 +172,10 @@ impl Rig {
 
     /// Dispatches `command` and answers the guard's confirmation, as the dialog does.
     async fn run(&self, command: Command, ctx: DispatchContext) -> Result<Outcome, DispatchError> {
-        let Outcome::NeedsConfirmation(asked) = self
-            .bus
-            .dispatch(command.clone(), ctx.clone())
-            .await
-            .expect("asks first")
+        // A request the server refuses to dry-run is refused before anything is asked
+        // (E19-S07).
+        let Outcome::NeedsConfirmation(asked) =
+            self.bus.dispatch(command.clone(), ctx.clone()).await?
         else {
             panic!("a rollback asks for a confirmation");
         };
@@ -368,15 +367,16 @@ async fn a_deployment_with_three_revisions_rolls_back_to_the_previous_and_to_a_n
 
     // --- the audit trail ------------------------------------------------------------------------
     let audit = rig.state.audit_log();
+    // The commits' records: the dry-run dispatch and the guard's dry runs before it asks
+    // (E19-S07) are dry-run records.
     let ok: Vec<_> = audit
         .iter()
-        .filter(|r| r.outcome == AuditOutcome::Succeeded)
+        .filter(|r| r.outcome == AuditOutcome::Succeeded && !r.dry_run)
         .map(|r| r.detail.as_deref().unwrap_or(""))
         .collect();
     assert_eq!(
         ok,
         [
-            "to_revision=previous from=3 to=2",
             "to_revision=previous from=3 to=2",
             "to_revision=1 from=4 to=1",
             "to_revision=5 from=5 to=5"
