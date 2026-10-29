@@ -126,7 +126,8 @@ impl CommandBus {
         }
         if !meta.mutating {
             let cluster = policy::cluster_of(&command).cloned().or(ctx.cluster);
-            let cx = HandlerContext::new(ctx.initiator, ctx.who, cluster, None);
+            let cx = HandlerContext::new(ctx.initiator, ctx.who, cluster, None)
+                .with_progress(ctx.progress);
             return entry
                 .handler
                 .handle(command, cx)

@@ -2,58 +2,44 @@
 //! a namespace that does not exist yet, nor a custom resource of a kind no definition has made
 //! yet; a buffer that creates the namespace or the definition first is the usual way to ship
 //! them, so the later document waits for it instead of failing its dry run.
+//!
+//! The rule is the domain's ([`oxikube_domain::apply::depends_on`], the edges of an `ApplyPlan`),
+//! applied here in buffer order.
 
-use oxikube_domain::ids::Gvk;
-use serde_json::Value;
+use oxikube_domain::apply::depends_on;
+use serde_json::{Value, json};
 
 use crate::apply::manifest::Manifest;
 use crate::apply::types::ApplyRequest;
 
 /// For each document, every earlier document it needs (a custom resource in a new namespace needs
-/// both the Namespace and the definition), in buffer order. A document that does not parse needs
-/// nothing (its dry run reports why).
+/// both the Namespace and the definition), in buffer order. A document without a namespace is
+/// compared in its request's default one. A document that does not parse needs nothing (its dry
+/// run reports why).
 pub(super) fn dependencies(
     requests: &[ApplyRequest],
     manifests: &[Option<Manifest>],
 ) -> Vec<Vec<usize>> {
-    (0..manifests.len())
-        .map(|index| {
-            let Some(me) = manifests[index].as_ref() else {
-                return Vec::new();
-            };
-            (0..index)
-                .filter(|&earlier| {
-                    manifests[earlier]
-                        .as_ref()
-                        .is_some_and(|other| needs(me, requests[index].namespace.as_deref(), other))
-                })
-                .collect()
+    let objects: Vec<Value> = manifests
+        .iter()
+        .zip(requests)
+        .map(|(manifest, request)| match manifest {
+            Some(manifest) => in_default_namespace(manifest, request.namespace.as_deref()),
+            None => Value::Null,
         })
-        .collect()
+        .collect();
+    let objects: Vec<&Value> = objects.iter().collect();
+    depends_on(&objects)
 }
 
-/// Whether `me` (applied with `default_namespace` for a missing namespace) needs `other`.
-fn needs(me: &Manifest, default_namespace: Option<&str>, other: &Manifest) -> bool {
-    if is_namespace(&other.gvk) {
-        let namespace = me.namespace.as_deref().or(default_namespace);
-        return namespace == Some(other.name.as_str());
+/// The object, with `metadata.namespace` set to `default` when it names none.
+fn in_default_namespace(manifest: &Manifest, default: Option<&str>) -> Value {
+    let mut object = manifest.object().clone();
+    if manifest.namespace.is_none()
+        && let Some(namespace) = default
+        && let Some(metadata) = object.get_mut("metadata").and_then(Value::as_object_mut)
+    {
+        metadata.insert("namespace".into(), json!(namespace));
     }
-    if is_crd(&other.gvk) {
-        let spec = other.object().get("spec");
-        let defines = |pointer: &str, want: &str| {
-            spec.and_then(|spec| spec.pointer(pointer))
-                .and_then(Value::as_str)
-                == Some(want)
-        };
-        return defines("/group", &me.gvk.group) && defines("/names/kind", &me.gvk.kind);
-    }
-    false
-}
-
-fn is_namespace(gvk: &Gvk) -> bool {
-    gvk.group.is_empty() && &*gvk.kind == "Namespace"
-}
-
-fn is_crd(gvk: &Gvk) -> bool {
-    &*gvk.group == "apiextensions.k8s.io" && &*gvk.kind == "CustomResourceDefinition"
+    object
 }

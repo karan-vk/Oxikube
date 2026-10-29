@@ -17,6 +17,7 @@
 
 mod aliases;
 mod allocation;
+mod apply_plan;
 mod auth_required;
 mod auto_reconnect;
 mod bindings;

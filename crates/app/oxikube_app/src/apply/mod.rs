@@ -1,4 +1,5 @@
-//! Apply (E10-S08): one object's manifest to a cluster, dry run first, through the guard.
+//! Apply (E10-S08): one object's manifest to a cluster, dry run first, through the guard; and many
+//! objects as one plan (E20-S03, `plan`).
 //!
 //! ```text
 //! editor ─preview─> ApplyService ─resource::Apply (dry run)─> guard ─> handler ─> SSA dry run
@@ -10,8 +11,10 @@
 //!
 //! | File | Holds |
 //! |---|---|
-//! | `service` | [`ApplyService`]: [`preview`](ApplyService::preview) and [`apply`](ApplyService::apply), the guard's confirmation answered by the preview, errors sorted into [`ApplyError`] (conflicts with their managers and times) |
-//! | `handler` | [`register_commands`]: the `resource::Apply` handler, the only code that writes a manifest (server-side apply under the field manager, the replace / create fallback) |
+//! | `service` | [`ApplyService`]: [`preview`](ApplyService::preview) and [`apply`](ApplyService::apply_plan), the guard's confirmation answered by the preview, errors sorted into [`ApplyError`] (conflicts with their managers and times) |
+//! | `handler` | [`register_commands`]: the `resource::Apply` handler (and, through `plan`, the `resource::ApplyPlan` one) |
+//! | `write` | `ObjectWrite`: the only code that writes a manifest (server-side apply under the field manager, the replace / create fallback), shared by both handlers |
+//! | `plan` | [`ApplyService::plan`] / [`dry_run`](ApplyService::dry_run_plan) / [`apply`](ApplyService::apply_plan): many objects as one `resource::ApplyPlan` (E20-S03): kind order, the whole plan dry-run first, one confirmation at the riskiest object's risk, rank by rank, CRDs `Established` first, results streamed, one audit record per object under a batch id |
 //! | `load` | [`load_path`] / [`load_text`]: files, directories (recursive, sorted, capped) and text read into `oxikube_domain::manifests` documents (E20-S01) |
 //! | `manifest` | the manifest read as one object, its namespace, the request body |
 //! | `mask` | Secret values replaced by keyed fingerprints before anything leaves this module |
@@ -31,8 +34,10 @@ mod handler;
 mod load;
 mod manifest;
 mod mask;
+mod plan;
 mod service;
 mod types;
+mod write;
 
 #[cfg(test)]
 mod tests;
@@ -49,6 +54,10 @@ pub use batch::{
 pub use change::{Change, SERVER_OWNED_FIELDS};
 pub use handler::{DEFAULT_FIELD_MANAGER, register_commands};
 pub use load::{LoadLimits, LoadNote, LoadedManifests, load_path, load_text};
+pub use plan::{
+    ApplyOptions, ClusterPlan, MAX_PLAN_OBJECTS, ObjectResult, ObjectStatus, PlanReport,
+    PlanStream, PlanTarget,
+};
 pub use service::ApplyService;
 pub use types::{
     ApplyError, ApplyMethod, ApplyPreview, ApplyReport, ApplyRequest, FieldConflict,
@@ -95,9 +104,18 @@ pub(crate) async fn resolved_audit_target(
     Some(manifest.target(cluster.clone(), namespace.as_deref()))
 }
 
+/// The one-line confirmation of a `resource::ApplyPlan`; `None` for any other command.
+pub(crate) fn summary(command: &Command, context: &str) -> Option<String> {
+    plan::summary(command, context)
+}
+
 /// What the audit record of a `resource::Apply` adds to its target: the field manager, force
-/// and the reviewed version (or `reviewed=create`). Never the manifest.
+/// and the reviewed version (or `reviewed=create`); for a `resource::ApplyPlan`, the counts and
+/// kinds. Never the manifest.
 pub(crate) fn audit_detail(command: &Command) -> Option<String> {
+    if let Some(detail) = plan::audit_detail(command) {
+        return Some(detail);
+    }
     let Command::ResourceApply {
         field_manager,
         force,

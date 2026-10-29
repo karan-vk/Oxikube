@@ -596,6 +596,18 @@ fn build_sample(command: CommandId, name: &str, missing: impl FnOnce(&str) -> Co
             resource_version: None,
             reviewed_absent: false,
         },
+        "resource::ApplyPlan" => Command::ResourceApplyPlan {
+            cluster,
+            namespace: None,
+            objects: oxikube_domain::apply::ManifestObjects(vec![serde_json::json!({
+                "apiVersion": "v1",
+                "kind": "ConfigMap",
+                "metadata": {"name": "x", "namespace": "default"},
+            })]),
+            field_manager: None,
+            force_conflicts: false,
+            stop_on_error: false,
+        },
         "resource::Delete" => Command::ResourceDelete {
             target: ResourceRef::namespaced(
                 cluster,

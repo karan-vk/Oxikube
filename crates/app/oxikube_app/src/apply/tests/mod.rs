@@ -5,6 +5,7 @@ mod batch;
 mod guard;
 mod handler;
 mod load;
+mod plan;
 mod service;
 
 use std::sync::Arc;

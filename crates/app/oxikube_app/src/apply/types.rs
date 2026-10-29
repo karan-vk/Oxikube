@@ -6,6 +6,7 @@ use std::fmt;
 use oxikube_domain::FieldCause;
 use oxikube_domain::command::Command;
 use oxikube_domain::ids::{ClusterId, ResourceRef};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::change::Change;
@@ -98,8 +99,9 @@ impl fmt::Debug for ApplyRequest {
     }
 }
 
-/// How the object reaches the server.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// How the object reaches the server. Serialised as [`as_str`](Self::as_str) names it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ApplyMethod {
     /// Server-side apply under the field manager.
     ServerSide,
@@ -184,7 +186,7 @@ pub struct ApplyReport {
 }
 
 /// A field another manager owns, from a server-side apply conflict.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FieldConflict {
     /// The field, in the server's notation (`.spec.replicas`).
     pub field: String,
@@ -224,6 +226,9 @@ pub enum ApplyError {
     /// sent.
     #[error("this apply needs a stronger confirmation than the preview; try again")]
     Unconfirmed,
+    /// The user (or the agent's permission prompt) declined the confirmation: nothing was sent.
+    #[error("the apply was not confirmed: nothing was sent")]
+    Declined,
     /// Anything else, with the error's message.
     #[error("{0}")]
     Failed(String),

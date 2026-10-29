@@ -889,7 +889,28 @@ crate's `README.md` for its allowed dependencies. Highlights:
   for namespaced kinds only (scope from the discovery registry or a CRD in the plan) and records `depends_on` (Namespace and CRD
   edges). `sanitize_for_apply(&mut Value, SanitizeMode::{Apply, Copy}) -> SanitizeReport` strips server-owned fields from the
   strip tables in `apply/strips.rs` (`Copy` adds ownerReferences, finalizers and per-kind allocations); the report holds paths
-  only. E20-S03 (ApplyService) and E20-S08 (copy) consume it; S03 replaces `oxikube_app::apply::batch::depends`.
+  only. E20-S03 (ApplyService) and E20-S08 (copy) consume it. `depends_on(&[&Value])` is the one edge rule, also used in
+  buffer order by `oxikube_app::apply::batch`; `ManifestObjects` carries a plan's objects in the `resource::ApplyPlan` payload
+  (its `Debug` names kinds only) and `object_apply_risk` is `classify(Apply, ...)` per object.
+- `oxikube_app::apply::plan` (E20-S03) — many objects as one plan, `kubectl apply -f dir` with the dry run first.
+  `ApplyService::plan(docs, PlanTarget)` sanitises every document (`SanitizeMode::Apply`) and builds the `ApplyPlan` over the
+  cluster's discovery; `dry_run_plan(plan, opts)` and `apply_plan(plan, opts, confirm)` each dispatch ONE `resource::ApplyPlan`
+  (guard decision: one mutating command per plan, like `selection::*`, not one `resource::Apply` per object), so read-only
+  refuses the whole plan before any request (one denied record), and the plan confirms once, through the caller's
+  `ConfirmationProvider`, at `Command::effective_risk` = the riskiest object's `classify` risk (cluster-scoped, RBAC and
+  custom kinds, and `force_conflicts`, raise it to medium). The handler rebuilds the plan from the objects (agents send
+  objects), rehearses the whole plan (8 dry runs at a time; an object whose Namespace or CRD the plan creates is
+  `DeferredDryRun`, a kind the server cannot dry-run `NoPreviewAvailable`), then applies rank by rank, 4 objects of a rank at a
+  time, polling each new CRD until `Established` (500 ms, 30 s; then `DiscoveryPort::discover` refreshes the kinds) before the
+  custom resources that need it. Each object is written by `apply::write::ObjectWrite` (the same SSA + fallback code as
+  `resource::Apply`, through the guard's `Mutation` writer, which re-checks read-only before every request) and audited as
+  `resource::Apply` with `batch=<id> via=resource::ApplyPlan manager=… force=…`; the plan's own record carries the batch id
+  and the counts. `applied_change` decides created / configured / unchanged from the object read before and returned after
+  (same `resourceVersion`, else `generation`, else content without server-owned fields: on kind, re-applying is a no-op with
+  the same version). `stop_on_error` stops at a failed dry run (nothing written) or a failed apply (later ranks skipped);
+  `ApplyOptions::cancel` (the ports' `CancellationToken`) skips what is not sent yet. Results stream as `PlanStream` items fed
+  by `command_bus::Progress` (a sink and the token on the `DispatchContext`, handed to the handler as
+  `HandlerContext::report` / `is_cancelled`); an agent's dispatch gets them all in the output. The UI is E20-S05.
 - `oxikube_app::helm` (E16-S03) — manifest -> resources. `oxikube_domain::helm::parse_manifest` (pure, `serde-saphyr`) splits a
   rendered manifest into `ManifestObject`s (empty and comment-only documents skipped, `kind: List` expanded, `helm.sh/hook`
   objects apart, a broken document reported as a `ManifestError` with a position only, never a snippet). `HelmService` reads the
@@ -1404,8 +1425,8 @@ crate's `README.md` for its allowed dependencies. Highlights:
   pipeline; E20 extends it to many objects, plan review #397) dispatches `resource::Apply` through the `CommandBus`, so the
   `MutationGuard` blocks it on a read-only cluster (re-checked before each request), confirms it at risk `Low` (the editor's
   diff preview is the confirmation: the service answers the guard's simple confirm with it) and audits the dry run and the
-  apply with the object as target and `manager=… force=…` as detail, never the manifest. The handler (`apply::handler`, the
-  only code that writes a manifest) reads the live object, has the server dry-run a server-side apply under the field
+  apply with the object as target and `manager=… force=…` as detail, never the manifest. The handler (`apply::handler`; the
+  write itself is `apply::write::ObjectWrite`, the only code that writes a manifest) reads the live object, has the server dry-run a server-side apply under the field
   manager (`editor.field_manager`, default `oxikube`; `force` only after the user chose it in the conflict dialog), then
   sends it; a `415` / `Unsupported` falls back to a replace carrying the reviewed `resourceVersion` (a create for a new
   object). Conflicts come back with their fields, managers and each manager's last `managedFields` time; a rejected field

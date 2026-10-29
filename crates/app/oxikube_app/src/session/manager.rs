@@ -117,6 +117,12 @@ impl ClusterSessionManager {
         self.shared.clock.now()
     }
 
+    /// The injected clock itself, for a command that waits on the cluster (a multi-object apply
+    /// polling a new CustomResourceDefinition until it is `Established`).
+    pub fn clock(&self) -> Arc<dyn ClockPort> {
+        self.shared.clock.clone()
+    }
+
     /// A snapshot of one session.
     pub fn get(&self, cluster: &ClusterId) -> Option<ClusterSession> {
         self.shared.entry(cluster).map(|e| e.lock().snapshot())

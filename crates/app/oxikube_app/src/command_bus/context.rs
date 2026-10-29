@@ -6,6 +6,7 @@ use oxikube_domain::audit::Initiator;
 use oxikube_domain::ids::{ClusterId, ResourceRef};
 use serde_json::Value;
 
+use super::progress::Progress;
 use crate::guard::{Confirmation, ConfirmationRequest};
 
 /// Who is dispatching, on which cluster, and with which answers.
@@ -26,6 +27,10 @@ pub struct DispatchContext {
     pub confirmation: Option<Confirmation>,
     /// Ask the handler for a server-side dry run (recorded in the audit record).
     pub dry_run: bool,
+    /// Where a handler that works through many objects reports each one as it finishes, and
+    /// how the caller asks it to stop (see [`Progress`]). Not part of what a confirmation is
+    /// bound to.
+    pub progress: Option<Progress>,
 }
 
 impl DispatchContext {
@@ -37,6 +42,7 @@ impl DispatchContext {
             cluster: None,
             confirmation: None,
             dry_run: false,
+            progress: None,
         }
     }
 
@@ -58,6 +64,13 @@ impl DispatchContext {
     #[must_use]
     pub fn with_dry_run(mut self, dry_run: bool) -> Self {
         self.dry_run = dry_run;
+        self
+    }
+
+    /// Hands the handler a [`Progress`] to report each item on and to watch for a stop.
+    #[must_use]
+    pub fn with_progress(mut self, progress: Progress) -> Self {
+        self.progress = Some(progress);
         self
     }
 }

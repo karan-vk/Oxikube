@@ -58,6 +58,13 @@ impl Command {
                 .map(|target| declared.max(delete_risk(&target.gvk, *propagation)))
                 .max()
                 .unwrap_or(declared),
+            // A plan is as risky as its riskiest object (E20-S03): a cluster-scoped, RBAC or
+            // custom kind, or a forced apply, raises the one confirmation of the whole plan.
+            Command::ResourceApplyPlan {
+                objects,
+                force_conflicts,
+                ..
+            } => declared.max(objects.apply_risk(*force_conflicts)),
             // Scaling up or down is low; scaling to zero stops every pod of the workload.
             Command::WorkloadScale { replicas: 0, .. } => declared.max(Risk::Medium),
             // Allowing the legacy fallback may create a never-expiring token Secret: a persistent
@@ -99,6 +106,10 @@ impl CommandMeta {
                 declared.max(Risk::Medium)
             } else if self.id == CommandId::WORKLOAD_SCALE {
                 // The worst case is a scale to zero.
+                declared.max(Risk::Medium)
+            } else if self.id == CommandId::RESOURCE_APPLY_PLAN {
+                // The worst case is a plan holding a cluster-scoped, RBAC or custom kind, or a
+                // forced apply: an apply never rates above medium.
                 declared.max(Risk::Medium)
             } else {
                 declared
@@ -313,6 +324,52 @@ mod tests {
         assert_eq!(evict.effective_risk(), Some(Risk::Medium));
         let force = Command::PodForceDelete { target };
         assert_eq!(force.effective_risk(), Some(Risk::High));
+    }
+
+    #[test]
+    fn an_apply_plan_is_as_risky_as_its_riskiest_object() {
+        use crate::apply::ManifestObjects;
+        use serde_json::json;
+
+        let cluster = ClusterId::new("~/.kube/config", &ContextName::new("kind"));
+        let configmap = json!({"apiVersion": "v1", "kind": "ConfigMap",
+            "metadata": {"name": "web", "namespace": "default"}});
+        let namespace = json!({"apiVersion": "v1", "kind": "Namespace",
+            "metadata": {"name": "shop"}});
+        let role = json!({"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "Role",
+            "metadata": {"name": "reader", "namespace": "default"}});
+        let plan = |objects: Vec<serde_json::Value>, force_conflicts| Command::ResourceApplyPlan {
+            cluster: cluster.clone(),
+            namespace: None,
+            objects: ManifestObjects(objects),
+            field_manager: None,
+            force_conflicts,
+            stop_on_error: false,
+        };
+        assert_eq!(
+            plan(vec![configmap.clone()], false).effective_risk(),
+            Some(Risk::Low)
+        );
+        // A cluster-scoped object raises the whole plan; so does an RBAC kind, or force.
+        assert_eq!(
+            plan(vec![configmap.clone(), namespace], false).effective_risk(),
+            Some(Risk::Medium)
+        );
+        assert_eq!(
+            plan(vec![configmap.clone(), role], false).effective_risk(),
+            Some(Risk::Medium)
+        );
+        assert_eq!(
+            plan(vec![configmap], true).effective_risk(),
+            Some(Risk::Medium)
+        );
+        let meta = super::super::lookup(CommandId::RESOURCE_APPLY_PLAN).unwrap();
+        assert!(meta.mutating);
+        assert_eq!(meta.tool_risk(), Some(Risk::Medium), "the worst case");
+        assert_eq!(
+            CommandId::RESOURCE_APPLY_PLAN.tool_name(),
+            "k8s.resource_apply_plan"
+        );
     }
 
     #[test]
