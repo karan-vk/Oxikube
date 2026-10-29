@@ -16,8 +16,22 @@ use oxikube_ports::{DeleteOptions, ResourceWriter, WriteOptions};
 /// of read commands never get one. Nothing else in the app exposes a `ResourceWriter`:
 /// [`ClusterSession::resources`](crate::ClusterSession::resources) is read-only.
 ///
-/// A lint that rejects `ResourceWriter` calls outside handlers is an `xtask` follow-up;
-/// until then this type and review are the enforcement.
+/// `cargo xtask lint-deps` scans every `ui`, `platform` and `bins` crate's non-test sources
+/// (`xtask/src/lint_mutation`) and fails on any mention of this type, on holding a
+/// `ResourceWriter` (implementing one is allowed), and on mutating calls on a writer handle.
+/// There is no allow-list.
+///
+/// Outside this crate the constructor is unreachable (the doctest below documents it; this
+/// crate sets `doctest = false`, so the `constructor_stays_crate_private` unit test is what
+/// actually guards it):
+///
+/// ```compile_fail,E0624
+/// use std::sync::Arc;
+/// use oxikube_app::guard::Mutation;
+/// fn forge(writer: Arc<dyn oxikube_ports::ResourceWriter>, cluster: oxikube_domain::ids::ClusterId) {
+///     let _ = Mutation::new(cluster, writer, false);
+/// }
+/// ```
 pub struct Mutation {
     cluster: ClusterId,
     writer: Arc<dyn ResourceWriter>,
@@ -80,5 +94,34 @@ impl fmt::Debug for Mutation {
             .field("cluster", &self.cluster)
             .field("dry_run", &self.dry_run)
             .finish_non_exhaustive()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// The crate has `doctest = false`, so the `compile_fail` doctest never runs. This guards the
+    /// same two facts from source: the constructor is crate-private and the token is not `Clone`.
+    #[test]
+    fn constructor_stays_crate_private() {
+        let src = include_str!("mutation.rs");
+        // The needles are built from pieces so this test does not match its own text.
+        let private_ctor = concat!("pub(crate)", " fn new(");
+        let public_ctor = concat!("pub", " fn new(");
+        assert!(
+            src.contains(private_ctor),
+            "Mutation::new must be pub(crate)"
+        );
+        assert!(!src.contains(public_ctor), "Mutation::new must not be pub");
+        let decl = concat!("pub struct", " Mutation {");
+        let before = &src[..src.find(decl).expect("Mutation declaration")];
+        let attrs = before.rsplit("\n\n").next().unwrap_or_default();
+        assert!(
+            !attrs.contains("derive("),
+            "Mutation must not derive Clone, Default or anything else"
+        );
+        assert!(
+            !src.contains(concat!("impl Clone", " for Mutation")),
+            "Mutation must not be Clone"
+        );
     }
 }

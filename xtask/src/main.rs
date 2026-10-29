@@ -17,6 +17,7 @@ mod kind;
 mod kind_images;
 mod kind_metrics_stack;
 mod lint_deps;
+mod lint_mutation;
 mod load_pods;
 mod perf;
 mod settings_schema;

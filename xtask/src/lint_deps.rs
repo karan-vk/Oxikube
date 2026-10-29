@@ -37,7 +37,7 @@ pub enum Layer {
 }
 
 impl Layer {
-    fn of(pkg: &Package, root: &std::path::Path) -> Option<Layer> {
+    pub(crate) fn of(pkg: &Package, root: &std::path::Path) -> Option<Layer> {
         let rel = pkg.manifest_path.as_std_path().strip_prefix(root).ok()?;
         let mut parts = rel
             .components()
@@ -153,7 +153,8 @@ pub fn run() -> Result<()> {
         .no_deps()
         .exec()
         .context("cargo metadata")?;
-    let errors = check(&meta);
+    let mut errors = check(&meta);
+    errors.extend(crate::lint_mutation::check(&meta));
     if errors.is_empty() {
         println!(
             "lint-deps: {} workspace crates OK",
