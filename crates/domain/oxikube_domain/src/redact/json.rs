@@ -4,6 +4,7 @@
 use super::patterns::{MARKER, is_sensitive_field};
 use super::scrubber::redact;
 use serde_json::Value;
+use std::borrow::Cow;
 
 /// Redacts secrets inside `value` in place, keeping keys and structure.
 ///
@@ -20,40 +21,28 @@ use serde_json::Value;
 /// leaves `ConfigMap` data alone unless a string pattern matches, so structured output stays
 /// useful.
 pub fn redact_json(value: &mut Value) {
-    walk(value, false);
-}
-
-fn walk(value: &mut Value, in_secret_data: bool) {
     match value {
         Value::String(text) => {
-            if in_secret_data {
-                set_marker(value);
-            } else if let std::borrow::Cow::Owned(clean) = redact(text) {
+            if let Cow::Owned(clean) = redact(text) {
                 *text = clean;
             }
         }
         Value::Array(items) => {
             for item in items {
-                walk(item, in_secret_data);
+                redact_json(item);
             }
         }
         Value::Object(map) => {
             let is_secret = map.get("kind").and_then(Value::as_str) == Some("Secret");
             for (key, child) in map.iter_mut() {
-                if in_secret_data {
-                    walk(child, true);
-                } else if is_sensitive_field(key) || (is_secret && is_body_key(key)) {
+                if is_sensitive_field(key) || (is_secret && is_body_key(key)) {
                     redact_all(child);
                 } else {
-                    walk(child, false);
+                    redact_json(child);
                 }
             }
         }
-        Value::Null | Value::Bool(_) | Value::Number(_) => {
-            if in_secret_data {
-                set_marker(value);
-            }
-        }
+        Value::Null | Value::Bool(_) | Value::Number(_) => {}
     }
 }
 
