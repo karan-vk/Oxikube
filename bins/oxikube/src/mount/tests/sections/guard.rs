@@ -55,6 +55,10 @@ const RISKS: &[(CommandId, Risk)] = &[
     (CommandId::POD_EVICT, Risk::Medium),
     (CommandId::POD_FORCE_DELETE, Risk::High),
     (CommandId::POD_SANITIZE, Risk::Medium),
+    // Uploading a file into a container (E20-S07): low for a new file, medium when it replaces one
+    // (`Command::effective_risk`); the file browser's Upload button and drop target, not a row
+    // action (it needs a local file).
+    (CommandId::POD_UPLOAD_FILE, Risk::Low),
     (CommandId::PVC_RESIZE, Risk::Medium),
     // The manifest editor's apply (E10); a Secret's "Edit decoded" applies through it.
     (CommandId::RESOURCE_APPLY, Risk::Low),

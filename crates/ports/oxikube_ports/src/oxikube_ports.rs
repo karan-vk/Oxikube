@@ -178,7 +178,7 @@ pub use exec::{
 };
 pub use feed::{Delta, DeltaBatch, WatchFeed};
 pub use feed_stats::{FeedStat, FeedStats, FeedVariant};
-pub use fs::{DirEntry, EntryKind, FileChunks, FsEvent, FsEventKind, FsPort};
+pub use fs::{DirEntry, EntryKind, FileChunks, FileRead, FsEvent, FsEventKind, FsPort};
 pub use helm::{
     ChartHit, ChartRef, HelmCapabilities, HelmError, HelmOutput, HelmPort, HelmRepoPort,
     HelmVersion, InstallRequest, OutputKind, OutputLine, Release, ReleaseRef, ReleaseStatus,

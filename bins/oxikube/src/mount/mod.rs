@@ -97,6 +97,10 @@
 //! the moment its record is stored (the log's `appended` signal, no polling); `audit::Export`
 //! writes the filtered records as JSONL or CSV.
 //!
+//! 20. the pod file browser (E20-S07, `oxikube_resources_ui::files`): "Browse Files" in a pod's
+//!     menu (or `pod::BrowseFiles` from the palette) opens the pod's container filesystem as a tab
+//!     of its cluster; `pod::DownloadFile` (a read) and `pod::UploadFile` (a guarded, audited
+//!     mutation) are on the bus over the app's `FileService`.
 //! 19. the RBAC subject pages (E17-S07, `mount::rbac`): `rbac::OpenUsers` (`:usr`, the sidebar's
 //!     Access Control > Users), `rbac::OpenGroups` (`:grp`) and `rbac::ShowSubject` (`:rbac
 //!     <subject>`) open the cluster's users, groups and a subject's per-verb policy matrix in its
@@ -268,6 +272,8 @@ pub struct Wiring {
     _events_views: Entity<oxikube_events_ui::EventsViews>,
     /// Opens the audit log viewer and applies the `audit::*` requests (E19-S09).
     _audit_views: Entity<oxikube_resources_ui::audit::AuditViews>,
+    /// Opens the pod file browsers `pod::BrowseFiles` asks for (E20-S07).
+    _files_views: Entity<oxikube_resources_ui::files::FilesViews>,
     /// Opens the can-i dialog for `rbac::CanI` (E17-S08).
     _can_i_dialogs: gpui::Task<()>,
     /// Opens the RBAC subject pages and applies the `rbac::*` requests (E17-S07).
@@ -351,6 +357,14 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     // Shells, attaches and commands in pod containers (E09-S08): one service per app, so the
     // container chosen last in a pod is remembered across windows.
     let exec_service = terminal::install_exec_service(&state, services.sessions.clone());
+
+    // The pod file browser (E20-S07): one service per app, so the last directory per pod and the
+    // transfers panel's list are shared by every window.
+    let file_service = Arc::new(oxikube_app::files::FileService::new(
+        services.sessions.clone(),
+        ports.clusters.fs.clone(),
+    ));
+    let (files_sink, files_rx) = oxikube_resources_ui::files::FilesCommandSink::channel();
 
     // Before any cluster tab opens: its layout restore rebuilds saved terminal tabs with these.
     let terminal_services = terminal::install_services(
@@ -543,6 +557,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         port_forwards: port_forwards.clone(),
         port_forward_favourites,
         port_forward_ui: port_forward_sink,
+        files: file_service.clone(),
+        files_views: files_sink,
     });
     let registry = match registry {
         Ok(registry) => registry,
@@ -921,6 +937,23 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         window,
         cx,
     );
+    // The pod file browser (E20-S07): `pod::BrowseFiles` ("Browse Files" in a pod's menu, the
+    // palette) opens it in the pod's cluster tab; its downloads and uploads run through the bus.
+    let files_views = oxikube_resources_ui::files::FilesViews::start(
+        oxikube_resources_ui::files::FilesViewsDeps {
+            view: oxikube_resources_ui::files::FilesViewDeps {
+                runner: oxikube_app::files::FileRunner::new(
+                    bus.clone(),
+                    local_user(),
+                    file_service,
+                ),
+            },
+            host: Rc::new(tabs.downgrade()),
+        },
+        files_rx,
+        window,
+        cx,
+    );
     // The can-i dialog (E17-S08): `rbac::CanI` (palette "RBAC: Can I?", prefilled from the selected
     // object) opens it in the cluster tab.
     let can_i_dialogs = oxikube_rbac_ui::can_i::CanIViews::start(
@@ -984,6 +1017,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _notification_clicks: notification_clicks,
         _events_views: events_views,
         _audit_views: audit_views,
+        _files_views: files_views,
         _can_i_dialogs: can_i_dialogs,
         _rbac_views: rbac_views,
         _notification_centre: centre,

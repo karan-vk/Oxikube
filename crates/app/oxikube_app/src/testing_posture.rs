@@ -538,6 +538,28 @@ fn build_sample(command: CommandId, name: &str, missing: impl FnOnce(&str) -> Co
             command: Vec::new(),
             name: None,
         },
+        "pod::BrowseFiles" => Command::PodBrowseFiles {
+            target: target(),
+            container: None,
+            path: Some("/".into()),
+        },
+        "pod::DownloadFile" => Command::PodDownloadFile {
+            target: target(),
+            container: None,
+            path: "/etc/hostname".into(),
+            directory: false,
+            destination: "/tmp/hostname".into(),
+            as_archive: false,
+            size: None,
+        },
+        "pod::UploadFile" => Command::PodUploadFile {
+            target: target(),
+            container: None,
+            dest_dir: "/tmp".into(),
+            local_path: "/tmp/notes.txt".into(),
+            size: 5,
+            overwrite: false,
+        },
         "pod::Attach" => Command::PodAttach {
             target: target(),
             container: None,

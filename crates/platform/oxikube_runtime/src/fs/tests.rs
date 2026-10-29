@@ -180,3 +180,33 @@ async fn a_dropped_write_stream_stops_and_cleans_up() {
     }
     assert!(!path.exists(), "nothing was published");
 }
+
+#[tokio::test]
+async fn read_stream_yields_the_size_and_the_whole_file_in_chunks() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("big.bin");
+    let content: Vec<u8> = (0..600_000u32).map(|n| (n % 251) as u8).collect();
+    StdFs.write(&path, &content).await.unwrap();
+    let read = StdFs.read_stream(&path).await.unwrap();
+    assert_eq!(read.size, content.len() as u64);
+    let chunks: Vec<Vec<u8>> = read.chunks.map(|chunk| chunk.unwrap()).collect().await;
+    assert!(chunks.len() >= 3, "a 600 kB file is several chunks");
+    assert_eq!(chunks.concat(), content);
+}
+
+#[tokio::test]
+async fn read_stream_of_an_empty_file_ends_at_once_and_of_a_directory_or_missing_path_fails() {
+    let dir = TempDir::new().unwrap();
+    let empty = dir.path().join("empty");
+    StdFs.write(&empty, b"").await.unwrap();
+    let read = StdFs.read_stream(&empty).await.unwrap();
+    assert_eq!(read.size, 0);
+    assert_eq!(read.chunks.count().await, 0);
+    let error = StdFs.read_stream(dir.path()).await.unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::Validation);
+    let error = StdFs
+        .read_stream(&dir.path().join("nope"))
+        .await
+        .unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::NotFound);
+}

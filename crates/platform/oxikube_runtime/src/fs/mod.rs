@@ -7,6 +7,7 @@
 //! | Method | What it does |
 //! |---|---|
 //! | `read` | the whole file; `NotFound` when absent |
+//! | `read_stream` | the file's size and mode, then its bytes in 256 KiB chunks, each read on the blocking pool: an upload of a large file never sits in memory |
 //! | `write` | temp file next to the target, `fsync`, rename over it: readers see the old or the new file, never half |
 //! | `write_stream` | the same, fed chunk by chunk from a stream (a log export): the file never sits in memory, and an error or a dropped call removes the temp file |
 //! | `write_private` | the same, with the file created `0600` (and new parent directories `0700`) on unix, so the content is never readable by others, not even for a moment |
@@ -22,7 +23,7 @@
 mod watch;
 
 use std::fs;
-use std::io::{ErrorKind as IoErrorKind, Write as _};
+use std::io::{ErrorKind as IoErrorKind, Read as _, Write as _};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
@@ -30,7 +31,7 @@ use async_trait::async_trait;
 use futures::StreamExt as _;
 use futures::stream::BoxStream;
 use oxikube_domain::{OxiError, OxiResult};
-use oxikube_ports::{DirEntry, EntryKind, FileChunks, FsEvent, FsPort};
+use oxikube_ports::{DirEntry, EntryKind, FileChunks, FileRead, FsEvent, FsPort};
 
 /// The [`FsPort`] on the real filesystem. Stateless and free to copy.
 #[derive(Debug, Clone, Copy, Default)]
@@ -40,6 +41,23 @@ impl StdFs {
     /// A filesystem port.
     pub fn new() -> Self {
         Self
+    }
+}
+
+/// The size of one chunk of [`FsPort::read_stream`].
+const READ_CHUNK: usize = 256 * 1024;
+
+/// The permission bits of a file, `0o644` where the platform has none.
+fn file_mode(meta: &fs::Metadata) -> u32 {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        meta.permissions().mode() & 0o7777
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = meta;
+        0o644
     }
 }
 
@@ -188,6 +206,47 @@ impl FsPort for StdFs {
     async fn read(&self, path: &Path) -> OxiResult<Vec<u8>> {
         let path = path.to_owned();
         blocking(move || fs::read(&path).map_err(|error| map_io("read", &path, error))).await
+    }
+
+    async fn read_stream(&self, path: &Path) -> OxiResult<FileRead> {
+        let owned = path.to_owned();
+        let (file, size, mode) = blocking(move || {
+            let file = fs::File::open(&owned).map_err(|error| map_io("read", &owned, error))?;
+            let meta = file
+                .metadata()
+                .map_err(|error| map_io("inspect", &owned, error))?;
+            if meta.is_dir() {
+                return Err(OxiError::validation(format!(
+                    "{} is a directory, not a file",
+                    owned.display()
+                )));
+            }
+            Ok((file, meta.len(), file_mode(&meta)))
+        })
+        .await?;
+        let path = path.to_owned();
+        let chunks = futures::stream::unfold(Some(file), move |file| {
+            let path = path.clone();
+            async move {
+                let mut file = file?;
+                let read = blocking(move || {
+                    let mut buffer = vec![0u8; READ_CHUNK];
+                    let n = file
+                        .read(&mut buffer)
+                        .map_err(|error| map_io("read", &path, error))?;
+                    buffer.truncate(n);
+                    Ok((file, buffer))
+                })
+                .await;
+                match read {
+                    Ok((_, buffer)) if buffer.is_empty() => None,
+                    Ok((file, buffer)) => Some((Ok(buffer), Some(file))),
+                    Err(error) => Some((Err(error), None)),
+                }
+            }
+        })
+        .boxed();
+        Ok(FileRead { size, mode, chunks })
     }
 
     async fn write(&self, path: &Path, contents: &[u8]) -> OxiResult<()> {

@@ -20,6 +20,7 @@ mod events;
 mod events_agent;
 mod events_view;
 mod exec;
+mod files;
 mod helm;
 mod helm_charts;
 mod helm_install;

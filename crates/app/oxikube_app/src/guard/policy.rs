@@ -170,6 +170,9 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::PodAttach { target, .. }
         | Command::PodExec { target, .. }
         | Command::PodDebug { target, .. }
+        | Command::PodBrowseFiles { target, .. }
+        | Command::PodDownloadFile { target, .. }
+        | Command::PodUploadFile { target, .. }
         | Command::PodPortForward { target, .. }
         | Command::PortForwardStart { target, .. }
         | Command::PortForwardFavouriteAdd { target, .. }
@@ -376,6 +379,9 @@ pub fn summary(meta: &CommandMeta, command: &Command, context: &str) -> String {
             context,
         );
     }
+    if let Some(summary) = crate::files::summary(command, context) {
+        return summary;
+    }
     if let Some(summary) = super::workload_policy::summary(command, context) {
         return summary;
     }
@@ -522,6 +528,9 @@ fn effective_image(image: &str) -> &str {
 /// audit log like every field.
 pub fn audit_detail(command: &Command) -> Option<String> {
     if let Some(detail) = crate::apply::audit_detail(command) {
+        return Some(detail);
+    }
+    if let Some(detail) = crate::files::audit_detail(command) {
         return Some(detail);
     }
     if let Some(detail) = super::selection_policy::detail(command) {
