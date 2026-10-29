@@ -122,6 +122,9 @@ pub fn kind(app: &mut Launched, context: &str, namespace: &str, case: &KindCase,
             !GENERIC.contains(id)
                 && *id != CommandId::RESOURCE_VIEW_METRICS
                 && *id != CommandId::SELECTION_LABEL
+                // "Diff with" (E20-S09) and "Copy to" (E20-S08) are cross-kind row actions.
+                && *id != CommandId::RESOURCE_DIFF_WITH
+                && *id != CommandId::RESOURCE_COPY_TO
         })
         .collect();
     assert_eq!(own, case.actions, "{}'s own row actions", case.kind);
@@ -134,7 +137,11 @@ pub fn kind(app: &mut Launched, context: &str, namespace: &str, case: &KindCase,
     // Every mutation of the row asks first, and a read-only cluster refuses it; nothing changes.
     let before = cluster::fingerprint(context, case, namespace, name);
     let sessions = app.vcx.read(AppState::global).services().sessions.clone();
-    for entry in entries.iter().filter(|e| e.action.meta().mutating) {
+    // "Copy to" is guarded by its target cluster (E20-S08), not the row's; its tests cover that.
+    for entry in entries
+        .iter()
+        .filter(|e| e.action.meta().mutating && e.command() != CommandId::RESOURCE_COPY_TO)
+    {
         let id = entry.command();
         let command = entry.action.command_for(&target);
         let asked = app::dispatch(
