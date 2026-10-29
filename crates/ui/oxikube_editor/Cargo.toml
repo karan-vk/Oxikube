@@ -145,5 +145,11 @@ name = "live_bench"
 [[example]]
 name = "templates_bench"
 
+# The guard's dry run of a 1 MB object in the confirmation dialog (E19-S07): the background diff
+# and the dialog's frames, idle and scrolling:
+# `cargo run -p oxikube_editor --profile release-fast --example dry_run_bench`
+[[example]]
+name = "dry_run_bench"
+
 [lints]
 workspace = true

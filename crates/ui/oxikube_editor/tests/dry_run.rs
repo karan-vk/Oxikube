@@ -1,10 +1,10 @@
 //! The guard's dry run in the confirmation dialog (E19-S07): `oxikube_editor::init` installs the
 //! E10 diff view in the workspace's `ConfirmDialog`, which draws each object the server would
 //! write; the diff ignores server-owned fields and never shows a Secret value; the banner and
-//! warning variants; and a 1 MB object is diffed off the UI thread, its frames inside the budget.
+//! warning variants; and a 1 MB object is diffed on the background executor while the dialog is
+//! drawn (its frame times: the `dry_run_bench` example).
 
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 use gpui::{AppContext as _, Entity, TestAppContext, VisualTestContext};
 use oxikube_app::PreviewChange;
@@ -180,56 +180,98 @@ fn the_banner_variants_are_drawn(cx: &mut TestAppContext) {
     );
 }
 
-/// Draws one frame after `scroll` and returns how long it took.
-fn frame(vcx: &mut VisualTestContext, scroll: impl FnOnce(&mut VisualTestContext)) -> Duration {
-    scroll(vcx);
-    let started = Instant::now();
-    vcx.update(|window, cx| window.draw(cx).clear(cx));
-    started.elapsed()
-}
-
-#[gpui::test]
-fn a_1mb_object_is_diffed_off_the_ui_thread_and_its_frames_fit_the_budget(cx: &mut TestAppContext) {
+/// A ConfigMap of at least 1 MB against its dry-run result, three keys changed through it: the
+/// first, one in the middle, the last.
+fn one_mb_change() -> PreviewChange {
     const MB: usize = 1 << 20;
     let (live, mut result) = (config_map("green", "7", MB), config_map("green", "8", MB));
-    // Changes spread through the object: the first key, one in the middle, the last.
-    let keys: Vec<String> = live["data"].as_object().unwrap().keys().cloned().collect();
+    let keys: Vec<String> = live["data"]
+        .as_object()
+        .expect("a data map")
+        .keys()
+        .cloned()
+        .collect();
     for key in [&keys[1], &keys[keys.len() / 2], &keys[keys.len() - 1]] {
         result["data"][key] = json!("changed");
     }
-    assert!(serde_json::to_vec(&live).unwrap().len() >= MB);
-
-    // The diff itself, timed as the background executor runs it.
-    let started = Instant::now();
-    let diff = oxikube_editor::diff::ManifestDiff::of_manifests(Some(&live), &result);
-    let background = started.elapsed();
-    assert_eq!(diff.hunks(), 3);
-
-    let prompt = ConfirmPrompt::new("Apply?", "Apply ConfigMap shop/web on kind-oxikube")
-        .with_changes(vec![change("ConfigMap", live, result)], 0);
-    let (_, mut vcx) = open_dialog(cx, prompt);
-    assert!(drawn(&mut vcx, "dry-run-diff"), "the diff arrived");
-
-    // 120 frames of the open dialog: each a redraw while the user moves the mouse or types in
-    // another field, the rows built for the screen only.
-    let mut frames: Vec<Duration> = (0..120).map(|_| frame(&mut vcx, |_| {})).collect();
-    frames.sort();
-    let p95 = frames[frames.len() * 95 / 100];
-    let max = frames[frames.len() - 1];
-    eprintln!(
-        "dry-run diff of a {} KiB object: background diff {:.1} ms; dialog frames p95 {:.2} ms, \
-         max {:.2} ms",
-        MB / 1024,
-        background.as_secs_f64() * 1e3,
-        p95.as_secs_f64() * 1e3,
-        max.as_secs_f64() * 1e3,
+    assert!(
+        serde_json::to_vec(&live).expect("serialises").len() >= MB,
+        "the live object is at least 1 MB"
     );
-    // The frame budget (docs/PERFORMANCE.md: p95 <= 8 ms). Debug builds are several times slower
-    // than the app, so they only have to stay under one 60 Hz frame.
-    let budget = if cfg!(debug_assertions) {
-        Duration::from_millis(16)
-    } else {
-        Duration::from_millis(8)
-    };
-    assert!(p95 <= budget, "p95 frame {p95:?} over {budget:?}");
+    change("ConfigMap", live, result)
+}
+
+/// The diff of a 1 MB object is computed by a background task: nothing while the view is built or
+/// drawn, nothing while only UI-thread tasks have run, and the result reaches the view on the UI
+/// thread after the background work. Frame times are measured by the `dry_run_bench` example.
+#[gpui::test]
+fn a_1mb_object_is_diffed_on_the_background_executor(cx: &mut TestAppContext) {
+    let change = one_mb_change();
+    init(cx);
+    cx.run_until_parked();
+    let window = cx.add_window(|_, cx| DryRunDiff::new(&change, cx));
+    let view = window.root(cx).expect("the view");
+    let mut vcx = VisualTestContext::from_window(window.into(), cx);
+    let pending = |vcx: &mut VisualTestContext| vcx.read(|cx| view.read(cx).diff().is_none());
+    assert!(
+        pending(&mut vcx),
+        "nothing is diffed while the view is built"
+    );
+    assert!(
+        drawn(&mut vcx, "dry-run-diff-pending") && pending(&mut vcx),
+        "a frame drawn while the diff is in flight shows the placeholder"
+    );
+
+    let dispatcher = vcx.executor().dispatcher().clone();
+    let test = dispatcher.as_test().expect("the test dispatcher");
+    let mut background_runs = 0;
+    while pending(&mut vcx) {
+        let (_, background) = test.scheduler().pending_task_counts();
+        if background > 0 {
+            // Only the background work runs: the view must not have its result until the UI
+            // thread takes it.
+            while test.tick(true) {}
+            background_runs += 1;
+            assert!(
+                pending(&mut vcx),
+                "the result reaches the view on the UI thread, after the background work"
+            );
+        } else {
+            assert!(
+                test.tick(false),
+                "the diff arrives before the executor parks"
+            );
+        }
+    }
+    assert!(
+        background_runs > 0,
+        "the diff was computed without a background task: on the UI thread"
+    );
+    let hunks = vcx.read(|cx| view.read(cx).diff().map(|diff| diff.hunks()));
+    assert_eq!(hunks, Some(3));
+}
+
+#[gpui::test]
+fn the_dialog_opens_before_the_diff_of_a_1mb_object_arrives(cx: &mut TestAppContext) {
+    let prompt = ConfirmPrompt::new("Apply?", "Apply ConfigMap shop/web on kind-oxikube")
+        .with_changes(vec![one_mb_change()], 0);
+    init(cx);
+    cx.run_until_parked();
+    let window = cx.add_window(|window, cx| {
+        let view = cx.new(|cx| ConfirmDialog::new(prompt, |_, _, _| {}, |_| {}, window, cx));
+        Root::new(view, window, cx)
+    });
+    let mut vcx = VisualTestContext::from_window(window.into(), cx);
+    assert!(drawn(&mut vcx, "confirm-change-0"), "the dialog is drawn");
+    assert!(
+        drawn(&mut vcx, "dry-run-diff-pending"),
+        "with the diff pending"
+    );
+    assert!(!drawn(&mut vcx, "dry-run-diff"), "no diff yet");
+    vcx.run_until_parked();
+    assert!(drawn(&mut vcx, "dry-run-diff"), "the diff arrived");
+    assert!(
+        !drawn(&mut vcx, "dry-run-diff-pending"),
+        "the placeholder is gone"
+    );
 }
