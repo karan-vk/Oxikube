@@ -25,7 +25,7 @@ use super::refusal::{NameRule, Refusal, validate_name};
 use super::target::{namespace_exists, served_kind, unavailable};
 use crate::apply::DEFAULT_FIELD_MANAGER;
 use crate::apply::mask::SecretMask;
-use crate::apply::write::{ObjectWrite, version_of};
+use crate::apply::write::{ObjectWrite, Preview, version_of};
 use crate::command_bus::{CommandOutput, CommandRegistry, HandlerContext, RegisterError};
 use crate::session::ClusterSessionManager;
 
@@ -135,7 +135,7 @@ async fn handle(
         write.rehearse(mutation.writer(), live.as_ref()).await?
     } else {
         write
-            .send(mutation.writer(), target_reader.as_ref())
+            .send(mutation.writer(), target_reader.as_ref(), Preview::First)
             .await?
     };
     let label = crate::actions::object_label(&target);
