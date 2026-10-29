@@ -26,7 +26,7 @@ use cargo_metadata::Metadata;
 
 use crate::lint_deps::Layer;
 
-pub use scan::scan_source;
+use scan::scan_source;
 
 /// Scan every `ui`, `platform` and `bins` crate of the workspace; one message per violation.
 pub fn check(meta: &Metadata) -> Vec<String> {

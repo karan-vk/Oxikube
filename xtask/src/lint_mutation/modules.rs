@@ -7,7 +7,7 @@ use syn::{Item, ItemMod};
 /// The crate root and every file reachable through non-`#[cfg(test)]` `mod x;` declarations.
 /// Files that are missing or fail to parse are skipped here; the scanner reports parse errors
 /// for the files it is given.
-pub fn module_files(root: &Path) -> Vec<PathBuf> {
+pub(super) fn module_files(root: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let dir = root.parent().map(Path::to_path_buf).unwrap_or_default();
     visit_file(root, &dir, &mut out);

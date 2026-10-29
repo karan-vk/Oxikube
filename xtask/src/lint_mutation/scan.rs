@@ -27,7 +27,7 @@ const WRITER_GETTERS: &[&str] = &["writer", "writer_handle"];
 
 /// Scan one source file; one message per violation. A file that does not parse is reported
 /// as a violation so it cannot hide a bypass.
-pub fn scan_source(src: &str) -> Vec<String> {
+pub(super) fn scan_source(src: &str) -> Vec<String> {
     let file = match syn::parse_file(src) {
         Ok(file) => file,
         Err(e) => return vec![format!("does not parse: {e}")],
@@ -41,7 +41,7 @@ pub fn scan_source(src: &str) -> Vec<String> {
 }
 
 /// Whether an attribute list contains `#[cfg(test)]`.
-pub fn is_cfg_test(attrs: &[Attribute]) -> bool {
+pub(super) fn is_cfg_test(attrs: &[Attribute]) -> bool {
     attrs.iter().any(|a| {
         a.path().is_ident("cfg") && a.parse_args::<Path>().is_ok_and(|p| p.is_ident("test"))
     })
