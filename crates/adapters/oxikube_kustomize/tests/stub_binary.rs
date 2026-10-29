@@ -232,17 +232,26 @@ async fn dropping_the_build_kills_the_child() {
     );
     script(dir.path(), "kustomize", &body);
     let cli = cli_in(dir.path());
-    // Cancelling is dropping the future.
-    let cancelled =
-        tokio::time::timeout(Duration::from_millis(500), cli.build(Path::new("/o"))).await;
-    assert!(
-        cancelled.is_err(),
-        "the build is still running when dropped"
-    );
-    let pid = std::fs::read_to_string(&pidfile)
-        .expect("pid file")
-        .trim()
-        .to_owned();
+    // Cancelling is dropping the future. Poll for the pid file instead of
+    // racing a fixed budget that also covers tool detection.
+    let mut build = cli.build(Path::new("/o"));
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+    let pid = loop {
+        tokio::select! {
+            result = &mut build => panic!("the build finished early: {result:?}"),
+            () = tokio::time::sleep(Duration::from_millis(20)) => {}
+        }
+        if let Ok(text) = std::fs::read_to_string(&pidfile)
+            && text.trim().parse::<u32>().is_ok()
+        {
+            break text.trim().to_owned();
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "the stub never wrote its pid"
+        );
+    };
+    drop(build);
     let mut waited = 0;
     while alive(&pid) && waited < 50 {
         tokio::time::sleep(Duration::from_millis(100)).await;
