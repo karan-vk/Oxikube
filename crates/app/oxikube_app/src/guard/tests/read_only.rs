@@ -131,7 +131,7 @@ fn privileged_toggle_runs_on_a_read_only_cluster_for_people_only() {
     }
     assert!(h.manager.get(&id("a")).unwrap().read_only());
 
-    h.dispatch(lift(), ctx(Initiator::Ui)).unwrap();
+    h.confirm_and_run(lift(), ctx(Initiator::Ui)).unwrap();
     assert!(!h.manager.get(&id("a")).unwrap().read_only());
 }
 

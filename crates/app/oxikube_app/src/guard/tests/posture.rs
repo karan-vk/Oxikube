@@ -104,7 +104,7 @@ fn toggling_without_a_value_flips_the_current_one() {
     h.dispatch(toggle("a", None), ctx(Initiator::Command))
         .unwrap();
     assert!(read_only(&h, "a"));
-    h.dispatch(toggle("a", None), ctx(Initiator::Command))
+    h.confirm_and_run(toggle("a", None), ctx(Initiator::Command))
         .unwrap();
     assert!(!read_only(&h, "a"));
     assert!(!h.prefs.stored(&id("a")).read_only);
@@ -124,13 +124,19 @@ fn turning_read_only_off_updates_the_setting_and_the_live_session() {
     h.connect_configured("a");
     assert!(read_only(&h, "a"));
 
-    let out = h
-        .dispatch(toggle("a", Some(false)), ctx(Initiator::Ui))
-        .unwrap();
+    // Lifting always asks, production-flagged or not.
+    let request = h.ask(toggle("a", Some(false)), ctx(Initiator::Ui));
+    assert_eq!(request.tier, oxikube_domain::safety::ConfirmTier::Simple);
     assert!(
-        matches!(out, Outcome::Completed(_)),
-        "no confirm: not flagged production"
+        !request.summary.contains("production"),
+        "{}",
+        request.summary
     );
+    assert!(read_only(&h, "a"), "nothing happened yet");
+    let out = h
+        .confirm_and_run(toggle("a", Some(false)), ctx(Initiator::Ui))
+        .unwrap();
+    assert!(matches!(out, Outcome::Completed(_)), "{out:?}");
 
     assert!(!read_only(&h, "a"));
     assert!(!h.prefs.stored(&id("a")).read_only);
@@ -150,7 +156,7 @@ fn the_live_session_follows_even_when_the_settings_echo_never_arrives() {
         .echo
         .store(false, std::sync::atomic::Ordering::SeqCst);
     h.connect("a", true);
-    h.dispatch(toggle("a", Some(false)), ctx(Initiator::Ui))
+    h.confirm_and_run(toggle("a", Some(false)), ctx(Initiator::Ui))
         .unwrap();
     assert!(!read_only(&h, "a"), "the command applies the value itself");
     h.dispatch(toggle("a", Some(true)), ctx(Initiator::Ui))
@@ -224,17 +230,19 @@ fn a_confirmation_for_another_request_does_not_lift_read_only() {
 }
 
 #[test]
-fn no_confirm_to_turn_it_on_or_for_a_cluster_that_is_not_flagged() {
+fn no_confirm_to_turn_it_on_but_lifting_asks_even_when_not_flagged() {
     let h = prod_cluster();
     // Turning on never asks, even on a production cluster.
     assert!(matches!(
         h.dispatch(toggle("a", Some(true)), ctx(Initiator::Ui)),
         Ok(Outcome::Completed(_))
     ));
-    // Unflagging production first is a person's explicit choice, and then lifting is plain.
+    // Unflagging production first is a person's explicit choice; lifting still asks.
     h.dispatch(colour("a", None), ctx(Initiator::Ui)).unwrap();
+    let request = h.ask(toggle("a", Some(false)), ctx(Initiator::Ui));
+    assert_eq!(request.tier, oxikube_domain::safety::ConfirmTier::Simple);
     assert!(matches!(
-        h.dispatch(toggle("a", Some(false)), ctx(Initiator::Ui)),
+        h.confirm_and_run(toggle("a", Some(false)), ctx(Initiator::Ui)),
         Ok(Outcome::Completed(_))
     ));
 }
@@ -357,7 +365,7 @@ fn a_failed_save_never_lowers_protection() {
         .fail
         .store(true, std::sync::atomic::Ordering::SeqCst);
     let err = h
-        .dispatch(toggle("a", Some(false)), ctx(Initiator::Ui))
+        .confirm_and_run(toggle("a", Some(false)), ctx(Initiator::Ui))
         .unwrap_err();
     assert!(matches!(err, DispatchError::Handler(_)), "{err:?}");
     assert!(read_only(&h, "a"), "still read-only");
@@ -402,14 +410,14 @@ fn lowering_protection_needs_a_writable_audit_log_raising_it_does_not() {
         .push_err(OxiError::internal("disk full"));
     let writes = h.prefs.writes().len();
     let err = h
-        .dispatch(toggle("a", Some(false)), ctx(Initiator::Ui))
+        .confirm_and_run(toggle("a", Some(false)), ctx(Initiator::Ui))
         .unwrap_err();
     assert!(matches!(err, DispatchError::AuditUnavailable(_)), "{err:?}");
     assert!(read_only(&h, "a"));
     assert_eq!(h.prefs.writes().len(), writes, "nothing was written");
 
     // Once the store recovers, the backlog lands first and the change goes through.
-    let out = h.dispatch(toggle("a", Some(false)), ctx(Initiator::Ui));
+    let out = h.confirm_and_run(toggle("a", Some(false)), ctx(Initiator::Ui));
     assert!(matches!(out, Ok(Outcome::Completed(_))), "{out:?}");
     assert!(!read_only(&h, "a"));
     assert_eq!(h.bus.guard().audit().backlog_len(), 0);
@@ -563,4 +571,51 @@ fn a_dry_run_reports_what_the_preset_would_leave_behind() {
         serde_json::json!(ClusterPreset::PROD_COLOUR)
     );
     assert!(!read_only(&h, "a"));
+}
+
+/// Restore on launch: what the toggle wrote is what a fresh manager opens the cluster with, so
+/// the first mutation after connect is already refused (and the lift survives a restart too).
+#[test]
+fn the_toggled_flag_is_restored_by_a_fresh_manager_before_the_first_mutation() {
+    let first_run = Harness::new();
+    first_run.connect("a", false);
+    first_run
+        .dispatch(toggle("a", Some(true)), ctx(Initiator::Ui))
+        .unwrap();
+    let saved = first_run.prefs.stored(&id("a"));
+    assert!(saved.read_only);
+
+    let second_run = Harness::new();
+    second_run.prefs.seed(&id("a"), saved);
+    second_run.connect_configured("a");
+    assert!(read_only(&second_run, "a"), "restored");
+    let err = second_run
+        .dispatch(crate::testing::pod_delete("a", "web-0"), ctx(Initiator::Ui))
+        .unwrap_err();
+    assert!(matches!(err, DispatchError::ReadOnly { .. }), "{err:?}");
+
+    second_run
+        .confirm_and_run(toggle("a", Some(false)), ctx(Initiator::Ui))
+        .unwrap();
+    let third_run = Harness::new();
+    third_run
+        .prefs
+        .seed(&id("a"), second_run.prefs.stored(&id("a")));
+    third_run.connect_configured("a");
+    assert!(!read_only(&third_run, "a"), "the lift persisted");
+}
+
+#[test]
+fn the_toggle_is_privileged_so_it_has_no_agent_tool_and_both_directions_are_audited() {
+    let h = Harness::new();
+    h.connect("a", false);
+    h.dispatch(toggle("a", Some(true)), ctx(Initiator::Ui))
+        .unwrap();
+    h.confirm_and_run(toggle("a", Some(false)), ctx(Initiator::Command))
+        .unwrap();
+    let records = h.audit();
+    assert_eq!(records.len(), 2);
+    assert_eq!(records[0].initiator, Initiator::Ui);
+    assert_eq!(records[1].initiator, Initiator::Command);
+    assert!(h.bus.tool(CommandId::CLUSTER_TOGGLE_READ_ONLY).is_none());
 }

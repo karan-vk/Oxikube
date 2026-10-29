@@ -11,6 +11,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::fields::{colour_schema, exec_interactivity_schema};
+use super::guard::GuardContent;
 use super::node_shell::NodeShellContent;
 use super::prometheus::PrometheusContent;
 use super::watch_budget::WatchBudgetContent;
@@ -52,6 +53,10 @@ pub struct ClusterSettingsContent {
     /// cluster read-only and opt individual ones out with `false`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub read_only: Option<bool>,
+    /// Guard defaults (E19-S04). `guard.default_read_only` decides the read-only mode of a
+    /// cluster that never had `read_only` written, at either level; an explicit `read_only` wins.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub guard: Option<GuardContent>,
     /// The namespace a new session starts in. Unset uses the kubeconfig context's namespace.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_namespace: Option<String>,

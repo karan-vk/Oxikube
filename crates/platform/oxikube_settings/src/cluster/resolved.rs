@@ -48,10 +48,16 @@ impl Settings for ClusterSettings {
     /// field), a `read_only` that is anything but plainly off still makes the cluster
     /// read-only, on a first load as much as on a reload. Everything else keeps `base`.
     fn salvage(merged: &Value, base: &Self) -> Option<Self> {
-        let wants_read_only = !matches!(
-            merged.get("read_only"),
-            None | Some(Value::Null | Value::Bool(false))
-        );
+        let off =
+            |value: Option<&Value>| matches!(value, None | Some(Value::Null | Value::Bool(false)));
+        let explicit = merged.get("read_only").filter(|value| !value.is_null());
+        // The guard default only counts while no explicit `read_only` overrides it.
+        let wants_read_only = match explicit {
+            Some(value) => !off(Some(value)),
+            None => !off(merged
+                .get("guard")
+                .and_then(|guard| guard.get("default_read_only"))),
+        };
         (wants_read_only && !base.prefs.read_only).then(|| Self {
             prefs: Arc::new(ClusterPrefs {
                 read_only: true,
@@ -70,6 +76,7 @@ fn prefs_from_content(content: ClusterSettingsContent) -> ClusterPrefs {
         display_name,
         colour,
         read_only,
+        guard,
         default_namespace,
         terminal_cwd,
         node_shell_image,
@@ -91,7 +98,9 @@ fn prefs_from_content(content: ClusterSettingsContent) -> ClusterPrefs {
     ClusterPrefs {
         display_name: non_blank(display_name),
         colour,
-        read_only: read_only.unwrap_or(false),
+        read_only: read_only
+            .or(guard.and_then(|guard| guard.default_read_only))
+            .unwrap_or(false),
         default_namespace: non_blank(default_namespace),
         terminal_cwd: non_blank(terminal_cwd),
         node_shell_image: non_blank(node_shell_image),

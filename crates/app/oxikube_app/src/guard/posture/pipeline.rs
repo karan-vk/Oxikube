@@ -51,8 +51,10 @@ impl MutationGuard {
         }
         let weakens = lowers || unflags;
 
-        // Lifting read-only on a cluster the user flagged as production asks first.
-        if lowers && ClusterPreset::detect(posture.colour) == ClusterPreset::Prod {
+        // Lifting read-only is the risky direction: it always asks first (E19-S04), on every
+        // cluster, for every initiator that may run the command at all.
+        if lowers {
+            let production = ClusterPreset::detect(posture.colour) == ClusterPreset::Prod;
             let label = posture.label(&cluster);
             match &ctx.confirmation {
                 None => {
@@ -70,9 +72,13 @@ impl MutationGuard {
                         tier: ConfirmTier::Simple,
                         risk: None,
                         cluster,
-                        summary: format!(
-                            "Turn off read-only mode on {label}: it is flagged as production"
-                        ),
+                        summary: if production {
+                            format!(
+                                "Turn off read-only mode on {label}: it is flagged as production"
+                            )
+                        } else {
+                            format!("Turn off read-only mode on {label}")
+                        },
                         expected_name: None,
                     }));
                 }

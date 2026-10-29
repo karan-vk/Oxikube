@@ -131,6 +131,11 @@ fn a_read_only_session_hides_mutations_until_the_palette_lifts_it(cx: &mut TestA
 
     // Lifting read-only is itself allowed in a read-only session (the escape hatch).
     app.run_from_palette("toggle read-only", CommandId::CLUSTER_TOGGLE_READ_ONLY);
+    // Lifting asks first (E19-S04): nothing changes until the confirm is answered.
+    check!(app, app.read_only(), "the lift waits for the confirmation");
+    app.press("enter");
+    app.tick();
+    app.tick();
     check!(app, !app.read_only(), "the palette lifted read-only again");
     app.press(OPEN_PALETTE);
     app.type_text("delete");

@@ -345,8 +345,16 @@
   // Accent colour of the cluster's tab, hotbar dot and badges: "#rrggbb" or "#rgb".
   "colour": null,
   // Block every mutation. Set `true` under `clusters.<id>` to protect one cluster, or at the top
-  // level to start every cluster read-only and opt individual ones out with `false`.
-  "read_only": false,
+  // level to start every cluster read-only and opt individual ones out with `false`. `null` (the
+  // default) leaves the decision to `guard.default_read_only`. The in-app toggle
+  // (`cluster::ToggleReadOnly`) writes this key under `clusters.<id>`, so it survives restarts.
+  "read_only": null,
+  // Guard defaults (E19-S04).
+  "guard": {
+    // Read-only mode for every cluster whose `read_only` was never written (a cluster you have
+    // not toggled). Opening a cluster for the first time is then already protected.
+    "default_read_only": false
+  },
   // The namespace a new session starts in; null uses the kubeconfig context's namespace.
   "default_namespace": null,
   // Working directory of terminals opened for the cluster; null uses your home directory.
