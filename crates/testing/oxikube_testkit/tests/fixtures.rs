@@ -25,8 +25,8 @@ fn fixtures_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures")
 }
 
-/// Every `*.json` under `fixtures/`, relative, skipping the apply directory (E20-S10, loaded by `fixtures::apply`), the kind manifests, the metrics stack's
-/// chart pins and the OpenAPI schema documents (which are not `Resource`s; see
+/// Every `*.json` under `fixtures/`, relative, skipping the apply directory (loaded by
+/// `fixtures::apply`), the kind manifests, the metrics stack's chart pins and the OpenAPI schema documents (which are not `Resource`s; see
 /// `every_openapi_fixture_is_registered_and_shaped`).
 fn json_files_on_disk(dir: &Path, root: &Path, out: &mut Vec<String>) {
     for entry in std::fs::read_dir(dir).expect("fixtures directory is readable") {
