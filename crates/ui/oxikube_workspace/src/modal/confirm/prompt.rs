@@ -132,11 +132,6 @@ impl ConfirmPrompt {
         self
     }
 
-    /// The text the user has to type, when the prompt asks for one.
-    pub fn typed_name(&self) -> Option<&SharedString> {
-        self.expected.as_ref()
-    }
-
     /// Whether the items differ in risk, so each row should say its own.
     pub(super) fn items_differ_in_risk(&self) -> bool {
         self.items

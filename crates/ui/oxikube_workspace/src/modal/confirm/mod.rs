@@ -1,8 +1,9 @@
 //! [`ConfirmDialog`]: the one confirmation dialog of the guard (E19-S06).
 //!
 //! The guard never waits for the UI: a mutation that needs confirming comes back as a
-//! `ConfirmationRequest`, and this dialog renders it //! a [`ConfirmPrompt`]) and answers by calling the closures its opener gave it: confirm
-//! (re-dispatch with the answer) or decline (the guard audits the refusal).
+//! `ConfirmationRequest`, and this dialog renders it (as a [`ConfirmPrompt`]) and answers by
+//! calling the closures its opener gave it: confirm (re-dispatch with the answer) or decline
+//! (the guard audits the refusal).
 //!
 //! - **Simple** tier: Confirm is enabled; the dialog holds focus, so Enter confirms and Esc
 //!   cancels; Tab walks Cancel and Confirm.
