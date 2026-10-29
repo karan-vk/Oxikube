@@ -24,6 +24,7 @@
 //! | `exec` | "Shell" and "Attach" buttons in a pod's header (E09-S08), through the same [`ExecFlow`](crate::exec::ExecFlow) as the table's row actions |
 //! | `scale` | `scale_state` and `open_scale` (E12-S04): whether the view offers Scale and the flow that opens its dialog, for the workload panel's button and the palette |
 //! | `rollout` | "Restart" and "Set image" in the header of a Deployment, StatefulSet or DaemonSet (E12-S05): `rollout_state`, the buttons, `workload::Restart` through the bus and the set-image flow's dialog, also for the palette |
+//! | `copy` | `copy_state` and `open_copy` (E20-S08): the flow that opens "Copy to…" for the palette |
 //! | `rollback` | `rollback_state` and `open_rollback` (E12-S06): whether the view offers Rollback and the flow that opens its dialog, for the workload panel's button and the palette |
 //! | `editor_buttons` | "Edit" and "View YAML in Editor" in the header (E10-S06): `resource::Edit` / `resource::ViewYamlInEditor`, which open a `kind/name` manifest editor tab |
 //! | `events_feed` | the Events tab's feed over the app's `EventService` index (E14-S04: no watch of its own), started on first show |
@@ -54,6 +55,7 @@
 //! `last-applied-configuration` annotation, which embeds the data, is dropped.
 
 mod ages;
+mod copy;
 mod describe;
 mod drawer;
 mod editor_buttons;

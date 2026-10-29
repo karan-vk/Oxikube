@@ -1365,6 +1365,27 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         stop_on_error: bool,
     },
+    /// Copy one object to another cluster or namespace (E20-S08): the source is read, stripped of
+    /// what the server owns (`SanitizeMode::Copy`), renamed and re-namespaced to `target`, and
+    /// server-side applied there. The command is guarded on the **target** cluster (its read-only
+    /// flag, confirmation and audit), the source cluster is only read. A dry-run dispatch stops
+    /// after the server's dry run on the target.
+    #[serde(rename = "resource::CopyTo")]
+    ResourceCopyTo {
+        /// The object to copy, on the source cluster.
+        source: ResourceRef,
+        /// Where the copy goes: the target cluster, the namespace (none for a cluster-scoped
+        /// kind) and the name the copy takes.
+        target: ResourceRef,
+        /// Replace an object that exists at `target` (server-side apply). Off: an existing object
+        /// is a conflict and nothing is written.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        overwrite: bool,
+        /// Take over fields other managers own at `target`. Only with `overwrite`; off unless the
+        /// user chose it after seeing the conflict.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        force: bool,
+    },
     /// Delete one pod.
     #[serde(rename = "pod::Delete")]
     PodDelete {
@@ -2316,6 +2337,7 @@ impl Command {
             Command::ResourceApplyPlan { .. } => CommandId::RESOURCE_APPLY_PLAN,
             Command::ApplyDirectory { .. } => CommandId::APPLY_DIRECTORY,
             Command::ApplyKustomize { .. } => CommandId::APPLY_KUSTOMIZE,
+            Command::ResourceCopyTo { .. } => CommandId::RESOURCE_COPY_TO,
             Command::PodDelete { .. } => CommandId::POD_DELETE,
             Command::PodEvict { .. } => CommandId::POD_EVICT,
             Command::PodForceDelete { .. } => CommandId::POD_FORCE_DELETE,
@@ -2457,6 +2479,7 @@ impl Command {
             | Command::SecretReveal { target, .. }
             | Command::SecretEditDecoded { target }
             | Command::ResourceDelete { target, .. }
+            | Command::ResourceCopyTo { target, .. }
             | Command::PodDelete { target, .. }
             | Command::PodEvict { target }
             | Command::PodForceDelete { target }
@@ -3123,6 +3146,12 @@ mod tests {
                 field_manager: Some("oxikube".into()),
                 force_conflicts: true,
                 stop_on_error: true,
+            },
+            Command::ResourceCopyTo {
+                source: pod(),
+                target: pod(),
+                overwrite: true,
+                force: true,
             },
             Command::PodDelete {
                 target: pod(),

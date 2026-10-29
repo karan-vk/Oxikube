@@ -16,7 +16,7 @@ use oxikube_domain::audit::{AuditOutcome, Initiator};
 use oxikube_domain::command::{COMMANDS, CommandId};
 use oxikube_domain::safety::{ConfirmTier, Risk};
 use oxikube_testkit::TestPorts;
-use oxikube_testkit::sections::catalog;
+use oxikube_testkit::sections::{KindCase, catalog};
 
 use super::super::App;
 use super::{served, target, ui};
@@ -65,6 +65,9 @@ const RISKS: &[(CommandId, Risk)] = &[
     // Many objects as one plan (E20-S03): the apply-directory dialog (E20-S05) and agents; low is
     // the floor, the riskiest object raises it (`effective_risk`). No row action.
     (CommandId::RESOURCE_APPLY_PLAN, Risk::Low),
+    // Copy to another cluster or namespace (E20-S08): classified as an apply on the target. The
+    // declared floor is low; a Secret, RBAC, custom or cluster-scoped object raises it.
+    (CommandId::RESOURCE_COPY_TO, Risk::Low),
     (CommandId::RESOURCE_DELETE, Risk::Medium),
     // Roles and ClusterRoles (E17-S05): the rule dialog's save and the detail panel's delete (which
     // counts the bindings first, so it is not a row action); an RBAC change is risk medium.
@@ -116,10 +119,15 @@ const RAISED_BY_TARGET: &[(CommandId, &str, ConfirmTier)] = &[
 ];
 
 /// The tier the guard asks for `id` on a `kind`: the documented one, or the raised one.
-fn expected_tier(id: CommandId, kind: &str) -> ConfirmTier {
+fn expected_tier(id: CommandId, case: &KindCase) -> ConfirmTier {
+    // A copy is classified as an apply on its target (E20-S08): a cluster-scoped kind (a Node, a
+    // Namespace, a CRD, a ClusterRole) asks for the typed name.
+    if id == CommandId::RESOURCE_COPY_TO && !case.namespaced() {
+        return ConfirmTier::TypeName;
+    }
     RAISED_BY_TARGET
         .iter()
-        .find(|(raised, on, _)| *raised == id && *on == kind)
+        .find(|(raised, on, _)| *raised == id && *on == case.kind)
         .map_or_else(|| documented(id).1, |(_, _, tier)| *tier)
 }
 
@@ -163,7 +171,7 @@ fn every_kinds_mutations_are_guarded_audited_and_tools(cx: &mut TestAppContext) 
         for action in mutations {
             let id = action.meta().id;
             let what = format!("{id} on a {}", case.kind);
-            let tier = expected_tier(id, case.kind);
+            let tier = expected_tier(id, case);
             assert!(bus.tool(id).is_some(), "{what}: an MCP tool stub");
             let command = action.command_for(&target);
 

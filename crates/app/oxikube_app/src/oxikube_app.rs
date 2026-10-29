@@ -78,6 +78,7 @@ pub mod cluster_overview;
 pub mod columns;
 pub mod command_bus;
 pub mod context;
+pub mod copy;
 pub mod diff;
 pub mod events;
 pub mod exec;
@@ -154,6 +155,10 @@ pub use command_bus::{
 };
 pub use context::{
     ContextRegistry, LogContextProvider, MetricsContextProvider, PendingContext, selection_context,
+};
+pub use copy::{
+    ClusterChoice, CopyChoice, CopyError, CopyOutcome, CopyPreview, CopyRequest, CopyService,
+    MissingReference, ReviewAnswer,
 };
 pub use events::{
     EventBuffer, EventFilter, EventFilterError, EventKey, EventService, EventsChanged,

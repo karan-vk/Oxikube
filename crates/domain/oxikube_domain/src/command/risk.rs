@@ -34,6 +34,30 @@ pub fn delete_risk(gvk: &Gvk, propagation: Propagation) -> Risk {
     )
 }
 
+/// The risk of copying an object of `gvk` to a target of `scope` (E20-S08): [`classify`] with
+/// [`MutationVerb::Apply`] (RBAC, custom and cluster-scoped kinds, `force`), raised to at least
+/// [`Risk::Medium`] for a Secret (copying one moves its data to another cluster or namespace) and
+/// to [`Risk::High`] for a cluster-scoped kind (a Namespace, a CustomResourceDefinition, a
+/// ClusterRole): those ask for the typed name, as the story's safety section says.
+pub fn copy_risk(gvk: &Gvk, scope: Scope, force: bool) -> Risk {
+    let risk = classify(
+        MutationVerb::Apply,
+        scope,
+        gvk,
+        MutationFlags {
+            force,
+            ..MutationFlags::default()
+        },
+    );
+    if scope == Scope::Cluster {
+        risk.max(Risk::High)
+    } else if gvk.is_core() && &*gvk.kind == "Secret" {
+        risk.max(Risk::Medium)
+    } else {
+        risk
+    }
+}
+
 impl Command {
     /// The risk of this command for the object it names: the declared [`CommandMeta::risk`]
     /// raised by the target ([`delete_risk`] for `resource::Delete`). `None` for a command that
@@ -65,6 +89,11 @@ impl Command {
                 force_conflicts,
                 ..
             } => declared.max(objects.apply_risk(*force_conflicts)),
+            // A copy is classified as the apply it is on the target (E20-S08): by the kind and the
+            // target's scope, and a Secret is at least medium because its data crosses clusters.
+            Command::ResourceCopyTo { target, force, .. } => {
+                declared.max(copy_risk(&target.gvk, target.scope(), *force))
+            }
             // Scaling up or down is low; scaling to zero stops every pod of the workload.
             Command::WorkloadScale { replicas: 0, .. } => declared.max(Risk::Medium),
             // Allowing the legacy fallback may create a never-expiring token Secret: a persistent
@@ -114,6 +143,9 @@ impl CommandMeta {
             } else if self.id == CommandId::WORKLOAD_SCALE {
                 // The worst case is a scale to zero.
                 declared.max(Risk::Medium)
+            } else if self.id == CommandId::RESOURCE_COPY_TO {
+                // The worst case is a cluster-scoped kind (a Namespace, a CRD): the typed name.
+                declared.max(Risk::High)
             } else if self.id == CommandId::RESOURCE_APPLY_PLAN {
                 // The worst case is a plan holding a cluster-scoped, RBAC or custom kind, or a
                 // forced apply: an apply never rates above medium.
@@ -406,6 +438,60 @@ mod tests {
         assert_eq!(
             CommandId::RESOURCE_APPLY_PLAN.tool_name(),
             "k8s.resource_apply_plan"
+        );
+    }
+
+    #[test]
+    fn a_copy_is_classified_as_the_apply_it_is_on_the_target() {
+        use crate::ids::Gvk;
+
+        let cluster = ClusterId::new("~/.kube/config", &ContextName::new("kind"));
+        let copy = |gvk: Gvk, namespaced: bool, force: bool| Command::ResourceCopyTo {
+            source: ResourceRef::namespaced(cluster.clone(), gvk.clone(), "a", "web"),
+            target: if namespaced {
+                ResourceRef::namespaced(cluster.clone(), gvk, "b", "web")
+            } else {
+                ResourceRef::cluster_scoped(cluster.clone(), gvk, "web")
+            },
+            overwrite: force,
+            force,
+        };
+        let configmap = Gvk::from_api_version("v1", "ConfigMap");
+        assert_eq!(
+            copy(configmap.clone(), true, false).effective_risk(),
+            Some(Risk::Low)
+        );
+        // Taking over other managers' fields is medium.
+        assert_eq!(
+            copy(configmap, true, true).effective_risk(),
+            Some(Risk::Medium)
+        );
+        for (api_version, kind) in [
+            ("v1", "Secret"),
+            ("rbac.authorization.k8s.io/v1", "Role"),
+            ("example.com/v1", "Widget"),
+        ] {
+            let gvk = Gvk::from_api_version(api_version, kind);
+            assert_eq!(
+                copy(gvk, true, false).effective_risk(),
+                Some(Risk::Medium),
+                "{kind}"
+            );
+        }
+        // A cluster-scoped kind asks for the typed name.
+        let namespace = Gvk::from_api_version("v1", "Namespace");
+        let risk = copy(namespace, false, false).effective_risk();
+        assert_eq!(risk, Some(Risk::High));
+        assert_eq!(
+            risk.map(Risk::confirm_tier),
+            Some(crate::safety::ConfirmTier::TypeName)
+        );
+        let meta = super::super::lookup(CommandId::RESOURCE_COPY_TO).unwrap();
+        assert!(meta.mutating);
+        assert_eq!(meta.tool_risk(), Some(Risk::High), "the worst case");
+        assert_eq!(
+            CommandId::RESOURCE_COPY_TO.tool_name(),
+            "k8s.resource_copy_to"
         );
     }
 

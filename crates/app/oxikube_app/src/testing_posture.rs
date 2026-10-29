@@ -640,6 +640,22 @@ fn build_sample(command: CommandId, name: &str, missing: impl FnOnce(&str) -> Co
             force_conflicts: false,
             stop_on_error: false,
         },
+        "resource::CopyTo" => Command::ResourceCopyTo {
+            source: ResourceRef::namespaced(
+                cluster.clone(),
+                Gvk::from_api_version("v1", "ConfigMap"),
+                "default",
+                "x",
+            ),
+            target: ResourceRef::namespaced(
+                cluster,
+                Gvk::from_api_version("v1", "ConfigMap"),
+                "other",
+                "x",
+            ),
+            overwrite: false,
+            force: false,
+        },
         "resource::Delete" => Command::ResourceDelete {
             target: ResourceRef::namespaced(
                 cluster,

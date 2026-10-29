@@ -112,6 +112,14 @@ impl ResourceViews {
             .next()
             .map(|table| table.downgrade());
         let view = drawer.update(cx, |drawer, cx| drawer.show(target, &deps, cx));
+        // "Copy to…" in the palette opens the same flow as the table's menu.
+        let copy = self
+            .deps
+            .table
+            .actions
+            .as_ref()
+            .and_then(|actions| actions.copy_flow(workspace.downgrade()));
+        view.update(cx, |view, _| view.set_copy(copy));
         // `j` / `k` in the drawer step the table this was opened from.
         view.update(cx, |view, _| view.set_origin(origin));
         Some(view)

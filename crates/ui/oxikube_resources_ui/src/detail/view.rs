@@ -36,6 +36,9 @@ pub struct DetailView {
     pub(super) focus: FocusHandle,
     /// The table the drawer was opened from, which `j` / `k` step through.
     pub(super) origin: Option<WeakEntity<ResourceTable>>,
+    /// Opens the copy flow for "Copy to…" (E20-S08), set by the views controller after the view
+    /// is made; `None`: the palette offers no copy for this detail.
+    pub(super) copy: Option<crate::copy::CopyFlow>,
     pub(super) tab: DetailTab,
     /// Whether the view is on screen (ages are checked only then).
     pub(super) shown: bool,
@@ -130,6 +133,7 @@ impl DetailView {
             mount,
             focus: cx.focus_handle(),
             origin: None,
+            copy: None,
             tab: DetailTab::Overview,
             shown: true,
             drawn_at: Timestamp::now(),
@@ -429,7 +433,7 @@ impl oxikube_workspace::command_surface::CommandSurface for DetailView {
             .selecting(vec![self.target.clone()])
     }
 
-    /// Scale, Set image and Rollback ask in their dialogs (E12-S04, E12-S05, E12-S06), so the palette
+    /// Scale, Set image, Rollback and Copy to… ask in their dialogs (E12-S04, E12-S05, E12-S06, E20-S08), so the palette
     /// runs them here; Restart goes through the bus like the header's button does.
     fn own_commands(&self, _: &App) -> Vec<oxikube_domain::command::CommandId> {
         use oxikube_domain::command::CommandId;
@@ -443,6 +447,9 @@ impl oxikube_workspace::command_surface::CommandSurface for DetailView {
         }
         if self.rollback_state() == Some(None) {
             own.push(CommandId::WORKLOAD_ROLLBACK);
+        }
+        if self.copy_state() == Some(None) {
+            own.push(CommandId::RESOURCE_COPY_TO);
         }
         own
     }
@@ -460,6 +467,7 @@ impl oxikube_workspace::command_surface::CommandSurface for DetailView {
             CommandId::WORKLOAD_RESTART => self.restart(cx),
             CommandId::WORKLOAD_SET_IMAGE => self.open_set_image(window, cx),
             CommandId::WORKLOAD_ROLLBACK => self.open_rollback(window, cx),
+            CommandId::RESOURCE_COPY_TO => self.open_copy(window, cx),
             _ => return false,
         }
         true

@@ -127,6 +127,21 @@ fn read_only_disables_delete_with_a_reason() {
 }
 
 #[test]
+fn copy_to_stays_enabled_on_a_read_only_source_because_only_the_target_is_written() {
+    let h = Harness::new();
+    let meta = oxikube_domain::command::lookup(CommandId::RESOURCE_COPY_TO).unwrap();
+    let read_only = ActionContext::new(Capabilities::MUTATE).read_only(true);
+    assert_eq!(read_only.state_of(meta), ActionState::Enabled);
+    // Any other mutation is still off there.
+    let delete = oxikube_domain::command::lookup(CommandId::RESOURCE_DELETE).unwrap();
+    assert_eq!(
+        read_only.state_of(delete),
+        ActionState::Disabled(DisabledReason::ReadOnly)
+    );
+    drop(h);
+}
+
+#[test]
 fn a_session_reports_its_own_context() {
     let h = Harness::new();
     h.connect("a", true);

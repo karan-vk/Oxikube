@@ -32,12 +32,12 @@ mod batch;
 mod change;
 mod handler;
 mod load;
-mod manifest;
-mod mask;
+pub(crate) mod manifest;
+pub(crate) mod mask;
 mod plan;
 mod service;
 mod types;
-mod write;
+pub(crate) mod write;
 
 #[cfg(test)]
 mod tests;
