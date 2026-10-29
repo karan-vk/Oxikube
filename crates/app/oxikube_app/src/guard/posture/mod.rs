@@ -32,7 +32,8 @@
 //!    (fail closed); raising protection is never refused because the log is down.
 //! 3. **Handler** (the single writer, E19-S04: the user's settings, not `StatePort`; the file
 //!    is the one truth, `guard.default_read_only` only the fallback for a cluster whose
-//!    `read_only` was never written, and a session starts from it at open): persists through the [`PrefsWriter`] (the comment-preserving settings
+//!    `read_only` was never written, and a session starts from it at open): persists through
+//!    the [`PrefsWriter`] (the comment-preserving settings
 //!    writer, supplied by the binary) and applies the change to the live session. Raising
 //!    protection goes live first and is persisted second, so a failing disk never leaves a
 //!    cluster less protected than the user asked for; lowering is persisted first and applied
