@@ -13,6 +13,7 @@ use futures::StreamExt as _;
 use futures::channel::mpsc;
 use gpui::Context;
 use oxikube_app::apply::ApplyError;
+use oxikube_domain::manifests::ManifestDoc;
 use oxikube_runtime::{notify_coalesced, spawn_kube};
 
 use super::backend::{Loaded, ResultStream};
@@ -20,20 +21,48 @@ use super::model::{Activity, LoadSummary, Stage};
 use super::source::{ApplySource, SourceKind};
 use super::view::ApplyView;
 
+/// `(kind, namespace as written in the file, name)` of a document: what "Re-run failed only"
+/// keeps. The namespace is empty when the file leaves it to the target.
+type RowKey = (String, String, String);
+
+fn key_of(doc: &ManifestDoc) -> RowKey {
+    let text = |pointer: &str| {
+        doc.json
+            .pointer(pointer)
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .to_owned()
+    };
+    (
+        text("/kind"),
+        text("/metadata/namespace"),
+        text("/metadata/name"),
+    )
+}
+
 /// Why a dry run that is stopped says its objects were not rehearsed.
 const CANCELLED: &str = "cancelled";
 
 impl ApplyView {
     /// Loads `source`: reads it, orders the plan and, unless the cluster is read-only, starts the
     /// server's dry run of every object.
+    ///
+    /// Refused while an apply is running: replacing the work would drop its result stream and
+    /// leave a half-applied plan with no report. Cancel the run first.
     pub fn load(&mut self, source: ApplySource, cx: &mut Context<Self>) {
+        if self.model.activity() == Activity::Applying {
+            self.problem =
+                Some("An apply is running: cancel it before loading another source.".into());
+            cx.notify();
+            return;
+        }
         self.load_keeping(source, None, cx);
     }
 
     fn load_keeping(
         &mut self,
         source: ApplySource,
-        keep: Option<Vec<(String, String)>>,
+        keep: Option<Vec<RowKey>>,
         cx: &mut Context<Self>,
     ) {
         self.stop_work();
@@ -74,24 +103,10 @@ impl ApplyView {
         self.problem = Some(message);
     }
 
-    fn loaded(
-        &mut self,
-        loaded: Loaded,
-        keep: Option<Vec<(String, String)>>,
-        cx: &mut Context<Self>,
-    ) {
+    fn loaded(&mut self, loaded: Loaded, keep: Option<Vec<RowKey>>, cx: &mut Context<Self>) {
         let mut docs = loaded.docs;
         if let Some(keep) = keep {
-            docs.retain(|doc| {
-                let text = |pointer: &str| {
-                    doc.json
-                        .pointer(pointer)
-                        .and_then(serde_json::Value::as_str)
-                        .unwrap_or_default()
-                };
-                keep.iter()
-                    .any(|(kind, name)| kind == text("/kind") && name == text("/metadata/name"))
-            });
+            docs.retain(|doc| keep.contains(&key_of(doc)));
         }
         self.model.loaded(LoadSummary {
             files: loaded.files,
@@ -241,7 +256,17 @@ impl ApplyView {
         if self.model.busy() {
             return;
         }
-        let keep = self.model.failed_keys();
+        let origins = self.model.failed_origins();
+        let keep: Vec<RowKey> = self
+            .docs
+            .iter()
+            .filter(|doc| {
+                origins
+                    .iter()
+                    .any(|(source, line)| source == doc.source.as_str() && *line == doc.line)
+            })
+            .map(key_of)
+            .collect();
         if keep.is_empty() {
             return;
         }

@@ -189,6 +189,11 @@ impl ApplyView {
         &self.model
     }
 
+    #[cfg(test)]
+    pub(super) fn model_mut(&mut self) -> &mut Model {
+        &mut self.model
+    }
+
     /// The path being applied.
     pub fn source(&self) -> Option<&ApplySource> {
         self.source.as_ref()

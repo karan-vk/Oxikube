@@ -17,7 +17,7 @@ use parking_lot::Mutex;
 
 use super::{CM_A, CM_B, NS, Rig, seed};
 use crate::apply::{
-    Activity, ApplyBackend, ApplySource, Loaded, ResultStream, ServiceBackend, Stage,
+    Activity, ApplyBackend, ApplySource, Loaded, ResultStream, ServiceBackend, SourceKind, Stage,
 };
 use crate::table::tests::fixture::cluster;
 
@@ -432,4 +432,47 @@ fn cancel_during_the_apply_cancels_the_runs_token_between_objects(cx: &mut TestA
     );
     let _ = release.send(());
     rig.settle();
+}
+
+#[gpui::test]
+fn loading_another_source_is_refused_while_an_apply_runs(cx: &mut TestAppContext) {
+    let mut rig = Rig::new(cx, None);
+    two_maps(&rig);
+    rig.open("/m");
+    let rows = rig.read(|v| v.model().rows().len());
+    rig.update(|view, _| view.model_mut().set_activity(Activity::Applying));
+    rig.request(SourceKind::Manifests, Some("/m"));
+    rig.settle();
+    assert_eq!(rig.read(|v| v.model().activity()), Activity::Applying);
+    assert_eq!(rig.read(|v| v.model().rows().len()), rows, "results kept");
+    assert!(rig.read(|v| v.problem.is_some()));
+}
+
+#[gpui::test]
+fn rerun_failed_tells_the_same_name_in_two_namespaces_apart(cx: &mut TestAppContext) {
+    let mut rig = Rig::new(cx, None);
+    let map = |namespace: &str| {
+        format!(
+            "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: app\n  namespace: {namespace}\n"
+        )
+    };
+    seed(
+        &rig,
+        "/m",
+        &[("a.yaml", &map("dev")), ("b.yaml", &map("prod"))],
+    );
+    rig.open("/m");
+    script_bad_first(&rig, 1);
+    rig.click("apply-apply");
+    rig.click("apply-confirm");
+    assert_eq!(rig.words(), ["failed", "created"]);
+    rig.click("apply-rerun-failed");
+    let spaces: Vec<_> = rig.read(|v| {
+        v.model()
+            .rows()
+            .iter()
+            .map(|row| row.namespace.clone())
+            .collect()
+    });
+    assert_eq!(spaces, [Some("dev".to_owned())], "only the failed one");
 }

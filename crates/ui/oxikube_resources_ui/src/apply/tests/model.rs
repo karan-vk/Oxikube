@@ -122,11 +122,8 @@ fn errors_only_keeps_failed_and_skipped_rows() {
     assert_eq!(model.lines(), [Line::Row(1), Line::Row(2)]);
     assert_eq!(model.failures(), 2);
     assert_eq!(
-        model.failed_keys(),
-        [
-            ("ConfigMap".to_owned(), "a".to_owned()),
-            ("ConfigMap".to_owned(), "b".to_owned())
-        ]
+        model.failed_origins(),
+        [("/m/a.yaml".to_owned(), 5), ("/m/a.yaml".to_owned(), 12)]
     );
 }
 

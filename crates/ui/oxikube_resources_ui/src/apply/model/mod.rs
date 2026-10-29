@@ -349,12 +349,13 @@ impl Model {
         self.rows.iter().filter(|row| row.failed()).count()
     }
 
-    /// `(kind, name)` of each failed or skipped row: what "Re-run failed only" keeps.
-    pub fn failed_keys(&self) -> Vec<(String, String)> {
+    /// `(source, line)` of each failed or skipped row: where its document came from, which
+    /// "Re-run failed only" maps back to the loaded documents.
+    pub fn failed_origins(&self) -> Vec<(String, usize)> {
         self.rows
             .iter()
             .filter(|row| row.failed())
-            .map(|row| (row.kind.clone(), row.name.clone()))
+            .map(|row| (row.source.clone(), row.line))
             .collect()
     }
 
