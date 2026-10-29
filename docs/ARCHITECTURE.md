@@ -838,6 +838,14 @@ crate's `README.md` for its allowed dependencies. Highlights:
 - `oxikube_settings::helm` (E16-S11) — the `helm` setting: `path` (empty autodetects), `server_side_apply` (default
   false; `server_side_warning` says when the binary is older than 3.13) and `default_repos` (`{ name, url }`, http(s)
   without credentials; bitnami, ingress-nginx and prometheus-community by default). Global, hot reloaded.
+- `oxikube_domain::manifests` + `oxikube_app::apply::load` (E20-S01) — the one manifest reader. `parse_documents(text, SourceId)`
+  (pure, `serde-saphyr`, YAML 1.1 octals) splits on column-0 `---` / `...`, skips empty and comment-only documents, expands
+  `kind: List` and top-level JSON arrays, validates `apiVersion` / `kind` / `metadata.name` (`generateName` alone is refused, as
+  `kubectl apply` does) and returns `ManifestDoc { source, line, json }` plus per-document `ManifestError { source, line,
+  column, message }` (a position and a generic message, never text: it may be a Secret). `load_path` / `load_text` in the app
+  walk a file or directory over `FsPort` (depth first, name order, `.yaml` / `.yml` / `.json`, hidden entries and symlinks
+  skipped, `kustomization.*` noted, `LoadLimits` on file size, file count, total bytes and depth). E20-S02/S03/S04/S05 and
+  E10-S09 consume it.
 - `oxikube_app::helm` (E16-S03) — manifest -> resources. `oxikube_domain::helm::parse_manifest` (pure, `serde-saphyr`) splits a
   rendered manifest into `ManifestObject`s (empty and comment-only documents skipped, `kind: List` expanded, `helm.sh/hook`
   objects apart, a broken document reported as a `ManifestError` with a position only, never a snippet). `HelmService` reads the
