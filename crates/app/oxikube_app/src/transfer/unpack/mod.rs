@@ -77,9 +77,12 @@ impl UnpackReport {
 /// # Errors
 ///
 /// `Validation` for an entry whose path escapes `dest` (the unpack stops there), for a stream
-/// that is not a tar archive or ends mid-entry; the archive stream's own error (a failed or
-/// cancelled download) as it arrives; `fs`'s errors writing a file. A file being written when an
-/// error arrives is abandoned (the port's atomic write), files finished before stay.
+/// that is not a tar archive, ends mid-entry or goes on for more than 1 MiB past the archive's
+/// end marker; the archive stream's own error (a failed or cancelled download) as it arrives,
+/// including one after the end marker (the stream is read to its end, so a remote `tar` that
+/// wrote a whole archive but exited non-zero, having skipped unreadable files, is an error, not a
+/// success); `fs`'s errors writing a file. A file being written when an error arrives is
+/// abandoned (the port's atomic write), files finished before stay.
 pub async fn safe_unpack(
     fs: &dyn FsPort,
     dest: &Path,
@@ -112,6 +115,9 @@ pub async fn safe_unpack(
             Kind::Other => report.skip(Skipped::Special(shown)),
         }
     }
+    // The download's outcome (the remote `tar`'s exit status) arrives after the archive's end
+    // marker: read it, or a tar that skipped unreadable files would pass for a success.
+    reader.finish().await?;
     Ok(report)
 }
 

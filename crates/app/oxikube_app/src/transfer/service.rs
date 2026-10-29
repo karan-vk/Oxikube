@@ -35,7 +35,9 @@ pub enum DownloadFormat {
 pub struct Download {
     /// What [`stream`](Self::stream) holds.
     pub format: DownloadFormat,
-    /// The bytes; see [`ExecTransferExt::tar_download`] for how it ends.
+    /// The bytes; see [`ExecTransferExt::tar_download`] for how it ends. Read it to its end: the
+    /// remote program's failure is the last item, after the archive's end marker
+    /// ([`safe_unpack`](super::safe_unpack) does).
     ///
     /// [`ExecTransferExt::tar_download`]: oxikube_ports::ExecTransferExt::tar_download
     pub stream: ByteStream,

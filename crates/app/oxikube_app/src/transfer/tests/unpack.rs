@@ -200,3 +200,45 @@ async fn broken_input_is_an_error_and_abandons_the_file() {
         .expect("empty");
     assert!(report.files.is_empty());
 }
+
+#[tokio::test]
+async fn the_stream_is_read_past_the_end_marker_for_its_outcome() {
+    // GNU tar pads the archive to a 10 KiB record after its end blocks: still a success.
+    let mut archive = archive_of(&[("a.txt", b"alpha")]);
+    archive.resize(10 * 1024, 0);
+    let fs = FakeFsPort::new();
+    let report = safe_unpack(&fs, &dest(), chunked(&archive, 700))
+        .await
+        .expect("padded archive");
+    assert_eq!(report.files, vec![PathBuf::from("a.txt")]);
+
+    // A remote tar that skipped an unreadable file still ends the archive cleanly, then exits
+    // non-zero: that error comes after the end marker and must not be lost.
+    let chunks: Vec<_> = archive
+        .chunks(512)
+        .map(|chunk| Ok(Bytes::copy_from_slice(chunk)))
+        .chain([Err(OxiError::forbidden("tar: secret: Permission denied"))])
+        .collect();
+    let fs = FakeFsPort::new();
+    let error = safe_unpack(&fs, &dest(), stream::iter(chunks).boxed())
+        .await
+        .expect_err("the exit status is the outcome");
+    assert_eq!(error.kind(), ErrorKind::Forbidden);
+    assert_eq!(
+        fs.read(&dest().join("a.txt")).await.expect("kept"),
+        b"alpha",
+        "files written before the error stay"
+    );
+
+    // A stream that never ends after the marker is cut off, not read forever.
+    let endless = stream::iter(std::iter::once(Ok(Bytes::from(archive.clone()))))
+        .chain(stream::repeat_with(|| {
+            Ok(Bytes::from(vec![0u8; 64 * 1024]))
+        }))
+        .boxed();
+    let fs = FakeFsPort::new();
+    let error = safe_unpack(&fs, &dest(), endless)
+        .await
+        .expect_err("endless trailer");
+    assert_eq!(error.kind(), ErrorKind::Validation);
+}

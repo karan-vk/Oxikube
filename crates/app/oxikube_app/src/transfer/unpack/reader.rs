@@ -14,6 +14,10 @@ const BLOCK: usize = 512;
 /// The largest metadata record (a GNU long name, a pax header) read into memory.
 const MAX_META_BYTES: u64 = 64 * 1024;
 
+/// The most bytes read (and dropped) after the end-of-archive marker: the second zero block and
+/// the record padding (10 KiB for GNU tar's default blocking factor, 1 MiB at its largest).
+const MAX_TRAILING_BYTES: u64 = 1024 * 1024;
+
 /// What an entry is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Kind {
@@ -41,6 +45,8 @@ pub(super) struct TarReader {
     /// Data bytes of the current entry not read yet, and the padding after them.
     remaining: u64,
     padding: u64,
+    /// The input returned `None`: it is not polled again.
+    ended: bool,
 }
 
 fn truncated() -> OxiError {
@@ -85,15 +91,22 @@ impl TarReader {
             current: Bytes::new(),
             remaining: 0,
             padding: 0,
+            ended: false,
         }
     }
 
     /// Makes `current` non-empty; `false` at the end of the input.
     async fn fill(&mut self) -> OxiResult<bool> {
         while self.current.is_empty() {
+            if self.ended {
+                return Ok(false);
+            }
             match self.input.next().await {
                 Some(chunk) => self.current = chunk?,
-                None => return Ok(false),
+                None => {
+                    self.ended = true;
+                    return Ok(false);
+                }
             }
         }
         Ok(true)
@@ -204,6 +217,31 @@ impl TarReader {
                         size,
                     }));
                 }
+            }
+        }
+    }
+
+    /// Reads the input to its end after the end-of-archive marker, dropping the trailing zero
+    /// blocks and padding, so an error the stream yields after the archive (a remote `tar` that
+    /// wrote a whole archive and then exited non-zero, a cancel) is returned instead of lost.
+    ///
+    /// Trailing bytes past `MAX_TRAILING_BYTES` are a `Validation` error, so a hostile stream
+    /// that never ends cannot hold the unpack forever.
+    pub(super) async fn finish(&mut self) -> OxiResult<()> {
+        let mut trailing = self.current.len() as u64;
+        self.current = Bytes::new();
+        loop {
+            if trailing > MAX_TRAILING_BYTES {
+                return Err(OxiError::validation(
+                    "the archive goes on past its end-of-archive marker",
+                ));
+            }
+            if self.ended {
+                return Ok(());
+            }
+            match self.input.next().await {
+                Some(chunk) => trailing += chunk?.len() as u64,
+                None => self.ended = true,
             }
         }
     }

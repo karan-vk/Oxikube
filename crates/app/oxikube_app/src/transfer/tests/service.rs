@@ -7,10 +7,12 @@ use oxikube_domain::ErrorKind;
 use oxikube_ports::{ExitStatus, RemotePath, TransferOptions};
 use oxikube_testkit::{ExecScript, ExecStreamCall, FakeExecStreamPort};
 
-use super::{chunked, collect};
+use oxikube_testkit::FakeFsPort;
+
+use super::{archive_of, chunked, collect};
 use crate::guard::Mutation;
 use crate::testing::{Harness, id};
-use crate::transfer::{DownloadFormat, RemoteEntry, TransferService};
+use crate::transfer::{DownloadFormat, RemoteEntry, TransferService, safe_unpack};
 
 struct Fixture {
     h: Harness,
@@ -70,6 +72,34 @@ async fn a_download_is_the_tar_stream() {
     assert_eq!(download.format, DownloadFormat::Tar);
     assert_eq!(collect(download.stream).await, b"tar-bytes");
     assert_eq!(f.commands()[0][4..6], ["tar", "-cf"]);
+}
+
+#[tokio::test]
+async fn a_tar_that_exits_non_zero_after_a_whole_archive_fails_the_unpack() {
+    let f = Fixture::new();
+    let mut archive = archive_of(&[("dir/readable.txt", b"ok")]);
+    archive.resize(10 * 1024, 0);
+    f.exec.script().exec.push_ok(
+        ExecScript::new()
+            .stdout(archive)
+            .stderr("tar: dir/secret: Cannot open: Permission denied\n")
+            .exit(Ok(ExitStatus::with_code(2))),
+    );
+    let download = f
+        .service
+        .download(
+            &id("a"),
+            &file(),
+            RemoteEntry::Directory,
+            TransferOptions::default(),
+        )
+        .await
+        .expect("download");
+    let fs = FakeFsPort::new();
+    let error = safe_unpack(&fs, std::path::Path::new("/downloads"), download.stream)
+        .await
+        .expect_err("the skipped file is reported");
+    assert_eq!(error.kind(), ErrorKind::Forbidden, "{error}");
 }
 
 #[tokio::test]
