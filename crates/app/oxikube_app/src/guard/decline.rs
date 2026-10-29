@@ -17,20 +17,14 @@ impl MutationGuard {
             .confirmations
             .take(token)
             .ok_or(ConfirmationError::Unknown)?;
-        let target = match self
+        let target = self
             .resolved_target(&pending.command, Some(&pending.cluster))
             .await
-        {
-            Some(target) => target,
-            None => policy::audit_target(&pending.command, &pending.cluster),
-        };
-        let detail = match self
+            .unwrap_or_else(|| policy::audit_target(&pending.command, &pending.cluster));
+        let detail = self
             .resolved_detail(&pending.command, Some(&pending.cluster))
             .await
-        {
-            Some(detail) => Some(detail),
-            None => policy::audit_detail(&pending.command),
-        };
+            .or_else(|| policy::audit_detail(&pending.command));
         self.audit
             .record(self.declined(&pending, target, detail.as_deref()))
             .await

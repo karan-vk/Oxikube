@@ -132,10 +132,8 @@ impl Drop for Unanswered<'_> {
 }
 
 impl CommandBus {
-    /// Runs `command` end to end, asking `provider` when the guard needs a confirmation: the
-    /// whole pipeline (read-only check, confirmation tier, the mandatory dry run, the handler,
-    /// the audit record) in one call: dispatch, ask `provider`, dispatch again with its answer or
-    /// decline. The guard's checks and records are exactly those of the two dispatches by hand;
+    /// Runs `command` end to end, asking `provider` when the guard needs a confirmation:
+    /// dispatch, ask `provider`, dispatch again with its answer or decline. The guard's checks and records are exactly those of the two dispatches by hand;
     /// if this future is dropped while `provider` is deciding, the request is forgotten and
     /// audited as cancelled by the user.
     ///
