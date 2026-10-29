@@ -17,6 +17,7 @@
 //! set of overlay layers would stack two scrims. Dialog-shaped content is built with
 //! [`DialogModal`] from `oxikube_ui`'s dialog pieces and buttons.
 
+mod confirm;
 mod dialog;
 mod focus;
 mod view;
@@ -31,6 +32,8 @@ use gpui::{
 };
 use oxikube_ui::{ActiveTokens as _, dialog::Cancel, layout::h_flex, u};
 
+pub(crate) use confirm::request::prompt_for as confirm_prompt_for;
+pub use confirm::{ConfirmDialog, ConfirmItem, ConfirmPrompt, PreviewNote, typed_matches};
 pub use dialog::{DIALOG_KEY_CONTEXT, DialogModal};
 pub use view::{ModalPlacement, ModalView, ModalViewHandle};
 

@@ -57,6 +57,13 @@ path = "tests/screenshot.rs"
 harness = false
 required-features = ["screenshot"]
 
+# The confirmation dialog's tiers in light and dark (E19-S06); same harness and gate as above.
+[[test]]
+name = "confirm_screenshot"
+path = "tests/confirm_screenshot.rs"
+harness = false
+required-features = ["screenshot"]
+
 # The production preset's badges in light and dark (E06-S09); same harness and gate as above.
 [[test]]
 name = "cluster_screenshot"

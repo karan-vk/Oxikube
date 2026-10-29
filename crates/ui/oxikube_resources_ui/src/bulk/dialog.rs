@@ -17,6 +17,7 @@ use oxikube_domain::selection::{LabelEdit, LabelField};
 use oxikube_ui::input::InputState;
 use oxikube_workspace::Workspace;
 use oxikube_workspace::modal::{ModalPlacement, ModalView};
+use oxikube_workspace::typed_matches;
 
 use super::editor::LabelEditor;
 use super::kind::BulkKind;
@@ -200,9 +201,9 @@ impl BulkDialog {
         self.error.as_deref()
     }
 
-    /// What has been typed, trimmed.
+    /// What has been typed, exactly (no trimming: the guard compares the same way).
     pub fn typed_text(&self, cx: &App) -> String {
-        self.typed.read(cx).value().trim().to_owned()
+        self.typed.read(cx).value().to_string()
     }
 
     /// Types `text` into the confirmation field, as the user would.
@@ -262,7 +263,7 @@ impl BulkDialog {
             && self
                 .plan
                 .phrase()
-                .is_none_or(|phrase| self.typed_text(cx) == phrase)
+                .is_none_or(|phrase| typed_matches(&self.typed_text(cx), phrase))
             && self
                 .editor
                 .as_ref()

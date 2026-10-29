@@ -17,6 +17,7 @@ use oxikube_domain::view::DeleteNote;
 use oxikube_runtime::spawn_kube;
 use oxikube_ui::input::{InputEvent, InputState};
 use oxikube_workspace::modal::{ModalPlacement, ModalView};
+use oxikube_workspace::typed_matches;
 use oxikube_workspace::{Toast, Workspace};
 
 /// Where the dialog is.
@@ -134,9 +135,9 @@ impl DeleteDialog {
         self.report.as_ref()
     }
 
-    /// What has been typed, trimmed.
+    /// What has been typed, exactly (no trimming: the guard compares the same way).
     pub fn typed_text(&self, cx: &App) -> String {
-        self.typed.read(cx).value().trim().to_owned()
+        self.typed.read(cx).value().to_string()
     }
 
     /// Types `text` into the confirmation field, as the user would.
@@ -170,7 +171,7 @@ impl DeleteDialog {
             && self
                 .plan
                 .phrase()
-                .is_none_or(|phrase| self.typed_text(cx) == phrase)
+                .is_none_or(|phrase| typed_matches(&self.typed_text(cx), phrase))
     }
 
     /// Cancels while asking, closes once finished: nothing is sent, so there is nothing to undo.
