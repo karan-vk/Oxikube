@@ -278,3 +278,71 @@ fn secret_values_never_reach_the_report() {
     assert!(!text.contains("aHVudGVyMg"));
     assert_eq!(secret["data"]["password"], "aHVudGVyMg==");
 }
+
+mod properties {
+    use proptest::prelude::{any, prop, prop_oneof, proptest};
+    use proptest::strategy::Strategy;
+    use serde_json::{Map, Value, json};
+
+    use super::super::{SanitizeMode, sanitize_for_apply};
+
+    fn arb_object() -> impl Strategy<Value = Value> {
+        let kind = prop_oneof![
+            "Pod",
+            "Service",
+            "ConfigMap",
+            "Secret",
+            "Deployment",
+            "Widget"
+        ];
+        let name = "[a-z][a-z0-9-]{0,12}";
+        let labels = prop::collection::btree_map("[a-z]{1,6}", "[a-z0-9]{0,6}", 0..4);
+        let spec = prop::collection::btree_map("[a-zA-Z]{1,8}", any::<i32>(), 0..5);
+        let server_fields = any::<bool>();
+        (kind, name, labels, spec, server_fields).prop_map(
+            |(kind, name, labels, spec, with_server)| {
+                let spec: Map<String, Value> =
+                    spec.into_iter().map(|(k, v)| (k, json!(v))).collect();
+                let mut object = json!({
+                    "apiVersion": "v1",
+                    "kind": kind,
+                    "metadata": {"name": name, "labels": labels},
+                    "spec": spec,
+                });
+                if with_server {
+                    object["status"] = json!({"phase": "Running"});
+                    object["metadata"]["uid"] = json!("u");
+                    object["metadata"]["resourceVersion"] = json!("1");
+                    object["metadata"]["managedFields"] = json!([]);
+                }
+                object
+            },
+        )
+    }
+
+    proptest! {
+        #[test]
+        fn apply_mode_is_idempotent_and_keeps_user_fields(object in arb_object()) {
+            let original = object.clone();
+            let mut once = object;
+            sanitize_for_apply(&mut once, SanitizeMode::Apply);
+            for pointer in ["/metadata/name", "/metadata/labels", "/spec"] {
+                assert_eq!(once.pointer(pointer), original.pointer(pointer), "{pointer}");
+            }
+            let mut twice = once.clone();
+            let second = sanitize_for_apply(&mut twice, SanitizeMode::Apply);
+            assert_eq!(twice, once);
+            assert!(second.is_empty());
+        }
+
+        #[test]
+        fn copy_mode_is_idempotent(object in arb_object()) {
+            let mut once = object;
+            sanitize_for_apply(&mut once, SanitizeMode::Copy);
+            let mut twice = once.clone();
+            let second = sanitize_for_apply(&mut twice, SanitizeMode::Copy);
+            assert_eq!(twice, once);
+            assert!(second.is_empty());
+        }
+    }
+}
