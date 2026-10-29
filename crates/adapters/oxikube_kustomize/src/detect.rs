@@ -65,8 +65,7 @@ async fn probe_standalone(
     .ok()?;
     done.status.success().then(|| KustomizeTool {
         kind: KustomizeToolKind::Standalone,
-        version: parse_standalone_version(&done.stdout)
-            .unwrap_or_else(|| UNKNOWN_VERSION.to_owned()),
+        version: find_version(&done.stdout).unwrap_or_else(|| UNKNOWN_VERSION.to_owned()),
         path: path.to_path_buf(),
     })
 }
@@ -106,12 +105,6 @@ async fn probe_kubectl(
     })
 }
 
-/// The kustomize version in `kustomize version` output: `v5.4.2` today,
-/// `{Version:kustomize/v4.5.7 GitCommit:... }` before kustomize 5.
-pub(crate) fn parse_standalone_version(output: &str) -> Option<String> {
-    find_version(output)
-}
-
 /// The kustomize version in `kubectl version --client` output (its `Kustomize Version:` line).
 pub(crate) fn parse_kubectl_version(output: &str) -> Option<String> {
     let line = output
@@ -120,7 +113,8 @@ pub(crate) fn parse_kubectl_version(output: &str) -> Option<String> {
     find_version(line)
 }
 
-/// The first `vMAJOR.MINOR.PATCH` (with any `-pre`/`+build` suffix) in `text`.
+/// The first `vMAJOR.MINOR.PATCH` (with any `-pre`/`+build` suffix) in `text`: `v5.4.2` from
+/// `kustomize version`, or `kustomize/v4.5.7` inside the pre-5 `{Version:... }` form.
 fn find_version(text: &str) -> Option<String> {
     let bytes = text.as_bytes();
     (0..bytes.len())
@@ -145,18 +139,11 @@ mod tests {
 
     #[test]
     fn standalone_versions_new_and_old() {
-        assert_eq!(
-            parse_standalone_version("v5.4.2\n").as_deref(),
-            Some("v5.4.2")
-        );
+        assert_eq!(find_version("v5.4.2\n").as_deref(), Some("v5.4.2"));
         let old = "{Version:kustomize/v4.5.7 GitCommit:56d82a8 BuildDate:2022 GoOs:linux}";
-        assert_eq!(parse_standalone_version(old).as_deref(), Some("v4.5.7"));
-        assert_eq!(parse_standalone_version("no version here"), None);
-        assert_eq!(
-            parse_standalone_version("v5.4"),
-            None,
-            "needs three numbers"
-        );
+        assert_eq!(find_version(old).as_deref(), Some("v4.5.7"));
+        assert_eq!(find_version("no version here"), None);
+        assert_eq!(find_version("v5.4"), None, "needs three numbers");
     }
 
     #[test]

@@ -6,7 +6,7 @@
 //! the child. Neither stream is ever logged: stdout may hold `secretGenerator` values.
 //! Modelled on `oxikube_helm::cli::run` and `oxikube_cloud::process::runner`.
 
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::io;
 use std::path::Path;
 use std::process::{ExitStatus, Stdio};
@@ -46,7 +46,7 @@ async fn spawn(command: &mut Command) -> io::Result<Child> {
 pub(crate) async fn run(
     binary: &Path,
     args: &[OsString],
-    path_var: &std::ffi::OsStr,
+    path_var: &OsStr,
     timeout: Duration,
 ) -> Result<Finished, KustomizeError> {
     let mut command = Command::new(binary);
