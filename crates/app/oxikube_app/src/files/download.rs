@@ -45,7 +45,7 @@ pub struct DownloadOutcome {
 impl FileService {
     /// Downloads a file or directory to the local disk, shown on the [`board`](Self::board).
     ///
-    /// A file is fetched with `cat` and written through [`FsPort::write_stream`] (a temp file next
+    /// A file is fetched with `cat` and written through [`oxikube_ports::FsPort::write_stream`] (a temp file next
     /// to the target, renamed on success: a failure or cancel leaves nothing under the final
     /// name). A directory is a tar stream, unpacked by [`safe_unpack`] or saved as one `.tar`.
     ///

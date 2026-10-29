@@ -1,7 +1,7 @@
 //! The audit viewer's model: the filters it offers, and reading the log a keyset page at a time.
 //!
 //! The viewer never loads the whole log. [`AuditFilters`] become an
-//! [`AuditQuery`](oxikube_ports::AuditQuery) (so the store's indices answer them), and
+//! [`oxikube_ports::AuditQuery`] (so the store's indices answer them), and
 //! [`AuditReader::page`] reads one page; the cursor of the page is the position of the next one.
 //! [`count_new`] says how many records a fresh head page holds that the viewer has not seen, for
 //! the "N new" pill.

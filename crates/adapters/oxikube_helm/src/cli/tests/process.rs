@@ -239,7 +239,13 @@ async fn a_failed_upgrade_ends_its_stream_with_the_error() {
     );
     let request = UpgradeRequest::new(release(), ChartRef::new("./demo", ""));
     let items: Vec<_> = fake.cli().upgrade(&request).await.unwrap().collect().await;
-    assert_eq!(items[0].as_ref().unwrap(), &OutputLine::stdout("progress"));
+    // Stdout and stderr are two pipes, so which line arrives first is not defined.
+    assert!(
+        items
+            .iter()
+            .any(|item| item.as_ref().ok() == Some(&OutputLine::stdout("progress"))),
+        "{items:?}"
+    );
     assert!(
         items[..items.len() - 1].iter().all(Result::is_ok),
         "{items:?}"
