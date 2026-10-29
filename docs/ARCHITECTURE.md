@@ -851,6 +851,13 @@ crate's `README.md` for its allowed dependencies. Highlights:
   walk a file or directory over `FsPort` (depth first, name order, `.yaml` / `.yml` / `.json`, hidden entries and symlinks
   skipped, `kustomization.*` noted, `LoadLimits` on file size, file count, total bytes and depth). E20-S02/S03/S04/S05 and
   E10-S09 consume it.
+- `oxikube_domain::apply` (E20-S02) — pure ordering and sanitising. `ApplyPlan::build(docs, target_ns, scope_fn)` sorts
+  `ManifestDoc`s by the one kind-rank table (`apply/rank.rs`: Helm `InstallOrder` style, unknown kinds after CRDs, webhooks last,
+  stable within a rank; a kubectl-style approximation, since `kubectl apply -f` keeps file order), defaults `metadata.namespace`
+  for namespaced kinds only (scope from the discovery registry or a CRD in the plan) and records `depends_on` (Namespace and CRD
+  edges). `sanitize_for_apply(&mut Value, SanitizeMode::{Apply, Copy}) -> SanitizeReport` strips server-owned fields from the
+  strip tables in `apply/strips.rs` (`Copy` adds ownerReferences, finalizers and per-kind allocations); the report holds paths
+  only. E20-S03 (ApplyService) and E20-S08 (copy) consume it; S03 replaces `oxikube_app::apply::batch::depends`.
 - `oxikube_app::helm` (E16-S03) — manifest -> resources. `oxikube_domain::helm::parse_manifest` (pure, `serde-saphyr`) splits a
   rendered manifest into `ManifestObject`s (empty and comment-only documents skipped, `kind: List` expanded, `helm.sh/hook`
   objects apart, a broken document reported as a `ManifestError` with a position only, never a snippet). `HelmService` reads the
