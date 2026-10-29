@@ -199,13 +199,13 @@ async fn a_patch_and_an_apply_are_previewed_and_leave_the_cluster_unchanged() {
     );
     let set_image = Command::WorkloadSetImage {
         target,
-        images: vec![ImageChange::new("main", "registry.k8s.io/pause:dry-run")],
+        images: vec![ImageChange::new("main", "registry.k8s.io/pause:3.9")],
     };
     let (_, preview) = rig.ask(&set_image).await;
     let result = &preview.changes[0].result;
     assert_eq!(
         result["spec"]["template"]["spec"]["containers"][0]["image"],
-        "registry.k8s.io/pause:dry-run"
+        "registry.k8s.io/pause:3.9"
     );
 
     // The controller still writes the status; the object itself is as it was.
