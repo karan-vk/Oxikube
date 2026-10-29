@@ -24,6 +24,7 @@ mod bindings;
 mod clock;
 mod cluster;
 mod columns;
+mod copy;
 mod crd_watch;
 mod debug;
 mod delete;
