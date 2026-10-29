@@ -45,6 +45,8 @@ rcgen.workspace = true
 # The embedded default settings, for the tests that change a setting (E13-S11).
 oxikube_assets.workspace = true
 insta.workspace = true
+# The upload tests read back the tar archive that was sent (`files::tests`, E20-S07).
+tar.workspace = true
 serde-saphyr.workspace = true
 gpui = { workspace = true, features = ["test-support"] }
 gpui_platform = { workspace = true, features = ["test-support"] }
@@ -83,6 +85,14 @@ required-features = ["screenshot"]
 [[test]]
 name = "audit_screenshot"
 path = "tests/audit_screenshot.rs"
+harness = false
+required-features = ["screenshot"]
+
+# The pod file browser: a listing, and the transfers panel with a running and a finished
+# transfer, E20-S07.
+[[test]]
+name = "files_screenshot"
+path = "tests/files_screenshot.rs"
 harness = false
 required-features = ["screenshot"]
 

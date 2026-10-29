@@ -1,0 +1,9 @@
+total 52
+drwxr-xr-x 1 root root 4096 2024-03-05 12:34:56.123456789 +0000 .
+drwxr-xr-x 1 root root 4096 2024-03-05 12:34:50.000000000 +0000 ..
+-rw-r--r-- 1 root root  220 2023-08-04 09:00:00.000000000 +0000 .bash_logout
+-rwxr-xr-x 1 root root 1234567 2024-01-15 23:59:59.999999999 +0100 app
+drwxr-xr-x 2 root root 4096 2024-02-01 00:00:00.000000000 -0530 config
+-rw-r----- 1 www-data adm 0 2024-03-05 12:00:00.000000000 +0000 empty.log
+-rwsr-xr-x 1 root root 55680 2023-01-01 00:00:00.000000000 +0000 su
+drwxrwxrwt 2 root root 4096 2024-03-05 11:11:11.000000000 +0000 tmp

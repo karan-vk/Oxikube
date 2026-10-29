@@ -32,6 +32,7 @@ mod events;
 mod events_agent;
 mod events_chain;
 mod exec;
+mod files;
 mod filter_selector;
 mod helm;
 mod live_metrics;

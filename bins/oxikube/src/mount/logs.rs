@@ -173,6 +173,7 @@ pub fn row_actions() -> RowActionRegistry {
         .chain(oxikube_resources_ui::view_row_actions())
         .chain(log_row_actions())
         .chain(oxikube_resources_ui::exec::exec_row_actions())
+        .chain(oxikube_resources_ui::files::files_row_actions())
         .chain(oxikube_resources_ui::kinds::row_actions())
         .chain(oxikube_resources_ui::kinds::service::service_row_actions())
         .chain(oxikube_editor::open::editor_row_actions())

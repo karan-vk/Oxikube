@@ -1446,6 +1446,63 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         name: Option<String>,
     },
+    /// Open a container's file browser (E20-S07): list a directory, then download and upload
+    /// from there. Reads only; the listing runs `ls` in the container.
+    #[serde(rename = "pod::BrowseFiles")]
+    PodBrowseFiles {
+        /// The pod whose files to browse.
+        target: ResourceRef,
+        /// Container name; `None` picks the default container.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        container: Option<String>,
+        /// The directory to open; `None` opens the one used last for this pod, else `/`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        path: Option<String>,
+    },
+    /// Copy a file or directory out of a container to the local disk (E20-S07). A read: it
+    /// changes nothing in the cluster, and writes only `destination`.
+    #[serde(rename = "pod::DownloadFile")]
+    PodDownloadFile {
+        /// The pod to read from.
+        target: ResourceRef,
+        /// Container name; `None` picks the default container.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        container: Option<String>,
+        /// The absolute path in the container.
+        path: String,
+        /// Whether `path` is a directory (it is then fetched as a tar archive).
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        directory: bool,
+        /// The local file to write (a file download, or a directory saved as one `.tar`), or the
+        /// local directory the files are unpacked into (a directory, `as_archive` off).
+        destination: String,
+        /// Save a directory as one `.tar` file instead of unpacking it.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        as_archive: bool,
+        /// The size in bytes the listing showed, for the progress bar; `None` when unknown.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        size: Option<u64>,
+    },
+    /// Copy a local file into a container's directory (E20-S07). A mutation: low risk for a new
+    /// file, medium when it replaces one ([`Command::effective_risk`]).
+    #[serde(rename = "pod::UploadFile")]
+    PodUploadFile {
+        /// The pod to write into.
+        target: ResourceRef,
+        /// Container name; `None` picks the default container.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        container: Option<String>,
+        /// The existing directory in the container the file goes into.
+        dest_dir: String,
+        /// The local file to send.
+        local_path: String,
+        /// The file's size in bytes, as the caller saw it (the audit record keeps it; the upload
+        /// fails if the file changed).
+        size: u64,
+        /// The file replaces one of the same name in `dest_dir`.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        overwrite: bool,
+    },
     /// Forward a local port to a pod port.
     #[serde(rename = "pod::PortForward")]
     PodPortForward {
@@ -2238,6 +2295,9 @@ impl Command {
             Command::PodAttach { .. } => CommandId::POD_ATTACH,
             Command::PodExec { .. } => CommandId::POD_EXEC,
             Command::PodDebug { .. } => CommandId::POD_DEBUG,
+            Command::PodBrowseFiles { .. } => CommandId::POD_BROWSE_FILES,
+            Command::PodDownloadFile { .. } => CommandId::POD_DOWNLOAD_FILE,
+            Command::PodUploadFile { .. } => CommandId::POD_UPLOAD_FILE,
             Command::PodPortForward { .. } => CommandId::POD_PORT_FORWARD,
             Command::PortForwardStart { .. } => CommandId::PORTFORWARD_START,
             Command::PortForwardStop { .. } => CommandId::PORTFORWARD_STOP,
@@ -2375,6 +2435,9 @@ impl Command {
             | Command::PodAttach { target, .. }
             | Command::PodExec { target, .. }
             | Command::PodDebug { target, .. }
+            | Command::PodBrowseFiles { target, .. }
+            | Command::PodDownloadFile { target, .. }
+            | Command::PodUploadFile { target, .. }
             | Command::PodPortForward { target, .. }
             | Command::PortForwardStart { target, .. }
             | Command::PortForwardFavouriteAdd { target, .. }
@@ -3052,6 +3115,28 @@ mod tests {
                 target_container: Some("app".into()),
                 command: vec!["sh".into()],
                 name: None,
+            },
+            Command::PodBrowseFiles {
+                target: pod(),
+                container: Some("app".into()),
+                path: Some("/etc".into()),
+            },
+            Command::PodDownloadFile {
+                target: pod(),
+                container: None,
+                path: "/var/log".into(),
+                directory: true,
+                destination: "/tmp/log".into(),
+                as_archive: false,
+                size: Some(4096),
+            },
+            Command::PodUploadFile {
+                target: pod(),
+                container: Some("app".into()),
+                dest_dir: "/tmp".into(),
+                local_path: "/home/me/a.txt".into(),
+                size: 12,
+                overwrite: true,
             },
             Command::PodPortForward {
                 target: pod(),

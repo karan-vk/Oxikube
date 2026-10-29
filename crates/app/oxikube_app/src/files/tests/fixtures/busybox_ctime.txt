@@ -1,0 +1,4 @@
+total 8
+drwxr-xr-x    2 root     root          4096 Tue Mar  5 12:34:56 2024 .
+drwxr-xr-x    1 root     root          4096 Tue Mar  5 12:30:00 2024 ..
+-rw-r--r--    1 root     root            12 Wed Jan  3 01:02:03 2024 hello.txt

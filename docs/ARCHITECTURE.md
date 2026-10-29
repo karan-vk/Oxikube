@@ -518,6 +518,21 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `TransferService::upload` takes the guard's `Mutation` (the only way the app writes into a container). `safe_unpack`
   unpacks a downloaded archive through `FsPort` (absolute paths, `..` refused; links, devices never created);
   `tar_file_stream` streams one local file as an archive. The Commands, MCP stubs and the file browser are E20-S07.
+- `oxikube_app::files` (E20-S07) — the pod file browser's app half. `FileService::list` runs one `sh` script per attempt over the
+  session's exec stream (no TTY, `LC_ALL=C`): `ls -la --full-time` when the container's `ls` accepts it (probed on `/`), else the classic
+  columns, else a `find` script for a container without `ls` (names and kinds only), else `NO_SHELL_TOOLS` (the clear "no shell tools,
+  open a debug container" state, not an error loop). The output is read by pure functions (`parse_ls`, `parse_find`) tested against a
+  fixture corpus (GNU, busybox, Alpine, symlinks, spaces, unicode, permission denied, empty). `download` fetches a file with `cat` into
+  `FsPort::write_stream` (temp file and rename, so a failure or cancel leaves nothing under the final name) and a directory as a tar
+  through `safe_unpack` or one `.tar`; `upload` takes the guard's `Mutation`, checks for an existing file and sends one file as a tar
+  built while it is read (`FsPort::read_stream`). `TransferBoard` is the registry of this run's transfers (progress, speed, cancel
+  token, error text); nothing on it is persisted. `pod::DownloadFile` is a read (allowed on a read-only cluster, not audited);
+  `pod::UploadFile` is a guarded mutation (Low for a new file, Medium when it replaces one, `Command::effective_risk`; blocked
+  read-only; one audit record `container=… path=… size=… overwrite=…`). `FileRunner` dispatches them on the bus for the view.
+  `oxikube_resources_ui::files` is the view: `FilesView` (a workspace item per pod: container buttons, breadcrumb with an editable path,
+  a virtualised `Table` sorted by name, size, mode or time with directories first, a hidden-files toggle, refresh, a per-path listing
+  cache, the `/var/run/secrets` warning, progress toasts with Cancel, the transfers panel, and the OS drop target), `FilesViews`
+  (opens it for `pod::BrowseFiles`) and the "Browse Files" row action.
 - `oxikube_app::exec` (E09-S08) — `ExecService`: `open_shell(pod, container, &ShellOptions)` finds the shell with a quick
   non-interactive exec per entry of the chain (`terminal.exec_shells`, default `bash`, `sh`; exit 126/127 or `executable file
   not found` means missing, anything else stops the search), opens the first the container has over the session's `ExecPort`

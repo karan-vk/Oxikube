@@ -79,6 +79,10 @@ impl Command {
                 grace_period_seconds: Some(0),
                 ..
             } => declared.max(Risk::High),
+            // Replacing a file in a container is more than adding one (E20-S07).
+            Command::PodUploadFile {
+                overwrite: true, ..
+            } => declared.max(Risk::Medium),
             _ => declared,
         })
     }
@@ -104,6 +108,9 @@ impl CommandMeta {
             } else if self.id == CommandId::SERVICEACCOUNT_GENERATE_KUBECONFIG {
                 // The worst case is the legacy token Secret fallback.
                 declared.max(Risk::Medium)
+            } else if self.id == CommandId::POD_UPLOAD_FILE {
+                // The worst case is replacing a file.
+                declared.max(Risk::Medium)
             } else if self.id == CommandId::WORKLOAD_SCALE {
                 // The worst case is a scale to zero.
                 declared.max(Risk::Medium)
@@ -125,6 +132,36 @@ mod tests {
 
     fn gvk(group: &str, kind: &str) -> Gvk {
         Gvk::new(group, "v1", kind)
+    }
+
+    #[test]
+    fn an_upload_is_low_for_a_new_file_and_medium_when_it_overwrites() {
+        let upload = |overwrite| Command::PodUploadFile {
+            target: ResourceRef::namespaced(
+                ClusterId::new("/k", &ContextName::new("kind")),
+                gvk("", "Pod"),
+                "default",
+                "web-0",
+            ),
+            container: None,
+            dest_dir: "/tmp".into(),
+            local_path: "/home/me/a.txt".into(),
+            size: 1,
+            overwrite,
+        };
+        assert_eq!(upload(false).effective_risk(), Some(Risk::Low));
+        assert_eq!(upload(true).effective_risk(), Some(Risk::Medium));
+        assert_eq!(
+            crate::command::lookup(CommandId::POD_UPLOAD_FILE)
+                .expect("declared")
+                .tool_risk(),
+            Some(Risk::Medium),
+            "the tool stub advertises the worst case"
+        );
+        assert_eq!(
+            upload(true).effective_risk().map(Risk::confirm_tier),
+            Some(crate::safety::ConfirmTier::Simple)
+        );
     }
 
     #[test]

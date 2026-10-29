@@ -72,6 +72,7 @@ pub(crate) fn acts_on_cursor_row(command: CommandId) -> bool {
         CommandId::POD_SHELL
             | CommandId::POD_ATTACH
             | CommandId::POD_DEBUG
+            | CommandId::POD_BROWSE_FILES
             | CommandId::NODE_SHELL
             | CommandId::NODE_CORDON
             | CommandId::NODE_UNCORDON
@@ -121,6 +122,7 @@ pub(crate) fn availability_hint(command: CommandId) -> Option<&'static str> {
         CommandId::NODE_UNCORDON => Some("Uncordon is available for Nodes"),
         CommandId::POD_ATTACH => Some("Attach is available for Pods"),
         CommandId::POD_DEBUG => Some("Debug is available for Pods"),
+        CommandId::POD_BROWSE_FILES => Some("Browse Files is available for Pods"),
         CommandId::POD_VIEW_LOGS | CommandId::WORKLOAD_VIEW_LOGS => {
             Some("Logs are available for Pods, workloads and Services")
         }

@@ -1,0 +1,10 @@
+total 64
+drwxr-xr-x    1 root     root          4096 2024-03-05 12:34:56.000000000 +0000 .
+drwxr-xr-x    1 root     root          4096 2024-03-05 12:34:56.000000000 +0000 ..
+-rwxr-xr-x    1 root     root             0 2024-03-05 12:34:56.000000000 +0000 .dockerenv
+drwxr-xr-x    2 root     root          4096 2024-01-26 00:00:00.000000000 +0000 bin
+drwxr-xr-x    5 root     root           360 2024-03-05 12:34:56.000000000 +0000 dev
+drwxr-xr-x    1 root     root          4096 2024-03-05 12:34:56.000000000 +0000 etc
+lrwxrwxrwx    1 root     root             8 2024-01-26 00:00:00.000000000 +0000 lib -> /usr/lib
+dr-xr-xr-x  234 root     root             0 2024-03-05 12:34:56.000000000 +0000 proc
+drwxr-xr-x    1 root     root          4096 2024-03-05 12:34:56.000000000 +0000 var

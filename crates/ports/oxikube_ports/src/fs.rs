@@ -20,6 +20,25 @@ use oxikube_domain::OxiResult;
 /// abandons the write.
 pub type FileChunks = BoxStream<'static, OxiResult<Vec<u8>>>;
 
+/// A local file opened for reading as chunks, with what a transfer needs to know first.
+pub struct FileRead {
+    /// The file's size in bytes when it was opened.
+    pub size: u64,
+    /// The permission bits (`0o644`); `0o644` where the platform has none.
+    pub mode: u32,
+    /// The content, in order; an `Err` item ends it.
+    pub chunks: FileChunks,
+}
+
+impl std::fmt::Debug for FileRead {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FileRead")
+            .field("size", &self.size)
+            .field("mode", &format_args!("{:o}", self.mode))
+            .finish_non_exhaustive()
+    }
+}
+
 /// The type of a directory entry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EntryKind {
@@ -81,6 +100,21 @@ pub struct FsEvent {
 pub trait FsPort: Send + Sync {
     /// The whole content of the file at `path`. `NotFound` when absent.
     async fn read(&self, path: &Path) -> OxiResult<Vec<u8>>;
+
+    /// Opens the file at `path` to be read in chunks: its size and mode, and the content as a
+    /// stream that never holds the whole file (an upload of a large file). `NotFound` when
+    /// absent, `Validation` for a directory.
+    ///
+    /// The default reads the whole file as one chunk, which is right for an in-memory fake; a
+    /// real filesystem overrides it to stream.
+    async fn read_stream(&self, path: &Path) -> OxiResult<FileRead> {
+        let content = self.read(path).await?;
+        Ok(FileRead {
+            size: content.len() as u64,
+            mode: 0o644,
+            chunks: futures::stream::once(async move { Ok(content) }).boxed(),
+        })
+    }
 
     /// Writes `contents` to `path`, creating parent directories and replacing any
     /// existing file atomically (temp file + rename).

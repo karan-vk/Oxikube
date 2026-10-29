@@ -313,10 +313,15 @@ impl CommandId {
     pub const PALETTE_TOGGLE_SHOW_ALL: CommandId = CommandId::new("palette::ToggleShowAll");
     /// `pod::Attach`: attach to a container's main process.
     pub const POD_ATTACH: CommandId = CommandId::new("pod::Attach");
+    /// `pod::BrowseFiles`: open a container's file browser (E20-S07).
+    pub const POD_BROWSE_FILES: CommandId = CommandId::new("pod::BrowseFiles");
     /// `pod::Debug`: add an ephemeral debug container to a pod and open a terminal in it.
     pub const POD_DEBUG: CommandId = CommandId::new("pod::Debug");
     /// `pod::Delete`: delete one pod.
     pub const POD_DELETE: CommandId = CommandId::new("pod::Delete");
+    /// `pod::DownloadFile`: copy a file or directory out of a container to the local disk
+    /// (E20-S07).
+    pub const POD_DOWNLOAD_FILE: CommandId = CommandId::new("pod::DownloadFile");
     /// `pod::Evict`: evict one pod through the eviction subresource (honours PodDisruptionBudgets).
     pub const POD_EVICT: CommandId = CommandId::new("pod::Evict");
     /// `pod::Exec`: run a command (or shell) in a container.
@@ -356,6 +361,8 @@ impl CommandId {
     pub const POD_SHOW_NODE: CommandId = CommandId::new("pod::ShowNode");
     /// `pod::Shell`: open an interactive shell in a container (`bash`, else `sh`).
     pub const POD_SHELL: CommandId = CommandId::new("pod::Shell");
+    /// `pod::UploadFile`: copy a local file into a container's directory (E20-S07).
+    pub const POD_UPLOAD_FILE: CommandId = CommandId::new("pod::UploadFile");
     /// `pod::ViewLogs`: open a pod's logs.
     pub const POD_VIEW_LOGS: CommandId = CommandId::new("pod::ViewLogs");
     /// `pvc::Resize`: grow a PersistentVolumeClaim (patch its requested storage).
@@ -1634,6 +1641,17 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::exec(CommandId::POD_ATTACH, "Attach", CommandScope::Selection)
         .in_views(TABLE_VIEWS)
         .selecting(SelectionKind::core("Pod")),
+    // E20-S07. Browsing a container's files and downloading from it only read: no confirmation,
+    // no risk, allowed on a read-only cluster. (They do run `ls` and `tar` in the container, so
+    // they need exec rights; the cluster's RBAC decides, like for `kubectl cp`.)
+    CommandMeta::read(
+        CommandId::POD_BROWSE_FILES,
+        "Browse Files",
+        CommandScope::Selection,
+        Capabilities::EXEC,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::core("Pod")),
     // Adds an ephemeral container to the pod (`patch` on `pods/ephemeralcontainers`), which cannot
     // be removed or edited until the pod is deleted: a mutation, so read-only blocks it, a simple
     // confirmation names the pod, image and target (low risk, E09-S10), and it is audited. It is
@@ -1653,6 +1671,14 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Selection,
         Risk::Medium,
         NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::core("Pod")),
+    CommandMeta::read(
+        CommandId::POD_DOWNLOAD_FILE,
+        "Download File",
+        CommandScope::Selection,
+        Capabilities::EXEC,
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::core("Pod")),
@@ -1717,6 +1743,18 @@ pub static COMMANDS: &[CommandMeta] = &[
         "Show Node",
         CommandScope::Selection,
         NONE,
+    )
+    .in_views(TABLE_VIEWS)
+    .selecting(SelectionKind::core("Pod")),
+    // An upload writes into the container's filesystem: a low-risk mutation (a new file in an
+    // existing directory), medium when it overwrites ([`Command::effective_risk`]). Blocked on a
+    // read-only cluster, simple confirmation, one audit record with the container, path and size.
+    CommandMeta::mutation(
+        CommandId::POD_UPLOAD_FILE,
+        "Upload File",
+        CommandScope::Selection,
+        Risk::Low,
+        Capabilities::EXEC,
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::core("Pod")),
@@ -2787,6 +2825,7 @@ mod tests {
                     || m.id == CommandId::RESOURCE_DELETE
                     || m.id == CommandId::SELECTION_DELETE
                     || m.id == CommandId::SERVICEACCOUNT_GENERATE_KUBECONFIG
+                    || m.id == CommandId::POD_UPLOAD_FILE
                     || m.id == CommandId::WORKLOAD_SCALE
                     || m.id == CommandId::RESOURCE_APPLY_PLAN)
         );

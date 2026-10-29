@@ -36,6 +36,7 @@ pub mod crds;
 pub mod describe_settings;
 pub mod detail;
 pub mod exec;
+pub mod files;
 pub mod filter;
 pub mod kinds;
 pub mod metrics;

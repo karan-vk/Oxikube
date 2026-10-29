@@ -1,0 +1,8 @@
+total 16
+-rw-r--r-- 1 root root   10 2024-03-05 12:34:56.000000000 +0000 my file.txt
+-rw-r--r-- 1 root root   11 2024-03-05 12:34:56.000000000 +0000 two  spaces  here
+-rw-r--r-- 1 root root   12 2024-03-05 12:34:56.000000000 +0000 日本語のファイル.txt
+-rw-r--r-- 1 root root   13 2024-03-05 12:34:56.000000000 +0000 émoji 🎉.md
+-rw-r--r-- 1 root root   14 2024-03-05 12:34:56.000000000 +0000  leading-space
+-rw-r--r-- 1 root root   15 2024-03-05 12:34:56.000000000 +0000 -dash-first
+-rw-r--r-- 1 root root   16 2024-03-05 12:34:56.000000000 +0000 arrow -> in name.txt

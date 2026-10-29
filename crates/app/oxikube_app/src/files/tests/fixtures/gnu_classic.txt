@@ -1,0 +1,7 @@
+total 8
+drwxr-xr-x  2 root root 4096 Mar  5 12:34 .
+drwxr-xr-x  1 root root 4096 Mar  5 12:30 ..
+-rw-r--r--  1 root root 1210 Mar  5 12:34 nginx.conf
+-rw-r--r--  1 root root 2310 Oct 11  2022 mime.types
+-rw-r--r--. 1 root root   99 Dec 31 23:00 selinux-file
+-rw-r--r--+ 1 root root   42 Jan  1 00:00 acl-file

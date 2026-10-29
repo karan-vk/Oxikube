@@ -1,0 +1,6 @@
+total 0
+lrwxrwxrwx 1 root root  9 Mar  5 12:34 current -> releases/7
+lrwxrwxrwx 1 root root 20 Mar  5 12:34 data -> /mnt/data with space
+lrwxrwxrwx 1 root root  4 Mar  5 12:34 loop -> loop
+lrwxrwxrwx 1 root root 12 Mar  5 12:34 a -> b -> c
+drwxr-xr-x 3 root root 60 Mar  5 12:34 releases
