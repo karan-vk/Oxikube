@@ -16,6 +16,11 @@ Two independent sets live here:
   `kubectl auth can-i --list --as` printed). `record.sh [context]` applies `fixture.yaml` (objects named `oxi-rbac-fx*`
   only), records and deletes it again. Read through `fixtures::rbac`; `oxikube_app`'s access tests compare the
   subject index with every review.
+- **Apply fixture** (`apply/`, E20-S10): 50 manifests (YAML and JSON, in subdirectories) for the bulk apply and copy
+  tests. File order is the opposite of the right apply order (custom resources in `00-custom-resources/`, the
+  Namespaces in `99-namespaces/`). Names that must be unique per run contain `fxrun`, replaced by a run id
+  (`fixtures::apply::files/docs/write_to`). Not part of `fixtures::ALL`; never applied by `kind-up`. Secrets hold
+  dummy values. The layout is described in the `fixtures::apply` rustdoc.
 - **Cluster fixtures** (`cluster/`, `metrics-server/`), described below.
 - **Metrics stack** (`metrics-stack/`): the nightly's tier-2 metrics fixtures, described at the end.
 

@@ -31,6 +31,16 @@ name: integration
 # both sides (rules and kubectl output, never a token) under diagnostics/namespaces/rbac, which both
 # jobs upload when they fail.
 #
+# The apply and copy suite (E20-S10, `oxikube_app/tests/kind_smoke/apply_fixture`) runs in the `kind`
+# job: the 50-manifest directory `oxikube_testkit/fixtures/apply` (files named in the opposite of the
+# right order, a CustomResourceDefinition and its resources) applied in kind order from an empty
+# cluster, again unchanged, with one value changed, with a conflict against another field manager,
+# and after its namespaces were deleted; a Deployment and a ConfigMap copied to another namespace
+# and accepted by `kubectl apply --dry-run=server`. Every run has its own `oxi-test-<rand>` id in
+# its namespaces and cluster-wide names and removes them in a drop guard. A failing run saves the
+# per-object results and the manifests that carry no Secret into diagnostics/namespaces/apply. The
+# `cross-cluster` job below repeats the copy between two real clusters, nightly.
+#
 # The data plane suite (E04-S14) is `crates/adapters/oxikube_kube/tests/`; its README maps every
 # port method and epic acceptance item to the test that exercises it. The nightly run executes the
 # whole suite twice on the same cluster as a flake check: a test that passes once and fails once is
@@ -168,6 +178,49 @@ jobs:
       - name: Teardown
         if: always()
         run: cargo run -q -p xtask -- kind-down --name oxikube || true
+
+  # Copy between two real clusters (E20-S10): `kind-oxikube` and a second kind cluster `oxikube-b`.
+  # Nightly and on demand only; the PR run copies between two namespaces of one cluster, which
+  # exercises the same two-session path. The object that lands in B must be one `kubectl apply
+  # --dry-run=server` accepts there.
+  cross-cluster:
+    if: ${{ github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      OXIKUBE_TEST_CONTEXT_B: kind-oxikube-b
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-rust
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: integration
+          save-if: false
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: oxikube
+          wait: 120s
+      - name: Second cluster
+        run: cargo run -q -p xtask -- kind-up --name oxikube-b
+      - name: Apply fixture, then copy across clusters
+        run: |
+          set -o pipefail
+          mkdir -p diagnostics
+          cargo test -p oxikube_app --features integration --test kind_smoke \
+            -- apply_fixture --nocapture 2>&1 | tee diagnostics/cross-cluster.log
+      - name: Upload diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: cross-cluster-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: diagnostics/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Teardown
+        if: always()
+        run: |
+          cargo run -q -p xtask -- kind-down --name oxikube-b || true
+          cargo run -q -p xtask -- kind-down --name oxikube || true
 
   # The Helm CLI scenarios against the oldest supported Helm (E16-S12), nightly and on demand: the
   # adapter's parsers and flags must still work with 3.10's output. Only the tests that run `helm`

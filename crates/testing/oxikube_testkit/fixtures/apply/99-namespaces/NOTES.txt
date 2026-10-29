@@ -1,0 +1,1 @@
+Not a manifest: the loader skips files that are not .yaml, .yml or .json.

@@ -1,0 +1,12 @@
+# Apply fixture (E20-S10): dummy values only. `fxrun` is replaced by a per-run id.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all
+  namespace: fxrun-app
+  labels:
+    app.kubernetes.io/part-of: apply-fixture
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress

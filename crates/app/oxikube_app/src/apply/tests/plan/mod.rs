@@ -3,6 +3,7 @@
 //! the definitions a custom resource waits for, stop on error and cancel.
 
 mod crd;
+mod fixture;
 mod flow;
 mod guard;
 mod outcomes;

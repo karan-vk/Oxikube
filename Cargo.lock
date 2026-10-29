@@ -6600,6 +6600,7 @@ dependencies = [
  "oxikube_ports",
  "parking_lot",
  "serde_json",
+ "tar",
  "tempfile",
  "tokio",
  "uuid",

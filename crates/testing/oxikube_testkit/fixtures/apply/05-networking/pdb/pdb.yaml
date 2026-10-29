@@ -1,0 +1,26 @@
+# Apply fixture (E20-S10): dummy values only. `fxrun` is replaced by a per-run id.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-1
+  namespace: fxrun-app
+  labels:
+    app.kubernetes.io/part-of: apply-fixture
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: web-1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-2
+  namespace: fxrun-app
+  labels:
+    app.kubernetes.io/part-of: apply-fixture
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: web-2

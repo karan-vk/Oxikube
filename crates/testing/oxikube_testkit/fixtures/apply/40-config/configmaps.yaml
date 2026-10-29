@@ -1,0 +1,66 @@
+# Apply fixture (E20-S10): dummy values only. `fxrun` is replaced by a per-run id.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: settings-1
+  namespace: fxrun-app
+  labels:
+    app.kubernetes.io/part-of: apply-fixture
+data:
+  LOG_LEVEL: info
+  FEATURE_1: "on"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: settings-2
+  namespace: fxrun-app
+  labels:
+    app.kubernetes.io/part-of: apply-fixture
+data:
+  LOG_LEVEL: info
+  FEATURE_2: "on"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: settings-3
+  namespace: fxrun-app
+  labels:
+    app.kubernetes.io/part-of: apply-fixture
+data:
+  LOG_LEVEL: info
+  FEATURE_3: "on"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: settings-4
+  namespace: fxrun-app
+  labels:
+    app.kubernetes.io/part-of: apply-fixture
+data:
+  LOG_LEVEL: info
+  FEATURE_4: "on"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: settings-5
+  namespace: fxrun-app
+  labels:
+    app.kubernetes.io/part-of: apply-fixture
+data:
+  LOG_LEVEL: info
+  FEATURE_5: "on"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: settings-6
+  namespace: fxrun-app
+  labels:
+    app.kubernetes.io/part-of: apply-fixture
+data:
+  LOG_LEVEL: info
+  FEATURE_6: "on"

@@ -25,7 +25,7 @@
 //! | `TableFeedPort` | [`FakeTableFeedPort`] |
 //! | `LogPort` | [`FakeLogPort`] |
 //! | `ExecPort` (+ `TerminalBackend`) | [`FakeExecPort`] (+ [`FakeTerminalBackend`]) |
-//! | `ExecStreamPort` | [`FakeExecStreamPort`] |
+//! | `ExecStreamPort` | [`FakeExecStreamPort`], and [`FakeTarExec`] (an in-memory filesystem that speaks tar) |
 //! | `PortForwardPort` | [`FakePortForwardPort`] |
 //! | `ClusterSourcePort` | [`FakeClusterSourcePort`] |
 //! | `CloudDiscoveryPort` | [`FakeCloudDiscoveryPort`] |
@@ -105,6 +105,7 @@ mod schema;
 mod session;
 mod storage;
 mod stream_io;
+mod tar_exec;
 mod terminal;
 mod warnings;
 
@@ -162,6 +163,7 @@ pub use storage::{
 pub use stream_io::{
     FakePortForwardPort, ForwardCapture, ForwardScript, PortForwardCall, PortForwardScripts,
 };
+pub use tar_exec::{FakeTarExec, TarExecCall};
 pub use terminal::{
     ExecPortCall, ExecPortScripts, FakeExecPort, FakeTerminalBackend, TerminalCall,
 };

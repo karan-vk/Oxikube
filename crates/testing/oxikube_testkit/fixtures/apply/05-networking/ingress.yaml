@@ -1,0 +1,40 @@
+# Apply fixture (E20-S10): dummy values only. `fxrun` is replaced by a per-run id.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: site-1
+  namespace: fxrun-app
+  labels:
+    app.kubernetes.io/part-of: apply-fixture
+spec:
+  rules:
+    - host: site-1.example.test
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web-1
+                port:
+                  number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: site-2
+  namespace: fxrun-app
+  labels:
+    app.kubernetes.io/part-of: apply-fixture
+spec:
+  rules:
+    - host: site-2.example.test
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web-2
+                port:
+                  number: 80

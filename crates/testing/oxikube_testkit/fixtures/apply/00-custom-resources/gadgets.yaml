@@ -1,0 +1,33 @@
+# Apply fixture (E20-S10): dummy values only. `fxrun` is replaced by a per-run id.
+apiVersion: fxrun.apply.test.oxikube.dev/v1
+kind: Gadget
+metadata:
+  name: gadget-1
+  namespace: fxrun-app
+  labels:
+    app.kubernetes.io/part-of: apply-fixture
+spec:
+  size: 1
+  tier: gold
+---
+apiVersion: fxrun.apply.test.oxikube.dev/v1
+kind: Gadget
+metadata:
+  name: gadget-2
+  namespace: fxrun-app
+  labels:
+    app.kubernetes.io/part-of: apply-fixture
+spec:
+  size: 2
+  tier: silver
+---
+apiVersion: fxrun.apply.test.oxikube.dev/v1
+kind: Gadget
+metadata:
+  name: gadget-3
+  namespace: fxrun-app
+  labels:
+    app.kubernetes.io/part-of: apply-fixture
+spec:
+  size: 3
+  tier: gold

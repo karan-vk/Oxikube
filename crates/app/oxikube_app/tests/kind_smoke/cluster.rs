@@ -42,6 +42,12 @@ impl Kind {
     /// `OXIKUBE_TEST_CONTEXT` is unset.
     pub async fn from_env() -> Option<Self> {
         let context = test_context()?;
+        Some(Self::named(context).await)
+    }
+
+    /// The kind cluster whose kubectl context is `context` (a second cluster of a cross-cluster
+    /// test, see `OXIKUBE_TEST_CONTEXT_B`).
+    pub async fn named(context: String) -> Self {
         ensure_kind_context(&context).expect("kind context");
         let home = std::env::var_os("HOME").map(|h| default_kubeconfig_path(&PathBuf::from(h)));
         let loaded = load_local_kubeconfig(
@@ -54,10 +60,10 @@ impl Kind {
         let context = ContextName::from(context);
         let definition = ContextDefinition::from_kubeconfig(&loaded.merged, &context)
             .unwrap_or_else(|| panic!("context `{context}` is not in the kubeconfig"));
-        Some(Self {
+        Self {
             context,
             kubeconfig: definition.kubeconfig().clone(),
-        })
+        }
     }
 
     /// The kind admin's client.

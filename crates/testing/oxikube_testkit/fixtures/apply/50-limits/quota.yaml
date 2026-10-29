@@ -1,0 +1,26 @@
+# Apply fixture (E20-S10): dummy values only. `fxrun` is replaced by a per-run id.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: caps
+  namespace: fxrun-app
+  labels:
+    app.kubernetes.io/part-of: apply-fixture
+spec:
+  hard:
+    pods: "50"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: defaults
+  namespace: fxrun-app
+  labels:
+    app.kubernetes.io/part-of: apply-fixture
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: 500m
+      defaultRequest:
+        cpu: 50m

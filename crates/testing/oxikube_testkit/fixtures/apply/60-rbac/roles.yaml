@@ -1,0 +1,24 @@
+# Apply fixture (E20-S10): dummy values only. `fxrun` is replaced by a per-run id.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: reader-1
+  namespace: fxrun-app
+  labels:
+    app.kubernetes.io/part-of: apply-fixture
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: reader-2
+  namespace: fxrun-data
+  labels:
+    app.kubernetes.io/part-of: apply-fixture
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list"]
