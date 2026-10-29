@@ -4,8 +4,14 @@
 //! `enforcement.rs` proves the bus denies a recording handler. This sweep goes further:
 //!
 //! * the handlers that can be built from fakes are the real ones (`resource::Delete`, the
-//!   workload, node, RBAC, namespace, storage, apply and Helm operation handlers), so a bypass
-//!   in a real handler is seen, not only a bypass in a stub;
+//!   workload, node, RBAC, namespace, storage, apply and Helm operation handlers). On a
+//!   read-only cluster the guard denies a mutating command before any handler body runs, so
+//!   those handlers are only registered here, not executed: this sweep proves the *guard*
+//!   denies every mutating command, not that a handler body avoids the writer. Handler bodies
+//!   run only in the reverse check (non-mutating commands) and the positive control
+//!   (`resource::Delete`). Running every real mutating handler on a writable cluster to catch a
+//!   direct `writer()` call is tracked as a follow-up and covered statically by the E19-S03
+//!   mutation lint;
 //! * after every attempt it checks the audit log (exactly one `Denied` record naming the
 //!   command, the initiator and, when recorded, the read-only reason) and every fake port
 //!   (zero writes on the resource port, zero calls on the exec and port-forward fakes, no
@@ -294,7 +300,7 @@ fn read_only_sweep() {
 }
 
 #[test]
-fn the_sweep_runs_the_real_handlers_where_fakes_can_build_them() {
+fn the_sweep_registers_the_real_handlers_where_fakes_can_build_them() {
     let world = World::new();
     for expected in [
         CommandId::RESOURCE_DELETE,
