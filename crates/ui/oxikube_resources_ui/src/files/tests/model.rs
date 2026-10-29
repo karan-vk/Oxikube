@@ -207,3 +207,42 @@ fn landing_a_prepared_listing_is_pointer_moves_and_the_sort_follows_the_model() 
     );
     assert_eq!(model.sort().column, FileColumn::Name);
 }
+
+/// Measures the header-click re-sort of 10,000 rows, which runs on the UI thread (frame budget
+/// 8 ms, `docs/PERFORMANCE.md`). Wall-clock numbers are machine-bound, so this only prints them:
+/// `cargo test -p oxikube_resources_ui --release --lib resort_timing -- --ignored --nocapture`.
+#[test]
+#[expect(clippy::print_stdout, reason = "the measurement is the output")]
+#[ignore = "prints wall-clock timings; run on demand with --release --nocapture"]
+fn resort_timing_of_ten_thousand_rows() {
+    let entries: Vec<FileEntry> = (0..10_000u32)
+        .map(|i| {
+            entry(
+                &format!("entry-{i:05}"),
+                FileKind::File,
+                u64::from(i) * 7 % 100_000,
+                i64::from(i),
+            )
+        })
+        .collect();
+    let mut model = FilesModel::new();
+    model.set_listing(&listing(entries));
+    let columns = [FileColumn::Name, FileColumn::Size, FileColumn::Modified];
+    let mut micros: Vec<u128> = (0..90)
+        .map(|n| {
+            let sort = FileSort {
+                column: columns[n % 3],
+                descending: n % 2 == 0,
+            };
+            let start = std::time::Instant::now();
+            model.set_sort(sort);
+            start.elapsed().as_micros()
+        })
+        .collect();
+    micros.sort_unstable();
+    println!(
+        "resort 10k rows: p50 {} us, p95 {} us, max {} us",
+        micros[45], micros[85], micros[89]
+    );
+    assert_eq!(model.len(), 10_000);
+}
