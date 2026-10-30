@@ -65,17 +65,12 @@ pub(super) fn build_theme(
 /// Zed's `merge_player_colors`: the theme's players replace the base's by index and the base's
 /// remaining players are kept, so a theme with 3 players still ends up with the full set.
 fn merge_players(base: &mut Vec<PlayerColor>, theme: Vec<PlayerColor>) {
-    let overridden = theme.len();
     for (index, player) in theme.into_iter().enumerate() {
         match base.get_mut(index) {
             Some(slot) => *slot = player,
             None => base.push(player),
         }
     }
-    debug_assert!(
-        base.len() >= overridden,
-        "merged players keep every theme player"
-    );
 }
 
 /// Explicit `oxikube` keys over the derived defaults.

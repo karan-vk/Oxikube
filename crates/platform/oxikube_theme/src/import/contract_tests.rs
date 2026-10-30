@@ -21,6 +21,12 @@ fn probe(n: usize) -> (String, Hsla) {
     (text, parsed)
 }
 
+fn sorted_keys() -> Vec<&'static str> {
+    let mut keys: Vec<&str> = table::mapped_keys().collect();
+    keys.sort_unstable();
+    keys
+}
+
 fn family(style: &str) -> String {
     format!(
         r#"{{ "name": "T", "themes": [{{ "name": "T Dark", "appearance": "dark", "style": {style} }}] }}"#
@@ -29,8 +35,7 @@ fn family(style: &str) -> String {
 
 #[test]
 fn every_mapped_key_sets_its_token() {
-    let mut keys: Vec<&str> = table::mapped_keys().collect();
-    keys.sort_unstable();
+    let keys = sorted_keys();
     assert!(keys.len() > 100, "the table maps the Zed v0.2.0 keys");
     for (index, key) in keys.iter().enumerate() {
         let (text, expected) = probe(index);
@@ -98,11 +103,7 @@ fn players_beyond_the_base_are_appended() {
 
 #[test]
 fn random_key_subsets_apply_exactly_the_keys_given() {
-    let keys: Vec<&str> = {
-        let mut keys: Vec<_> = table::mapped_keys().collect();
-        keys.sort_unstable();
-        keys
-    };
+    let keys = sorted_keys();
     let mut state = 0x2545_f491_4f6c_dd1d_u64;
     let mut next = move || {
         state ^= state << 13;
