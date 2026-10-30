@@ -310,9 +310,7 @@ async fn path_write_to_a_cluster_layer(cx: &mut TestAppContext) {
         "{file}"
     );
     cx.read(|cx| {
-        let store = cx.global::<SettingsStore>();
-        assert_eq!(store.diagnostics().len(), 0);
-        let _ = store;
+        assert_eq!(cx.global::<SettingsStore>().diagnostics().len(), 0);
         assert_eq!(TerminalSettings::get_global(cx).font_size, 13.0);
     });
 }

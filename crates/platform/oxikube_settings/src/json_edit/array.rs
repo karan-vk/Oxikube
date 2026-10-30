@@ -17,16 +17,11 @@
 use serde_json::Value;
 use std::ops::Range;
 
-use super::{construct_json_value, replace_value_in_json_text, to_pretty_json};
+use super::{construct_json_value, json_parser, replace_value_in_json_text, to_pretty_json};
 
 const TS_DOCUMENT_KIND: &str = "document";
 const TS_ARRAY_KIND: &str = "array";
 const TS_COMMENT_KIND: &str = "comment";
-
-/// A new tree-sitter parser for JSON.
-fn json_parser() -> tree_sitter::Parser {
-    super::json_parser()
-}
 
 pub(super) fn parse_index_key(index_key: &str) -> Option<usize> {
     index_key.strip_prefix('#')?.parse().ok()
