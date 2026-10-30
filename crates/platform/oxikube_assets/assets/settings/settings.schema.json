@@ -299,7 +299,8 @@
               "type": "null"
             }
           ],
-          "description": "The keymap layered under your `keymap.json`: `default` (the per-OS defaults) or `vim`\n(adds `j` / `k` / `g g` / `shift-g` / `ctrl-d` / `ctrl-u`, `d d` delete and `y y` copy name\nto resource tables; the editor, the terminal and text fields are untouched)."
+          "description": "The keymap layered under your `keymap.json`: `default` (the per-OS defaults) or `vim`\n(adds `j` / `k` / `g g` / `shift-g` / `ctrl-d` / `ctrl-u`, `d d` delete and `y y` copy name\nto resource tables; the editor, the terminal and text fields are untouched).",
+          "x-oxikube-dynamic-enum": "base_keymaps"
         },
         "cloud": {
           "$ref": "#/$defs/CloudSettingsContent"
@@ -768,7 +769,8 @@
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "x-oxikube-dynamic-enum": "fonts"
         },
         "font_size": {
           "description": "The font size in points (6 to 72), at 100 % UI zoom: the UI zoom scales it like every\nother size, so 14 is 21 pixels at a zoom of 1.5. `null` uses the theme's monospace size.\nA change applies to open editors at once.",
@@ -991,7 +993,8 @@
               "type": "null"
             }
           ],
-          "description": "The keymap layered under your `keymap.json`: `default` (the per-OS defaults) or `vim`\n(adds `j` / `k` / `g g` / `shift-g` / `ctrl-d` / `ctrl-u`, `d d` delete and `y y` copy name\nto resource tables; the editor, the terminal and text fields are untouched)."
+          "description": "The keymap layered under your `keymap.json`: `default` (the per-OS defaults) or `vim`\n(adds `j` / `k` / `g g` / `shift-g` / `ctrl-d` / `ctrl-u`, `d d` delete and `y y` copy name\nto resource tables; the editor, the terminal and text fields are untouched).",
+          "x-oxikube-dynamic-enum": "base_keymaps"
         }
       },
       "type": "object"
@@ -1703,7 +1706,8 @@
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "x-oxikube-dynamic-enum": "fonts"
         },
         "font_size": {
           "description": "Font size in points (6 - 72); a value outside is clamped. `null` uses the theme's\nmonospace size. The UI zoom applies on top. Applies to open terminals at once.",
@@ -1786,7 +1790,8 @@
       "anyOf": [
         {
           "description": "One theme, whatever the system appearance.",
-          "type": "string"
+          "type": "string",
+          "x-oxikube-dynamic-enum": "themes"
         },
         {
           "additionalProperties": false,
@@ -1797,14 +1802,16 @@
               "type": [
                 "string",
                 "null"
-              ]
+              ],
+              "x-oxikube-dynamic-enum": "themes"
             },
             "light": {
               "description": "The theme to use in light appearance.",
               "type": [
                 "string",
                 "null"
-              ]
+              ],
+              "x-oxikube-dynamic-enum": "themes"
             },
             "mode": {
               "anyOf": [
@@ -2018,7 +2025,8 @@
           "type": "null"
         }
       ],
-      "description": "The keymap layered under your `keymap.json`: `default` (the per-OS defaults) or `vim`\n(adds `j` / `k` / `g g` / `shift-g` / `ctrl-d` / `ctrl-u`, `d d` delete and `y y` copy name\nto resource tables; the editor, the terminal and text fields are untouched)."
+      "description": "The keymap layered under your `keymap.json`: `default` (the per-OS defaults) or `vim`\n(adds `j` / `k` / `g g` / `shift-g` / `ctrl-d` / `ctrl-u`, `d d` delete and `y y` copy name\nto resource tables; the editor, the terminal and text fields are untouched).",
+      "x-oxikube-dynamic-enum": "base_keymaps"
     },
     "cloud": {
       "$ref": "#/$defs/CloudSettingsContent"

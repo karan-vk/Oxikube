@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 #[serde(untagged)]
 pub enum ThemeSelectionContent {
     /// One theme, whatever the system appearance.
+    #[schemars(extend("x-oxikube-dynamic-enum" = "themes"))]
     Static(String),
     /// A light and a dark theme with a mode choosing between them.
     Dynamic {
@@ -25,9 +26,11 @@ pub enum ThemeSelectionContent {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         mode: Option<ThemeMode>,
         /// The theme to use in light appearance.
+        #[schemars(extend("x-oxikube-dynamic-enum" = "themes"))]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         light: Option<String>,
         /// The theme to use in dark appearance.
+        #[schemars(extend("x-oxikube-dynamic-enum" = "themes"))]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         dark: Option<String>,
     },

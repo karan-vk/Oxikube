@@ -45,6 +45,7 @@ pub struct TerminalContent {
     pub shell_args: Option<Vec<String>>,
     /// Font family of the terminal text; should be monospace. `null` uses the platform's
     /// monospace font (Menlo, Consolas, DejaVu Sans Mono). Applies to open terminals at once.
+    #[schemars(extend("x-oxikube-dynamic-enum" = "fonts"))]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub font_family: Option<String>,
     /// Font size in points (6 - 72); a value outside is clamped. `null` uses the theme's

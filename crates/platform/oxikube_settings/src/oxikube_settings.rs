@@ -55,6 +55,7 @@ pub mod metrics;
 pub mod paths;
 pub mod portforward;
 pub mod schema;
+pub mod schema_dynamic;
 pub mod settings;
 pub mod store;
 #[cfg(test)]
@@ -76,6 +77,7 @@ pub use metrics::{
     MetricsSettings, MetricsSettingsContent,
 };
 pub use portforward::{PortForwardSettings, PortForwardSettingsContent};
+pub use schema_dynamic::DynamicEnums;
 pub use settings::{RegisteredSetting, Settings, SettingsContent, SettingsLocation};
 pub use store::SettingsStore;
 pub use update::new_text_for_update;
