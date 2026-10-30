@@ -47,6 +47,11 @@ binary links every settings-owning crate, so the schema covers every setting the
 (`src/settings_schema.rs`, E05-S06b). A feature crate that registers settings must be a dependency
 of this binary and be referenced from it (its `init` in `startup::FEATURES`); xtask fails otherwise.
 
+`--print-live-settings-schema` (also hidden) prints the schema with the dynamic enums injected
+(bundled theme names, base keymaps; the running app adds user themes and fonts), as the in-app JSON
+editor sees it (E21-S02). Fields opt in with `#[schemars(extend("x-oxikube-dynamic-enum" = "themes"))]`
+(`themes` | `base_keymaps` | `fonts`); the checked-in schema only carries the annotation.
+
 ## Allowed internal dependencies
 
 - everything (domain, ports, app, adapters, platform, ui, testing)

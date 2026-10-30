@@ -20,6 +20,7 @@ pub struct EditorSettingsContent {
     pub tab_size: Option<i64>,
     /// The font family of the text, such as "JetBrains Mono". `null` uses the theme's monospace
     /// font. A change applies to open editors at once.
+    #[schemars(extend("x-oxikube-dynamic-enum" = "fonts"))]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub font_family: Option<String>,
     /// The font size in points (6 to 72), at 100 % UI zoom: the UI zoom scales it like every

@@ -51,6 +51,9 @@ Options:
 pub enum Print {
     /// `--print-settings-schema`: the `settings.schema.json` text.
     SettingsSchema,
+    /// `--print-live-settings-schema`: the schema with the dynamic enums (installed themes, base
+    /// keymaps) injected, as the in-app JSON editor sees it. Not byte-stable; never checked in.
+    LiveSettingsSchema,
     /// `--print-settings-crates`: the crates that registered settings, one per line.
     SettingsCrates,
 }
@@ -111,6 +114,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Parsed, String>
         match flag.as_str() {
             "-h" | "--help" => return Ok(Parsed::Help),
             "--print-settings-schema" => out.print = Some(Print::SettingsSchema),
+            "--print-live-settings-schema" => out.print = Some(Print::LiveSettingsSchema),
             "--print-settings-crates" => out.print = Some(Print::SettingsCrates),
             "--perf" => out.perf = true,
             "--perf-no-probe" => out.perf_no_probe = true,
@@ -379,10 +383,15 @@ mod tests {
             Some(Print::SettingsSchema)
         );
         assert_eq!(
+            run(&["--print-live-settings-schema"]).unwrap().print,
+            Some(Print::LiveSettingsSchema)
+        );
+        assert_eq!(
             run(&["--print-settings-crates"]).unwrap().print,
             Some(Print::SettingsCrates)
         );
         assert!(!USAGE.contains("--print-settings"));
+        assert!(!USAGE.contains("--print-live"));
     }
 
     #[test]

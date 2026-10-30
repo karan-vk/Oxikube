@@ -28,6 +28,25 @@ pub enum BaseKeymap {
 }
 
 impl BaseKeymap {
+    /// Every base keymap this build ships, in the order the settings page lists them.
+    pub const ALL: [Self; 2] = [Self::Default, Self::Vim];
+
+    /// The `settings.json` spelling (`default`, `vim`).
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Default => "default",
+            Self::Vim => "vim",
+        }
+    }
+
+    /// [`name`](Self::name) of every [`ALL`](Self::ALL) entry.
+    pub fn names() -> Vec<String> {
+        Self::ALL
+            .iter()
+            .map(|keymap| keymap.name().to_owned())
+            .collect()
+    }
+
     /// Whether this base keymap switches the vim layer on.
     pub const fn is_vim(self) -> bool {
         matches!(self, Self::Vim)
@@ -40,6 +59,7 @@ pub struct KeymapSettingsContent {
     /// The keymap layered under your `keymap.json`: `default` (the per-OS defaults) or `vim`
     /// (adds `j` / `k` / `g g` / `shift-g` / `ctrl-d` / `ctrl-u`, `d d` delete and `y y` copy name
     /// to resource tables; the editor, the terminal and text fields are untouched).
+    #[schemars(extend("x-oxikube-dynamic-enum" = "base_keymaps"))]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub base_keymap: Option<BaseKeymap>,
 }
@@ -98,6 +118,14 @@ pub(crate) fn follow_base_keymap(cx: &mut App) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn names_match_the_serde_spelling_of_every_variant() {
+        for keymap in BaseKeymap::ALL {
+            assert_eq!(serde_json::to_value(keymap).unwrap(), keymap.name());
+        }
+        assert_eq!(BaseKeymap::names(), ["default", "vim"]);
+    }
 
     #[test]
     fn the_default_is_the_default_keymap() {
