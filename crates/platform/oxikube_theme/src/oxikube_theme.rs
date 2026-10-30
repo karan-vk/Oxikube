@@ -42,11 +42,12 @@ mod test_fixtures;
 
 pub use appearance::{Appearance, SystemAppearance, ThemeMode};
 pub use global::{
-    ActiveTheme, apply_user_scan, init, init_watching_dir, init_with_dir, refresh_active,
+    ActiveTheme, ActiveThemeExt, apply_user_scan, init, init_watching_dir, init_with_dir,
+    insert_theme_families, refresh_active, remove_themes_by_source,
 };
 pub use import::{
     ImportDiagnostic, ImportError, ImportReport, ImportedFamily, ThemeFamily, import_family,
 };
-pub use registry::{ThemeFileProblem, ThemeMeta, ThemeRegistry, ThemeSource};
+pub use registry::{ExtensionId, ThemeFileProblem, ThemeMeta, ThemeRegistry, ThemeSource};
 pub use settings::{ThemeSelection, ThemeSelectionContent, ThemeSettings};
 pub use tokens::ThemeTokens;
