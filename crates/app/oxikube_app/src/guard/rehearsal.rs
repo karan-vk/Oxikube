@@ -25,7 +25,14 @@
 //!
 //! A server that cannot dry-run the request (an aggregated API without dry-run support, an
 //! admission webhook with side effects, see [`no_preview_reason`]) never blocks the mutation: the
-//! request carries [`DryRunPreview::NoPreviewAvailable`] and the dialog shows a banner.
+//! request carries [`DryRunPreview::NoPreviewAvailable`] and the dialog shows a banner. The token
+//! remembers that too ([`Rehearsal::Unavailable`]), and the confirmed dispatch's [`Mutation`]
+//! tells the handler not to send its own dry run first ([`Mutation::rehearses_first`]): it would
+//! fail the same way, after the user confirmed.
+//!
+//! A person's own dry-run dispatch of a `resource::Apply` through the guard (the editor's apply
+//! preview, `ApplyService::preview`) stands in for the rehearsal of the apply that follows it (see
+//! `receipt`): that person has seen the server's answer, and nobody would see a second one.
 
 use std::sync::Arc;
 
@@ -40,6 +47,36 @@ use super::preview::{
 };
 use super::{Mutation, MutationGuard};
 use crate::command_bus::{CommandHandler, DispatchContext, DispatchError, HandlerContext};
+
+/// What the guard's dry run before a confirmation established: kept with the token and handed to
+/// the handler of the confirmed dispatch through its [`Mutation`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum Rehearsal {
+    /// The guard dry-ran nothing (the command needs no dry run, or the dispatch is one itself).
+    #[default]
+    None,
+    /// The server dry-ran exactly this request before it was confirmed.
+    Done,
+    /// The server cannot dry-run it ([`DryRunPreview::NoPreviewAvailable`]): the confirmed run
+    /// sends the request without a dry run first.
+    Unavailable,
+}
+
+impl Rehearsal {
+    /// Whether the guard's dry run happened (or found that none is possible).
+    pub(crate) fn happened(self) -> bool {
+        self != Rehearsal::None
+    }
+}
+
+impl From<&DryRunPreview> for Rehearsal {
+    fn from(preview: &DryRunPreview) -> Self {
+        match preview {
+            DryRunPreview::Rehearsed(_) => Rehearsal::Done,
+            DryRunPreview::NoPreviewAvailable { .. } => Rehearsal::Unavailable,
+        }
+    }
+}
 
 /// What the server-side dry run of a command showed, attached to its
 /// [`ConfirmationRequest`](super::ConfirmationRequest).
@@ -86,9 +123,9 @@ pub(super) fn require_rehearsal(
     meta: &CommandMeta,
     command: &Command,
     ctx: &DispatchContext,
-    rehearsed: bool,
+    rehearsal: Rehearsal,
 ) -> Result<(), DispatchError> {
-    if needs_rehearsal(command, ctx) && !rehearsed {
+    if needs_rehearsal(command, ctx) && !rehearsal.happened() {
         return Err(DispatchError::DryRunRequired(meta.id));
     }
     Ok(())

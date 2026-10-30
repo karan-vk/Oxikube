@@ -136,8 +136,8 @@ async fn send(
     }
 }
 
-/// Sends `role` as a dry run, then for real unless the dispatch is itself a dry run; returns the
-/// object of the last request.
+/// Sends `role` as a dry run (unless the guard found the server cannot dry-run it), then for real
+/// unless the dispatch is itself a dry run; returns the object of the last request.
 async fn write_checked(
     mutation: &Mutation,
     how: Write,
@@ -147,9 +147,11 @@ async fn write_checked(
         dry_run: true,
         ..mutation.write_options()
     };
-    let rehearsed = send(mutation, how, role, &rehearsal).await?;
-    if mutation.dry_run() {
-        return Ok(rehearsed);
+    if mutation.rehearses_first() {
+        let rehearsed = send(mutation, how, role, &rehearsal).await?;
+        if mutation.dry_run() {
+            return Ok(rehearsed);
+        }
     }
     send(mutation, how, role, &mutation.write_options()).await
 }

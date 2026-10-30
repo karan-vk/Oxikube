@@ -16,7 +16,7 @@ use oxikube_domain::ids::ClusterId;
 use oxikube_domain::safety::{ConfirmTier, Risk};
 use parking_lot::Mutex;
 
-use super::rehearsal::DryRunPreview;
+use super::rehearsal::{DryRunPreview, Rehearsal};
 
 /// Most confirmations waiting for an answer. Issuing one more forgets the oldest, whose
 /// token then fails as [`ConfirmationError::Unknown`].
@@ -55,7 +55,9 @@ pub struct ConfirmationRequest {
     /// The server-side dry run the guard ran before asking: for a create, update, patch or apply
     /// ([`preview_verb`](super::preview_verb)) the objects it would write next to the live ones,
     /// and for a command whose risk [requires one](Risk::requires_dry_run_diff) (an
-    /// `Irreversible` delete) what the server said; `None` for any other command.
+    /// `Irreversible` delete) what the server said; `None` for any other command, and for a
+    /// `resource::Apply` the same person just dry-ran through the guard at the UI (the editor's
+    /// apply preview: that person saw the server's answer already).
     pub preview: Option<DryRunPreview>,
 }
 
@@ -113,8 +115,8 @@ pub(crate) struct Pending {
     pub(crate) cluster: ClusterId,
     pub(crate) expected_name: Option<String>,
     pub(crate) dry_run: bool,
-    /// Whether the guard ran the command's dry run before asking ([`DryRunPreview`]).
-    pub(crate) rehearsed: bool,
+    /// What the guard's dry run before asking established ([`DryRunPreview`]).
+    pub(crate) rehearsal: Rehearsal,
 }
 
 /// The guard's table of pending confirmations.
@@ -142,14 +144,14 @@ impl PendingConfirmations {
     }
 
     /// Consumes `answer` for `command` dispatched by `initiator` (as a dry run or not) and
-    /// returns whether the guard dry-ran the command before it asked.
+    /// returns what the guard's dry run before it asked established.
     pub(crate) fn redeem(
         &self,
         answer: &Confirmation,
         command: &Command,
         initiator: Initiator,
         dry_run: bool,
-    ) -> Result<bool, ConfirmationError> {
+    ) -> Result<Rehearsal, ConfirmationError> {
         let pending = self.take(answer.token).ok_or(ConfirmationError::Unknown)?;
         if pending.command != *command
             || pending.initiator != initiator
@@ -161,7 +163,7 @@ impl PendingConfirmations {
             Some(expected) if answer.typed_name.as_deref() != Some(expected.as_str()) => {
                 Err(ConfirmationError::NameMismatch { expected })
             }
-            _ => Ok(pending.rehearsed),
+            _ => Ok(pending.rehearsal),
         }
     }
 

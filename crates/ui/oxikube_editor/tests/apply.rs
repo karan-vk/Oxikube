@@ -49,17 +49,10 @@ fn the_key_dry_runs_shows_the_diff_and_apply_sends_it(cx: &mut TestAppContext) {
 
     f.confirm(&dialog);
     assert!(f.modal::<ApplyPreviewDialog>().is_none());
-    // The preview's dry run, the guard's before it asks (E19-S07), the handler's, the apply.
-    assert_eq!(
-        f.writes(),
-        [
-            ("patch", true),
-            ("patch", true),
-            ("patch", true),
-            ("patch", false)
-        ]
-    );
-    let ResourceCall::Patch { patch, .. } = &f.resources.mutating_calls()[3] else {
+    // The preview's dry run stands in for the guard's before it asks and the handler's
+    // (E19-S07): the confirmed apply is the one request sent.
+    assert_eq!(f.writes(), [("patch", true), ("patch", false)]);
+    let ResourceCall::Patch { patch, .. } = &f.resources.mutating_calls()[1] else {
         panic!("a patch")
     };
     assert_eq!(
@@ -89,11 +82,10 @@ fn the_key_dry_runs_shows_the_diff_and_apply_sends_it(cx: &mut TestAppContext) {
         .iter()
         .map(|r| (r.dry_run, r.outcome))
         .collect();
-    // The preview, the guard's dry run (E19-S07), the apply.
+    // The preview (it stands in for the guard's dry run, E19-S07), the apply: one record each.
     assert_eq!(
         audit,
         [
-            (true, AuditOutcome::Succeeded),
             (true, AuditOutcome::Succeeded),
             (false, AuditOutcome::Succeeded)
         ]
@@ -268,8 +260,8 @@ fn a_conflict_lists_its_managers_and_force_applies_over_them(cx: &mut TestAppCon
             _ => None,
         })
         .collect();
-    // The forced preview, the guard's dry run, the handler's, the apply.
-    assert_eq!(forces, [false, true, true, true, true]);
+    // The forced preview, then the apply.
+    assert_eq!(forces, [false, true, true]);
     assert_eq!(f.notice(&editor), "Applied ConfigMap shop/web");
 }
 
@@ -402,11 +394,10 @@ fn an_api_without_dry_run_shows_a_banner_and_still_applies(cx: &mut TestAppConte
             .all(ResourceCall::is_dry_run)
     );
 
-    // The guard's dry run and the handler's are refused the same way; the apply is sent.
-    for _ in 0..2 {
-        f.resources.script().patch.push_err(no_dry_run());
-        f.resources.script().replace.push_err(no_dry_run());
-    }
+    // The guard's dry run is refused the same way; the handler sends none of its own, and the
+    // apply is sent.
+    f.resources.script().patch.push_err(no_dry_run());
+    f.resources.script().replace.push_err(no_dry_run());
     f.confirm(&dialog);
     assert_eq!(f.writes().last(), Some(&("patch", false)));
     assert_eq!(f.notice(&editor), "Applied ConfigMap shop/web");

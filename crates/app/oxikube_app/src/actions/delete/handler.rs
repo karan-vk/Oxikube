@@ -66,7 +66,8 @@ pub(crate) enum Deleted {
 }
 
 /// Deletes `target` with `propagation` through the guard's permit: a server-side dry run of the
-/// same delete first (a request the server would refuse fails before anything changes), then the
+/// same delete first (a request the server would refuse fails before anything changes; not when
+/// the guard found the server cannot dry-run it, [`Mutation::rehearses_first`]), then the
 /// delete, unless the dispatch is itself a dry run. The one place `resource::Delete` and
 /// `selection::Delete` delete an object.
 ///
@@ -87,14 +88,17 @@ pub(crate) async fn delete_object(
             .await?;
         return Ok(Deleted::DryRun);
     }
-    // The server rehearses the delete first (admission, RBAC, existence).
-    let rehearsal = DeleteOptions {
-        dry_run: true,
-        ..options.clone()
-    };
-    writer
-        .delete(&target.gvk, ns, &target.name, &rehearsal)
-        .await?;
+    // The server rehearses the delete first (admission, RBAC, existence), unless the guard found
+    // it cannot dry-run one.
+    if mutation.rehearses_first() {
+        let rehearsal = DeleteOptions {
+            dry_run: true,
+            ..options.clone()
+        };
+        writer
+            .delete(&target.gvk, ns, &target.name, &rehearsal)
+            .await?;
+    }
     Ok(
         match writer
             .delete(&target.gvk, ns, &target.name, &options)

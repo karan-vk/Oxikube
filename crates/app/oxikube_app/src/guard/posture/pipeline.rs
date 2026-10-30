@@ -68,7 +68,7 @@ impl MutationGuard {
                         cluster: cluster.clone(),
                         expected_name: None,
                         dry_run: ctx.dry_run,
-                        rehearsed: false,
+                        rehearsal: Default::default(),
                     });
                     return Ok(Outcome::NeedsConfirmation(ConfirmationRequest {
                         token,

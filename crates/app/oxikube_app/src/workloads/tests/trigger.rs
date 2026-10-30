@@ -182,3 +182,18 @@ fn only_a_cronjob_can_be_triggered() {
     assert!(error.to_string().contains("is not a CronJob"), "{error}");
     assert!(t.writes().is_empty());
 }
+
+#[test]
+fn a_server_that_cannot_dry_run_still_gets_the_confirmed_trigger() {
+    let t = Workloads::new(false);
+    let ctx = crate::command_bus::DispatchContext::new(Initiator::Ui, "alice");
+    let output = t.h.confirm_without_dry_runs("a", trigger("nightly"), ctx);
+    assert_eq!(output.data.expect("data")["outcome"], "triggered");
+    assert_eq!(
+        t.writes(),
+        [
+            ("Job".to_owned(), "create", true),
+            ("Job".to_owned(), "create", false)
+        ]
+    );
+}

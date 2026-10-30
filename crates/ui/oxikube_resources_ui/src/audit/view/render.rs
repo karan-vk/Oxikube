@@ -163,7 +163,9 @@ impl AuditView {
         let tokens = cx.tokens();
         let model = self.model(cx);
         let count = model.len();
-        let tail = if model.has_more() {
+        let tail = if model.capped() {
+            "the newest are shown: narrow the filters, or export, to see older records"
+        } else if model.has_more() {
             "more below"
         } else {
             "end of log"

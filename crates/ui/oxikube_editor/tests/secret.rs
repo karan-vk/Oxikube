@@ -168,10 +168,10 @@ fn applying_re_encodes_to_base64_keeps_binary_and_hides_values_in_the_preview(
     let bodies = f.patch_bodies();
     assert_eq!(
         bodies.len(),
-        4,
-        "the preview's dry run, the guard's (E19-S07), the handler's, the apply"
+        2,
+        "the preview's dry run (it stands in for the guard's, E19-S07), then the apply"
     );
-    assert_eq!(bodies[3]["data"]["password"], ROTATED_B64);
+    assert_eq!(bodies[1]["data"]["password"], ROTATED_B64);
     let stored = f.resources.objects().remove(0).to_value();
     assert_eq!(stored["data"]["password"], ROTATED_B64);
     assert_eq!(stored["data"]["blob"], "//4=");
@@ -336,9 +336,9 @@ fn nothing_decoded_reaches_the_layout_the_audit_or_the_logs(cx: &mut TestAppCont
     f.confirm(&dialog);
 
     // The audit records name the object and the field manager, never the manifest.
-    // The preview, the guard's dry run before it asks (E19-S07), the apply.
+    // The preview (it stands in for the guard's dry run before it asks, E19-S07), the apply.
     let audit = f.state.audit_log();
-    assert_eq!(audit.len(), 3);
+    assert_eq!(audit.len(), 2);
     assert!(audit.iter().all(|r| r.outcome == AuditOutcome::Succeeded));
     // Applied as `resource::Apply`: risk low, so a simple confirmation (the dry-run preview).
     assert!(audit.iter().all(|r| &*r.cmd == "resource::Apply"));

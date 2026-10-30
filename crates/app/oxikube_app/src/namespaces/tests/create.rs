@@ -231,3 +231,15 @@ fn the_creator_reports_a_read_only_cluster_as_forbidden() {
     assert_eq!(err.kind(), ErrorKind::Forbidden);
     assert!(h.writes("a").is_empty());
 }
+
+#[test]
+fn a_server_that_cannot_dry_run_still_gets_the_confirmed_create() {
+    let h = harness();
+    h.connect("a", false);
+    let output = h.confirm_without_dry_runs("a", create("a", "team-a", &[]), ctx(Initiator::Ui));
+    assert_eq!(output.message.as_deref(), Some("Created namespace team-a"));
+    assert_eq!(
+        creates(&h),
+        [(true, "team-a".to_owned()), (false, "team-a".to_owned())]
+    );
+}

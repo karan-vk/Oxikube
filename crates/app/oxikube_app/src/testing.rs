@@ -443,6 +443,50 @@ impl Harness {
         self.dispatch(cmd, ctx.with_confirmation(answer))
     }
 
+    /// Runs `cmd` on `cluster` as a server that cannot dry-run anything answers it (E19-S07): the
+    /// guard's question carries `NoPreviewAvailable`, the person confirms, and the confirmed
+    /// dispatch must complete with no further dry run (the handler's own would fail the same way
+    /// and stop what was confirmed). Returns the output.
+    pub fn confirm_without_dry_runs(
+        &self,
+        cluster: &str,
+        cmd: Command,
+        ctx: DispatchContext,
+    ) -> CommandOutput {
+        let port = self.resources(cluster);
+        port.refuse_dry_runs(
+            oxikube_domain::ErrorKind::Unsupported,
+            "the server does not support dry run",
+        );
+        let request = self.ask(cmd.clone(), ctx.clone());
+        assert!(
+            matches!(
+                request.preview,
+                Some(crate::guard::DryRunPreview::NoPreviewAvailable { .. })
+            ),
+            "the question says there is no preview: {request:?}"
+        );
+        let dry_runs = port.mutating_calls().len();
+        let answer = match request.expected_name {
+            Some(name) => Confirmation::typed(request.token, name),
+            None => Confirmation::simple(request.token),
+        };
+        let out = self.dispatch(cmd, ctx.with_confirmation(answer));
+        let Ok(Outcome::Completed(output)) = out else {
+            panic!(
+                "a missing preview never blocks the confirmed command: {out:?}, writes {:?}",
+                port.mutating_calls()
+            );
+        };
+        let confirmed = port.mutating_calls();
+        assert!(
+            confirmed[dry_runs..].iter().all(|call| !call.is_dry_run()),
+            "no dry run after the confirmation: {confirmed:?}"
+        );
+        assert!(confirmed.len() > dry_runs, "the confirmed command wrote");
+        output
+    }
+
     pub fn audit(&self) -> Vec<AuditRecord> {
         self.state.audit_log()
     }

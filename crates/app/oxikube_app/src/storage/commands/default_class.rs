@@ -84,10 +84,14 @@ pub(super) async fn handle(
         dry_run: true,
         ..options.clone()
     };
-    for (name, patch) in &writes {
-        writer
-            .patch(&class_gvk(), None, name, patch, &rehearsal)
-            .await?;
+    // Every write rehearsed before any is sent, unless the guard found the server cannot
+    // dry-run them.
+    if mutation.rehearses_first() {
+        for (name, patch) in &writes {
+            writer
+                .patch(&class_gvk(), None, name, patch, &rehearsal)
+                .await?;
+        }
     }
     let cleared: Vec<&str> = clearing.iter().map(|c| &*c.meta.name as &str).collect();
     if mutation.dry_run() {

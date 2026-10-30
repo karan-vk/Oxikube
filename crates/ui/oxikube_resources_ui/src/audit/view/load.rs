@@ -2,6 +2,8 @@
 //! signal, and what each does to the rows. Every read runs on the Tokio bridge (`spawn_kube`),
 //! never on the UI thread, and a read that lands after the filters changed is dropped.
 
+use std::collections::VecDeque;
+
 use futures::future::Either;
 use gpui::{App, AppContext as _, Context};
 use oxikube_app::audit::query::{NewRecords, PAGE_SIZE, READ_TIMEOUT, count_new};
@@ -62,7 +64,7 @@ impl AuditView {
                 self.error = None;
                 self.pending_new = None;
                 let names = self.cluster_names();
-                let mut old = Vec::new();
+                let mut old = VecDeque::new();
                 self.table.update_quiet(cx, |d| {
                     d.names = names;
                     old = d.model.replace(page.records, page.next);
@@ -209,7 +211,7 @@ impl AuditView {
             }
             // Nothing loaded yet, or the whole newest page is new: it is the new first page.
             NewRecords::Exactly(_) | NewRecords::AtLeast(_) => {
-                let mut old = Vec::new();
+                let mut old = VecDeque::new();
                 self.table
                     .update_quiet(cx, |d| old = d.model.replace(fresh.records, fresh.next));
                 release_off_thread(old, cx);
@@ -240,7 +242,7 @@ impl AuditView {
 
 /// Frees `records` on a background thread: a replaced page of tens of thousands of records owns
 /// hundreds of thousands of strings, too much to free inside one frame.
-fn release_off_thread(records: Vec<AuditRecord>, cx: &App) {
+fn release_off_thread(records: VecDeque<AuditRecord>, cx: &App) {
     if records.len() > RELEASE_INLINE_MAX {
         cx.background_spawn(async move { drop(records) }).detach();
     }

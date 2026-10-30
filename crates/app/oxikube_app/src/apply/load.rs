@@ -15,7 +15,8 @@
 //!   is one [`ManifestError`]; too many files, too many bytes in all, or a tree deeper than the
 //!   limit stop the load with an error.
 //!
-//! Errors name the file and line, never document text (the parser drops it).
+//! Errors name the file and line, never document text (the parser drops it). Each file is parsed
+//! on the runtime's blocking pool ([`off_io_workers`]), never on an I/O worker.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -23,6 +24,8 @@ use std::sync::Arc;
 use oxikube_domain::manifests::{ManifestDoc, ManifestError, SourceId, parse_documents};
 use oxikube_domain::{ErrorKind, OxiError, OxiResult};
 use oxikube_ports::{DirEntry, EntryKind, FsPort};
+
+use crate::offload::off_io_workers;
 
 /// Bounds on one load.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -235,7 +238,8 @@ async fn read_file(
             .push(file_error("the file is not valid UTF-8".into()));
         return Ok(());
     };
-    let (docs, errors) = parse_documents(&text, source.clone());
+    // Parsing megabytes of YAML is CPU work: not on an I/O worker.
+    let (docs, errors) = off_io_workers(move || parse_documents(&text, source)).await?;
     loaded.docs.extend(docs);
     loaded.errors.extend(errors);
     Ok(())

@@ -196,3 +196,33 @@ fn a_dry_run_rehearses_and_writes_nothing() {
     assert_eq!(patches(&h).len(), 1);
     assert!(patches(&h)[0].2, "a rehearsal only");
 }
+
+#[test]
+fn a_server_that_cannot_dry_run_still_gets_the_confirmed_default() {
+    let h = harness();
+    seed(
+        &h,
+        [
+            storage_class("old").default_class().build(),
+            storage_class("fast").build(),
+        ],
+    );
+    h.confirm_without_dry_runs(
+        super::CLUSTER,
+        set_default("fast", true),
+        ctx(Initiator::Ui),
+    );
+    let sent: Vec<(String, bool)> = patches(&h)
+        .into_iter()
+        .map(|(name, _, dry)| (name, dry))
+        .collect();
+    assert_eq!(
+        sent,
+        [
+            ("fast".to_owned(), true),
+            ("fast".to_owned(), false),
+            ("old".to_owned(), false)
+        ],
+        "the guard's refused dry run, then both writes"
+    );
+}

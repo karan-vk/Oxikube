@@ -38,8 +38,11 @@ pub fn register_commands(registry: &mut CommandRegistry) -> Result<(), RegisterE
             field_manager: Some(DEFAULT_FIELD_MANAGER.to_owned()),
         };
         let writer = mutation.writer();
-        // The server rehearses the create first (a name that exists, RBAC, admission).
-        writer.create(&gvk, None, &object, &options(true)).await?;
+        // The server rehearses the create first (a name that exists, RBAC, admission), unless
+        // the guard found it cannot dry-run one.
+        if mutation.rehearses_first() {
+            writer.create(&gvk, None, &object, &options(true)).await?;
+        }
         if mutation.dry_run() {
             return Ok(CommandOutput {
                 message: Some(format!("Dry run: namespace {name} can be created")),
@@ -76,12 +79,15 @@ pub fn register_commands(registry: &mut CommandRegistry) -> Result<(), RegisterE
                 data: Some(json!({ "outcome": "dry_run", "name": name })),
             });
         }
-        // The server rehearses the delete first (RBAC, admission, existence).
-        let rehearsal = oxikube_ports::DeleteOptions {
-            dry_run: true,
-            ..options.clone()
-        };
-        writer.delete(&target.gvk, None, &name, &rehearsal).await?;
+        // The server rehearses the delete first (RBAC, admission, existence), unless the guard
+        // found it cannot dry-run one.
+        if mutation.rehearses_first() {
+            let rehearsal = oxikube_ports::DeleteOptions {
+                dry_run: true,
+                ..options.clone()
+            };
+            writer.delete(&target.gvk, None, &name, &rehearsal).await?;
+        }
         let outcome = writer.delete(&target.gvk, None, &name, &options).await?;
         // A namespace is deleted asynchronously: it goes `Terminating` while its contents and
         // finalizers are removed.

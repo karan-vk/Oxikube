@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use oxikube_app::command_bus::{CommandOutput, CommandRegistry, HandlerContext, RegisterError};
 use oxikube_app::diff::{DiffProgress, DiffRequest, DiffService};
+use oxikube_app::offload::off_io_workers;
 use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::safety::Initiator;
 use oxikube_domain::{OxiError, OxiResult};
@@ -83,23 +84,25 @@ async fn handle(
             show(DiffState::Working(step.text()))
         })
         .await;
-    match result {
-        Ok(diff) => {
-            let summary = (!shows_tab).then(|| (diff.summary_text(), diff.summary_data()));
-            if shows_tab {
-                show(DiffState::Ready(Arc::new(DiffData::new(diff))));
-            }
-            Ok(match summary {
-                Some((message, data)) => CommandOutput {
-                    message: Some(message),
-                    data: Some(data),
-                },
-                None => CommandOutput::none(),
-            })
+    let result = match result {
+        Ok(diff) if shows_tab => {
+            // Writing both sides as YAML and the line diff is CPU work (a 5 MB object takes a
+            // while): on the runtime's blocking pool, never on an I/O worker.
+            off_io_workers(move || DiffData::new(diff))
+                .await
+                .map(|data| {
+                    show(DiffState::Ready(Arc::new(data)));
+                    CommandOutput::none()
+                })
         }
-        Err(error) => {
-            show(DiffState::Failed(error.message().to_owned()));
-            Err(error)
-        }
+        Ok(diff) => Ok(CommandOutput {
+            message: Some(diff.summary_text()),
+            data: Some(diff.summary_data()),
+        }),
+        Err(error) => Err(error),
+    };
+    if let Err(error) = &result {
+        show(DiffState::Failed(error.message().to_owned()));
     }
+    result
 }

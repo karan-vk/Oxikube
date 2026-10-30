@@ -79,8 +79,8 @@ fn every_attempt_is_audited_with_the_object_and_never_the_manifest() {
     assert_eq!(
         summary,
         [
-            (true, AuditOutcome::Succeeded),
-            // The guard's own dry run before it asks (E19-S07) is an audited attempt too.
+            // The preview's dry run stands in for the guard's own before the apply (E19-S07):
+            // one dry run, one apply.
             (true, AuditOutcome::Succeeded),
             (false, AuditOutcome::Succeeded),
             (true, AuditOutcome::Failed),
@@ -100,7 +100,7 @@ fn every_attempt_is_audited_with_the_object_and_never_the_manifest() {
     );
     // A new object: no reviewed version to carry, a create was reviewed.
     assert_eq!(
-        audit[2].detail.as_deref(),
+        audit[1].detail.as_deref(),
         Some("manager=team-a force=false reviewed=create")
     );
 }
@@ -135,7 +135,6 @@ fn the_audit_names_the_namespace_the_object_is_written_to() {
     assert_eq!(
         places,
         [
-            ("ConfigMap", Some("default"), AuditOutcome::Succeeded),
             ("ConfigMap", Some("default"), AuditOutcome::Succeeded),
             ("ConfigMap", Some("default"), AuditOutcome::Succeeded),
             ("Namespace", None, AuditOutcome::Succeeded),
@@ -179,8 +178,8 @@ fn an_agent_dispatch_is_rehearsed_by_the_server_first() {
     assert_eq!(output.data.unwrap()["outcome"], "applied");
     assert_eq!(
         t.writes(),
-        [("patch", true), ("patch", true), ("patch", false)],
-        "the guard's dry run, the handler's own, the apply"
+        [("patch", true), ("patch", false)],
+        "the guard's dry run, then the apply: the handler does not dry-run it again"
     );
     assert_eq!(t.h.audit()[0].initiator, Initiator::Agent);
 }
@@ -196,4 +195,25 @@ fn the_tool_stub_is_mutating_and_gated() {
     assert!(tool.is_mutating());
     assert_eq!(tool.risk, Some(Risk::Low));
     assert_eq!(t.h.bus.owner(CommandId::RESOURCE_APPLY), Some("test_extra"));
+}
+
+#[test]
+fn an_agents_own_dry_run_never_spares_the_person_the_preview() {
+    let t = Applying::new(false);
+    t.port().insert(live_configmap("7"));
+    let command = t.request(CONFIGMAP).command(None);
+    let agent = DispatchContext::new(Initiator::Agent, "agent").with_cluster(id("a"));
+    let dry =
+        t.h.confirm_and_run(command.clone(), agent.clone().with_dry_run(true))
+            .expect("the agent's dry run");
+    assert!(matches!(dry, Outcome::Completed(_)), "{dry:?}");
+    // The person confirming the agent's apply still gets the server's diff.
+    let asked = t.h.ask(command, agent);
+    assert!(
+        matches!(
+            asked.preview,
+            Some(crate::guard::DryRunPreview::Rehearsed(_))
+        ),
+        "{asked:?}"
+    );
 }

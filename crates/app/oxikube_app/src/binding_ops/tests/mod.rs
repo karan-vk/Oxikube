@@ -410,3 +410,16 @@ fn the_commands_have_tool_stubs() {
         assert_eq!(id.tool_name(), tool);
     }
 }
+
+#[test]
+fn a_server_that_cannot_dry_run_still_gets_the_confirmed_create() {
+    let h = setup(false);
+    let c = ctx(Initiator::Ui).with_cluster(id("a"));
+    h.confirm_without_dry_runs("a", create(&role_binding("view", None)), c);
+    let dry: Vec<bool> = h.writes("a").iter().map(ResourceCall::is_dry_run).collect();
+    assert_eq!(
+        dry,
+        [true, false],
+        "the guard's refused dry run, then the create"
+    );
+}

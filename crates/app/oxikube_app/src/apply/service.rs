@@ -116,8 +116,9 @@ impl ApplyService {
 
     /// Applies what `preview` showed. The preview is the confirmation (risk `Low`): the guard's
     /// request is answered with it, unless the guard asks for more, which nothing confirmed.
-    /// The guard re-checks read-only mode before the request is sent, and the handler has the
-    /// server rehearse it once more.
+    /// The guard re-checks read-only mode before the request is sent. The preview's dry run
+    /// stands in for the guard's own before it asks, and for the handler's (E19-S07): the
+    /// confirmed apply is the one request sent.
     ///
     /// # Errors
     ///

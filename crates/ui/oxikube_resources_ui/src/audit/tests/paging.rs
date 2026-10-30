@@ -65,7 +65,7 @@ fn filters_go_into_the_store_query(cx: &mut TestAppContext) {
     assert_eq!(query.initiator, Some(Initiator::Ui));
     assert_eq!(query.outcome, Some(AuditOutcome::Succeeded));
     assert_eq!(query.cluster, Some(super::cluster()));
-    let rows = fx.model(|m| m.records().to_vec());
+    let rows = fx.model(|m| m.records().iter().cloned().collect::<Vec<_>>());
     assert_eq!(
         rows.len(),
         10,
@@ -91,7 +91,7 @@ fn an_older_page_of_a_replaced_filter_is_dropped(cx: &mut TestAppContext) {
             cx,
         );
     });
-    let rows = fx.model(|m| m.records().to_vec());
+    let rows = fx.model(|m| m.records().iter().cloned().collect::<Vec<_>>());
     assert!(
         rows.iter().all(|r| r.initiator == Initiator::Agent),
         "no row of the old filter"
@@ -167,4 +167,71 @@ fn replacing_the_page_hands_back_the_old_records_to_free_off_thread() {
     let _ = model.replace(seed(5), None);
     let old = model.replace(seed(2), None);
     assert_eq!(old.len(), 5, "the caller frees the replaced page");
+}
+
+#[test]
+fn the_model_never_holds_more_than_its_cap_however_far_the_table_scrolls() {
+    use crate::audit::MAX_LOADED_RECORDS;
+    let mut model = crate::audit::AuditModel::new();
+    let cursor = Some(oxikube_ports::AuditCursor::new(
+        jiff::Timestamp::UNIX_EPOCH,
+        1,
+    ));
+    let page = seed(PAGE_SIZE as i64);
+    let _ = model.replace(page.clone(), cursor);
+    // A 300k-record log scrolled to its end.
+    for _ in 1..(300_000 / PAGE_SIZE) {
+        if !model.has_more() {
+            break;
+        }
+        model.append(page.clone(), cursor);
+    }
+    assert_eq!(model.len(), MAX_LOADED_RECORDS);
+    assert!(
+        model.capped() && !model.has_more(),
+        "no more pages are read"
+    );
+
+    // Records stored meanwhile go in front; the oldest loaded ones drop off the end.
+    model.select(Some(3));
+    let selected = model.selected_record().cloned();
+    let fresh: Vec<_> = (0..5)
+        .map(|n| {
+            super::rec(
+                1_000_000 + n,
+                &format!("new-{n}"),
+                "pod::Delete",
+                Initiator::Ui,
+                AuditOutcome::Succeeded,
+            )
+        })
+        .rev()
+        .collect();
+    model.prepend(fresh);
+    assert_eq!(model.len(), MAX_LOADED_RECORDS);
+    assert_eq!(&*model.get(0).expect("a row").target.name, "new-4");
+    assert_eq!(model.selected(), Some(8), "the selection keeps its record");
+    assert_eq!(model.selected_record().cloned(), selected);
+
+    // A new filter starts over below the cap.
+    let _ = model.replace(seed(3), cursor);
+    assert!(!model.capped() && model.has_more());
+}
+
+#[test]
+fn a_log_that_ends_at_the_cap_is_not_capped() {
+    use crate::audit::MAX_LOADED_RECORDS;
+    let mut model = crate::audit::AuditModel::new();
+    let cursor = Some(oxikube_ports::AuditCursor::new(
+        jiff::Timestamp::UNIX_EPOCH,
+        1,
+    ));
+    let page = seed(PAGE_SIZE as i64);
+    let _ = model.replace(page.clone(), cursor);
+    let pages = MAX_LOADED_RECORDS / PAGE_SIZE;
+    for n in 1..pages {
+        model.append(page.clone(), (n + 1 < pages).then_some(cursor).flatten());
+    }
+    assert_eq!(model.len(), MAX_LOADED_RECORDS);
+    assert!(!model.capped() && !model.has_more(), "the end of the log");
 }

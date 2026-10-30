@@ -5,9 +5,14 @@
 //! editor ─preview─> ApplyService ─resource::Apply (dry run)─> guard ─> handler ─> SSA dry run
 //!        <─ApplyPreview (live + result, Secret values masked)──────────────────────┘
 //! user confirms the diff preview
-//! editor ─apply──> ApplyService ─resource::Apply──────────────> guard ─> handler ─> SSA dry run, SSA
+//! editor ─apply──> ApplyService ─resource::Apply──────────────> guard ─> handler ─> SSA
 //!                                                                        (415: replace at the reviewed version)
 //! ```
+//!
+//! The preview's dry run is the one the apply needs: the guard takes it in place of its own
+//! before it asks (a receipt, see `guard::receipt`) and the handler sends no second one. An
+//! agent's `resource::Apply` is dry-run by the guard before it asks, and the question carries the
+//! diff (E19-S07).
 //!
 //! | File | Holds |
 //! |---|---|

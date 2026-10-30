@@ -1,7 +1,13 @@
 //! [`AuditModel`]: the records the viewer has loaded, newest first, the keyset cursor to read on
 //! from, and the selection. Plain data, no GPUI.
+//!
+//! The model holds at most [`MAX_LOADED_RECORDS`]: a log of hundreds of thousands of records is
+//! never all in memory (about 1.4 KB a record), and scrolling to its end stops at the newest
+//! [`MAX_LOADED_RECORDS`] with a note to narrow the filters or export the rest. Records stored
+//! while the viewer is open go in front and the oldest loaded ones drop off the end, so the bound
+//! holds during a bulk operation too, and putting them in front never moves the loaded ones.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use gpui::SharedString;
 pub use oxikube_app::audit::export::initiator_text;
@@ -155,12 +161,17 @@ pub fn cell_text(record: &AuditRecord, column: AuditColumn, names: &ClusterNames
     }
 }
 
+/// Most records the viewer holds (see the [module docs](self)): about 14 MiB of records.
+pub const MAX_LOADED_RECORDS: usize = 10_000;
+
 /// The loaded records. See the [module docs](self).
 #[derive(Debug, Default)]
 pub struct AuditModel {
-    records: Vec<AuditRecord>,
+    records: VecDeque<AuditRecord>,
     cursor: Option<AuditCursor>,
     exhausted: bool,
+    /// Older records exist that the model will not load: it holds [`MAX_LOADED_RECORDS`].
+    capped: bool,
     selected: Option<usize>,
 }
 
@@ -181,7 +192,7 @@ impl AuditModel {
     }
 
     /// The loaded records, newest first.
-    pub fn records(&self) -> &[AuditRecord] {
+    pub fn records(&self) -> &VecDeque<AuditRecord> {
         &self.records
     }
 
@@ -192,12 +203,17 @@ impl AuditModel {
 
     /// The newest loaded record.
     pub fn head(&self) -> Option<&AuditRecord> {
-        self.records.first()
+        self.records.front()
     }
 
     /// Whether older records remain to be read.
     pub fn has_more(&self) -> bool {
-        !self.exhausted && self.cursor.is_some()
+        !self.capped && !self.exhausted && self.cursor.is_some()
+    }
+
+    /// Whether older records exist than the model will load: it holds [`MAX_LOADED_RECORDS`].
+    pub fn capped(&self) -> bool {
+        self.capped
     }
 
     /// Where the next page starts.
@@ -213,32 +229,50 @@ impl AuditModel {
         &mut self,
         records: Vec<AuditRecord>,
         next: Option<AuditCursor>,
-    ) -> Vec<AuditRecord> {
+    ) -> VecDeque<AuditRecord> {
         let selected = self.selected_record().cloned();
-        let old = std::mem::replace(&mut self.records, records);
+        let old = std::mem::replace(&mut self.records, VecDeque::from(records));
         self.cursor = next;
         self.exhausted = next.is_none();
+        self.capped = false;
+        self.cap();
         self.selected = selected.and_then(|s| self.records.iter().position(|r| *r == s));
         old
     }
 
-    /// Adds an older page at the end.
+    /// Adds an older page at the end, up to [`MAX_LOADED_RECORDS`].
     pub fn append(&mut self, records: Vec<AuditRecord>, next: Option<AuditCursor>) {
         self.records.extend(records);
         self.cursor = next;
         self.exhausted = next.is_none();
+        self.cap();
+        if self.records.len() >= MAX_LOADED_RECORDS && !self.exhausted {
+            self.capped = true;
+        }
     }
 
     /// Puts `fresh` (newer than every loaded record, newest first) in front; the selection keeps
-    /// its record.
-    pub fn prepend(&mut self, mut fresh: Vec<AuditRecord>) {
+    /// its record. The oldest loaded records drop off the end past [`MAX_LOADED_RECORDS`].
+    pub fn prepend(&mut self, fresh: Vec<AuditRecord>) {
         if fresh.is_empty() {
             return;
         }
         let added = fresh.len();
-        fresh.append(&mut self.records);
-        self.records = fresh;
+        for record in fresh.into_iter().rev() {
+            self.records.push_front(record);
+        }
         self.selected = self.selected.map(|ix| ix + added);
+        self.cap();
+    }
+
+    /// Drops the oldest records past [`MAX_LOADED_RECORDS`] (they can no longer be paged to, so
+    /// the model is capped) and a selection that pointed at one.
+    fn cap(&mut self) {
+        if self.records.len() > MAX_LOADED_RECORDS {
+            self.records.truncate(MAX_LOADED_RECORDS);
+            self.capped = true;
+            self.selected = self.selected.filter(|ix| *ix < MAX_LOADED_RECORDS);
+        }
     }
 
     /// Selects row `ix` (`None` clears the selection).
