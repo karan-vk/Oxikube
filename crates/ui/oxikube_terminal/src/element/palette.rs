@@ -7,6 +7,7 @@
 //! 12) override the theme for that terminal.
 
 use gpui::{Hsla, Rgba};
+use oxikube_theme::ThemeTokens;
 use oxikube_theme::tokens::{AnsiColors, TerminalColors};
 
 use crate::grid::{CellFlags, SnapshotCell, TermColor, TermRgb};
@@ -38,6 +39,17 @@ pub struct TerminalPalette {
 }
 
 impl TerminalPalette {
+    /// The palette of a whole theme: its `terminal.*` tokens.
+    ///
+    /// The cursor and the selection are the theme's local player (`players[0]`, the Zed
+    /// convention): `oxikube_theme` derives `terminal.cursor` from that player's cursor and
+    /// `terminal.selection` from its selection when assembling the tokens, falling back to the
+    /// accent. So this function, the interface selection and the editor agree, and the element
+    /// never reads a theme key itself.
+    pub fn from_theme(theme: &ThemeTokens) -> Self {
+        Self::new(&theme.terminal)
+    }
+
     /// The palette of a theme.
     pub fn new(theme: &TerminalColors) -> Self {
         let mut indexed = [theme.foreground; 256];

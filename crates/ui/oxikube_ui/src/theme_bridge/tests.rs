@@ -225,6 +225,29 @@ mod theme_config_tests {
         });
     }
 
+    /// The editor reads `cx.theme().highlight_theme` when it paints, so a theme switch recolours
+    /// open editors on the next frame; captures the theme leaves out come from the mapping table.
+    #[gpui::test]
+    fn the_editor_highlighter_follows_the_theme_with_alias_fallbacks(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            crate::init(cx);
+            let mut first = theme(AYU, "Ayu Dark");
+            first.syntax.styles.remove("boolean");
+            set_theme(cx, &first);
+            let constant = first.syntax.styles["constant"].color;
+            let boolean = cx.theme().highlight_theme.style.syntax.style("boolean");
+            assert_eq!(boolean.and_then(|style| style.color), constant);
+
+            set_theme(cx, &theme(GRUVBOX, "Gruvbox Light"));
+            assert_eq!(cx.theme().highlight_theme.name, "Gruvbox Light");
+            let keyword = cx.theme().highlight_theme.style.syntax.style("keyword");
+            assert_eq!(
+                keyword.and_then(|style| style.color),
+                Some(color("#9d0006ff"))
+            );
+        });
+    }
+
     #[gpui::test]
     fn set_tokens_after_set_theme_drops_the_theme_config(cx: &mut TestAppContext) {
         cx.update(|cx| {

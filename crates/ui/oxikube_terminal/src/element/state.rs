@@ -65,6 +65,16 @@ impl TerminalElementState {
         self.0.borrow().cache.stats()
     }
 
+    /// The palette the last frame painted with (`None` before the first frame). Tests and
+    /// `--perf`; a clone, so not for the paint path.
+    pub fn palette(&self) -> Option<super::palette::TerminalPalette> {
+        self.0
+            .borrow()
+            .palette
+            .as_ref()
+            .map(|memo| memo.palette.clone())
+    }
+
     /// The link under the pointer while the platform modifier is held.
     pub fn hovered_link(&self) -> Option<TerminalLink> {
         self.0.borrow().hovered.clone()

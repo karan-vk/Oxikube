@@ -15,6 +15,7 @@ mod mouse;
 mod report;
 mod settings;
 mod terminal_keys;
+mod theme;
 
 use std::cell::RefCell;
 use std::path::PathBuf;

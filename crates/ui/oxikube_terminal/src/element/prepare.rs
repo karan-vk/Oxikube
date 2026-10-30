@@ -42,7 +42,7 @@ pub(super) fn refresh_palette(inner: &mut Inner, theme: Arc<ThemeTokens>) {
             && memo.overrides == *overrides
     });
     if !fresh {
-        let palette = TerminalPalette::new(&theme.terminal).with_overrides(overrides);
+        let palette = TerminalPalette::from_theme(&theme).with_overrides(overrides);
         inner.palette = Some(PaletteMemo {
             theme,
             overrides: overrides.clone(),

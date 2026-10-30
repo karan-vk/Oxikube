@@ -123,3 +123,50 @@ fn attributes_change_the_colours() {
         "hidden text is drawn in its background colour"
     );
 }
+
+fn hex(color: Hsla) -> String {
+    oxikube_theme::color::to_hex(color)
+}
+
+/// One Dark, as the bundled theme file spells it: 16 ANSI + foreground, background, cursor and
+/// selection. The cursor and selection are the local player's (`players[0]`).
+#[test]
+fn one_dark_golden() {
+    let theme = theme();
+    let palette = TerminalPalette::from_theme(theme);
+    let ansi: Vec<String> = (0..16)
+        .map(|index| hex(palette.resolve(TermColor::Indexed(index))))
+        .collect();
+    let golden = [
+        "#282c34ff",
+        "#e06c75ff",
+        "#98c379ff",
+        "#e5c07bff",
+        "#61afefff",
+        "#c678ddff",
+        "#56b6c2ff",
+        "#abb2bfff",
+        "#636d83ff",
+        "#ea858bff",
+        "#aad581ff",
+        "#ffd885ff",
+        "#85c1ffff",
+        "#d398ebff",
+        "#6ed5deff",
+        "#fafafaff",
+    ];
+    assert_eq!(ansi, golden);
+    assert_eq!(hex(palette.foreground()), "#abb2bfff");
+    assert_eq!(hex(palette.background()), "#282c34ff");
+    assert_eq!(hex(palette.cursor()), "#74ade8ff");
+    assert_eq!(hex(palette.selection()), "#74ade83d");
+}
+
+#[test]
+fn cursor_and_selection_are_the_local_players() {
+    let theme = theme();
+    let player = theme.players.first().expect("One Dark has players");
+    let palette = TerminalPalette::from_theme(theme);
+    assert_eq!(palette.cursor(), player.cursor);
+    assert_eq!(palette.selection(), player.selection);
+}
