@@ -223,8 +223,15 @@ pub(crate) fn color_slot(key: &str) -> Option<ColorSlot> {
     COLOR_KEYS.get(key).copied()
 }
 
-/// Every mapped `style` key (for tests that check coverage).
-#[cfg(test)]
+/// Every mapped `style` key (the theme-family schema and tests that check coverage).
 pub(crate) fn mapped_keys() -> impl Iterator<Item = &'static str> {
     COLOR_KEYS.keys().copied()
+}
+
+/// Every `oxikube` block key, with the indexed palettes expanded (for the theme-family schema).
+pub(crate) fn oxikube_keys() -> Vec<String> {
+    let named = OXIKUBE.iter().map(|(name, _)| (*name).to_owned());
+    let tabs = (1..=crate::tokens::CLUSTER_TAB_COLORS).map(|n| format!("{CLUSTER_TAB_PREFIX}{n}"));
+    let sources = (1..=crate::tokens::LOG_SOURCE_COLORS).map(|n| format!("{LOG_SOURCE_PREFIX}{n}"));
+    named.chain(tabs).chain(sources).collect()
 }
