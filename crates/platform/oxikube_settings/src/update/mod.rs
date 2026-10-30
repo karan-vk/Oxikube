@@ -107,15 +107,15 @@ pub fn new_text_for_path_update(
     key_path: &[&str],
     value: Value,
 ) -> OxiResult<String> {
+    if key_path.is_empty() {
+        return Err(OxiError::validation("a settings path must not be empty"));
+    }
     let full_path: Vec<&str> = cluster
         .map(|id| [CLUSTERS_KEY, id.as_str()])
         .into_iter()
         .flatten()
         .chain(key_path.iter().copied())
         .collect();
-    if key_path.is_empty() {
-        return Err(OxiError::validation("a settings path must not be empty"));
-    }
     let root = parse_jsonc_object(old_text).map_err(|err| {
         OxiError::validation(format!(
             "settings.json could not be parsed; fix it before editing: {err}"
