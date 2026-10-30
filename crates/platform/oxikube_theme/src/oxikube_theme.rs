@@ -16,6 +16,8 @@
 //! - [`user_dir`], [`watcher`]: scanning `<config>/themes/` and `notify` hot reload (the thread
 //!   does the file reads and parsing, never the UI thread).
 //! - [`global`]: [`init`], [`ActiveTheme`] and the observers that keep it current.
+//! - [`content`]: the typed serde model of a theme-family file and its JSON Schema
+//!   (`schema/theme-family.schema.json`).
 //! - [`color`]: `#rgb` / `#rgba` / `#rrggbb` / `#rrggbbaa` <-> `Hsla`.
 //! - [`glyph_warm`]: the glyph atlas warmed for every installed theme's text colours, so a theme
 //!   switch draws without rasterising text in the frame (E05-P602).
@@ -28,6 +30,7 @@
 
 pub mod appearance;
 pub mod color;
+pub mod content;
 pub mod global;
 pub mod glyph_warm;
 pub mod import;

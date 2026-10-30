@@ -1,0 +1,1318 @@
+{
+  "$defs": {
+    "AppearanceContent": {
+      "description": "`appearance` of one theme entry.",
+      "oneOf": [
+        {
+          "const": "light",
+          "description": "A light theme.",
+          "type": "string"
+        },
+        {
+          "const": "dark",
+          "description": "A dark theme.",
+          "type": "string"
+        }
+      ]
+    },
+    "OxikubeContent": {
+      "description": "Oxikube's Kubernetes status colours; unset keys are derived from `style`.",
+      "properties": {
+        "cluster.tab.1": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cluster.tab.2": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cluster.tab.3": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cluster.tab.4": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cluster.tab.5": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cluster.tab.6": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cluster.tab.7": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cluster.tab.8": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "log.source.1": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "log.source.10": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "log.source.2": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "log.source.3": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "log.source.4": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "log.source.5": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "log.source.6": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "log.source.7": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "log.source.8": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "log.source.9": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status.failed": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status.pending": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status.running": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status.succeeded": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status.terminating": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status.unknown": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ThemeContent": {
+      "description": "One entry of `themes`.",
+      "properties": {
+        "appearance": {
+          "$ref": "#/$defs/AppearanceContent",
+          "description": "Whether the theme is light or dark."
+        },
+        "name": {
+          "description": "Theme name, shown in the picker and used by the `theme` setting.",
+          "type": "string"
+        },
+        "oxikube": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OxikubeContent"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Oxikube's own Kubernetes status colours (optional; derived from `style` when absent)."
+        },
+        "style": {
+          "$ref": "#/$defs/ThemeStyleContent",
+          "default": {},
+          "description": "Colours keyed by dotted Zed key (`editor.background`), plus `players`, `accents` and\n`syntax`."
+        }
+      },
+      "required": [
+        "name",
+        "appearance"
+      ],
+      "type": "object"
+    },
+    "ThemeStyleContent": {
+      "description": "Theme colours by dotted Zed key; unknown keys are ignored (and counted as unmapped).",
+      "properties": {
+        "accents": {
+          "items": {
+            "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": "array"
+        },
+        "background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "border": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "border.disabled": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "border.focused": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "border.selected": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "border.transparent": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "border.variant": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "conflict": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "conflict.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "conflict.border": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "created": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "created.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "created.border": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "deleted": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "deleted.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "deleted.border": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "drop_target.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "editor.active_line.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "editor.active_line_number": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "editor.active_wrap_guide": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "editor.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "editor.document_highlight.read_background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "editor.document_highlight.write_background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "editor.foreground": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "editor.gutter.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "editor.highlighted_line.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "editor.hover_line_number": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "editor.invisible": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "editor.line_number": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "editor.subheader.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "editor.wrap_guide": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "element.active": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "element.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "element.disabled": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "element.hover": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "element.selected": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "elevated_surface.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "error": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "error.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "error.border": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ghost_element.active": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ghost_element.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ghost_element.disabled": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ghost_element.hover": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ghost_element.selected": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hidden": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hidden.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hidden.border": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hint": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hint.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hint.border": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "icon": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "icon.accent": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "icon.disabled": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "icon.muted": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "icon.placeholder": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ignored": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ignored.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ignored.border": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "info": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "info.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "info.border": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "link_text.hover": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "modified": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "modified.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "modified.border": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pane.focused_border": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "panel.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "panel.focused_border": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "players": {
+          "items": {
+            "properties": {
+              "background": {
+                "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "cursor": {
+                "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "selection": {
+                "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "predictive": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "predictive.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "predictive.border": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "renamed": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "renamed.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "renamed.border": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scrollbar.thumb.active_background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scrollbar.thumb.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scrollbar.thumb.border": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scrollbar.thumb.hover_background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scrollbar.track.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scrollbar.track.border": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "search.active_match_background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "search.match_background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status_bar.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "success": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "success.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "success.border": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "surface.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "syntax": {
+          "additionalProperties": {
+            "properties": {
+              "color": {
+                "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "font_style": {
+                "enum": [
+                  "normal",
+                  "italic",
+                  "oblique",
+                  null
+                ],
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "font_weight": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "type": "object"
+        },
+        "tab.active_background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tab.inactive_background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tab_bar.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.ansi.black": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.ansi.blue": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.ansi.bright_black": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.ansi.bright_blue": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.ansi.bright_cyan": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.ansi.bright_green": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.ansi.bright_magenta": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.ansi.bright_red": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.ansi.bright_white": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.ansi.bright_yellow": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.ansi.cyan": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.ansi.dim_black": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.ansi.dim_blue": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.ansi.dim_cyan": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.ansi.dim_green": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.ansi.dim_magenta": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.ansi.dim_red": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.ansi.dim_white": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.ansi.dim_yellow": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.ansi.green": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.ansi.magenta": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.ansi.red": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.ansi.white": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.ansi.yellow": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.bright_foreground": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.dim_foreground": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal.foreground": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "text": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "text.accent": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "text.disabled": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "text.muted": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "text.placeholder": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title_bar.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title_bar.inactive_background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "toolbar.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "unreachable": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "unreachable.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "unreachable.border": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version_control.added": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version_control.conflict_marker.ours": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version_control.conflict_marker.theirs": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version_control.deleted": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version_control.modified": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version_control.word_added": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version_control.word_deleted": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "warning": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "warning.background": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "warning.border": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "description": "A whole theme-family file.",
+  "properties": {
+    "$schema": {
+      "description": "URL of the schema the file follows (editors use it for completion).",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "author": {
+      "default": "",
+      "description": "Author credit.",
+      "type": "string"
+    },
+    "name": {
+      "description": "Family name, e.g. `Ayu`.",
+      "type": "string"
+    },
+    "themes": {
+      "description": "The themes of the family.",
+      "items": {
+        "$ref": "#/$defs/ThemeContent"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "name",
+    "themes"
+  ],
+  "title": "ThemeFamilyContent",
+  "type": "object"
+}
