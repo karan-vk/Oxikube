@@ -11,7 +11,7 @@ use gpui::{AppContext as _, Context, Subscription, TestAppContext, UpdateGlobal 
 use oxikube_domain::ids::ClusterId;
 use oxikube_settings::{
     Settings, SettingsDiagnostic, SettingsLocation, SettingsStore, init_with_dir,
-    update_user_settings,
+    update_user_settings, update_user_settings_path,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -244,5 +244,75 @@ fn try_get_and_override_global(cx: &mut TestAppContext) {
     cx.update(|cx| {
         TerminalSettings::override_global(TerminalSettings { font_size: 99.0 }, cx);
         assert_eq!(TerminalSettings::get_global(cx).font_size, 99.0);
+    });
+}
+
+/// The untyped path write: keeps comments, applies at once, observers fire, and `Null` resets.
+#[gpui::test]
+async fn path_write_edits_resets_and_notifies(cx: &mut TestAppContext) {
+    let dir = setup(cx, Some(USER));
+    let (terminal_count, on_terminal) = counter();
+    let _sub = cx.update(|cx| TerminalSettings::observe(cx, on_terminal));
+    cx.run_until_parked();
+
+    cx.update(|cx| {
+        update_user_settings_path(cx, None, &["terminal", "font_size"], serde_json::json!(21))
+    })
+    .await
+    .unwrap();
+    cx.run_until_parked();
+    let file = std::fs::read_to_string(dir.path().join("settings.json")).unwrap();
+    assert_eq!(
+        file,
+        USER.replace("13,", "21,"),
+        "comments and layout survive"
+    );
+    assert_eq!(terminal_count.get(), 1);
+    cx.read(|cx| assert_eq!(TerminalSettings::get_global(cx).font_size, 21.0));
+
+    // Reset: the key (and the now-empty section) disappear and the default returns.
+    cx.update(|cx| {
+        update_user_settings_path(
+            cx,
+            None,
+            &["terminal", "font_size"],
+            serde_json::Value::Null,
+        )
+    })
+    .await
+    .unwrap();
+    cx.run_until_parked();
+    let file = std::fs::read_to_string(dir.path().join("settings.json")).unwrap();
+    assert!(
+        file.starts_with("// mine\n") && !file.contains("font_size"),
+        "{file}"
+    );
+    cx.read(|cx| assert_eq!(TerminalSettings::get_global(cx).font_size, 12.0));
+}
+
+#[gpui::test]
+async fn path_write_to_a_cluster_layer(cx: &mut TestAppContext) {
+    let dir = setup(cx, Some(USER));
+    let id: ClusterId = "00000000000000aa".parse().unwrap();
+    cx.update(|cx| {
+        update_user_settings_path(
+            cx,
+            Some(id.clone()),
+            &["terminal", "font_size"],
+            serde_json::json!(30),
+        )
+    })
+    .await
+    .unwrap();
+    let file = std::fs::read_to_string(dir.path().join("settings.json")).unwrap();
+    assert!(
+        file.contains("// keep me") && file.contains("\"clusters\""),
+        "{file}"
+    );
+    cx.read(|cx| {
+        let store = cx.global::<SettingsStore>();
+        assert_eq!(store.diagnostics().len(), 0);
+        let _ = store;
+        assert_eq!(TerminalSettings::get_global(cx).font_size, 13.0);
     });
 }

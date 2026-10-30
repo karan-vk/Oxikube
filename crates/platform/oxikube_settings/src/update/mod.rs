@@ -90,6 +90,91 @@ pub fn new_text_for_update<T: Settings>(
     Ok(text)
 }
 
+/// The text of a settings file after the value at `key_path` was set to `value`.
+///
+/// The untyped counterpart of [`new_text_for_update`], for a UI driven by the settings schema
+/// rather than by a Rust type: the path is the JSON key path (`["terminal", "font_size"]`),
+/// `cluster` prefixes it with `clusters.<id>`. Missing intermediate objects are created, an
+/// intermediate that is not an object is replaced by one, and `Value::Null` resets the field:
+/// the key is removed, along with any parent object the removal leaves empty. Comments,
+/// key order and unrelated formatting survive.
+///
+/// Fails with `Validation` when `old_text` is not valid JSONC or `key_path` is empty, and with
+/// `Internal` if the edit would produce unparsable text.
+pub fn new_text_for_path_update(
+    old_text: &str,
+    cluster: Option<&ClusterId>,
+    key_path: &[&str],
+    value: Value,
+) -> OxiResult<String> {
+    let full_path: Vec<&str> = cluster
+        .map(|id| [CLUSTERS_KEY, id.as_str()])
+        .into_iter()
+        .flatten()
+        .chain(key_path.iter().copied())
+        .collect();
+    if key_path.is_empty() {
+        return Err(OxiError::validation("a settings path must not be empty"));
+    }
+    let root = parse_jsonc_object(old_text).map_err(|err| {
+        OxiError::validation(format!(
+            "settings.json could not be parsed; fix it before editing: {err}"
+        ))
+    })?;
+    let old_value = Value::Object(root);
+    let mut new_value = old_value.clone();
+    set_at_path(&mut new_value, &full_path, value);
+
+    let mut text = old_text.to_owned();
+    let tab_size = infer_json_indent_size(&text);
+    let mut edits = Vec::new();
+    update_value_in_json_text(
+        &mut text,
+        &mut Vec::new(),
+        tab_size,
+        &old_value,
+        &new_value,
+        &mut edits,
+    );
+
+    parse_jsonc_object(&text)
+        .map_err(|err| OxiError::internal(format!("settings edit produced invalid JSON: {err}")))?;
+    Ok(text)
+}
+
+/// Set `value` at `path` inside `root`, or remove it (pruning emptied parents) for `Null`.
+fn set_at_path(root: &mut Value, path: &[&str], value: Value) {
+    let Some((key, rest)) = path.split_first() else {
+        *root = value;
+        return;
+    };
+    if !root.is_object() {
+        if value.is_null() {
+            return;
+        }
+        *root = Value::Object(serde_json::Map::new());
+    }
+    let Some(object) = root.as_object_mut() else {
+        return;
+    };
+    if rest.is_empty() && value.is_null() {
+        object.remove(*key);
+        return;
+    }
+    if value.is_null() && !object.contains_key(*key) {
+        return;
+    }
+    let child = object.entry((*key).to_owned()).or_insert(Value::Null);
+    set_at_path(child, rest, value);
+    if value_is_empty_object(child) && !rest.is_empty() {
+        object.remove(*key);
+    }
+}
+
+fn value_is_empty_object(value: &Value) -> bool {
+    value.as_object().is_some_and(serde_json::Map::is_empty)
+}
+
 /// The content as JSON with unset (`null`) members removed.
 ///
 /// Goes through text rather than `serde_json::to_value`: `to_value` widens an `f32` to `f64`

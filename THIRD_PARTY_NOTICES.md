@@ -18,11 +18,17 @@ Entries (file → upstream path @ rev):
 - `crates/platform/oxikube_settings/src/json_edit/mod.rs`, `json_edit/format.rs`:
   `update_value_in_json_text`, `replace_value_in_json_text`, `construct_json_value`,
   `infer_json_indent_size` and `to_pretty_json` from `crates/settings_json/src/settings_json.rs`
-  @ a84689073d296dfd39987bc7dd478e43ef76d83a. Array-index (`#N`) key paths not vendored; adapted
-  to tree-sitter 0.26 (the version gpui-component's editor links; `QueryMatch::captures` is a field).
+  @ a84689073d296dfd39987bc7dd478e43ef76d83a. Adapted to tree-sitter 0.26 (the version
+  gpui-component's editor links; `QueryMatch::captures` is a field).
+- `crates/platform/oxikube_settings/src/json_edit/array.rs`: `parse_index_key`,
+  `handle_possible_array_value` (the `#N` array-index key paths),
+  `replace_top_level_array_value_in_json_text` and `append_top_level_array_value_in_json_text` from
+  the same file @ a84689073d (E21-S01, for the keymap writer).
 - `crates/platform/oxikube_settings/src/json_edit/tests.rs`: the `object_replace`,
   `object_replace_escapes_new_key`, `object_remove_and_rename_find_an_escaped_key_by_its_own_range`
   and `test_infer_json_indent_size` tests from the same file @ a84689073d.
+- `crates/platform/oxikube_settings/src/json_edit/array_tests.rs`: the `object_replace_array`,
+  `array_replace` and `array_append` tests from the same file @ a84689073d, plus Oxikube cases.
 - `crates/platform/oxikube_keymap/tests/dispatch.rs`: the context-precedence, `null`-disables,
   pending-sequence, layer-rank and targeted-unbind tests of `crates/gpui/src/keymap.rs` (`mod tests`)
   @ the `gpui-pre` 0.3.7 snapshot of Zed's gpui (Apache-2.0 upstream, taken under GPL-3.0-or-later

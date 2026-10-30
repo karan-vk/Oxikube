@@ -17,7 +17,7 @@ use serde_json::{Value, json};
 
 /// Minimal stand-in for the `unindent` crate used by the upstream tests: strip the common
 /// leading spaces of every line after the first, ignoring whitespace-only lines.
-trait UnindentText {
+pub(super) trait UnindentText {
     fn unindent_text(&self) -> String;
 }
 

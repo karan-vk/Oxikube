@@ -12,9 +12,10 @@
 //! trailing commas elsewhere in the file survive a GUI edit. The text is located with the
 //! tree-sitter JSON grammar, which tolerates comments and trailing commas.
 //!
-//! Changes from upstream: the `#N` array-index key paths (`handle_possible_array_value` and
-//! the top-level array helpers, used by Zed's keymap editor) are not vendored, so arrays are
-//! replaced as whole values; `find_value_range_in_json_text` and `parse_json_with_comments`
+//! The `#N` array-index key paths and the top-level array helpers used by Zed's keymap editor
+//! live in a private `array` submodule and are re-exported here.
+//!
+//! Changes from upstream: `find_value_range_in_json_text` and `parse_json_with_comments`
 //! are not vendored ([`crate::jsonc`] parses); `util::RangeExt` is inlined; tree-sitter stays on
 //! 0.26 (the version gpui-component's editor links), where `QueryMatch::captures` is a field, as
 //! upstream has it; panicking `unwrap`s carry the
@@ -22,10 +23,16 @@
 //! inside its braces (upstream rewrote the whole document at the root, moving a header above
 //! `{` inside it and dropping block comments). Formatting helpers live in [`format`].
 
+mod array;
+#[cfg(test)]
+mod array_tests;
 mod format;
 #[cfg(test)]
 mod tests;
 
+pub use array::{
+    append_top_level_array_value_in_json_text, replace_top_level_array_value_in_json_text,
+};
 pub use format::{infer_json_indent_size, to_pretty_json};
 
 use serde_json::Value;
@@ -196,6 +203,18 @@ pub fn replace_value_in_json_text<T: AsRef<str>>(
                 break;
             }
 
+            if let Some(array_replacement) = array::handle_possible_array_value(
+                &mat.captures[0].node,
+                &mat.captures[1].node,
+                text,
+                &key_path[depth..],
+                new_value,
+                replace_key,
+                tab_size,
+            ) {
+                return array_replacement;
+            }
+
             first_key_start = None;
         }
     }
@@ -340,6 +359,10 @@ fn json_string(key: &str) -> String {
 fn construct_json_value(key_path: &[impl AsRef<str>], new_value: Option<&Value>) -> Value {
     let mut new_value = new_value.cloned().unwrap_or(Value::Null);
     for key in key_path.iter().rev() {
+        if array::parse_index_key(key.as_ref()).is_some() {
+            new_value = serde_json::json!([new_value]);
+            continue;
+        }
         new_value = serde_json::json!({ key.as_ref().to_string(): new_value });
     }
     new_value

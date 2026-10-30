@@ -15,11 +15,12 @@ use futures::channel::mpsc;
 use gpui::{App, AppContext as _, Global, Task, UpdateGlobal as _};
 use oxikube_domain::ids::ClusterId;
 use oxikube_domain::{OxiError, OxiResult};
+use serde_json::Value;
 
 use crate::paths::{self, io_error};
 use crate::settings::Settings;
 use crate::store::SettingsStore;
-use crate::update::new_text_for_update;
+use crate::update::{new_text_for_path_update, new_text_for_update};
 use crate::watcher::{DEFAULT_DEBOUNCE, SettingsFileWatcher};
 
 impl Global for SettingsStore {}
@@ -134,10 +135,21 @@ pub fn update_user_settings<T: Settings>(
     cluster: Option<ClusterId>,
     update: impl FnOnce(&mut T::Content) + Send + 'static,
 ) -> Task<OxiResult<()>> {
+    write_user_text(cx, move |old_text| {
+        new_text_for_update::<T>(old_text, cluster.as_ref(), update)
+    })
+}
+
+/// Shared write path of the user file: compute the new text from the current text under the
+/// edit lock, write it atomically on the background executor, then apply it to the store.
+fn write_user_text(
+    cx: &mut App,
+    compute: impl FnOnce(&str) -> OxiResult<String> + Send + 'static,
+) -> Task<OxiResult<()>> {
     let store = cx.global::<SettingsStore>();
     let Some(path) = store.user_settings_path().map(Path::to_path_buf) else {
         let old_text = store.user_settings_text().unwrap_or_default().to_owned();
-        let result = new_text_for_update::<T>(&old_text, cluster.as_ref(), update)
+        let result = compute(&old_text)
             .and_then(|text| SettingsStore::update_global(cx, |s, _| s.set_user_settings(&text)));
         return Task::ready(result);
     };
@@ -148,7 +160,7 @@ pub fn update_user_settings<T: Settings>(
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let old_text = paths::read_or_empty(&path).map_err(|err| io_error("read", &path, err))?;
-        let new_text = new_text_for_update::<T>(&old_text, cluster.as_ref(), update)?;
+        let new_text = compute(&old_text)?;
         if new_text != old_text {
             paths::write_atomically(&path, &new_text)?;
         }
@@ -158,5 +170,25 @@ pub fn update_user_settings<T: Settings>(
     cx.spawn(async move |cx| {
         let (seq, new_text) = write.await?;
         cx.update_global::<SettingsStore, _>(|store, _| store.apply_written_text(seq, &new_text))
+    })
+}
+
+/// Set the value at a JSON key path in the user's `settings.json`, keeping comments and
+/// formatting, and apply the result immediately.
+///
+/// The untyped twin of [`update_user_settings`] for schema-driven UI: `key_path` is the
+/// field's path (`["terminal", "font_size"]`), `cluster` selects `clusters.<id>`, and
+/// `Value::Null` resets the field (see [`new_text_for_path_update`]). Same locking, atomic
+/// write and watcher-echo handling as the typed entry.
+pub fn update_user_settings_path(
+    cx: &mut App,
+    cluster: Option<ClusterId>,
+    key_path: &[&str],
+    value: Value,
+) -> Task<OxiResult<()>> {
+    let key_path: Vec<String> = key_path.iter().map(|key| (*key).to_owned()).collect();
+    write_user_text(cx, move |old_text| {
+        let path: Vec<&str> = key_path.iter().map(String::as_str).collect();
+        new_text_for_path_update(old_text, cluster.as_ref(), &path, value)
     })
 }
