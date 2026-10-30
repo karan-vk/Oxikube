@@ -172,4 +172,6 @@ fn parse_lenient(text: &str) -> Result<Value, ImportError> {
 }
 
 #[cfg(test)]
+mod contract_tests;
+#[cfg(test)]
 mod tests;
