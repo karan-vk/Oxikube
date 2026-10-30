@@ -15,7 +15,8 @@
 //! edit.
 
 use crate::appearance::SystemAppearance;
-use crate::registry::ThemeRegistry;
+use crate::import::ThemeFamily;
+use crate::registry::{ThemeRegistry, ThemeSource};
 use crate::settings::{ThemeSelection, ThemeSettings};
 use crate::tokens::ThemeTokens;
 use crate::user_dir::{UserThemes, scan_dir, themes_dir};
@@ -41,6 +42,19 @@ impl ActiveTheme {
             Some(active) => active.0.clone(),
             None => Arc::new(ThemeTokens::fallback(SystemAppearance::get(cx)).clone()),
         }
+    }
+}
+
+/// `cx.active_theme()`: the active theme from any `App`. Named apart from gpui-component's own
+/// `ActiveTheme::theme` so both traits can be in scope in `oxikube_ui`.
+pub trait ActiveThemeExt {
+    /// The active theme (see [`ActiveTheme::get`]).
+    fn active_theme(&self) -> Arc<ThemeTokens>;
+}
+
+impl ActiveThemeExt for App {
+    fn active_theme(&self) -> Arc<ThemeTokens> {
+        ActiveTheme::get(self)
     }
 }
 
@@ -139,6 +153,29 @@ pub fn apply_user_scan(cx: &mut App, scan: UserThemes) {
     }
     cx.update_global::<ThemeRegistry, _>(|registry, _| registry.replace_user_themes(scan));
     refresh_active(cx);
+}
+
+/// Adds `families` to the registry under `source` and re-resolves the active theme, so a
+/// selected theme that was missing until now takes effect. Needs [`init`] first.
+pub fn insert_theme_families(
+    cx: &mut App,
+    source: &ThemeSource,
+    families: impl IntoIterator<Item = ThemeFamily>,
+) {
+    cx.update_global::<ThemeRegistry, _>(|registry, _| {
+        registry.insert_theme_families(source, families);
+    });
+    refresh_active(cx);
+}
+
+/// Removes everything `source` contributed (an unloaded extension) and re-resolves the active
+/// theme; if the selected theme went away the default of its appearance takes over. Returns the
+/// number of themes removed.
+pub fn remove_themes_by_source(cx: &mut App, source: &ThemeSource) -> usize {
+    let removed =
+        cx.update_global::<ThemeRegistry, _>(|registry, _| registry.remove_by_source(source));
+    refresh_active(cx);
+    removed
 }
 
 /// Resolves the `theme` setting against the system appearance and sets [`ActiveTheme`] when the
