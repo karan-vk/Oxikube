@@ -98,6 +98,8 @@ pub struct TerminalState {
     _writer: KubeTask<()>,
     _drain: Task<()>,
     _settings: Subscription,
+    /// Repaints when the active theme changes (the element rebuilds its palette memo).
+    _theme: Subscription,
 }
 
 impl EventEmitter<TerminalEvent> for TerminalState {}
@@ -163,6 +165,10 @@ impl TerminalState {
             cx.notify();
         });
 
+        // A theme switch repaints the terminal on the same frame: the element's palette memo is
+        // keyed by the theme's terminal tokens, so one notify is all it takes.
+        let theme = cx.observe_global::<oxikube_theme::ActiveTheme>(|_, cx| cx.notify());
+
         Self {
             grid,
             output_gate,
@@ -179,6 +185,7 @@ impl TerminalState {
             _writer: writer,
             _drain: drain,
             _settings: settings,
+            _theme: theme,
         }
     }
 

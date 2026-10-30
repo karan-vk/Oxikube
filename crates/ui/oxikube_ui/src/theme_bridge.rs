@@ -8,9 +8,11 @@
 //! - `config`: [`set_theme`] and [`theme_config`], `ThemeTokens` -> the library's `ThemeConfig`
 //!   (core colours, editor/syntax highlight) applied through its own theme mechanism.
 //! - `follow`: [`follow_active_theme`], keeps the library in step with `oxikube_theme`.
+//! - `syntax_map`: the one table from Zed syntax names to the editor's capture names (aliases, plain-text fallback).
 
 mod config;
 mod follow;
+mod syntax_map;
 
 pub use config::{set_theme, theme_config};
 pub use follow::follow_active_theme;

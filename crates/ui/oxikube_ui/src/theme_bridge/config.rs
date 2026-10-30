@@ -11,6 +11,7 @@
 //! editor epic turns it on); without it the section type is a stub that ignores the data.
 
 use super::install;
+use super::syntax_map::{self, EDITOR_CAPTURES};
 use crate::tokens::Tokens;
 use gpui::{App, Hsla};
 use gpui_component::ThemeConfig;
@@ -148,12 +149,20 @@ pub(super) fn highlight(theme: &ThemeTokens) -> Value {
         put(&format!("{name}.background"), status.background);
         put(&format!("{name}.border"), status.border);
     }
-    let syntax: Map<String, Value> = theme
+    let mut syntax: Map<String, Value> = theme
         .syntax
         .styles
         .iter()
         .map(|(name, style)| (name.clone(), syntax_style(style)))
         .collect();
+    // Every capture the editor paints gets a style when the theme covers it by ancestor or alias.
+    for capture in &EDITOR_CAPTURES {
+        if !syntax.contains_key(capture.name)
+            && let Some(style) = syntax_map::resolve(&theme.syntax, capture)
+        {
+            syntax.insert(capture.name.to_owned(), syntax_style(style));
+        }
+    }
     style.insert("syntax".to_owned(), Value::Object(syntax));
     Value::Object(style)
 }
