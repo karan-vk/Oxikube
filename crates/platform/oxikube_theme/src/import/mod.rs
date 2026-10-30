@@ -14,7 +14,7 @@
 
 mod report;
 mod syntax;
-mod table;
+pub(crate) mod table;
 mod theme;
 
 use crate::appearance::Appearance;
