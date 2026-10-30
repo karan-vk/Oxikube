@@ -15,7 +15,7 @@ use oxikube_domain::audit::{AuditOutcome, Initiator};
 use oxikube_domain::command::{Command, CommandId};
 use oxikube_domain::ids::{Gvk, ResourceRef};
 use oxikube_testkit::{ResourceCall, TestPorts, discovery_sets};
-use oxikube_workspace::modal::DialogModal;
+use oxikube_workspace::modal::ConfirmDialog;
 use oxikube_workspace::sidebar::SidebarPanel;
 use serde_json::json;
 
@@ -201,6 +201,6 @@ fn app_dialog(ws: &gpui::Entity<oxikube_workspace::Workspace>, cx: &gpui::App) -
         .read(cx)
         .modal_layer()
         .read(cx)
-        .active_modal::<DialogModal>()?;
-    Some(dialog.read(cx).message_text()?.to_string())
+        .active_modal::<ConfirmDialog>()?;
+    Some(dialog.read(cx).message_text().to_string())
 }

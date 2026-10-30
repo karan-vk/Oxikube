@@ -31,7 +31,7 @@ pub struct OpenedPod {
 /// Lists, downloads and uploads files of pod containers. See the [module docs](super).
 ///
 /// Plain async Rust over the ports: tests use the fakes. It applies no policy: browsing and
-/// downloading are reads, and an upload needs the [`Mutation`] only the guard hands out. Poll
+/// downloading are reads, and an upload needs the [`crate::guard::Mutation`] only the guard hands out. Poll
 /// its futures from `oxikube_runtime::spawn_kube`, never the UI thread.
 pub struct FileService {
     sessions: ClusterSessionManager,

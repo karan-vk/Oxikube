@@ -14,7 +14,7 @@ use oxikube_domain::kinds::{ResourceKind, VerbSet};
 use oxikube_resources_ui::table::ResourceTable;
 use oxikube_testkit::ResourceCall;
 use oxikube_testkit::TestPorts;
-use oxikube_workspace::modal::DialogModal;
+use oxikube_workspace::modal::ConfirmDialog;
 use serde_json::json;
 
 use super::App;
@@ -95,11 +95,11 @@ impl App {
                 .read(cx)
                 .modal_layer()
                 .read(cx)
-                .active_modal::<DialogModal>()?;
+                .active_modal::<ConfirmDialog>()?;
             let dialog = dialog.read(cx);
             Some((
                 dialog.title().to_string(),
-                dialog.message_text()?.to_string(),
+                dialog.message_text().to_string(),
             ))
         })
     }
@@ -168,18 +168,21 @@ fn t_confirms_then_creates_the_job_audits_it_and_offers_to_open_it(cx: &mut Test
     assert_eq!(title, "Run the CronJob now?");
     assert!(message.contains("default/nightly"), "{message}");
     assert!(message.contains("job template"), "{message}");
-    assert!(app.writes().is_empty(), "nothing is sent before the answer");
+    assert!(
+        app.writes().iter().all(ResourceCall::is_dry_run),
+        "only the dry run is sent before the answer"
+    );
 
     app.press("enter");
     app.tick();
     app.tick();
 
-    // The server rehearsed the Job, then it was created: the generated name, the owner, the
+    // The guard's preview and the handler rehearsed the Job, then it was created: the generated name, the owner, the
     // instantiate annotation.
     let writes = app.writes();
-    assert_eq!(writes.len(), 2, "{writes:?}");
-    assert!(writes[0].is_dry_run() && !writes[1].is_dry_run());
-    let ResourceCall::Create { object, .. } = &writes[1] else {
+    assert_eq!(writes.len(), 3, "{writes:?}");
+    assert!(writes[..2].iter().all(ResourceCall::is_dry_run) && !writes[2].is_dry_run());
+    let ResourceCall::Create { object, .. } = &writes[2] else {
         panic!("a create: {writes:?}");
     };
     assert_eq!(object["metadata"]["generateName"], "nightly-manual-");
@@ -189,7 +192,13 @@ fn t_confirms_then_creates_the_job_audits_it_and_offers_to_open_it(cx: &mut Test
         "manual"
     );
 
-    let audit = app.ports.state.audit_log();
+    let audit: Vec<_> = app
+        .ports
+        .state
+        .audit_log()
+        .into_iter()
+        .filter(|record| !record.dry_run)
+        .collect();
     assert_eq!(audit.len(), 1, "{audit:?}");
     assert_eq!(&*audit[0].cmd, "cronjob::Trigger");
     assert_eq!(audit[0].outcome, AuditOutcome::Succeeded);
@@ -248,7 +257,13 @@ fn s_suspends_a_cronjob_after_a_confirmation_and_the_palette_resumes_it(cx: &mut
         done.completed().unwrap().message.as_deref(),
         Some("Resumed CronJob default/nightly")
     );
-    let audit = app.ports.state.audit_log();
+    let audit: Vec<_> = app
+        .ports
+        .state
+        .audit_log()
+        .into_iter()
+        .filter(|record| !record.dry_run)
+        .collect();
     let ids: Vec<_> = audit.iter().map(|r| r.cmd.to_string()).collect();
     assert_eq!(ids, ["cronjob::Suspend", "cronjob::Resume"]);
     assert_eq!(audit[1].initiator, Initiator::Command);
@@ -266,8 +281,14 @@ fn declining_the_confirmation_changes_nothing_and_is_audited(cx: &mut TestAppCon
     assert!(app.dialog_text().is_some());
     app.press("escape");
     app.tick();
-    assert!(app.writes().is_empty());
-    let audit = app.ports.state.audit_log();
+    assert!(app.writes().iter().all(ResourceCall::is_dry_run));
+    let audit: Vec<_> = app
+        .ports
+        .state
+        .audit_log()
+        .into_iter()
+        .filter(|record| !record.dry_run)
+        .collect();
     assert_eq!(audit.len(), 1);
     assert_eq!(audit[0].outcome, AuditOutcome::Cancelled);
 }
@@ -373,7 +394,13 @@ fn a_read_only_cluster_refuses_every_command_whoever_asks(cx: &mut TestAppContex
         }
     }
     assert!(app.writes().is_empty());
-    let audit = app.ports.state.audit_log();
+    let audit: Vec<_> = app
+        .ports
+        .state
+        .audit_log()
+        .into_iter()
+        .filter(|record| !record.dry_run)
+        .collect();
     assert_eq!(audit.len(), 12);
     assert!(audit.iter().all(|r| r.outcome == AuditOutcome::Denied));
 }

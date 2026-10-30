@@ -14,7 +14,7 @@ use oxikube_resources_ui::detail::{DetailDrawer, DetailView};
 use oxikube_resources_ui::table::ResourceTable;
 use oxikube_testkit::kinds::core_kinds;
 use oxikube_testkit::{ResourceCall, TestPorts};
-use oxikube_workspace::modal::DialogModal;
+use oxikube_workspace::modal::ConfirmDialog;
 use oxikube_workspace::sidebar::SidebarPanel;
 use serde_json::json;
 
@@ -257,16 +257,10 @@ fn saving_a_binding_to_cluster_admin_asks_to_confirm_with_a_warning_then_writes(
             .read(cx)
             .modal_layer()
             .read(cx)
-            .active_modal::<DialogModal>()
+            .active_modal::<ConfirmDialog>()
             .expect("the guard's confirmation");
         let modal = modal.read(cx);
-        (
-            modal.title().to_string(),
-            modal
-                .message_text()
-                .map(ToString::to_string)
-                .unwrap_or_default(),
-        )
+        (modal.title().to_string(), modal.message_text().to_string())
     });
     assert_eq!(title, "Create the binding?");
     assert!(
@@ -287,7 +281,11 @@ fn saving_a_binding_to_cluster_admin_asks_to_confirm_with_a_warning_then_writes(
             _ => None,
         })
         .collect();
-    assert_eq!(creates, [true, false], "dry run, then the create");
+    assert_eq!(
+        creates,
+        [true, true, false],
+        "the guard's preview and the handler's own dry run, then the create"
+    );
     let audit = app.ports.state.audit_log();
     let record = audit.last().expect("an audit record");
     assert_eq!(&*record.cmd, "binding::Create");

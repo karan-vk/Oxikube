@@ -611,6 +611,23 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Global,
         NONE,
     ),
+    // panel's dry run and apply are `resource::ApplyPlan` dispatches, guarded one by one, so the
+    // command itself changes nothing and needs no confirmation of its own (a read-only cluster
+    // still shows the panel; its dry run and Apply are refused there by that guard).
+    CommandMeta::read(
+        CommandId::APPLY_DIRECTORY,
+        "Apply: Directory or File",
+        CommandScope::Cluster,
+        NONE,
+    ),
+    // The same panel on a kustomize overlay; hidden while neither `kustomize` nor
+    // `kubectl kustomize` exists (E20-S04's detection grants the capability).
+    CommandMeta::read(
+        CommandId::APPLY_KUSTOMIZE,
+        "Apply: Kustomize Directory",
+        CommandScope::Cluster,
+        Capabilities::KUSTOMIZE,
+    ),
     // Writes the viewer's filtered records to a file the user picks (E19-S09). Reads the local audit
     // log (already redacted at write time, no bodies) and changes no cluster, so it runs on a
     // read-only cluster and has no guard tier.
@@ -629,23 +646,6 @@ pub static COMMANDS: &[CommandMeta] = &[
         NONE,
     ),
     // Opens the apply panel (E20-S05) on a file or directory: loading reads local files and the
-    // panel's dry run and apply are `resource::ApplyPlan` dispatches, guarded one by one, so the
-    // command itself changes nothing and needs no confirmation of its own (a read-only cluster
-    // still shows the panel; its dry run and Apply are refused there by that guard).
-    CommandMeta::read(
-        CommandId::APPLY_DIRECTORY,
-        "Apply: Directory or File",
-        CommandScope::Cluster,
-        NONE,
-    ),
-    // The same panel on a kustomize overlay; hidden while neither `kustomize` nor
-    // `kubectl kustomize` exists (E20-S04's detection grants the capability).
-    CommandMeta::read(
-        CommandId::APPLY_KUSTOMIZE,
-        "Apply: Kustomize Directory",
-        CommandScope::Cluster,
-        Capabilities::KUSTOMIZE,
-    ),
     // A binding is where RBAC privileges are handed out (E17-S06): risk medium like the roles, one
     // simple confirmation (a binding to cluster-admin or to everybody is called out in its text), a
     // server dry run first, blocked on a read-only cluster, audited with the role and a subject

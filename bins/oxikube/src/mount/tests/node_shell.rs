@@ -19,7 +19,7 @@ use oxikube_terminal::view::{
 use oxikube_testkit::TestPorts;
 use oxikube_testkit::fakes::FakeTerminalBackend;
 use oxikube_workspace::DockPosition;
-use oxikube_workspace::modal::DialogModal;
+use oxikube_workspace::modal::ConfirmDialog;
 
 use super::App;
 use crate::app_state::AppState;
@@ -97,11 +97,11 @@ impl App {
                 .read(cx)
                 .modal_layer()
                 .read(cx)
-                .active_modal::<DialogModal>()?;
+                .active_modal::<ConfirmDialog>()?;
             let dialog = dialog.read(cx);
             Some((
                 dialog.title().to_string(),
-                dialog.message_text()?.to_string(),
+                dialog.message_text().to_string(),
             ))
         })
     }

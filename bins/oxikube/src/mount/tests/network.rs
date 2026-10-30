@@ -13,7 +13,7 @@ use oxikube_domain::ids::{Gvk, ResourceRef};
 use oxikube_domain::kinds::{ResourceKind, VerbSet};
 use oxikube_resources_ui::table::ResourceTable;
 use oxikube_testkit::{ResourceCall, TestPorts};
-use oxikube_workspace::modal::DialogModal;
+use oxikube_workspace::modal::ConfirmDialog;
 use serde_json::json;
 
 use super::App;
@@ -98,8 +98,8 @@ impl App {
                 .read(cx)
                 .modal_layer()
                 .read(cx)
-                .active_modal::<DialogModal>()?;
-            Some(dialog.read(cx).message_text()?.to_string())
+                .active_modal::<ConfirmDialog>()?;
+            Some(dialog.read(cx).message_text().to_string())
         })
     }
 }
@@ -157,8 +157,11 @@ fn set_as_default_confirms_then_moves_the_flag_through_the_guard_and_the_audit_l
         "{message}"
     );
     assert!(
-        resources.mutating_calls().is_empty(),
-        "nothing is sent before the answer"
+        resources
+            .mutating_calls()
+            .iter()
+            .all(ResourceCall::is_dry_run),
+        "only the dry run is sent before the answer"
     );
 
     app.press("enter");
@@ -167,6 +170,7 @@ fn set_as_default_confirms_then_moves_the_flag_through_the_guard_and_the_audit_l
     let sent: Vec<(String, serde_json::Value)> = resources
         .mutating_calls()
         .into_iter()
+        .filter(|call| !call.is_dry_run())
         .map(|call| match call {
             ResourceCall::Patch { name, patch, .. } => {
                 (name, patch.body["metadata"]["annotations"][DEFAULT].clone())
@@ -181,7 +185,13 @@ fn set_as_default_confirms_then_moves_the_flag_through_the_guard_and_the_audit_l
             ("traefik".to_owned(), serde_json::Value::Null)
         ]
     );
-    let audit = app.ports.state.audit_log();
+    let audit: Vec<_> = app
+        .ports
+        .state
+        .audit_log()
+        .into_iter()
+        .filter(|record| !record.dry_run)
+        .collect();
     assert_eq!(audit.len(), 1, "{audit:?}");
     assert_eq!(&*audit[0].cmd, "ingressclass::SetDefault");
     assert_eq!(audit[0].outcome, AuditOutcome::Succeeded);
@@ -232,7 +242,13 @@ fn a_read_only_cluster_refuses_it_whoever_asks(cx: &mut TestAppContext) {
         .ports_for(&TestPorts::cluster_id())
         .resources;
     assert!(resources.mutating_calls().is_empty());
-    let audit = app.ports.state.audit_log();
+    let audit: Vec<_> = app
+        .ports
+        .state
+        .audit_log()
+        .into_iter()
+        .filter(|record| !record.dry_run)
+        .collect();
     assert_eq!(audit.len(), 3);
     assert!(audit.iter().all(|r| r.outcome == AuditOutcome::Denied));
 }

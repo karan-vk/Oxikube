@@ -305,11 +305,30 @@
           "$ref": "#/$defs/CloudSettingsContent"
         },
         "colour": {
-          "description": "Accent colour of the cluster's tab, hotbar dot and badges, as `#rrggbb` or `#rgb`.",
-          "examples": [
-            "#e5484d"
+          "anyOf": [
+            {
+              "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+            },
+            {
+              "enum": [
+                "red",
+                "orange",
+                "green",
+                "blue",
+                "purple",
+                "gray",
+                "grey"
+              ]
+            },
+            {
+              "type": "null"
+            }
           ],
-          "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$",
+          "description": "Accent colour of the cluster's tab, hotbar dot and badges, as `#rrggbb`, `#rgb` or a palette name\n(`red`, `orange`, `green`, `blue`, `purple`, `gray`). Anything else is refused with a\ndiagnostic and the last good value stays.",
+          "examples": [
+            "#e5484d",
+            "red"
+          ],
           "type": [
             "string",
             "null"
@@ -510,11 +529,30 @@
           ]
         },
         "colour": {
-          "description": "Accent colour of the cluster's tab, hotbar dot and badges, as `#rrggbb` or `#rgb`.",
-          "examples": [
-            "#e5484d"
+          "anyOf": [
+            {
+              "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+            },
+            {
+              "enum": [
+                "red",
+                "orange",
+                "green",
+                "blue",
+                "purple",
+                "gray",
+                "grey"
+              ]
+            },
+            {
+              "type": "null"
+            }
           ],
-          "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$",
+          "description": "Accent colour of the cluster's tab, hotbar dot and badges, as `#rrggbb`, `#rgb` or a palette name\n(`red`, `orange`, `green`, `blue`, `purple`, `gray`). Anything else is refused with a\ndiagnostic and the last good value stays.",
+          "examples": [
+            "#e5484d",
+            "red"
+          ],
           "type": [
             "string",
             "null"
@@ -2007,11 +2045,30 @@
       "type": "object"
     },
     "colour": {
-      "description": "Accent colour of the cluster's tab, hotbar dot and badges, as `#rrggbb` or `#rgb`.",
-      "examples": [
-        "#e5484d"
+      "anyOf": [
+        {
+          "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+        },
+        {
+          "enum": [
+            "red",
+            "orange",
+            "green",
+            "blue",
+            "purple",
+            "gray",
+            "grey"
+          ]
+        },
+        {
+          "type": "null"
+        }
       ],
-      "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$",
+      "description": "Accent colour of the cluster's tab, hotbar dot and badges, as `#rrggbb`, `#rgb` or a palette name\n(`red`, `orange`, `green`, `blue`, `purple`, `gray`). Anything else is refused with a\ndiagnostic and the last good value stays.",
+      "examples": [
+        "#e5484d",
+        "red"
+      ],
       "type": [
         "string",
         "null"

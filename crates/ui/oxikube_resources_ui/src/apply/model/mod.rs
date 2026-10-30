@@ -55,7 +55,7 @@ pub struct LoadSummary {
     pub stderr: String,
 }
 
-/// The panel's state. See the [module docs](self).
+/// The panel's state. See the module docs.
 #[derive(Debug)]
 pub struct Model {
     stage: Stage,

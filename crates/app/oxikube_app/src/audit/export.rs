@@ -1,7 +1,7 @@
 //! Writing the audit log to a file (`audit::Export`): JSONL or CSV, streamed.
 //!
 //! [`export`] pages through the log with the viewer's filters and hands
-//! [`FsPort::write_stream`](oxikube_ports::FsPort::write_stream) one formatted page at a time, so a
+//! [`oxikube_ports::FsPort::write_stream`] one formatted page at a time, so a
 //! million records never sit in memory and nothing appears at the destination unless the whole
 //! export succeeded. Records carry no bodies (`oxikube_domain::audit`) and were redacted when they
 //! were written, so the export adds nothing a record did not already say.
