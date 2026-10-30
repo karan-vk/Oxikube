@@ -67,7 +67,7 @@ pub use cloud::{CloudSettings, CloudSettingsContent};
 pub use cluster::{ClusterSettings, ClusterSettingsContent};
 pub use diagnostics::SettingsDiagnostic;
 pub use diff::{DiffSettings, DiffSettingsContent};
-pub use global::{init, init_with_dir, update_user_settings};
+pub use global::{init, init_with_dir, update_user_settings, update_user_settings_path};
 pub use helm::{HelmRepoContent, HelmSettings, HelmSettingsContent};
 pub use kubeconfig::{KubeconfigSettings, KubeconfigSettingsContent};
 pub use kustomize::{KustomizeSettings, KustomizeSettingsContent};
@@ -78,7 +78,7 @@ pub use metrics::{
 pub use portforward::{PortForwardSettings, PortForwardSettingsContent};
 pub use settings::{RegisteredSetting, Settings, SettingsContent, SettingsLocation};
 pub use store::SettingsStore;
-pub use update::new_text_for_update;
+pub use update::{new_text_for_path_update, new_text_for_update};
 
 /// Re-exports used by [`register_settings!`]; not part of the API.
 #[doc(hidden)]
