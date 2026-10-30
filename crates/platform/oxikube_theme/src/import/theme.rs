@@ -4,7 +4,7 @@ use super::report::ImportReport;
 use super::syntax::{accents, color_at, players, syntax};
 use super::table::{OXIKUBE, cluster_tab_index, color_slot, log_source_index};
 use crate::appearance::Appearance;
-use crate::tokens::{ThemeTokens, derive_colors, derive_oxikube};
+use crate::tokens::{PlayerColor, ThemeTokens, derive_colors, derive_oxikube};
 use serde_json::{Map, Value};
 
 /// Builds the tokens for one theme over `base`.
@@ -34,7 +34,7 @@ pub(super) fn build_theme(
         match key.as_str() {
             "players" => {
                 if let Some(players) = players(value, name, report).filter(|p| !p.is_empty()) {
-                    tokens.players = players;
+                    merge_players(&mut tokens.players, players);
                 }
             }
             "accents" => {
@@ -60,6 +60,22 @@ pub(super) fn build_theme(
         apply_oxikube_block(&mut tokens, name, block, report);
     }
     tokens
+}
+
+/// Zed's `merge_player_colors`: the theme's players replace the base's by index and the base's
+/// remaining players are kept, so a theme with 3 players still ends up with the full set.
+fn merge_players(base: &mut Vec<PlayerColor>, theme: Vec<PlayerColor>) {
+    let overridden = theme.len();
+    for (index, player) in theme.into_iter().enumerate() {
+        match base.get_mut(index) {
+            Some(slot) => *slot = player,
+            None => base.push(player),
+        }
+    }
+    debug_assert!(
+        base.len() >= overridden,
+        "merged players keep every theme player"
+    );
 }
 
 /// Explicit `oxikube` keys over the derived defaults.
