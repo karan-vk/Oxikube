@@ -223,7 +223,7 @@ fn user_beats_extension_beats_bundled_and_later_insert_wins_within_a_source() {
     assert_eq!(text_of(&registry), color("#333333"), "user beats extension");
     assert_eq!(registry.names(), ["One Dark", "One Light"], "listed once");
 
-    assert_eq!(registry.remove_user_themes(), 1);
+    assert_eq!(registry.remove_by_source(&ThemeSource::User), 1);
     assert_eq!(text_of(&registry), color("#222222"));
     registry.remove_by_source(&ext("a"));
     assert_ne!(text_of(&registry), color("#222222"), "bundled again");

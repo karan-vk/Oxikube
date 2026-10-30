@@ -125,11 +125,6 @@ impl ThemeRegistry {
         }
     }
 
-    /// Removes the user's themes (what a deleted `themes/` directory means).
-    pub fn remove_user_themes(&mut self) -> usize {
-        self.remove_by_source(&ThemeSource::User)
-    }
-
     /// Replaces every user theme with the contents of a fresh scan of the themes directory.
     pub fn replace_user_themes(&mut self, scan: UserThemes) {
         self.user.clear();
