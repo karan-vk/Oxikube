@@ -353,3 +353,32 @@ fn only_a_claim_can_be_resized() {
         "{error}"
     );
 }
+
+#[test]
+fn a_server_that_cannot_dry_run_still_gets_the_confirmed_resize() {
+    let h = harness();
+    expandable_cluster(&h);
+    h.confirm_without_dry_runs(
+        super::CLUSTER,
+        resize("shop", "20Gi", Some("10Gi")),
+        ctx(Initiator::Ui),
+    );
+    let dry: Vec<bool> = patches(&h)
+        .iter()
+        .map(oxikube_testkit::ResourceCall::is_dry_run)
+        .collect();
+    assert_eq!(
+        dry,
+        [true, false],
+        "the guard's refused dry run, then the patch"
+    );
+    let stored = h.resources(super::CLUSTER).objects();
+    let claim = stored
+        .iter()
+        .find(|o| o.name() == "data")
+        .expect("the claim");
+    assert_eq!(
+        claim.get_str("/spec/resources/requests/storage"),
+        Some("20Gi")
+    );
+}

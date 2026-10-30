@@ -6,6 +6,8 @@ use std::sync::Arc;
 use oxikube_domain::ids::ClusterId;
 use oxikube_ports::{DeleteOptions, ResourceWriter, WriteOptions};
 
+use super::rehearsal::Rehearsal;
+
 /// Permission to write to one cluster, for the duration of one guarded command.
 ///
 /// Only [`MutationGuard`](super::MutationGuard) can create one (the constructor is
@@ -36,6 +38,7 @@ pub struct Mutation {
     cluster: ClusterId,
     writer: Arc<dyn ResourceWriter>,
     dry_run: bool,
+    rehearsal: Rehearsal,
 }
 
 impl Mutation {
@@ -45,7 +48,16 @@ impl Mutation {
             cluster,
             writer,
             dry_run,
+            rehearsal: Rehearsal::None,
         }
+    }
+
+    /// The same permit, for a dispatch confirmed after the guard's dry run established
+    /// `rehearsal`.
+    #[must_use]
+    pub(crate) fn with_rehearsal(mut self, rehearsal: Rehearsal) -> Self {
+        self.rehearsal = rehearsal;
+        self
     }
 
     /// The cluster this permission is for.
@@ -71,6 +83,21 @@ impl Mutation {
         self.dry_run
     }
 
+    /// Whether the handler has the server rehearse a request (send it as a dry run) before it
+    /// sends it for real. `false` when the guard's own dry run, before this command was
+    /// confirmed, found that the server cannot dry-run it: the user confirmed it without a
+    /// preview, and a dry run of the handler's own would fail the same way and stop what the user
+    /// confirmed (E19-S07: a missing preview never blocks the mutation). Always `true` for a
+    /// dry-run dispatch.
+    pub fn rehearses_first(&self) -> bool {
+        self.rehearsal != Rehearsal::Unavailable
+    }
+
+    /// What the guard's dry run before the confirmation established.
+    pub(crate) fn rehearsal(&self) -> Rehearsal {
+        self.rehearsal
+    }
+
     /// Write options honouring [`dry_run`](Self::dry_run).
     pub fn write_options(&self) -> WriteOptions {
         WriteOptions {
@@ -93,6 +120,7 @@ impl fmt::Debug for Mutation {
         f.debug_struct("Mutation")
             .field("cluster", &self.cluster)
             .field("dry_run", &self.dry_run)
+            .field("rehearsal", &self.rehearsal)
             .finish_non_exhaustive()
     }
 }

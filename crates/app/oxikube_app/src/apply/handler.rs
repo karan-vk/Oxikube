@@ -24,6 +24,7 @@ use super::types::ApplyMethod;
 use super::write::{ObjectWrite, Preview, version_of};
 use crate::actions::object_label;
 use crate::command_bus::{CommandOutput, CommandRegistry, HandlerContext, RegisterError};
+use crate::guard::Rehearsal;
 use crate::guard::no_preview_reason;
 use crate::session::ClusterSessionManager;
 
@@ -93,11 +94,18 @@ async fn handle(
     if mutation.dry_run() {
         return rehearse(&write, writer, reader.as_ref()).await;
     }
-    let (method, object) = match write.send(writer, reader.as_ref(), Preview::First).await {
+    // The guard dry-ran this apply before it was confirmed, or the person's own preview did
+    // (E19-S07): no second dry run. Otherwise the server rehearses it first.
+    let preview = match mutation.rehearsal() {
+        Rehearsal::None => Preview::First,
+        Rehearsal::Done => Preview::Done,
+        Rehearsal::Unavailable => Preview::Unavailable,
+    };
+    let (method, object) = match write.send(writer, reader.as_ref(), preview).await {
         Ok(done) => done,
         // The API cannot dry-run the apply (an aggregated API, a webhook with side effects): sent
         // without the rehearsal; a missing preview never blocks what the user confirmed (E19-S07).
-        Err(error) if no_preview_reason(&error).is_some() => {
+        Err(error) if preview == Preview::First && no_preview_reason(&error).is_some() => {
             write
                 .send(writer, reader.as_ref(), Preview::Unavailable)
                 .await?

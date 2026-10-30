@@ -63,15 +63,18 @@ pub(super) async fn handle(
         dry_run: true,
         ..options.clone()
     };
-    // The server rehearses the patch first (admission, RBAC, the class's own refusal).
-    let rehearsed = writer
-        .patch(&claim_gvk(), ns, &target.name, &patch, &rehearsal)
-        .await?;
-    if mutation.dry_run() {
-        return Ok(CommandOutput {
-            message: Some(format!("Dry run: {ns_name} can be resized to {new}")),
-            data: Some(report("dry_run", from_text.as_deref(), &new, &rehearsed)),
-        });
+    // The server rehearses the patch first (admission, RBAC, the class's own refusal), unless
+    // the guard found it cannot dry-run one.
+    if mutation.rehearses_first() {
+        let rehearsed = writer
+            .patch(&claim_gvk(), ns, &target.name, &patch, &rehearsal)
+            .await?;
+        if mutation.dry_run() {
+            return Ok(CommandOutput {
+                message: Some(format!("Dry run: {ns_name} can be resized to {new}")),
+                data: Some(report("dry_run", from_text.as_deref(), &new, &rehearsed)),
+            });
+        }
     }
     let patched = writer
         .patch(&claim_gvk(), ns, &target.name, &patch, &options)

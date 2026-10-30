@@ -171,3 +171,16 @@ fn a_suspend_dry_run_changes_nothing() {
 }
 
 use oxikube_domain::audit::AuditOutcome;
+
+#[test]
+fn a_server_that_cannot_dry_run_still_gets_the_confirmed_suspend() {
+    let t = Workloads::new(false);
+    let ctx = crate::command_bus::DispatchContext::new(Initiator::Ui, "alice");
+    t.h.confirm_without_dry_runs("a", suspend(cronjob_ref("nightly")), ctx);
+    let stored = t.port().objects();
+    let nightly = stored
+        .iter()
+        .find(|o| o.name() == "nightly")
+        .expect("the CronJob");
+    assert_eq!(nightly.get_bool("/spec/suspend"), Some(true));
+}

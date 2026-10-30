@@ -71,7 +71,7 @@ impl WorkloadService {
         let namespace = cronjob.namespace();
         let job_gvk = Gvk::new("batch", "v1", "Job");
         let writer = mutation.writer();
-        if !mutation.dry_run() {
+        if !mutation.dry_run() && mutation.rehearses_first() {
             writer
                 .create(&job_gvk, namespace, &job, &options(true))
                 .await?;
@@ -147,7 +147,7 @@ impl WorkloadService {
         let patch = Patch::merge(suspend_patch(suspend));
         let writer = mutation.writer();
         let (namespace, name) = (target.namespace(), &*target.name);
-        if !mutation.dry_run() {
+        if !mutation.dry_run() && mutation.rehearses_first() {
             writer
                 .patch(&target.gvk, namespace, name, &patch, &options(true))
                 .await?;

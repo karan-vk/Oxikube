@@ -11,7 +11,8 @@ use oxikube_ports::ResourceWriter;
 
 use super::confirm::{ConfirmationRequest, Pending};
 use super::gate::ReadOnlyGate;
-use super::rehearsal::{needs_rehearsal, require_rehearsal};
+use super::receipt::Receipts;
+use super::rehearsal::{Rehearsal, needs_rehearsal, require_rehearsal};
 use super::{Mutation, MutationGuard, policy};
 use crate::audit::AuditLog;
 use crate::command_bus::{CommandHandler, DispatchContext, DispatchError, HandlerContext, Outcome};
@@ -37,8 +38,12 @@ struct Question {
 
 /// The result of the synchronous checks.
 enum Admission {
-    /// Run the handler. `rehearsed`: the confirmation redeemed followed the guard's dry run.
-    Proceed { admitted: Admitted, rehearsed: bool },
+    /// Run the handler. `rehearsal`: what the guard's dry run before the confirmation redeemed
+    /// established.
+    Proceed {
+        admitted: Admitted,
+        rehearsal: Rehearsal,
+    },
     /// Ask the user first; nothing ran. The token is issued once any dry run is done.
     Confirm(Question),
     /// Refused; `record` is written before the error is returned.
@@ -59,12 +64,12 @@ impl MutationGuard {
     ) -> Result<Outcome, DispatchError> {
         let resolved = self.resolved_target(&command, ctx.cluster.as_ref()).await;
         let resolved_detail = self.resolved_detail(&command, ctx.cluster.as_ref()).await;
-        let (admitted, rehearsed) =
+        let (admitted, rehearsal) =
             match self.admit(meta, &command, &ctx, resolved, resolved_detail) {
                 Admission::Proceed {
                     admitted,
-                    rehearsed,
-                } => (admitted, rehearsed),
+                    rehearsal,
+                } => (admitted, rehearsal),
                 Admission::Confirm(question) => {
                     return self.ask(meta, &command, &ctx, question, handler).await;
                 }
@@ -82,7 +87,7 @@ impl MutationGuard {
 
         // The dry-run stage: a command that needs the guard's dry run got it before it was
         // confirmed (`ask`), or it does not run.
-        if let Err(error) = require_rehearsal(meta, &command, &ctx, rehearsed) {
+        if let Err(error) = require_rehearsal(meta, &command, &ctx, rehearsal) {
             let record = self.refusal(meta, &ctx, &admitted, &error);
             if let Err(err) = self.audit.record(record).await {
                 tracing::warn!(error = %err, "could not audit a refused mutation");
@@ -120,7 +125,11 @@ impl MutationGuard {
             context,
             writer,
         ));
-        let mutation = Mutation::new(cluster.clone(), writer, ctx.dry_run);
+        let mutation =
+            Mutation::new(cluster.clone(), writer, ctx.dry_run).with_rehearsal(rehearsal);
+        // A person's own dry run of an apply stands in for the guard's rehearsal of the apply
+        // that follows (see `receipt`), once the server accepted it.
+        let receipt = Receipts::eligible(&command, &ctx).map(|command| (cluster.clone(), command));
         let cx = HandlerContext::new(
             ctx.initiator,
             ctx.who.clone(),
@@ -147,13 +156,18 @@ impl MutationGuard {
             .flush()
             .await
             .map_err(DispatchError::AuditFailed)?;
+        if let (Ok(_), Some((cluster, command))) = (&result, receipt) {
+            self.receipts.record(ctx.who.clone(), cluster, command);
+        }
         result
             .map(Outcome::Completed)
             .map_err(DispatchError::Handler)
     }
 
-    /// Answers the first dispatch of a command that needs confirming: dry-runs it first when its
-    /// risk requires that (see `rehearsal`), then issues the token and returns the request.
+    /// Answers the first dispatch of a command that needs confirming: dry-runs it first when it is
+    /// previewed or its risk requires that (see `rehearsal`; a person's own accepted dry run of
+    /// the same apply stands in for it, see `receipt`), then issues the token and returns the
+    /// request.
     async fn ask(
         &self,
         meta: &CommandMeta,
@@ -168,17 +182,20 @@ impl MutationGuard {
             tier,
             summary,
         } = question;
-        let preview = if needs_rehearsal(command, ctx) {
-            Some(
-                self.rehearse(meta, command, ctx, &admitted, handler)
-                    .await?,
-            )
+        let (preview, rehearsal) = if !needs_rehearsal(command, ctx) {
+            (None, Rehearsal::None)
+        } else if self.receipts.take(command, ctx, &admitted.cluster) {
+            (None, Rehearsal::Done)
         } else {
-            None
+            let preview = self
+                .rehearse(meta, command, ctx, &admitted, handler)
+                .await?;
+            let rehearsal = Rehearsal::from(&preview);
+            (Some(preview), rehearsal)
         };
         let expected_name = pending.expected_name.clone();
         let token = self.confirmations.issue(Pending {
-            rehearsed: preview.is_some(),
+            rehearsal,
             ..pending
         });
         Ok(Outcome::NeedsConfirmation(ConfirmationRequest {
@@ -307,7 +324,7 @@ impl MutationGuard {
         };
 
         let tier = policy::confirm_tier_for(meta, command);
-        let mut rehearsed = false;
+        let mut rehearsal = Rehearsal::None;
         if tier != ConfirmTier::None
             && let Some(answer) = &ctx.confirmation
         {
@@ -315,7 +332,7 @@ impl MutationGuard {
                 .confirmations
                 .redeem(answer, command, ctx.initiator, ctx.dry_run)
             {
-                Ok(dry_ran) => rehearsed = dry_ran,
+                Ok(dry_ran) => rehearsal = dry_ran,
                 Err(err) => {
                     return deny(DispatchError::Confirmation(err), AuditOutcome::Denied);
                 }
@@ -343,7 +360,7 @@ impl MutationGuard {
                         cluster: admitted.cluster.clone(),
                         expected_name,
                         dry_run: ctx.dry_run,
-                        rehearsed: false,
+                        rehearsal: Rehearsal::None,
                     },
                     admitted,
                     tier,
@@ -352,7 +369,7 @@ impl MutationGuard {
             }
             None => Admission::Proceed {
                 admitted,
-                rehearsed,
+                rehearsal,
             },
         }
     }

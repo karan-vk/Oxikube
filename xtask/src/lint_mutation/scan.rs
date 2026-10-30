@@ -9,8 +9,9 @@ use syn::{
     PatType, Path, Token, Type, UseTree,
 };
 
-/// Methods of `ResourceWriter` that change a cluster.
-const MUTATING_METHODS: &[&str] = &[
+/// Methods of `ResourceWriter` that change a cluster: every method the trait declares (the
+/// `mutating_methods_cover_the_writer_trait` test reads the trait to keep this in step).
+pub(super) const MUTATING_METHODS: &[&str] = &[
     "create",
     "replace",
     "patch",
@@ -20,6 +21,21 @@ const MUTATING_METHODS: &[&str] = &[
     "evict",
     "create_subresource",
     "patch_subresource",
+    "replace_subresource",
+];
+
+/// Methods that hand on the handle they are called on (or the value inside an `Option` or
+/// `Result` holding it): `w.clone()`, `getter().unwrap()`.
+const PASS_THROUGH_METHODS: &[&str] = &[
+    "clone",
+    "as_ref",
+    "as_deref",
+    "borrow",
+    "unwrap",
+    "expect",
+    "unwrap_unchecked",
+    "unwrap_or_else",
+    "unwrap_or_default",
 ];
 
 /// Names that produce a writer handle when called: `mutation.writer()`.
@@ -54,6 +70,9 @@ pub(super) fn is_cfg_test(attrs: &[Attribute]) -> bool {
 struct Scanner {
     /// Bindings, parameters and fields whose declared type mentions a writer-capable trait.
     writer_names: BTreeSet<String>,
+    /// Type aliases and generic parameters that stand for a writer-capable trait
+    /// (`type Port = Arc<dyn ResourcePort>;`, `fn f<P: ResourcePort>(p: P)`).
+    writer_types: BTreeSet<String>,
     reporting: bool,
     found: BTreeSet<String>,
 }
@@ -71,6 +90,8 @@ impl Scanner {
             Expr::Paren(p) => self.is_writer_handle(&p.expr),
             Expr::Reference(r) => self.is_writer_handle(&r.expr),
             Expr::Await(a) => self.is_writer_handle(&a.base),
+            // `x.writer()?`: the handle inside the `Option` or `Result`.
+            Expr::Try(t) => self.is_writer_handle(&t.expr),
             Expr::Path(p) => p
                 .path
                 .get_ident()
@@ -82,7 +103,7 @@ impl Scanner {
             Expr::MethodCall(m) => {
                 let name = m.method.to_string();
                 WRITER_GETTERS.contains(&name.as_str())
-                    || (matches!(name.as_str(), "clone" | "as_ref" | "as_deref")
+                    || (PASS_THROUGH_METHODS.contains(&name.as_str())
                         && self.is_writer_handle(&m.receiver))
             }
             _ => false,
@@ -112,7 +133,7 @@ impl Scanner {
     }
 
     fn learn(&mut self, pat: &Pat, ty: &Type) {
-        if mentions_writer_trait(ty)
+        if self.mentions_writer_trait(ty)
             && let Pat::Ident(id) = pat
         {
             self.writer_names.insert(id.ident.to_string());
@@ -120,20 +141,52 @@ impl Scanner {
     }
 }
 
-/// Whether a type names `ResourceWriter` or `ResourcePort` anywhere.
-fn mentions_writer_trait(ty: &Type) -> bool {
-    struct Finder(bool);
-    impl<'ast> Visit<'ast> for Finder {
+/// Whether `ty` names `ResourceWriter` or `ResourcePort` anywhere, or one of `aliases`.
+fn names_writer_trait(ty: &Type, aliases: &BTreeSet<String>) -> bool {
+    struct Finder<'a> {
+        aliases: &'a BTreeSet<String>,
+        found: bool,
+    }
+    impl<'ast> Visit<'ast> for Finder<'_> {
         fn visit_path_segment(&mut self, seg: &'ast syn::PathSegment) {
-            if seg.ident == "ResourceWriter" || seg.ident == "ResourcePort" {
-                self.0 = true;
+            if seg.ident == "ResourceWriter"
+                || seg.ident == "ResourcePort"
+                || self.aliases.contains(&seg.ident.to_string())
+            {
+                self.found = true;
             }
             syn::visit::visit_path_segment(self, seg);
         }
     }
-    let mut finder = Finder(false);
+    let mut finder = Finder {
+        aliases,
+        found: false,
+    };
     finder.visit_type(ty);
-    finder.0
+    finder.found
+}
+
+/// Whether any of `bounds` names a writer-capable trait.
+fn bounds_name_writer_trait<'a>(
+    bounds: impl IntoIterator<Item = &'a syn::TypeParamBound>,
+    aliases: &BTreeSet<String>,
+) -> bool {
+    bounds.into_iter().any(|bound| match bound {
+        syn::TypeParamBound::Trait(t) => {
+            let ty = Type::Path(syn::TypePath {
+                qself: None,
+                path: t.path.clone(),
+            });
+            names_writer_trait(&ty, aliases)
+        }
+        _ => false,
+    })
+}
+
+impl Scanner {
+    fn mentions_writer_trait(&self, ty: &Type) -> bool {
+        names_writer_trait(ty, &self.writer_types)
+    }
 }
 
 impl<'ast> Visit<'ast> for Scanner {
@@ -201,11 +254,37 @@ impl<'ast> Visit<'ast> for Scanner {
 
     fn visit_field(&mut self, node: &'ast Field) {
         if let Some(ident) = &node.ident
-            && mentions_writer_trait(&node.ty)
+            && self.mentions_writer_trait(&node.ty)
         {
             self.writer_names.insert(ident.to_string());
         }
         syn::visit::visit_field(self, node);
+    }
+
+    fn visit_item_type(&mut self, node: &'ast syn::ItemType) {
+        if !is_cfg_test(&node.attrs) {
+            if self.mentions_writer_trait(&node.ty) {
+                self.writer_types.insert(node.ident.to_string());
+            }
+            syn::visit::visit_item_type(self, node);
+        }
+    }
+
+    fn visit_type_param(&mut self, node: &'ast syn::TypeParam) {
+        if bounds_name_writer_trait(&node.bounds, &self.writer_types) {
+            self.writer_types.insert(node.ident.to_string());
+        }
+        syn::visit::visit_type_param(self, node);
+    }
+
+    fn visit_predicate_type(&mut self, node: &'ast syn::PredicateType) {
+        if bounds_name_writer_trait(&node.bounds, &self.writer_types)
+            && let Type::Path(p) = &node.bounded_ty
+            && let Some(ident) = p.path.get_ident()
+        {
+            self.writer_types.insert(ident.to_string());
+        }
+        syn::visit::visit_predicate_type(self, node);
     }
 
     fn visit_pat_type(&mut self, node: &'ast PatType) {

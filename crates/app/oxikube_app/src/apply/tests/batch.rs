@@ -139,7 +139,9 @@ fn a_failure_while_applying_does_not_stop_the_rest_but_skips_what_needs_it() {
         report.documents[1].message,
         "skipped: it needs Namespace shop (document 1), which did not apply"
     );
-    assert_eq!(applied_names(&t), ["elsewhere"]);
+    // The namespace's apply was sent (its preview was the dry run) and refused; the document in
+    // it was never sent.
+    assert_eq!(applied_names(&t), ["shop", "elsewhere"]);
     assert_eq!(report.summary(), "1 applied, 1 failed, 1 skipped");
 }
 
@@ -320,11 +322,13 @@ fn every_document_is_audited_on_its_own_without_its_values() {
     let preview = t.preview_batch(&[&a, secret]);
     t.apply_batch(&preview);
     let audit = t.h.audit();
-    // Two dry runs, then two applies, each preceded by the guard's own dry run (E19-S07; each
-    // recorded once, whatever the handler rehearses).
-    assert_eq!(audit.len(), 6);
+    // Two dry runs, then two applies: each preview stands in for the guard's own dry run of the
+    // apply that follows it (E19-S07), so nothing is dry-run or recorded twice.
+    assert_eq!(audit.len(), 4);
     let targets: Vec<String> = audit.iter().map(|r| r.target.name.to_string()).collect();
-    assert_eq!(targets, ["a", "db", "a", "a", "db", "db"]);
+    assert_eq!(targets, ["a", "db", "a", "db"]);
+    let dry_runs: Vec<bool> = audit.iter().map(|r| r.dry_run).collect();
+    assert_eq!(dry_runs, [true, true, false, false]);
     let text = format!("{audit:?}");
     assert!(!text.contains("hunter2"), "{text}");
     // The previews hold the Secret masked.

@@ -129,7 +129,8 @@ impl WorkloadService {
     }
 
     /// Sends `patch`: a server dry run first (admission, quota and RBAC are rehearsed before
-    /// anything changes), then the real request, unless the dispatch is itself a dry run.
+    /// anything changes; not when the guard found the server cannot dry-run it), then the real
+    /// request, unless the dispatch is itself a dry run.
     async fn send(
         &self,
         mutation: &Mutation,
@@ -138,7 +139,7 @@ impl WorkloadService {
     ) -> OxiResult<Resource> {
         let writer = mutation.writer();
         let (namespace, name) = (target.namespace(), &*target.name);
-        if !mutation.dry_run() {
+        if !mutation.dry_run() && mutation.rehearses_first() {
             writer
                 .patch(&target.gvk, namespace, name, patch, &options(true))
                 .await?;

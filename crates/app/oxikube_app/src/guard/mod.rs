@@ -64,6 +64,7 @@ pub mod policy;
 pub mod posture;
 mod preview;
 mod provider;
+mod receipt;
 mod rehearsal;
 mod selection_policy;
 mod workload_policy;
@@ -86,10 +87,12 @@ pub use preview::{
 };
 pub use provider::{ConfirmationProvider, ConfirmationRouter, Decision};
 pub use rehearsal::DryRunPreview;
+pub(crate) use rehearsal::Rehearsal;
 
 use crate::audit::AuditLog;
 use crate::session::ClusterSessionManager;
 use confirm::PendingConfirmations;
+use receipt::Receipts;
 
 /// Applies read-only mode, the confirmation policy, the dry-run stage and the audit
 /// record to every mutating command. See the [module docs](self).
@@ -101,6 +104,8 @@ pub struct MutationGuard {
     sessions: ClusterSessionManager,
     audit: Arc<AuditLog>,
     confirmations: PendingConfirmations,
+    /// A person's accepted dry runs of an apply (see `receipt`).
+    receipts: Receipts,
 }
 
 impl MutationGuard {
@@ -115,6 +120,7 @@ impl MutationGuard {
             sessions,
             audit: Arc::new(AuditLog::new(state, clock)),
             confirmations: PendingConfirmations::default(),
+            receipts: Receipts::default(),
         }
     }
 

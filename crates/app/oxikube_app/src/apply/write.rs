@@ -7,6 +7,7 @@
 //! send (First):        SSA dry run ─ok─> SSA
 //!                           └─unsupported─> replace / create dry run ─> replace / create
 //! send (Unavailable):  SSA ─unsupported─> replace / create
+//! send (Done):         as Unavailable: the server dry-ran it before it was confirmed
 //! ```
 //!
 //! Server-side apply runs under the field manager with `force` only when the user chose it. A
@@ -31,6 +32,9 @@ pub(crate) enum Preview {
     First,
     /// The server cannot dry-run the kind (the rehearsal said so): the write is sent without one.
     Unavailable,
+    /// The server dry-ran exactly this write before it was confirmed (the guard's dry run, or the
+    /// person's own preview of it): sent without another one.
+    Done,
 }
 
 /// One object to write, as a command describes it.
@@ -92,7 +96,8 @@ impl ObjectWrite {
 
     /// The write itself. With [`Preview::First`] the server rehearses it first (admission,
     /// validation, ownership); with [`Preview::Unavailable`] it is sent straight away, the dry run
-    /// being one the server cannot do.
+    /// being one the server cannot do, and with [`Preview::Done`] too, the dry run having been
+    /// done before the write was confirmed.
     pub(crate) async fn send(
         &self,
         writer: &dyn ResourceWriter,
@@ -102,7 +107,7 @@ impl ObjectWrite {
         // `None`: the dry run passed and the apply is still to send; `Some`: already sent.
         let server_side = match preview {
             Preview::First => self.server_side(writer, true).await.map(|_| None),
-            Preview::Unavailable => self.server_side(writer, false).await.map(Some),
+            Preview::Unavailable | Preview::Done => self.server_side(writer, false).await.map(Some),
         };
         match server_side {
             Ok(Some(object)) => Ok((ApplyMethod::ServerSide, object)),

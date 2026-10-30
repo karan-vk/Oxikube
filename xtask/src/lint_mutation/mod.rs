@@ -9,8 +9,9 @@
 //! 2. name `ResourceWriter` other than in `impl ResourceWriter for T` (implementing a fake world
 //!    is fine; holding or calling a writer is not), or
 //! 3. call a mutating method (`create`, `replace`, `patch`, `delete`, `delete_collection`,
-//!    `scale`, `evict`, `create_subresource`, `patch_subresource`) on a handle typed
-//!    `ResourceWriter` / `ResourcePort` or obtained from a `.writer()` call.
+//!    `scale`, `evict`, `create_subresource`, `patch_subresource`, `replace_subresource`: every
+//!    method of `ResourceWriter`) on a handle typed `ResourceWriter` / `ResourcePort` or obtained
+//!    from a `.writer()` call, also through `?`, `.unwrap()`, `.expect(..)` or `.clone()`.
 //!
 //! The scan parses sources with `syn`, so strings, comments and `#[cfg(test)]` items are ignored.
 //! Dev-dependency targets (tests, benches, examples) are never visited: only the crate's lib and

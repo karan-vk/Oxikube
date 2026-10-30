@@ -421,3 +421,19 @@ fn the_runner_answers_the_simple_confirmation_and_reports() {
     assert_eq!(error.kind(), ErrorKind::Forbidden);
     assert!(ro.resources("a").recorded_calls().is_empty());
 }
+
+#[test]
+fn a_server_that_cannot_dry_run_still_gets_the_confirmed_image() {
+    let h = with_deployment();
+    h.confirm_without_dry_runs(
+        "a",
+        set_image_of(deployment("a"), &[("web", "nginx:1.27")]),
+        ctx(Initiator::Ui),
+    );
+    let sent: Vec<bool> = patches(&h).into_iter().map(|(dry, ..)| dry).collect();
+    assert_eq!(
+        sent,
+        [true, false],
+        "the guard's refused dry run, then the patch"
+    );
+}

@@ -96,11 +96,12 @@ fn an_unsupported_dry_run_is_marked_no_preview_and_never_blocks() {
     let h = Harness::with_delete_handler();
     h.connect("a", false);
     let resources = h.resources("a");
-    resources.script().delete.push_err(OxiError::new(
+    // A server that cannot dry-run anything: every dry run fails the same way, not just the
+    // guard's.
+    resources.refuse_dry_runs(
         ErrorKind::Unsupported,
         "the aggregated API does not support dry run",
-    ));
-    resources.script().delete.push_ok(DeleteOutcome::Deleted);
+    );
     resources.script().delete.push_ok(DeleteOutcome::Deleted);
     let command = namespace_delete("metrics");
 
@@ -116,7 +117,11 @@ fn an_unsupported_dry_run_is_marked_no_preview_and_never_blocks() {
         ctx(Initiator::Agent).with_confirmation(answer(&request)),
     );
     assert!(matches!(out, Ok(Outcome::Completed(_))), "{out:?}");
-    assert_eq!(deletes(&h).last(), Some(&(false, "metrics".to_owned())));
+    assert_eq!(
+        deletes(&h),
+        [(true, "metrics".to_owned()), (false, "metrics".to_owned())],
+        "the guard's dry run, then the delete: the handler sends no dry run of its own"
+    );
     assert_eq!(
         h.outcomes(),
         [
@@ -235,23 +240,32 @@ fn the_dry_run_needs_a_writable_audit_log() {
 #[test]
 fn a_confirmation_without_the_dry_run_cannot_approve_an_irreversible_command() {
     use crate::command_bus::DispatchContext;
-    use crate::guard::rehearsal::require_rehearsal;
+    use crate::guard::rehearsal::{Rehearsal, require_rehearsal};
 
     let command = namespace_delete("payments");
     let meta = command.meta();
     let real = DispatchContext::new(Initiator::Ui, "alice");
     assert!(matches!(
-        require_rehearsal(meta, &command, &real, false),
+        require_rehearsal(meta, &command, &real, Rehearsal::None),
         Err(DispatchError::DryRunRequired(CommandId::RESOURCE_DELETE))
     ));
-    assert!(require_rehearsal(meta, &command, &real, true).is_ok());
+    assert!(require_rehearsal(meta, &command, &real, Rehearsal::Done).is_ok());
+    assert!(require_rehearsal(meta, &command, &real, Rehearsal::Unavailable).is_ok());
     // A dry-run dispatch and a command that is not irreversible need none.
-    assert!(require_rehearsal(meta, &command, &real.clone().with_dry_run(true), false).is_ok());
+    assert!(
+        require_rehearsal(
+            meta,
+            &command,
+            &real.clone().with_dry_run(true),
+            Rehearsal::None
+        )
+        .is_ok()
+    );
     let ordinary = Command::ResourceDelete {
         target: pod("a", "web-0"),
         propagation: Propagation::Background,
     };
-    assert!(require_rehearsal(ordinary.meta(), &ordinary, &real, false).is_ok());
+    assert!(require_rehearsal(ordinary.meta(), &ordinary, &real, Rehearsal::None).is_ok());
     assert_eq!(
         oxikube_domain::OxiError::from(DispatchError::DryRunRequired(CommandId::RESOURCE_DELETE))
             .kind(),

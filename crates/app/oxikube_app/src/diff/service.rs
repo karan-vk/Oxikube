@@ -15,6 +15,7 @@ use super::ignore::IgnoreList;
 use super::keys::key_report;
 use super::normalize::{DiffOptions, Fingerprinter, normalize};
 use super::result::{DiffSide, ResourceDiff};
+use crate::offload::off_io_workers;
 use crate::session::ClusterSessionManager;
 
 /// One comparison: two objects of one kind and what to look at.
@@ -78,7 +79,7 @@ impl DiffService {
 
     /// Reads and compares the two objects of `request`. Run it off the UI thread
     /// (`oxikube_runtime::spawn_kube`); the work is the two reads side by side and one pass over
-    /// each object.
+    /// each object, which runs on the runtime's blocking pool ([`off_io_workers`]).
     ///
     /// # Errors
     ///
@@ -119,7 +120,9 @@ impl DiffService {
             include_status: request.include_status,
             compare_identity: request.compare_identity,
         };
-        let mut diff = compare(request, left, right, &options);
+        // Normalising and diffing two multi-megabyte objects is CPU work: not on an I/O worker.
+        let compared = request.clone();
+        let mut diff = off_io_workers(move || compare(&compared, left, right, &options)).await?;
         diff.left.cluster_title = self.title(&request.left.cluster);
         diff.right.cluster_title = self.title(&request.right.cluster);
         Ok(diff)

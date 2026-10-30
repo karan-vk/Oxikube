@@ -34,6 +34,6 @@ mod tests;
 
 pub use commands::{AUDIT_COMMANDS, AuditCommandSink, AuditRequest, register_commands};
 pub use controller::{AuditHost, AuditViews, AuditViewsDeps};
-pub use model::{AuditColumn, AuditModel};
+pub use model::{AuditColumn, AuditModel, MAX_LOADED_RECORDS};
 pub use oxikube_app::audit::query::PAGE_SIZE;
 pub use view::{AuditView, AuditViewDeps, ITEM_KEY};

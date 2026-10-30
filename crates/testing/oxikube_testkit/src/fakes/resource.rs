@@ -6,7 +6,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use oxikube_domain::ids::Gvk;
 use oxikube_domain::json::JsonRef;
-use oxikube_domain::{ObjectMeta, OxiError, OxiResult, Resource};
+use oxikube_domain::{ErrorKind, ObjectMeta, OxiError, OxiResult, Resource};
 use oxikube_ports::{
     ClockPort, DeleteCollectionOutcome, DeleteOptions, DeleteOutcome, Delta, DeltaBatch,
     ListOptions, ListPage, Patch, PatchKind, ResourceReader, ResourceWriter, Scale, Subresource,
@@ -317,6 +317,9 @@ pub struct FakeResourcePort {
     clock: Arc<FakeClockPort>,
     watches: StreamGauge,
     writes: Overlap,
+    /// Set by [`refuse_dry_runs`](FakeResourcePort::refuse_dry_runs): the error every dry-run
+    /// write answers.
+    dry_run_refusal: Mutex<Option<(ErrorKind, String)>>,
 }
 
 fake_plumbing!(FakeResourcePort, ResourceScripts, ResourceCall);
@@ -351,6 +354,23 @@ impl FakeResourcePort {
             clock,
             watches: StreamGauge::default(),
             writes: Overlap::default(),
+            dry_run_refusal: Mutex::new(None),
+        }
+    }
+
+    /// Makes the fake a server that cannot dry-run anything (an aggregated API answering 405, an
+    /// admission webhook with side effects): from now on every write sent as a dry run is
+    /// recorded and answered with an error of `kind` saying `message`, before any script. Writes
+    /// that are not dry runs behave as before.
+    pub fn refuse_dry_runs(&self, kind: ErrorKind, message: impl Into<String>) {
+        *self.dry_run_refusal.lock() = Some((kind, message.into()));
+    }
+
+    /// The error a dry-run write answers while [`refuse_dry_runs`](Self::refuse_dry_runs) is on.
+    fn dry_run_refused(&self, dry_run: bool) -> OxiResult<()> {
+        match &*self.dry_run_refusal.lock() {
+            Some((kind, message)) if dry_run => Err(OxiError::new(*kind, message.clone())),
+            _ => Ok(()),
         }
     }
 
@@ -713,6 +733,7 @@ impl ResourceWriter for FakeResourcePort {
             object: object.clone(),
             options: options.clone(),
         });
+        self.dry_run_refused(options.dry_run)?;
         self.script.create.next_or_else(|| {
             let res = object_from_body(object, namespace)?;
             if self.find(&res.kind, res.namespace(), res.name()).is_some() {
@@ -744,6 +765,7 @@ impl ResourceWriter for FakeResourcePort {
             object: object.clone(),
             options: options.clone(),
         });
+        self.dry_run_refused(options.dry_run)?;
         self.script.replace.next_or_else(|| {
             if self.find(kind, namespace, name).is_none() {
                 return Err(OxiError::not_found(format!("{kind} {name} not found")));
@@ -771,6 +793,7 @@ impl ResourceWriter for FakeResourcePort {
             patch: patch.clone(),
             options: options.clone(),
         });
+        self.dry_run_refused(options.dry_run)?;
         let _in_flight = self.writes.enter().await;
         self.script.patch.next_or_else(|| match &patch.kind {
             // A server-side apply of a whole object: the body is what the store holds afterwards
@@ -833,6 +856,7 @@ impl ResourceWriter for FakeResourcePort {
             name: name.to_owned(),
             options: options.clone(),
         });
+        self.dry_run_refused(options.dry_run)?;
         let _in_flight = self.writes.enter().await;
         self.script.delete.next_or_else(|| {
             if self.find(kind, namespace, name).is_none() {
@@ -872,6 +896,7 @@ impl ResourceWriter for FakeResourcePort {
             selection: selection.clone(),
             options: options.clone(),
         });
+        self.dry_run_refused(options.dry_run)?;
         self.script
             .delete_collection
             .next_or_unscripted(PORT, "delete_collection")
@@ -892,6 +917,7 @@ impl ResourceWriter for FakeResourcePort {
             replicas,
             options: options.clone(),
         });
+        self.dry_run_refused(options.dry_run)?;
         self.script.scale.next_or_unscripted(PORT, "scale")
     }
 
@@ -901,6 +927,7 @@ impl ResourceWriter for FakeResourcePort {
             pod: pod.to_owned(),
             options: options.clone(),
         });
+        self.dry_run_refused(options.dry_run)?;
         self.script.evict.next_or_unscripted(PORT, "evict")
     }
 
@@ -921,6 +948,7 @@ impl ResourceWriter for FakeResourcePort {
             body: body.clone(),
             options: options.clone(),
         });
+        self.dry_run_refused(options.dry_run)?;
         self.script
             .create_subresource
             .next_or_unscripted(PORT, "create_subresource")
@@ -943,6 +971,7 @@ impl ResourceWriter for FakeResourcePort {
             patch: patch.clone(),
             options: options.clone(),
         });
+        self.dry_run_refused(options.dry_run)?;
         self.script
             .patch_subresource
             .next_or_unscripted(PORT, "patch_subresource")
@@ -965,6 +994,7 @@ impl ResourceWriter for FakeResourcePort {
             body: body.clone(),
             options: options.clone(),
         });
+        self.dry_run_refused(options.dry_run)?;
         self.script
             .replace_subresource
             .next_or_unscripted(PORT, "replace_subresource")
@@ -1252,5 +1282,29 @@ mod tests {
         assert_eq!(listed[0].meta, a.meta);
         assert_eq!(listed[0].kind, a.kind);
         assert!(listed[0].get("/spec").is_none() && listed[0].get("/status").is_none());
+    }
+
+    #[test]
+    fn a_server_refusing_dry_runs_answers_every_dry_run_and_still_writes() {
+        let fake = FakeResourcePort::new();
+        let body = json!({"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "cfg"}});
+        let cm = Gvk::new("", "v1", "ConfigMap");
+        fake.refuse_dry_runs(ErrorKind::Unsupported, "dry run is not supported");
+
+        let refused =
+            block_on(fake.create(&cm, Some("demo"), &body, &WriteOptions::dry_run())).unwrap_err();
+        assert_eq!(refused.kind(), ErrorKind::Unsupported);
+        assert_eq!(refused.message(), "dry run is not supported");
+        block_on(fake.create(&cm, Some("demo"), &body, &WriteOptions::default())).unwrap();
+        assert!(
+            block_on(fake.delete(&cm, Some("demo"), "cfg", &DeleteOptions::dry_run())).is_err()
+        );
+        block_on(fake.delete(&cm, Some("demo"), "cfg", &DeleteOptions::default())).unwrap();
+        assert!(fake.objects().is_empty());
+        assert_eq!(
+            fake.mutating_calls().len(),
+            4,
+            "refused dry runs are recorded"
+        );
     }
 }

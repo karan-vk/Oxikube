@@ -210,3 +210,23 @@ fn a_missing_namespace_fails_the_rehearsal() {
     assert_eq!(audit.len(), 1);
     assert!(audit[0].dry_run && audit[0].outcome == AuditOutcome::Failed);
 }
+
+#[test]
+fn a_server_that_cannot_dry_run_still_gets_the_confirmed_delete() {
+    let h = harness();
+    h.connect("a", false);
+    h.allow_deletes("a", 1);
+    let output =
+        h.confirm_without_dry_runs("a", delete("a", "payments", &[]), ctx(Initiator::Agent));
+    assert_eq!(
+        output.message.as_deref(),
+        Some("Deleted namespace payments")
+    );
+    assert_eq!(
+        deletes(&h),
+        [
+            (true, "payments".to_owned()),
+            (false, "payments".to_owned())
+        ]
+    );
+}

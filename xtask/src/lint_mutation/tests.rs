@@ -169,3 +169,89 @@ fn renaming_inside_a_use_group_is_a_violation() {
 fn renaming_an_unrelated_import_is_fine() {
     clean("use oxikube_ports::ResourceReader as R;");
 }
+
+#[test]
+fn replacing_a_subresource_is_a_mutating_call() {
+    flagged(
+        "async fn f(p: std::sync::Arc<dyn ResourcePort>) { p.replace_subresource().await; }",
+        "`.replace_subresource()`",
+    );
+}
+
+#[test]
+fn a_writer_obtained_through_try_or_unwrap_is_still_a_writer() {
+    flagged(
+        "async fn f(s: S) -> Option<()> { s.writer()?.delete().await; None }",
+        "`.delete()`",
+    );
+    flagged(
+        "async fn f(s: S) { s.writer().unwrap().patch().await; }",
+        "`.patch()`",
+    );
+    flagged(
+        "async fn f(s: S) { s.writer().expect(\"connected\").evict().await; }",
+        "`.evict()`",
+    );
+    flagged(
+        "async fn f(s: S) { let w = s.writer()?; w.replace_subresource().await; }",
+        "`.replace_subresource()`",
+    );
+}
+
+/// Every method `ResourceWriter` declares changes a cluster, so the lint must know each one: a
+/// method added to the trait and not here would be callable from a view unseen.
+#[test]
+fn mutating_methods_cover_the_writer_trait() {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../crates/ports/oxikube_ports/src/resource.rs"
+    );
+    let src = std::fs::read_to_string(path).expect("the ports crate's resource module");
+    let file = syn::parse_file(&src).expect("the ports crate parses");
+    let writer = file
+        .items
+        .iter()
+        .find_map(|item| match item {
+            syn::Item::Trait(t) if t.ident == "ResourceWriter" => Some(t),
+            _ => None,
+        })
+        .expect("ResourceWriter is declared in oxikube_ports::resource");
+    let declared: Vec<String> = writer
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            syn::TraitItem::Fn(f) => Some(f.sig.ident.to_string()),
+            _ => None,
+        })
+        .collect();
+    assert!(!declared.is_empty(), "ResourceWriter declares methods");
+    let missing: Vec<&String> = declared
+        .iter()
+        .filter(|name| !super::scan::MUTATING_METHODS.contains(&name.as_str()))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "MUTATING_METHODS misses ResourceWriter methods {missing:?}"
+    );
+}
+
+#[test]
+fn a_writer_typed_through_an_alias_or_a_generic_is_still_a_writer() {
+    flagged(
+        "type Port = std::sync::Arc<dyn ResourcePort>;
+         async fn f(p: Port) { p.replace_subresource().await; }",
+        "`.replace_subresource()`",
+    );
+    flagged(
+        "async fn f<P: ResourcePort>(p: P) { p.delete().await; }",
+        "`.delete()`",
+    );
+    flagged(
+        "async fn f<P>(p: &P) where P: ResourcePort + ?Sized { p.patch().await; }",
+        "`.patch()`",
+    );
+    clean(
+        "type Reader = std::sync::Arc<dyn ResourceReader>;
+         async fn f<R: ResourceReader>(r: Reader, s: R) { r.list().await; s.get().await; }",
+    );
+}
