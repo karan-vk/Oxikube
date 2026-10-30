@@ -2,6 +2,7 @@
 //! change signal (E22-S04).
 
 use gpui::{Subscription, TestAppContext};
+use oxikube_settings::{SettingsStore, init_with_dir as init_settings};
 use oxikube_theme::import::import_family;
 use oxikube_theme::{
     ActiveTheme, ActiveThemeExt as _, Appearance, ExtensionId, SystemAppearance, ThemeSource,
@@ -55,9 +56,49 @@ fn the_active_theme_is_readable_from_the_app_and_observed_exactly_once(cx: &mut 
 }
 
 #[gpui::test]
+fn a_selected_extension_theme_activates_on_insert_and_falls_back_on_removal(
+    cx: &mut TestAppContext,
+) {
+    let config = tempfile::tempdir().expect("temp dir");
+    cx.update(|cx| init_settings(config.path(), cx));
+    let (changes, _subscription) = setup(cx);
+    cx.update(|cx| {
+        gpui::UpdateGlobal::update_global(cx, |store: &mut SettingsStore, _| {
+            store
+                .set_user_settings(r#"{ "theme": "Ayu Dark" }"#)
+                .expect("valid settings")
+        });
+    });
+    // The selected theme is unknown for now, so the appearance default stays active.
+    assert_eq!(cx.read(|cx| cx.active_theme().name.clone()), "One Dark");
+    let before = changes.get();
+
+    let family = import_family(AYU).expect("fixture imports").family;
+    cx.update(|cx| insert_theme_families(cx, &source(), [family]));
+    assert_eq!(cx.read(|cx| cx.active_theme().name.clone()), "Ayu Dark");
+    assert_eq!(changes.get(), before + 1, "insert notifies once");
+
+    cx.update(|cx| remove_themes_by_source(cx, &source()));
+    assert_eq!(cx.read(|cx| cx.active_theme().name.clone()), "One Dark");
+    assert_eq!(changes.get(), before + 2, "removal notifies once");
+}
+
+#[gpui::test]
 fn dropping_the_subscription_releases_the_observer(cx: &mut TestAppContext) {
+    let config = tempfile::tempdir().expect("temp dir");
+    cx.update(|cx| init_settings(config.path(), cx));
     let (changes, subscription) = setup(cx);
+    cx.update(|cx| {
+        gpui::UpdateGlobal::update_global(cx, |store: &mut SettingsStore, _| {
+            store
+                .set_user_settings(r#"{ "theme": "Ayu Dark" }"#)
+                .expect("valid settings")
+        });
+    });
     drop(subscription);
-    cx.update(|cx| SystemAppearance::set(cx, Appearance::Light));
+    // This insert changes the active theme, which would notify a live observer.
+    let family = import_family(AYU).expect("fixture imports").family;
+    cx.update(|cx| insert_theme_families(cx, &source(), [family]));
+    assert_eq!(cx.read(|cx| cx.active_theme().name.clone()), "Ayu Dark");
     assert_eq!(changes.get(), 0, "a dropped observer never runs");
 }
