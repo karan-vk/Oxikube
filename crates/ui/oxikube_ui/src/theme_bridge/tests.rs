@@ -280,3 +280,75 @@ mod theme_config_tests {
         drop(subscription);
     }
 }
+
+// ---- switching while the window is busy (E22-S05) --------------------------------------------
+mod switch_tests {
+    use super::*;
+    use crate::root::Root;
+    use crate::{dialog::Dialog, set_ui_scale};
+    use gpui::{AppContext as _, IntoElement as _, ParentElement as _, VisualTestContext, div};
+    use gpui_component::WindowExt as _;
+
+    #[gpui::test]
+    fn a_theme_switch_with_a_dialog_open_keeps_the_dialog_and_recolours(cx: &mut TestAppContext) {
+        cx.update(crate::init);
+        let window = cx.add_window(|window, cx| {
+            let content = cx.new(|_| gpui::Empty);
+            Root::new(content, window, cx)
+        });
+        let cx = &mut VisualTestContext::from_window(window.into(), cx);
+        cx.update(|_, cx| set_tokens(cx, Tokens::dark()));
+        cx.update(|window, cx| {
+            window.open_dialog(cx, |dialog: Dialog, _, _| {
+                dialog.title("Delete pod?").child(div().into_any_element())
+            });
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| assert!(window.has_active_dialog(cx)));
+
+        let light = Tokens::light();
+        cx.update(|_, cx| set_tokens(cx, light));
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            assert!(
+                window.has_active_dialog(cx),
+                "the overlay survives the switch"
+            );
+            assert!(!cx.theme().is_dark());
+            assert_eq!(cx.theme().colors.popover, light.colors.elevated_surface);
+        });
+    }
+
+    #[gpui::test]
+    fn a_theme_switch_keeps_the_125_percent_zoom(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            crate::init(cx);
+            set_ui_scale(cx, UiScale::new(1.25));
+            let base = Tokens::dark();
+            assert_eq!(cx.theme().font_size, base.font.body * 1.25);
+
+            let light = Tokens::light();
+            set_tokens(cx, light);
+            assert_eq!(cx.theme().font_size, light.font.body * 1.25);
+            assert_eq!(cx.theme().radius, light.radius.md * 1.25);
+            assert_eq!(cx.theme().mono_font_size, light.font.mono * 1.25);
+            set_ui_scale(cx, UiScale::IDENTITY);
+        });
+    }
+
+    #[gpui::test]
+    fn a_theme_switch_leaves_the_font_families_alone(cx: &mut TestAppContext) {
+        // Themes carry no font families (Zed keeps them in settings), so the bridge must not
+        // overwrite whatever the library or the user configured.
+        cx.update(|cx| {
+            crate::init(cx);
+            let (sans, mono) = (
+                cx.theme().font_family.clone(),
+                cx.theme().mono_font_family.clone(),
+            );
+            set_tokens(cx, Tokens::light());
+            assert_eq!(cx.theme().font_family, sans);
+            assert_eq!(cx.theme().mono_font_family, mono);
+        });
+    }
+}
