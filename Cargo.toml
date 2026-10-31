@@ -104,7 +104,7 @@ serde_json_lenient = { version = "0.2", features = ["float_roundtrip"] }
 serde_path_to_error = "0.1"
 schemars = "1"
 toml = "1"
-syn = { version = "2", default-features = false, features = ["full", "parsing", "visit", "derive", "printing", "clone-impls", "proc-macro"] }
+syn = { version = "3", default-features = false, features = ["full", "parsing", "visit", "derive", "printing", "clone-impls", "proc-macro"] }
 json-patch = "4"
 # `Either` of kube's delete responses (object still present / Status). Same major kube uses.
 either = "1"
