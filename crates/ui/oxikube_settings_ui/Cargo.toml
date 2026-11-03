@@ -58,6 +58,10 @@ required-features = ["screenshot"]
 [[test]]
 name = "keymap_screenshot"
 path = "tests/keymap_screenshot.rs"
+harness = false
+required-features = ["screenshot"]
+
+[[test]]
 name = "settings_page_screenshot"
 path = "tests/settings_page_screenshot.rs"
 harness = false
