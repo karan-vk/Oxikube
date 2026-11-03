@@ -27,6 +27,7 @@
 //! - [`dock`], [`dialog`], [`menu`], [`input`], [`tabs`], [`sidebar`], [`markdown`],
 //!   [`button`], [`layout`]: curated re-exports under our names; no `pub use gpui_component::*`.
 //! - [`error_details`]: the Details toggle and raw-text box every error notice shares.
+//! - [`switch`]: [`switch::Switch`], an on/off control (the settings page, E21-S05).
 //! - [`spinner`]: [`spinner::Spinner`], a loading indicator that stands still under reduce-motion.
 //! - [`tooltip`]: [`tooltip::Tooltip`], hover text for any element, and [`tooltip::tooltip_for_action`]
 //!   (the title plus the key bound to an action).
@@ -61,6 +62,7 @@ pub mod setup;
 pub mod sidebar;
 pub mod size;
 pub mod spinner;
+pub mod switch;
 pub mod table;
 pub mod tabs;
 pub mod theme_bridge;

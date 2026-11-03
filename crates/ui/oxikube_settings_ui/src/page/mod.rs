@@ -12,8 +12,8 @@
 //! * The search field matches section titles, field titles, paths and descriptions fuzzily
 //!   (the palette's engine); a result opens its section scrolled to the field, highlighted.
 //! * Each field shows a badge for the layer its value comes from (`Default`, `User`, `Cluster`)
-//!   with a tooltip on how the layers stack, and the value in effect. The controls that edit
-//!   values are E21-S05's; the per-cluster tab E21-S06's.
+//!   with a tooltip on how the layers stack, and the control that edits it ([`crate::controls`],
+//!   E21-S05); the per-cluster tab is E21-S06's.
 //!
 //! | Module | Holds |
 //! |---|---|
@@ -28,7 +28,7 @@
 
 mod badge;
 mod model;
-mod schema_walk;
+pub(crate) mod schema_walk;
 mod search;
 mod titles;
 mod view;

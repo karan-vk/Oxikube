@@ -29,6 +29,7 @@ use oxikube_workspace::ItemEvent;
 
 use super::model::SettingsPageModel;
 use super::search::{SearchHit, SearchIndex};
+use crate::controls::Controls;
 
 /// The settings page. See the [page module](crate::page).
 pub struct SettingsPage {
@@ -44,7 +45,9 @@ pub struct SettingsPage {
     highlighted: Option<usize>,
     /// Where the badges read the layers at: `None` for the global value (the cluster tab of
     /// E21-S06 sets one).
-    cluster: Option<ClusterId>,
+    pub(crate) cluster: Option<ClusterId>,
+    /// The controls of the fields shown (E21-S05).
+    pub(crate) controls: Controls,
     focus: FocusHandle,
     content_scroll: ScrollHandle,
     _subscriptions: Vec<Subscription>,
@@ -92,7 +95,12 @@ impl SettingsPage {
             },
         );
         // The badges and values read the store at draw time: redraw when it changes.
-        let settings = cx.observe_global::<SettingsStore>(|_, cx| cx.notify());
+        // Inputs that are not being edited follow the file.
+        let settings = cx.observe_global_in::<SettingsStore>(window, |this, window, cx| {
+            this.controls
+                .sync_from_store(&this.model, this.cluster.as_ref(), window, cx);
+            cx.notify();
+        });
         // The page's focus goes to the search field, so typing searches at once.
         let focus = cx.focus_handle();
         let to_search = cx.on_focus(&focus, window, |this, window, cx| {
@@ -107,6 +115,7 @@ impl SettingsPage {
             hits: Vec::new(),
             highlighted: None,
             cluster: None,
+            controls: Controls::default(),
             focus,
             content_scroll: ScrollHandle::new(),
             _subscriptions: vec![typing, settings, to_search],

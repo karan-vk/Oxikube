@@ -15,6 +15,11 @@ use serde_json::Value;
 /// The schema annotation naming the live list a string field draws its values from.
 pub const DYNAMIC_ENUM_KEY: &str = "x-oxikube-dynamic-enum";
 
+/// The JSON Schema `format` that marks a string field as a colour (`#rrggbb`, `#rgb` or a
+/// palette name). A field whose schema carries it gets a colour control on the settings page;
+/// a field of type `ClusterColour` is recognised by its hex `pattern` as well.
+pub const COLOR_FORMAT: &str = "color";
+
 /// List name for installed theme names.
 pub const THEMES: &str = "themes";
 /// List name for the base keymap names.
