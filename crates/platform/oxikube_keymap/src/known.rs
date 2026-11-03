@@ -49,6 +49,7 @@ pub const SEED_CONTEXTS: &[&str] = &[
     "DialogButton",
     "DialogModal",
     "Hotbar",
+    "KeymapRecorder",
     "ModalLayer",
     "NamespaceList",
     "NamespaceSearch",
@@ -144,6 +145,16 @@ impl KnownNames {
     /// The known view contexts, sorted.
     pub fn contexts(&self) -> impl Iterator<Item = &str> {
         self.names.contexts.iter().map(String::as_str)
+    }
+
+    /// The known flags and value keys, sorted.
+    pub fn flags(&self) -> impl Iterator<Item = &str> {
+        self.names.flags.iter().map(String::as_str)
+    }
+
+    /// Whether `name` is a known flag or value key (not a view context).
+    pub fn is_flag(&self, name: &str) -> bool {
+        self.names.flags.contains(name) && !self.names.contexts.contains(name)
     }
 
     /// Every known name (contexts, then flags), for "did you mean".

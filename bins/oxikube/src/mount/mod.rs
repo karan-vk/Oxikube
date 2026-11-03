@@ -256,6 +256,8 @@ pub struct Wiring {
     _helm_repos_pages: Task<()>,
     /// Opens the keymap editor page for `keymap::ShowEditor` (E21-S07).
     _keymap_editor_pages: Task<()>,
+    /// Writes the keymap editor's `keymap::SetBinding` / `keymap::RemoveBinding` (E21-S08).
+    _keymap_edits: Task<()>,
     /// Opens the Role / ClusterRole rule dialog for `role::OpenDialog` (E17-S05).
     _role_dialogs: Task<()>,
     /// Opens the RoleBinding / ClusterRoleBinding dialog for `binding::OpenDialog` (E17-S06).
@@ -464,6 +466,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         oxikube_settings_ui::helm_repos::HelmReposRequestSink::channel();
     let (keymap_editor_sink, keymap_editor_rx) =
         oxikube_settings_ui::keymap::KeymapEditorRequestSink::channel();
+    let (keymap_edit_sink, keymap_edit_rx) = oxikube_settings_ui::keymap::KeymapEditSink::channel();
     // Installs (E16-S09) run against each session's own kubeconfig context and file.
     let helm_targets = helm_install::targets(
         services.sessions.clone(),
@@ -558,6 +561,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         binding_dialogs: binding_sink,
         helm_repos_pages: helm_repos_sink,
         keymap_editor_pages: keymap_editor_sink,
+        keymap_edits: keymap_edit_sink,
         helm_charts: helm_services.charts.clone(),
         helm_charts_pages: helm_charts_sink,
         helm_releases: helm_releases.clone(),
@@ -930,6 +934,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         window,
         cx,
     );
+    // `keymap::SetBinding` / `keymap::RemoveBinding` (E21-S08): written to `keymap.json` here.
+    let keymap_edits = oxikube_settings_ui::keymap::KeymapEdits::start(keymap_edit_rx, cx);
     // Pulses (E13-S10): `cluster::ShowPulses` (`:pulses`, the palette, the sidebar's Pulses entry)
     // opens the page in the cluster tab.
     let pulses_pages = pulses::start_views(
@@ -1068,6 +1074,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _metrics_pages: metrics_pages,
         _helm_repos_pages: helm_repos_pages,
         _keymap_editor_pages: keymap_editor_pages,
+        _keymap_edits: keymap_edits,
         _role_dialogs: role_dialogs,
         _binding_dialogs: binding_dialogs,
         _helm_releases_pages: helm_releases_pages,

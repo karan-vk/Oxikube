@@ -1,4 +1,5 @@
-//! `keymap::ShowEditor`: open the page in the active cluster's tab.
+//! `keymap::ShowEditor`: open the page in the active cluster's tab; `keymap::RecordBinding`: open
+//! the key recorder on its selected row (E21-S08).
 
 use std::rc::Rc;
 
@@ -12,49 +13,70 @@ use oxikube_workspace::{ClusterTabs, CommandDispatcher, OpenOptions};
 
 use super::view::{ITEM_KEY, KeymapEditorDeps, KeymapEditorView};
 
+/// What the window is asked to do with the page.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KeymapEditorRequest {
+    /// Show the page (`keymap::ShowEditor`).
+    Show,
+    /// Show the page and open the key recorder on its selected row (`keymap::RecordBinding`).
+    Record,
+}
+
 /// A handle on the window's page-request queue. Cheap to clone; usable from any thread.
 #[derive(Clone, Debug)]
 pub struct KeymapEditorRequestSink {
-    tx: UnboundedSender<()>,
+    tx: UnboundedSender<KeymapEditorRequest>,
 }
 
 impl KeymapEditorRequestSink {
     /// A sink and the receiver [`KeymapEditorViews::start`] drains.
-    pub fn channel() -> (Self, UnboundedReceiver<()>) {
+    pub fn channel() -> (Self, UnboundedReceiver<KeymapEditorRequest>) {
         let (tx, rx) = unbounded();
         (Self { tx }, rx)
     }
 
-    /// Asks the window to show the page. Fails when the window is gone.
-    pub fn send(&self) -> OxiResult<()> {
+    /// Asks the window to act on the page. Fails when the window is gone.
+    pub fn send(&self, request: KeymapEditorRequest) -> OxiResult<()> {
         self.tx
-            .unbounded_send(())
+            .unbounded_send(request)
             .map_err(|_| OxiError::internal("the window with the cluster tabs is gone"))
     }
 }
 
-/// Registers `keymap::ShowEditor` (and its tool stub, `keymap.show_editor`) on `registry`. The
-/// binary installs it as `oxikube_settings_ui::keymap`.
+/// Registers `keymap::ShowEditor` and `keymap::RecordBinding` (tool stubs `app.keymap_show_editor`,
+/// `app.keymap_record_binding`) on `registry`, and the edits of [`KeymapEditSink`](super::KeymapEditSink)
+/// (`keymap::SetBinding`, `keymap::RemoveBinding`) over `edits`. The binary installs them as
+/// `oxikube_settings_ui::keymap`.
 ///
 /// # Errors
 ///
-/// A [`RegisterError`] when the id is already taken.
+/// A [`RegisterError`] when an id is already taken.
 pub fn register_commands(
     registry: &mut CommandRegistry,
     sink: KeymapEditorRequestSink,
+    edits: super::edits::KeymapEditSink,
 ) -> Result<(), RegisterError> {
-    let meta = *command::lookup(CommandId::KEYMAP_SHOW_EDITOR)
-        .ok_or(RegisterError::Undeclared(CommandId::KEYMAP_SHOW_EDITOR))?;
-    registry.register(meta, move |command: Command, _: HandlerContext| {
+    for (id, request) in [
+        (CommandId::KEYMAP_SHOW_EDITOR, KeymapEditorRequest::Show),
+        (
+            CommandId::KEYMAP_RECORD_BINDING,
+            KeymapEditorRequest::Record,
+        ),
+    ] {
+        let meta = *command::lookup(id).ok_or(RegisterError::Undeclared(id))?;
         let sink = sink.clone();
-        async move {
-            if !matches!(command, Command::KeymapShowEditor) {
-                return Err(OxiError::validation("not a keymap::ShowEditor command"));
+        registry.register(meta, move |command: Command, _: HandlerContext| {
+            let sink = sink.clone();
+            async move {
+                if command.id() != id {
+                    return Err(OxiError::validation(format!("not a {id} command")));
+                }
+                sink.send(request)?;
+                Ok(CommandOutput::none())
             }
-            sink.send()?;
-            Ok(CommandOutput::none())
-        }
-    })
+        })?;
+    }
+    super::edits::register_edit_commands(registry, edits)
 }
 
 /// What opening the page needs.
@@ -74,13 +96,20 @@ impl KeymapEditorViews {
     /// life of the window (dropping it stops it).
     pub fn start(
         deps: KeymapEditorViewsDeps,
-        mut requests: UnboundedReceiver<()>,
+        mut requests: UnboundedReceiver<KeymapEditorRequest>,
         window: &mut Window,
         cx: &mut App,
     ) -> Task<()> {
         window.spawn(cx, async move |cx| {
-            while requests.next().await.is_some() {
-                match cx.update(|window, cx| Self::open(&deps, window, cx)) {
+            while let Some(request) = requests.next().await {
+                let opened = cx.update(|window, cx| {
+                    let opened = Self::open(&deps, window, cx);
+                    if opened && request == KeymapEditorRequest::Record {
+                        Self::record(&deps, window, cx);
+                    }
+                    opened
+                });
+                match opened {
                     Ok(true) => {}
                     Ok(false) => {
                         tracing::debug!(
@@ -120,6 +149,7 @@ impl KeymapEditorViews {
             None => {
                 let page = KeymapEditorDeps {
                     dispatcher: deps.dispatcher.clone(),
+                    workspace: Some(workspace.downgrade()),
                 };
                 let view = cx.new(|cx| KeymapEditorView::new(page, window, cx));
                 let options = OpenOptions {
@@ -136,5 +166,34 @@ impl KeymapEditorViews {
             tabs.activate(&cluster, window, cx);
         });
         true
+    }
+
+    /// Opens the key recorder on the selected row of the page in the active cluster's tab.
+    /// `false` when there is no page or nothing is selected.
+    pub fn record(deps: &KeymapEditorViewsDeps, window: &mut Window, cx: &mut App) -> bool {
+        let Some(tabs) = deps.tabs.upgrade() else {
+            return false;
+        };
+        let Some(workspace) = tabs
+            .read(cx)
+            .active()
+            .and_then(|cluster| tabs.read(cx).tab(cluster))
+            .map(|tab| tab.read(cx).workspace().clone())
+        else {
+            return false;
+        };
+        let Some(page) = workspace
+            .read(cx)
+            .items_of_type::<KeymapEditorView>()
+            .into_iter()
+            .next()
+        else {
+            return false;
+        };
+        let opened = page.update(cx, |page, cx| page.record_selected(window, cx).is_some());
+        if !opened {
+            tracing::debug!("keymap::RecordBinding: select a row of the keymap editor first");
+        }
+        opened
     }
 }

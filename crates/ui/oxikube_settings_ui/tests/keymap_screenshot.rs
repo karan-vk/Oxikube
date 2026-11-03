@@ -6,6 +6,9 @@
 //!   (`Cmd+Shift+P`, the keymap's `cmd-shift-p`), showing the default marked "overridden" and the
 //!   "unbound by you" row.
 //! - `keymap_list_light`: the first frame in the light tokens.
+//! - `keymap_recorder` (E21-S08): the key recorder on the user's `keymap::ShowEditor` binding
+//!   with `ctrl-alt-k` recorded in `ResourceTable`, listing the binding it clashes with (the
+//!   user's `keymap::OpenUser`, everywhere) and the Keep both / Replace them choice.
 //!
 //! `harness = false` and `--features screenshot`, like the metrics page's test. Checks the image
 //! size, that it is not blank and, when a golden exists for this OS, that it matches within
@@ -22,8 +25,9 @@ use std::process::ExitCode;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use gpui::{AppContext as _, HeadlessAppContext, px, size};
-use oxikube_keymap::KeymapOptions;
+use gpui::{AppContext as _, HeadlessAppContext, Keystroke, px, size};
+use oxikube_keymap::{KeymapOptions, KeymapPlatform};
+use oxikube_settings_ui::keymap::recorder::KeybindRecorder;
 use oxikube_settings_ui::keymap::{KeymapEditorDeps, KeymapEditorView};
 use oxikube_settings_ui::metrics::test_support::RecordingDispatcher;
 use oxikube_testkit::headless::HEADLESS_SCALE_FACTOR;
@@ -61,6 +65,7 @@ fn render(
         oxikube_keymap::init_with_text(USER, KeymapOptions::default(), cx);
         let deps = KeymapEditorDeps {
             dispatcher: Rc::new(RecordingDispatcher::new()),
+            workspace: None,
         };
         let view = cx.new(|cx| KeymapEditorView::new(deps, window, cx));
         page = Some(view.clone());
@@ -82,10 +87,56 @@ fn render(
     cx.capture_screenshot(window.into())
 }
 
+fn render_recorder(tokens: oxikube_ui::Tokens) -> anyhow::Result<RgbaImage> {
+    let mut cx = headless();
+    let mut held = None;
+    let window = cx.open_window(size(px(560.), px(420.)), |window, cx| {
+        oxikube_ui::init(cx);
+        oxikube_ui::set_tokens(cx, tokens);
+        cx.set_reduce_motion(true);
+        oxikube_runtime::init_deterministic(cx);
+        oxikube_keymap::init_with_text(USER, KeymapOptions::default(), cx);
+        let row = oxikube_keymap::keymap_rows(cx)
+            .into_iter()
+            .find(|row| row.action == "keymap::ShowEditor" && !row.keystrokes.is_empty())
+            .expect("the user's binding of keymap::ShowEditor");
+        let view = cx.new(|cx| {
+            KeybindRecorder::new(
+                &row,
+                KeymapPlatform::MacOs,
+                Rc::new(RecordingDispatcher::new()),
+                window,
+                cx,
+            )
+        });
+        held = Some(view.clone());
+        oxikube_ui::root::new_root(view, window, cx)
+    })?;
+    if let Some(view) = held {
+        cx.update_window(window.into(), |_, window, cx| {
+            view.update(cx, |recorder, cx| {
+                recorder.type_context("ResourceTable", window, cx);
+                let stroke = Keystroke::parse("ctrl-alt-k").expect("a keystroke");
+                recorder.capture(&stroke, cx);
+                recorder.stop(cx);
+            });
+        })?;
+    }
+    cx.run_until_parked();
+    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))?;
+    cx.run_until_parked();
+    cx.capture_screenshot(window.into())
+}
+
 fn check(name: &str, image: RgbaImage) -> anyhow::Result<()> {
     let scale = HEADLESS_SCALE_FACTOR;
+    let expected = if name == "keymap_recorder" {
+        (560 * scale, 420 * scale)
+    } else {
+        (WIDTH as u32 * scale, HEIGHT as u32 * scale)
+    };
     anyhow::ensure!(
-        image.dimensions() == (WIDTH as u32 * scale, HEIGHT as u32 * scale),
+        image.dimensions() == expected,
         "unexpected image size {:?}",
         image.dimensions()
     );
@@ -121,6 +172,10 @@ fn run() -> anyhow::Result<()> {
     check(
         "keymap_search",
         render(Some("Cmd+Shift+P"), true, oxikube_ui::Tokens::dark())?,
+    )?;
+    check(
+        "keymap_recorder",
+        render_recorder(oxikube_ui::Tokens::dark())?,
     )
 }
 

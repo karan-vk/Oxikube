@@ -14,5 +14,8 @@ actions!(
         /// bound to it in `keymap.json`, the palette and the MCP tool run one behaviour; the
         /// binary handles it.
         ShowEditor,
+        /// Open the key recorder on the keymap editor's selected action
+        /// (`keymap::RecordBinding`, E21-S08); the binary handles it like the others.
+        RecordBinding,
     ]
 );

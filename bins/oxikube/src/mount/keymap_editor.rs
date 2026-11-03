@@ -1,8 +1,8 @@
 //! The keymap editor page of the main window (E21-S07): `keymap::ShowEditor` opens it in the
 //! active cluster's tab, and the sidebar's Settings > Keymap entry asks for it.
 //!
-//! * [`start_views`] applies each `keymap::ShowEditor` request on the UI thread
-//!   (`oxikube_settings_ui::keymap::KeymapEditorViews`).
+//! * [`start_views`] applies each `keymap::ShowEditor` / `keymap::RecordBinding` request on the UI
+//!   thread (`oxikube_settings_ui::keymap::KeymapEditorViews`).
 //! * [`install_tab`] runs for every cluster tab: a click on the sidebar's Keymap entry is the
 //!   same command.
 
@@ -11,18 +11,18 @@ use std::rc::Rc;
 use futures::channel::mpsc::UnboundedReceiver;
 use gpui::{App, Entity, Task, WeakEntity, Window};
 use oxikube_domain::command::{Command, CommandId};
-use oxikube_settings_ui::keymap::{KeymapEditorViews, KeymapEditorViewsDeps};
+use oxikube_settings_ui::keymap::{KeymapEditorRequest, KeymapEditorViews, KeymapEditorViewsDeps};
 use oxikube_workspace::sidebar::{SidebarEvent, SidebarPanel, SidebarTarget};
 use oxikube_workspace::{ClusterTab, ClusterTabs, CommandDispatcher};
 
 use super::tabs::TabDeps;
 
-/// Starts the window's keymap editor page over `requests` (the bus's `keymap::ShowEditor`
-/// handler). Keep the task for the life of the window.
+/// Starts the window's keymap editor page over `requests` (the bus's `keymap::ShowEditor` and
+/// `keymap::RecordBinding` handlers). Keep the task for the life of the window.
 pub fn start_views(
     dispatcher: Rc<dyn CommandDispatcher>,
     tabs: WeakEntity<ClusterTabs>,
-    requests: UnboundedReceiver<()>,
+    requests: UnboundedReceiver<KeymapEditorRequest>,
     window: &mut Window,
     cx: &mut App,
 ) -> Task<()> {

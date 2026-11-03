@@ -1836,7 +1836,15 @@ crate's `README.md` for its allowed dependencies. Highlights:
   every binding for the help overlay; `conflicts` lists a key bound twice in one context of a
   layer. `reload(cx)` is the explicit reload for tests (no watcher thread), `user_keymap_file(cx)`
   the file's path, and `keymap::OpenUser` the action of the command that creates the file from its
-  commented template and opens it.
+  commented template and opens it. Module `edit` (E21-S08): the keymap editor's writes.
+  `KeybindUpdateOperation` (`Add` into the section of its context or a new one, `Replace` a user
+  binding in place or override a default and `null` its old keys, `Remove` a user binding or `null`
+  a default) applied to the text on `oxikube_settings::json_edit`'s array helpers, so comments
+  survive; `ContextModel` finds the bindings in force a new one clashes with across the context
+  chain (same keys or a prefix, contexts some focus stack of module `stacks` satisfies together,
+  checked with GPUI's own `depth_of`); `preview_edit` runs the one validator on the result and
+  `write_user_keymap` refuses an edit that adds an error, writes on the background executor and
+  applies the text at once, so the watcher's echo rebinds nothing. Default keymaps are never edited.
 - `oxikube_workspace` — Zed-style Item / Panel / Pane / Dock shell with persistence. Module
   `window` (E05-S03): the main window (per-platform `WindowOptions`, app id, `Root`, title bar) and
   the application menu. Module `workspace` (E05-S04): the `Workspace` entity on gpui-component's

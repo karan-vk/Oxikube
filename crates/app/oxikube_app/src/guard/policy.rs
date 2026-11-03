@@ -250,6 +250,9 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::PaletteToggleShowAll
         | Command::KeymapOpenUser
         | Command::KeymapShowEditor
+        | Command::KeymapRecordBinding
+        | Command::KeymapSetBinding { .. }
+        | Command::KeymapRemoveBinding { .. }
         | Command::ChartsOpenGallery
         | Command::SettingsOpen
         | Command::AppQuit

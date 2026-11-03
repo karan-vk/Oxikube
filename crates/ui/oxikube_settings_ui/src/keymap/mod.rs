@@ -12,17 +12,28 @@
 //! | `delegate` | [`KeymapDelegate`]: the virtualised table (`oxikube_ui::table`) over the model |
 //! | `view`, `render` | [`KeymapEditorView`]: the page, its toolbar and its workspace item |
 //! | `sidebar` | the Settings section's "Keymap" entry |
-//! | `command` | [`register_commands`], [`KeymapEditorRequestSink`], [`KeymapEditorViews`]: `keymap::ShowEditor` |
+//! | `command` | [`register_commands`], [`KeymapEditorRequestSink`], [`KeymapEditorViews`]: `keymap::ShowEditor`, `keymap::RecordBinding` |
+//! | `edits` | [`KeymapEditSink`], [`KeymapEdits`]: `keymap::SetBinding` and `keymap::RemoveBinding`, applied on the UI thread by `oxikube_keymap::edit` (E21-S08) |
+//! | `editing` | the page's Record and Remove buttons (E21-S08) |
+//! | [`recorder`] | [`KeybindRecorder`](recorder::KeybindRecorder): the modal that records keys, shows conflicts and saves (E21-S08) |
 //!
 //! The rows come from [`oxikube_keymap::keymap_rows`], built from the layers' files so that a
 //! binding the user replaced or `null`led stays visible ("overridden", "unbound by you"); the
 //! page re-reads them on [`oxikube_keymap::subscribe_changes`], keeping the search, filters,
-//! selection and scroll. Editing is the next story (E21-S08); here "Open keymap.json" is
-//! `keymap::OpenUser`.
+//! selection and scroll. "Open keymap.json" is `keymap::OpenUser`.
+//!
+//! Editing (E21-S08): "Record binding" (`keymap::RecordBinding`) opens the [`recorder`] on the
+//! selected row; its Save is `keymap::SetBinding`. "Remove binding" is `keymap::RemoveBinding`: a
+//! binding of the user's file is deleted, a default one unbound with `null` there. Both commands
+//! edit `keymap.json` through `oxikube_keymap::edit` (comments kept, validated before writing,
+//! in force at once) and never touch a default keymap.
 
 mod command;
 mod delegate;
+mod editing;
+mod edits;
 mod model;
+pub mod recorder;
 mod render;
 mod search;
 mod sidebar;
@@ -32,9 +43,11 @@ mod view;
 mod tests;
 
 pub use command::{
-    KeymapEditorRequestSink, KeymapEditorViews, KeymapEditorViewsDeps, register_commands,
+    KeymapEditorRequest, KeymapEditorRequestSink, KeymapEditorViews, KeymapEditorViewsDeps,
+    register_commands,
 };
 pub use delegate::{KeymapDelegate, context_label, default_file_name, source_label};
+pub use edits::{KeymapEditRequest, KeymapEditSink, KeymapEdits};
 pub use model::{ContextFilter, EmptyState, KeymapListModel, RowKey};
 pub use search::{Haystack, Query, canonical_keystroke};
 pub use sidebar::{ENTRY_ID, SECTION_ID, entry, register_sidebar, section};

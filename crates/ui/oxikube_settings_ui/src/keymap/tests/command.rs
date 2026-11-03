@@ -24,8 +24,8 @@ use oxikube_workspace::{ClusterTabs, ClusterTabsDeps, CommandDispatcher};
 
 use super::RecordingBus;
 use crate::keymap::{
-    ENTRY_ID, ITEM_KEY, KeymapEditorRequestSink, KeymapEditorViews, KeymapEditorViewsDeps,
-    SECTION_ID, register_commands, register_sidebar,
+    ENTRY_ID, ITEM_KEY, KeymapEditSink, KeymapEditorRequest, KeymapEditorRequestSink,
+    KeymapEditorViews, KeymapEditorViewsDeps, SECTION_ID, register_commands, register_sidebar,
 };
 
 fn context(name: &str) -> ClusterContext {
@@ -47,10 +47,11 @@ fn id(name: &str) -> ClusterId {
 #[test]
 fn the_command_queues_a_request_and_has_a_tool_stub() {
     let (sink, mut requests) = KeymapEditorRequestSink::channel();
+    let (edits, _edit_requests) = KeymapEditSink::channel();
     let mut registry = CommandRegistry::new();
     registry
         .install("oxikube_settings_ui::keymap", |r| {
-            register_commands(r, sink)
+            register_commands(r, sink, edits)
         })
         .unwrap();
     let clock = Arc::new(FakeClockPort::default());
@@ -71,14 +72,14 @@ fn the_command_queues_a_request_and_has_a_tool_stub() {
     ))
     .unwrap();
     assert!(matches!(outcome, Outcome::Completed(_)));
-    assert_eq!(block_on(requests.next()), Some(()));
+    assert_eq!(block_on(requests.next()), Some(KeymapEditorRequest::Show));
 }
 
 #[test]
 fn a_sink_whose_window_is_gone_is_an_error() {
     let (sink, requests) = KeymapEditorRequestSink::channel();
     drop(requests);
-    assert!(sink.send().is_err());
+    assert!(sink.send(KeymapEditorRequest::Show).is_err());
 }
 
 #[gpui::test]

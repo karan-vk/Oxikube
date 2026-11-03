@@ -26,7 +26,7 @@ use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_editor::view::{
     ConfigFile, ConfigFileKind, EditorRequest, EditorViewSink, OpenConfigFile,
 };
-use oxikube_keymap::{KeymapDiagnosticsEvent, OpenUser, ShowEditor};
+use oxikube_keymap::{KeymapDiagnosticsEvent, OpenUser, RecordBinding, ShowEditor};
 use oxikube_workspace::{CommandDispatcher, Toast, ToastAction, Workspace};
 use serde_json::json;
 
@@ -135,6 +135,16 @@ pub fn install_action(
     dispatcher: &Rc<dyn CommandDispatcher>,
     cx: &mut App,
 ) {
+    let record_dispatcher = Rc::downgrade(dispatcher);
+    cx.on_action(move |_: &RecordBinding, cx| {
+        if cx.active_window() == Some(window)
+            && let Some(dispatcher) = record_dispatcher.upgrade()
+        {
+            dispatcher.dispatch(Command::KeymapRecordBinding, cx);
+        } else {
+            cx.propagate();
+        }
+    });
     let editor_dispatcher = Rc::downgrade(dispatcher);
     cx.on_action(move |_: &ShowEditor, cx| {
         if cx.active_window() == Some(window)

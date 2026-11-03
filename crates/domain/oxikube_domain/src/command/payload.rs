@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use super::cloud::CloudRefreshMode;
 use super::id::CommandId;
 use super::image::ImageChange;
+use super::keymap::{KeymapBindingEdit, KeymapBindingRef};
 use super::kubeconfig::{KubeconfigSourceRef, NewKubeconfigSource};
 use super::meta::CommandMeta;
 use super::registry;
@@ -727,6 +728,24 @@ pub enum Command {
     /// Open the keymap editor page: every action with its context, binding and source (E21-S07).
     #[serde(rename = "keymap::ShowEditor")]
     KeymapShowEditor,
+    /// Record a new key binding for the keymap editor's selected action: opens the recorder
+    /// (E21-S08).
+    #[serde(rename = "keymap::RecordBinding")]
+    KeymapRecordBinding,
+    /// Bind keystrokes to an action in the user's `keymap.json`, keeping its comments; refused
+    /// when the result does not validate (E21-S08).
+    #[serde(rename = "keymap::SetBinding")]
+    KeymapSetBinding {
+        /// What to bind, and what it replaces.
+        edit: KeymapBindingEdit,
+    },
+    /// Take a binding out of force: delete it from the user's `keymap.json`, or unbind a default
+    /// one with `null` there (E21-S08).
+    #[serde(rename = "keymap::RemoveBinding")]
+    KeymapRemoveBinding {
+        /// Which binding.
+        binding: KeymapBindingRef,
+    },
     /// Open the chart gallery, every chart state on one page, as a tab.
     #[serde(rename = "charts::OpenGallery")]
     ChartsOpenGallery,
@@ -2251,6 +2270,9 @@ impl Command {
             Command::PaletteToggleShowAll => CommandId::PALETTE_TOGGLE_SHOW_ALL,
             Command::KeymapOpenUser => CommandId::KEYMAP_OPEN_USER,
             Command::KeymapShowEditor => CommandId::KEYMAP_SHOW_EDITOR,
+            Command::KeymapRecordBinding => CommandId::KEYMAP_RECORD_BINDING,
+            Command::KeymapSetBinding { .. } => CommandId::KEYMAP_SET_BINDING,
+            Command::KeymapRemoveBinding { .. } => CommandId::KEYMAP_REMOVE_BINDING,
             Command::ChartsOpenGallery => CommandId::CHARTS_OPEN_GALLERY,
             Command::SettingsOpen => CommandId::SETTINGS_OPEN,
             Command::AppQuit => CommandId::APP_QUIT,
@@ -2956,6 +2978,28 @@ mod tests {
             Command::PaletteToggleShowAll,
             Command::KeymapOpenUser,
             Command::KeymapShowEditor,
+            Command::KeymapRecordBinding,
+            Command::KeymapSetBinding {
+                edit: crate::command::KeymapBindingEdit {
+                    action: "keymap::OpenUser".into(),
+                    data: None,
+                    context: Some("Workspace".into()),
+                    keystrokes: "cmd-shift-k".into(),
+                    replaces: None,
+                    unbind: vec![crate::command::KeymapBindingRef {
+                        context: None,
+                        keystrokes: "cmd-shift-k".into(),
+                        source: crate::command::KeymapSource::Default,
+                    }],
+                },
+            },
+            Command::KeymapRemoveBinding {
+                binding: crate::command::KeymapBindingRef {
+                    context: Some("ResourceTable".into()),
+                    keystrokes: "g g".into(),
+                    source: crate::command::KeymapSource::User,
+                },
+            },
             Command::ChartsOpenGallery,
             Command::SettingsOpen,
             Command::AppQuit,
@@ -3565,6 +3609,9 @@ mod tests {
                     | Command::PaletteToggleShowAll
                     | Command::KeymapOpenUser
                     | Command::KeymapShowEditor
+                    | Command::KeymapRecordBinding
+                    | Command::KeymapSetBinding { .. }
+                    | Command::KeymapRemoveBinding { .. }
                     | Command::ChartsOpenGallery
                     | Command::SettingsOpen
                     | Command::AppQuit
