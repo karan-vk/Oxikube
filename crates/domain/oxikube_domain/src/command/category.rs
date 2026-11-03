@@ -96,6 +96,7 @@ impl CommandCategory {
             ("view", CommandCategory::View),
             ("palette", CommandCategory::View),
             ("help", CommandCategory::View),
+            ("theme", CommandCategory::View),
             ("jump", CommandCategory::View),
             ("keymap", CommandCategory::View),
             ("charts", CommandCategory::View),

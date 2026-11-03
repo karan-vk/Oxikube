@@ -1244,14 +1244,6 @@ pub static COMMANDS: &[CommandMeta] = &[
         CommandScope::Global,
         NONE,
     ),
-    // Opens the theme picker; a UI preference, not a cluster mutation: no guard tier. Committing
-    // writes the `theme` user setting through the settings store's comment-preserving update.
-    CommandMeta::read(
-        CommandId::THEME_SELECT,
-        "Select Theme",
-        CommandScope::Global,
-        NONE,
-    ),
     // Patches the `ingressclass.kubernetes.io/is-default-class` annotation (a merge patch, with
     // a server dry run through the guard); low risk: it changes which class an Ingress without
     // one gets, and is undone by setting another class (or removing the annotation).
@@ -2510,6 +2502,14 @@ pub static COMMANDS: &[CommandMeta] = &[
         NONE,
     )
     .in_views(TERMINAL_VIEW),
+    // Opens the theme picker; a UI preference, not a cluster mutation: no guard tier. Committing
+    // writes the `theme` user setting through the settings store's comment-preserving update.
+    CommandMeta::read(
+        CommandId::THEME_SELECT,
+        "Select Theme",
+        CommandScope::Global,
+        NONE,
+    ),
     CommandMeta::read(
         CommandId::VIEW_OPEN,
         "Open View",
