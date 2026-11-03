@@ -54,6 +54,11 @@ pub fn vim_keymap() -> &'static str {
     include_str!("../assets/keymaps/vim.json")
 }
 
+/// The embedded optional k9s layer (`k9s.json`): what k9s has that the defaults lack.
+pub fn k9s_keymap() -> &'static str {
+    include_str!("../assets/keymaps/k9s.json")
+}
+
 /// The commented template for a new user `keymap.json`.
 pub fn initial_user_keymap_content() -> &'static str {
     include_str!("../assets/keymaps/initial_user_keymap.json")
@@ -70,6 +75,7 @@ mod tests {
             default_keymap(KeymapPlatform::Linux),
             default_keymap(KeymapPlatform::Windows),
             vim_keymap(),
+            k9s_keymap(),
             initial_user_keymap_content(),
         ] {
             assert!(text.contains('['), "{text}");

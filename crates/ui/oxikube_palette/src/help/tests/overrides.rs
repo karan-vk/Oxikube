@@ -52,7 +52,7 @@ fn a_default_the_user_unbound_is_listed_as_unbound(cx: &mut TestAppContext) {
 #[gpui::test]
 fn the_vim_base_keymap_shows_the_base_chip(cx: &mut TestAppContext) {
     let options = KeymapOptions {
-        vim: true,
+        base_keymap: oxikube_keymap::BaseKeymap::Vim,
         ..KeymapOptions::default()
     };
     let mut f = Fixture::with_keymap(cx, Where::Table, "", options);

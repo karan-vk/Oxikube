@@ -33,7 +33,7 @@ impl HelpCategory {
 pub enum HelpSource {
     /// The shipped per-OS defaults, and keys other crates bound in code: no chip.
     Default,
-    /// The optional vim base keymap (`Base`).
+    /// The optional base keymap, vim or k9s (`Base`).
     Base,
     /// The user's `keymap.json` (`User`): an override.
     User,
@@ -44,7 +44,7 @@ impl HelpSource {
     pub fn of(layer: Option<KeymapLayer>) -> Self {
         match layer {
             Some(KeymapLayer::User) => Self::User,
-            Some(KeymapLayer::Vim) => Self::Base,
+            Some(KeymapLayer::Vim | KeymapLayer::K9s) => Self::Base,
             Some(KeymapLayer::Default) | None => Self::Default,
         }
     }

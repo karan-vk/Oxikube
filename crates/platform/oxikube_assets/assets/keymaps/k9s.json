@@ -1,0 +1,25 @@
+// Oxikube k9s base keymap (E21-S09), selected with `"base_keymap": "k9s"` in settings.json.
+//
+// The per-OS defaults already carry k9s's verbs (y YAML, d describe, e edit, l logs, s shell,
+// a attach, ctrl-d delete, shift-f / f port forwards, ctrl-w wide, ctrl-k kill, z sanitize,
+// o show node, shift-j owner, 0-9 namespaces, `:` the jump bar, `?` help). This layer holds only
+// what the defaults leave out; like every base keymap it sits between the defaults and your own
+// keymap.json, so your bindings still win. Only existing actions are bound.
+//
+//   c   copy the name of the cursor row (k9s). On the Nodes table `c` keeps meaning cordon, as in
+//       k9s, so that table is excluded here.
+//   q   close the detail drawer and return to the table (k9s: `q` backs out of a detail view).
+[
+  {
+    "context": "ResourceTable && !Editing && kind != Node",
+    "bindings": {
+      "c": "resource_table::CopyName"
+    }
+  },
+  {
+    "context": "DetailDrawer && !Editing",
+    "bindings": {
+      "q": "resource_detail::Close"
+    }
+  }
+]

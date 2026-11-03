@@ -40,7 +40,7 @@ fn every_os_binds_zoom_new_window_and_quit(cx: &mut TestAppContext) {
         ] {
             let mut store = KeymapStore::new(KeymapOptions {
                 platform,
-                vim: false,
+                base_keymap: oxikube_keymap::BaseKeymap::Default,
             });
             let merged = store.merge(cx);
             let bound = |action: &dyn gpui::Action| {

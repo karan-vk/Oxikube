@@ -218,3 +218,95 @@ fn base_keymap_default_in_settings_json_is_the_plain_defaults(cx: &mut TestAppCo
 fn base_keymap_vim_in_settings_json_turns_the_vim_layer_on(cx: &mut TestAppContext) {
     check_base_keymap(cx, "// vim, please\n{ \"base_keymap\": \"vim\" }", true);
 }
+
+#[gpui::test]
+fn base_keymap_k9s_in_settings_json_adds_its_keys_and_leaves_the_terminal_alone(
+    cx: &mut TestAppContext,
+) {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("settings.json"),
+        r#"{ "base_keymap": "k9s" }"#,
+    )
+    .unwrap();
+    cx.update(|cx| {
+        let mut env = StartupEnv::test();
+        env.config = crate::startup::ConfigSource::Dir(dir.path().to_owned());
+        init(cx, env).unwrap();
+    });
+    let problems = cx.read(oxikube_keymap::diagnostics);
+    assert!(problems.is_empty(), "{problems:?}");
+    let stack = |last: &str| {
+        parse_stack(&[
+            "Workspace",
+            "ClusterTab connected",
+            "Workspace",
+            "Pane",
+            last,
+        ])
+        .unwrap()
+    };
+    let key = |cx: &mut TestAppContext, keys: &str, last: &str| {
+        cx.read(|cx| resolve(cx, keys, &stack(last)).unwrap())
+    };
+    let pod = "ResourceTable kind=Pod selection=one";
+    assert_eq!(key(cx, "c", pod).action(), Some("resource_table::CopyName"));
+    // On Nodes `c` stays k9s's cordon.
+    let node = "ResourceTable kind=Node selection=one";
+    assert_eq!(
+        key(cx, "c", node).action(),
+        Some("resource_table::CordonSelected")
+    );
+    assert_eq!(
+        key(cx, "q", "DetailDrawer kind=Pod").action(),
+        Some("resource_detail::Close")
+    );
+    assert_eq!(
+        key(cx, "ctrl-d", pod).action(),
+        Some("resource_table::DeleteSelected")
+    );
+    for keys in ["c", "q", "ctrl-d"] {
+        assert_eq!(
+            key(cx, keys, "Terminal"),
+            Resolution::Unbound,
+            "{keys} in a terminal"
+        );
+    }
+    assert_eq!(key(cx, "q", "ManifestEditor"), Resolution::Unbound);
+}
+
+/// The base keymaps pass the one validator the user's file goes through, with the real action
+/// registry and every context the app's views set: no unknown action, context or keystroke, and
+/// every action they name is registered by a crate of the app.
+#[gpui::test]
+fn the_bundled_base_keymaps_pass_the_keymap_validator(cx: &mut TestAppContext) {
+    cx.update(|cx| init(cx, StartupEnv::test())).expect("init");
+    let registry = cx.read(ActionRegistry::from_app);
+    for (name, text) in [
+        ("vim.json", oxikube_assets::vim_keymap()),
+        ("k9s.json", oxikube_assets::k9s_keymap()),
+    ] {
+        let found = oxikube_keymap::validate::validate(
+            text,
+            &registry,
+            &oxikube_keymap::KnownNames::current(),
+        );
+        assert!(found.is_empty(), "{name}: {found:?}");
+        let parsed = oxikube_keymap::file::parse_keymap(text, KeymapLayer::Default).unwrap();
+        let mut bound = 0;
+        for (_, section) in parsed.sections {
+            for value in section.bindings.values() {
+                if let Ok(KeymapAction::Action { name: action, .. }) =
+                    KeymapAction::from_json(value)
+                {
+                    assert!(
+                        registry.contains(&action),
+                        "{name} names `{action}`; no crate registers it"
+                    );
+                    bound += 1;
+                }
+            }
+        }
+        assert!(bound >= 2, "{name} binds {bound} actions");
+    }
+}

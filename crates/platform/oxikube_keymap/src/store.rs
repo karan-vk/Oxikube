@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use gpui::{App, KeyBinding, KeyBindingContextPredicate, Keystroke};
 use oxikube_assets::KeymapPlatform;
 
+use crate::base_keymap::BaseKeymap;
 use crate::build::build_layer;
 use crate::conflicts::{KeymapConflict, find_conflicts};
 use crate::diagnostics::KeymapDiagnostic;
@@ -81,22 +82,22 @@ impl ParsedUserKeymap {
 pub struct KeymapOptions {
     /// Which OS's default keymap to use (the compile target unless a test says otherwise).
     pub platform: KeymapPlatform,
-    /// Layer the optional `vim.json` between the defaults and the user's file.
-    pub vim: bool,
+    /// The base keymap layered between the defaults and the user's file (`Default`: none).
+    pub base_keymap: BaseKeymap,
 }
 
 impl Default for KeymapOptions {
     fn default() -> Self {
         Self {
             platform: KeymapPlatform::current(),
-            vim: false,
+            base_keymap: BaseKeymap::Default,
         }
     }
 }
 
 /// The bindings of all layers merged, ready for `cx.bind_keys`.
 pub struct MergedKeymap {
-    /// Default, then vim, then user bindings, in that order.
+    /// Default, then base keymap, then user bindings, in that order.
     pub bindings: Vec<KeyBinding>,
     /// Embedded-layer bindings skipped because no crate registered their action.
     pub skipped_embedded: usize,
@@ -106,7 +107,8 @@ pub struct MergedKeymap {
 pub struct KeymapStore {
     options: KeymapOptions,
     default: LayerState,
-    vim: Option<LayerState>,
+    /// The parsed file of the current base keymap, when it has one.
+    base: Option<LayerState>,
     user: LayerState,
     user_path: Option<PathBuf>,
     diagnostics: Vec<KeymapDiagnostic>,
@@ -122,38 +124,60 @@ impl KeymapStore {
                 oxikube_assets::default_keymap(options.platform),
                 KeymapLayer::Default,
             ),
-            vim: None,
+            base: None,
             user: LayerState::default(),
             user_path: None,
             diagnostics: Vec::new(),
             conflicts: Vec::new(),
         };
-        store.set_vim(options.vim);
+        store.set_base_keymap(options.base_keymap);
         store
     }
 
-    /// The options the store was built with (the vim flag reflects later [`Self::set_vim`]).
+    /// The options the store was built with (`base_keymap` reflects later
+    /// [`Self::set_base_keymap`] calls).
     pub fn options(&self) -> KeymapOptions {
         self.options
     }
 
-    /// Whether the vim layer is on.
-    pub fn vim_enabled(&self) -> bool {
-        self.options.vim
+    /// The base keymap that is on.
+    pub fn base_keymap(&self) -> BaseKeymap {
+        self.options.base_keymap
     }
 
-    /// Turn the vim layer on or off. The embedded file is parsed the first time it is needed.
-    /// Returns whether the flag changed.
-    pub fn set_vim(&mut self, enabled: bool) -> bool {
-        let changed = self.options.vim != enabled;
-        self.options.vim = enabled;
-        if enabled && self.vim.is_none() {
-            self.vim = Some(LayerState::parse(
-                oxikube_assets::vim_keymap(),
-                KeymapLayer::Vim,
-            ));
+    /// Whether the vim layer is on.
+    pub fn vim_enabled(&self) -> bool {
+        self.options.base_keymap.is_vim()
+    }
+
+    /// Switch the base keymap: drop the old overlay and parse the new one's embedded file (a few
+    /// dozen lines). Returns whether the base keymap changed.
+    pub fn set_base_keymap(&mut self, base: BaseKeymap) -> bool {
+        let changed = self.options.base_keymap != base || self.base_missing(base);
+        self.options.base_keymap = base;
+        if changed {
+            self.base = base
+                .layer()
+                .zip(base.overlay_text())
+                .map(|(layer, text)| LayerState::parse(text, layer));
         }
         changed
+    }
+
+    fn base_missing(&self, base: BaseKeymap) -> bool {
+        base.layer().is_some() && self.base.is_none()
+    }
+
+    /// The parsed state of `layer`, when it is on.
+    fn layer_state(&self, layer: KeymapLayer) -> Option<&LayerState> {
+        match layer {
+            KeymapLayer::Default => Some(&self.default),
+            KeymapLayer::Vim | KeymapLayer::K9s => self
+                .base
+                .as_ref()
+                .filter(|_| self.options.base_keymap.layer() == Some(layer)),
+            KeymapLayer::User => Some(&self.user),
+        }
     }
 
     /// Replace the user layer with the sections of `text`. Returns whether the effective
@@ -216,12 +240,9 @@ impl KeymapStore {
         let mut conflicts = Vec::new();
         let mut skipped_embedded = 0;
         for layer in KeymapLayer::ORDER {
-            let state = match layer {
-                KeymapLayer::Default => Some(&self.default),
-                KeymapLayer::Vim => self.vim.as_ref().filter(|_| self.options.vim),
-                KeymapLayer::User => Some(&self.user),
+            let Some(state) = self.layer_state(layer) else {
+                continue;
             };
-            let Some(state) = state else { continue };
             let built = build_layer(cx, layer, &state.sections);
             // Only the user's layer keeps its text: the one validator reports everything it can
             // see in it, unless the sections are stale.
@@ -272,7 +293,7 @@ impl KeymapStore {
         }
     }
 
-    /// Every binding of every enabled layer, weakest first (default, vim, user; sections and
+    /// Every binding of every enabled layer, weakest first (default, base keymap, user; sections and
     /// bindings in file order), as the files state them, each context in the predicate's own
     /// spelling (`A&&B` is `A && B`). What the loader rejects is left out like the loader leaves
     /// it out (its problem is in [`Self::diagnostics`]): a section whose context does not parse,
@@ -281,12 +302,9 @@ impl KeymapStore {
     pub fn layer_bindings(&self) -> Vec<LayerBinding> {
         let mut out = Vec::new();
         for layer in KeymapLayer::ORDER {
-            let state = match layer {
-                KeymapLayer::Default => Some(&self.default),
-                KeymapLayer::Vim => self.vim.as_ref().filter(|_| self.options.vim),
-                KeymapLayer::User => Some(&self.user),
+            let Some(state) = self.layer_state(layer) else {
+                continue;
             };
-            let Some(state) = state else { continue };
             for (_, section) in &state.sections {
                 let context = match section.context_expr() {
                     None => None,

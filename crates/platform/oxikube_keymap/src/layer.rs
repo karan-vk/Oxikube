@@ -8,15 +8,18 @@ use gpui::KeyBindingMetaIndex;
 pub enum KeymapLayer {
     /// The embedded per-OS `default-*.json`.
     Default,
-    /// The optional embedded `vim.json`, between the defaults and the user's file.
+    /// The optional embedded `vim.json` base keymap, between the defaults and the user's file.
     Vim,
+    /// The optional embedded `k9s.json` base keymap, in the same place as [`Self::Vim`] (the two
+    /// are never on together).
+    K9s,
     /// The user's `keymap.json`.
     User,
 }
 
 impl KeymapLayer {
     /// Layers in the order their bindings are added to GPUI's keymap (lowest precedence first).
-    pub const ORDER: [KeymapLayer; 3] = [Self::Default, Self::Vim, Self::User];
+    pub const ORDER: [KeymapLayer; 4] = [Self::Default, Self::Vim, Self::K9s, Self::User];
 
     /// The metadata GPUI stores with each binding of this layer.
     ///
@@ -27,7 +30,8 @@ impl KeymapLayer {
         KeyBindingMetaIndex(match self {
             Self::User => 0,
             Self::Vim => 1,
-            Self::Default => 2,
+            Self::K9s => 2,
+            Self::Default => 3,
         })
     }
 
@@ -36,9 +40,15 @@ impl KeymapLayer {
         match meta?.0 {
             0 => Some(Self::User),
             1 => Some(Self::Vim),
-            2 => Some(Self::Default),
+            2 => Some(Self::K9s),
+            3 => Some(Self::Default),
             _ => None,
         }
+    }
+
+    /// Whether this layer is a base keymap (an overlay chosen by the `base_keymap` setting).
+    pub const fn is_base(self) -> bool {
+        matches!(self, Self::Vim | Self::K9s)
     }
 
     /// Whether bindings naming an unregistered action are skipped silently instead of reported.
@@ -55,6 +65,7 @@ impl std::fmt::Display for KeymapLayer {
         f.write_str(match self {
             Self::Default => "default keymap",
             Self::Vim => "vim keymap",
+            Self::K9s => "k9s keymap",
             Self::User => "keymap.json",
         })
     }
@@ -70,7 +81,10 @@ mod tests {
             assert_eq!(KeymapLayer::from_meta(Some(layer.meta())), Some(layer));
         }
         assert!(KeymapLayer::User.meta().0 < KeymapLayer::Vim.meta().0);
-        assert!(KeymapLayer::Vim.meta().0 < KeymapLayer::Default.meta().0);
+        assert!(KeymapLayer::Vim.meta().0 < KeymapLayer::K9s.meta().0);
+        assert!(KeymapLayer::K9s.meta().0 < KeymapLayer::Default.meta().0);
+        assert!(KeymapLayer::Vim.is_base() && KeymapLayer::K9s.is_base());
+        assert!(!KeymapLayer::Default.is_base() && !KeymapLayer::User.is_base());
         assert_eq!(KeymapLayer::from_meta(None), None);
     }
 }

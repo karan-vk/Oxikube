@@ -57,7 +57,14 @@ const MAC: KeymapPlatform = KeymapPlatform::MacOs;
 const LINUX: KeymapPlatform = KeymapPlatform::Linux;
 
 fn options(platform: KeymapPlatform, vim: bool) -> KeymapOptions {
-    KeymapOptions { platform, vim }
+    KeymapOptions {
+        platform,
+        base_keymap: if vim {
+            oxikube_keymap::BaseKeymap::Vim
+        } else {
+            oxikube_keymap::BaseKeymap::Default
+        },
+    }
 }
 
 fn install(cx: &mut TestAppContext, platform: KeymapPlatform, vim: bool, user: &str) {

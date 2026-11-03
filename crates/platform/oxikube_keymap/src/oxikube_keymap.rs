@@ -3,8 +3,8 @@
 //! Layered, hot-reloading key bindings in Zed's `keymap.json` format (E05-S07).
 //!
 //! Layers, lowest first: the embedded per-OS `default-*.json` ([`oxikube_assets::default_keymap`]),
-//! the optional embedded `vim.json` (the `base_keymap: "vim"` setting, [`KeymapOptions::vim`] /
-//! [`set_vim_layer`]), then the user's `keymap.json` next to `settings.json`. The layers are
+//! the optional embedded base keymap (`vim.json` or `k9s.json`, the `base_keymap` setting, [`KeymapOptions::base_keymap`] /
+//! [`set_base_keymap`]), then the user's `keymap.json` next to `settings.json`. The layers are
 //! merged into one flat list of GPUI `KeyBinding`s and bound with `cx.bind_keys`; later layers
 //! win, and `null` unbinds.
 //!
@@ -20,7 +20,8 @@
 //! the MCP tool run one behaviour ([`ActionRegistry::command`]).
 //!
 //! Module map:
-//! - [`base_keymap`]: the `base_keymap` setting (`default` | `vim`) that drives the vim layer.
+//! - [`base_keymap`]: the `base_keymap` setting (`default` | `k9s` | `vim`) that picks the overlay
+//!   layer; [`docs`]: the generated `docs/keymap.md`.
 //! - [`mod@file`]: the `keymap.json` format and its lenient parser; [`lines`]: where each section
 //!   and binding is in the text, for `keymap.json:12` in a diagnostic.
 //! - [`events`]: [`subscribe_diagnostics`], how the binary learns that the user's file has
@@ -58,6 +59,7 @@ pub mod conflicts;
 pub mod context;
 pub mod diagnostics;
 pub mod dispatch;
+pub mod docs;
 pub mod edit;
 pub mod events;
 pub mod file;
@@ -89,7 +91,8 @@ pub use events::{KeymapChanged, subscribe_changes, subscribe_diagnostics};
 pub use file::{KeymapAction, KeymapSection};
 pub use global::{
     conflicts, diagnostics, init, init_with_dir, init_with_options, init_with_text, keymap_rows,
-    rebind, reload, reload_user_keymap, set_vim_layer, user_diagnostics, user_keymap_file,
+    rebind, reload, reload_user_keymap, set_base_keymap, set_vim_layer, user_diagnostics,
+    user_keymap_file,
 };
 pub use known::{KnownNames, register_context, register_flag};
 pub use layer::KeymapLayer;

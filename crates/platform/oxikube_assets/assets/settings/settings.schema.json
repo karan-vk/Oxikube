@@ -48,6 +48,11 @@
           "const": "vim",
           "description": "The defaults plus the vim layer (`vim.json`): `j` / `k` / `g g` / `shift-g` / `ctrl-d` /\n`ctrl-u` in tables, `d d` to delete, `y y` to copy the name. Nothing changes in text\nfields, the terminal or the manifest editor.",
           "type": "string"
+        },
+        {
+          "const": "k9s",
+          "description": "The defaults plus the k9s layer (`k9s.json`): what k9s has that the defaults lack (`c`\ncopies the name, `q` closes the detail drawer). The defaults already carry k9s's verbs.",
+          "type": "string"
         }
       ]
     },
@@ -300,7 +305,7 @@
               "type": "null"
             }
           ],
-          "description": "The keymap layered under your `keymap.json`: `default` (the per-OS defaults) or `vim`\n(adds `j` / `k` / `g g` / `shift-g` / `ctrl-d` / `ctrl-u`, `d d` delete and `y y` copy name\nto resource tables; the editor, the terminal and text fields are untouched).",
+          "description": "The keymap layered under your `keymap.json`: `default` (the per-OS defaults), `k9s` (adds\n`c` copy name and `q` close detail to the k9s verbs the defaults already have) or `vim`\n(adds `j` / `k` / `g g` / `shift-g` / `ctrl-d` / `ctrl-u`, `d d` delete and `y y` copy name\nto resource tables; the editor, the terminal and text fields are untouched).",
           "x-oxikube-dynamic-enum": "base_keymaps"
         },
         "cloud": {
@@ -1010,7 +1015,7 @@
               "type": "null"
             }
           ],
-          "description": "The keymap layered under your `keymap.json`: `default` (the per-OS defaults) or `vim`\n(adds `j` / `k` / `g g` / `shift-g` / `ctrl-d` / `ctrl-u`, `d d` delete and `y y` copy name\nto resource tables; the editor, the terminal and text fields are untouched).",
+          "description": "The keymap layered under your `keymap.json`: `default` (the per-OS defaults), `k9s` (adds\n`c` copy name and `q` close detail to the k9s verbs the defaults already have) or `vim`\n(adds `j` / `k` / `g g` / `shift-g` / `ctrl-d` / `ctrl-u`, `d d` delete and `y y` copy name\nto resource tables; the editor, the terminal and text fields are untouched).",
           "x-oxikube-dynamic-enum": "base_keymaps"
         }
       },
@@ -2043,7 +2048,7 @@
           "type": "null"
         }
       ],
-      "description": "The keymap layered under your `keymap.json`: `default` (the per-OS defaults) or `vim`\n(adds `j` / `k` / `g g` / `shift-g` / `ctrl-d` / `ctrl-u`, `d d` delete and `y y` copy name\nto resource tables; the editor, the terminal and text fields are untouched).",
+      "description": "The keymap layered under your `keymap.json`: `default` (the per-OS defaults), `k9s` (adds\n`c` copy name and `q` close detail to the k9s verbs the defaults already have) or `vim`\n(adds `j` / `k` / `g g` / `shift-g` / `ctrl-d` / `ctrl-u`, `d d` delete and `y y` copy name\nto resource tables; the editor, the terminal and text fields are untouched).",
       "x-oxikube-dynamic-enum": "base_keymaps"
     },
     "cloud": {
