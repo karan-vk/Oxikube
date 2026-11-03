@@ -11,7 +11,10 @@ use oxikube_theme::{
 use std::cell::Cell;
 use std::rc::Rc;
 
-const AYU: &str = include_str!("fixtures/ayu.json");
+/// The Ayu fixture renamed to "Acme", so its themes do not collide with the bundled Ayu family.
+fn acme_fixture() -> String {
+    include_str!("fixtures/ayu.json").replace("Ayu", "Acme")
+}
 
 fn setup(cx: &mut TestAppContext) -> (Rc<Cell<usize>>, Subscription) {
     let changes = Rc::new(Cell::new(0));
@@ -32,7 +35,9 @@ fn source() -> ThemeSource {
 #[gpui::test]
 fn inserting_or_removing_unselected_themes_does_not_notify(cx: &mut TestAppContext) {
     let (changes, _subscription) = setup(cx);
-    let family = import_family(AYU).expect("fixture imports").family;
+    let family = import_family(&acme_fixture())
+        .expect("fixture imports")
+        .family;
     cx.update(|cx| insert_theme_families(cx, &source(), [family]));
     assert_eq!(changes.get(), 0);
     assert_eq!(cx.update(|cx| remove_themes_by_source(cx, &source())), 3);
@@ -45,7 +50,7 @@ fn the_active_theme_is_readable_from_the_app_and_observed_exactly_once(cx: &mut 
     assert_eq!(cx.read(|cx| cx.active_theme().name.clone()), "One Dark");
     cx.update(|cx| {
         let registry = oxikube_theme::ThemeRegistry::global(cx);
-        assert!(registry.get("Ayu Dark").is_none());
+        assert!(registry.get("Acme Dark").is_none());
     });
     // A pinned mode change switches the default theme: one notification, a repeat is silent.
     cx.update(|cx| SystemAppearance::set(cx, Appearance::Light));
@@ -65,7 +70,7 @@ fn a_selected_extension_theme_activates_on_insert_and_falls_back_on_removal(
     cx.update(|cx| {
         gpui::UpdateGlobal::update_global(cx, |store: &mut SettingsStore, _| {
             store
-                .set_user_settings(r#"{ "theme": "Ayu Dark" }"#)
+                .set_user_settings(r#"{ "theme": "Acme Dark" }"#)
                 .expect("valid settings")
         });
     });
@@ -73,9 +78,11 @@ fn a_selected_extension_theme_activates_on_insert_and_falls_back_on_removal(
     assert_eq!(cx.read(|cx| cx.active_theme().name.clone()), "One Dark");
     let before = changes.get();
 
-    let family = import_family(AYU).expect("fixture imports").family;
+    let family = import_family(&acme_fixture())
+        .expect("fixture imports")
+        .family;
     cx.update(|cx| insert_theme_families(cx, &source(), [family]));
-    assert_eq!(cx.read(|cx| cx.active_theme().name.clone()), "Ayu Dark");
+    assert_eq!(cx.read(|cx| cx.active_theme().name.clone()), "Acme Dark");
     assert_eq!(changes.get(), before + 1, "insert notifies once");
 
     cx.update(|cx| remove_themes_by_source(cx, &source()));
@@ -91,14 +98,16 @@ fn dropping_the_subscription_releases_the_observer(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui::UpdateGlobal::update_global(cx, |store: &mut SettingsStore, _| {
             store
-                .set_user_settings(r#"{ "theme": "Ayu Dark" }"#)
+                .set_user_settings(r#"{ "theme": "Acme Dark" }"#)
                 .expect("valid settings")
         });
     });
     drop(subscription);
     // This insert changes the active theme, which would notify a live observer.
-    let family = import_family(AYU).expect("fixture imports").family;
+    let family = import_family(&acme_fixture())
+        .expect("fixture imports")
+        .family;
     cx.update(|cx| insert_theme_families(cx, &source(), [family]));
-    assert_eq!(cx.read(|cx| cx.active_theme().name.clone()), "Ayu Dark");
+    assert_eq!(cx.read(|cx| cx.active_theme().name.clone()), "Acme Dark");
     assert_eq!(changes.get(), 0, "a dropped observer never runs");
 }
