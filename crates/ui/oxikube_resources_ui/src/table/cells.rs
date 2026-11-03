@@ -20,10 +20,16 @@ pub struct ToneColors {
     pub neutral: Hsla,
     /// `Running`, `Ready`, `Bound`.
     pub ok: Hsla,
-    /// `Pending`, `Terminating`, `NotReady`.
+    /// `Pending`, `NotReady`.
     pub warn: Hsla,
     /// `Failed`, `CrashLoopBackOff`, `Error`.
     pub error: Hsla,
+    /// `Succeeded`, `Completed`.
+    pub succeeded: Hsla,
+    /// `Terminating`.
+    pub terminating: Hsla,
+    /// `Unknown`.
+    pub unknown: Hsla,
 }
 
 impl ToneColors {
@@ -36,12 +42,18 @@ impl ToneColors {
                 ok: theme.0.oxikube.status_running,
                 warn: theme.0.oxikube.status_pending,
                 error: theme.0.oxikube.status_failed,
+                succeeded: theme.0.oxikube.status_succeeded,
+                terminating: theme.0.oxikube.status_terminating,
+                unknown: theme.0.oxikube.status_unknown,
             },
             None => Self {
                 neutral: colors.text,
                 ok: colors.success,
                 warn: colors.warning,
                 error: colors.error,
+                succeeded: colors.info,
+                terminating: colors.text_disabled,
+                unknown: colors.text_muted,
             },
         }
     }
@@ -53,6 +65,9 @@ impl ToneColors {
             Tone::Ok => self.ok,
             Tone::Warn => self.warn,
             Tone::Error => self.error,
+            Tone::Succeeded => self.succeeded,
+            Tone::Terminating => self.terminating,
+            Tone::Unknown => self.unknown,
         }
     }
 }

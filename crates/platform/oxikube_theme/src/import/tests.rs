@@ -307,6 +307,21 @@ fn oxikube_status_colours_default_from_the_themes_own_status_colours() {
         dark.status.hidden.foreground
     );
     assert_eq!(dark.oxikube.status_unknown, dark.colors.text_muted);
+    // The Argo CD health, sync and diff colours default from the same status colours.
+    let o = &dark.oxikube;
+    assert_eq!(o.health_healthy, dark.status.success.foreground);
+    assert_eq!(o.health_progressing, dark.status.warning.foreground);
+    assert_eq!(o.health_degraded, dark.status.error.foreground);
+    assert_eq!(o.health_missing, dark.colors.text_muted);
+    assert_eq!(o.sync_synced, dark.status.success.foreground);
+    assert_eq!(o.sync_out_of_sync, dark.status.warning.foreground);
+    assert_eq!(o.sync_unknown, dark.colors.text_muted);
+    assert_eq!(o.diff_added, dark.status.success.foreground);
+    assert_eq!(o.diff_removed, dark.status.error.foreground);
+    // `hint` and `modified` are lifted to AA on every panel where the theme's are fainter.
+    for derived in [o.health_suspended, o.diff_changed] {
+        assert!(crate::tokens::contrast_ratio(derived, dark.colors.surface) >= 4.5);
+    }
     // The cluster tab palette cycles through the player cursors.
     assert_eq!(dark.oxikube.cluster_tabs[0], dark.players[0].cursor);
     assert_eq!(dark.oxikube.cluster_tabs[7], dark.players[7].cursor);
@@ -430,4 +445,30 @@ fn every_mapped_key_has_a_unique_slot() {
             "slot {index} was overwritten by another key"
         );
     }
+}
+
+#[test]
+fn health_sync_and_diff_keys_parse_and_a_partial_block_fills_only_the_missing_keys() {
+    let text = r##"{ "name": "O", "themes": [{ "name": "O", "appearance": "dark", "style": {},
+        "oxikube": { "health.degraded": "#ff0000", "syncStatus.outOfSync": "#ffaa00",
+                     "diff.added": "#00ff00", "diff.changed": "#0000ff", "health.bogus": "#fff" } }] }"##;
+    let imported = import(text);
+    let o = imported.family.themes[0].oxikube;
+    let default = import(r##"{ "themes": [{ "name": "D", "appearance": "dark" }] }"##)
+        .family
+        .themes[0]
+        .oxikube;
+    assert_eq!(o.health_degraded, color("#ff0000ff"));
+    assert_eq!(o.sync_out_of_sync, color("#ffaa00ff"));
+    assert_eq!(o.diff_added, color("#00ff00ff"));
+    assert_eq!(o.diff_changed, color("#0000ffff"));
+    assert_eq!(o.health_healthy, default.health_healthy);
+    assert_eq!(o.sync_synced, default.sync_synced);
+    assert_eq!(o.diff_removed, default.diff_removed);
+    assert!(
+        imported
+            .report
+            .unknown_keys
+            .contains("oxikube.health.bogus")
+    );
 }

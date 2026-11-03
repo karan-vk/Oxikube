@@ -39,9 +39,22 @@ fn on_accent_for(accent: Hsla) -> Hsla {
 /// WCAG AA for normal-size text.
 const MIN_TEXT_CONTRAST: f32 = 4.5;
 
-/// The `oxikube` colours a theme gets when its file does not set them: status colours from the
-/// theme's own status colours, cluster tabs cycling through its player colours (or accents, or
-/// the terminal ANSI row when it has neither), and the log-source palette from the terminal's
+/// The `oxikube` colours a theme gets when its file does not set them. Status colours come from
+/// the theme's own status colours:
+///
+/// | `oxikube` key | default |
+/// |---|---|
+/// | `status.running`, `health.healthy`, `syncStatus.synced`, `diff.added` | `success` |
+/// | `status.pending`, `health.progressing`, `syncStatus.outOfSync` | `warning` |
+/// | `status.failed`, `health.degraded`, `diff.removed` | `error` |
+/// | `status.succeeded` | `info` |
+/// | `status.terminating` | `hidden` |
+/// | `health.suspended` | `hint` |
+/// | `diff.changed` | `modified` |
+/// | `status.unknown`, `health.missing`, `syncStatus.unknown` | muted text |
+///
+/// Cluster tabs cycle through the player colours (or accents, or the terminal ANSI row when the
+/// theme has neither), and the log-source palette from the terminal's
 /// ANSI colours (moved lighter or darker where one is below AA on the log row fills).
 pub(crate) fn derive_oxikube(tokens: &ThemeTokens) -> OxikubeColors {
     let mut palette: Vec<Hsla> = tokens.players.iter().map(|p| p.cursor).collect();
@@ -84,6 +97,17 @@ pub(crate) fn derive_oxikube(tokens: &ThemeTokens) -> OxikubeColors {
         tokens.colors.element_selected,
     ];
     let log_sources = log_sources.map(|c| with_min_contrast(c, &backgrounds, MIN_TEXT_CONTRAST));
+    // Badge and diff colours are text and glyphs on every panel and row state, and a theme's
+    // `modified` / `hint` can be faint on one (One Light's modified is 2.3:1 selected).
+    let panels = [
+        tokens.colors.background,
+        tokens.colors.surface,
+        tokens.colors.elevated_surface,
+        tokens.colors.element,
+        tokens.colors.element_hover,
+        tokens.colors.element_selected,
+    ];
+    let legible = |c: Hsla| with_min_contrast(c, &panels, MIN_TEXT_CONTRAST);
     OxikubeColors {
         status_running: tokens.status.success.foreground,
         status_pending: tokens.status.warning.foreground,
@@ -91,6 +115,17 @@ pub(crate) fn derive_oxikube(tokens: &ThemeTokens) -> OxikubeColors {
         status_succeeded: tokens.status.info.foreground,
         status_terminating: tokens.status.hidden.foreground,
         status_unknown: tokens.colors.text_muted,
+        health_healthy: tokens.status.success.foreground,
+        health_progressing: tokens.status.warning.foreground,
+        health_degraded: tokens.status.error.foreground,
+        health_suspended: legible(tokens.status.hint.foreground),
+        health_missing: tokens.colors.text_muted,
+        sync_synced: tokens.status.success.foreground,
+        sync_out_of_sync: tokens.status.warning.foreground,
+        sync_unknown: tokens.colors.text_muted,
+        diff_added: tokens.status.success.foreground,
+        diff_removed: tokens.status.error.foreground,
+        diff_changed: legible(tokens.status.modified.foreground),
         cluster_tabs,
         log_sources,
     }

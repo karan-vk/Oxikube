@@ -27,6 +27,28 @@ pub struct OxikubeColors {
     pub status_terminating: Hsla,
     /// `Unknown` and anything unclassified (default: muted text).
     pub status_unknown: Hsla,
+    /// Argo CD health `Healthy` (default: success).
+    pub health_healthy: Hsla,
+    /// Argo CD health `Progressing` (default: warning).
+    pub health_progressing: Hsla,
+    /// Argo CD health `Degraded` (default: error).
+    pub health_degraded: Hsla,
+    /// Argo CD health `Suspended` (default: hint).
+    pub health_suspended: Hsla,
+    /// Argo CD health `Missing` (default: muted text). Health `Unknown` uses `status_unknown`.
+    pub health_missing: Hsla,
+    /// Argo CD sync status `Synced` (default: success).
+    pub sync_synced: Hsla,
+    /// Argo CD sync status `OutOfSync` (default: warning).
+    pub sync_out_of_sync: Hsla,
+    /// Argo CD sync status `Unknown` (default: muted text).
+    pub sync_unknown: Hsla,
+    /// A line or resource a diff adds (default: success).
+    pub diff_added: Hsla,
+    /// A line or resource a diff removes (default: error).
+    pub diff_removed: Hsla,
+    /// A line or resource a diff changes (default: the modified status colour).
+    pub diff_changed: Hsla,
     /// The palette a cluster tab can be coloured with, so production and staging tabs differ at
     /// a glance (default: the theme's player colours).
     pub cluster_tabs: [Hsla; CLUSTER_TAB_COLORS],
@@ -46,6 +68,17 @@ impl OxikubeColors {
             status_succeeded: color,
             status_terminating: color,
             status_unknown: color,
+            health_healthy: color,
+            health_progressing: color,
+            health_degraded: color,
+            health_suspended: color,
+            health_missing: color,
+            sync_synced: color,
+            sync_out_of_sync: color,
+            sync_unknown: color,
+            diff_added: color,
+            diff_removed: color,
+            diff_changed: color,
             cluster_tabs: [color; CLUSTER_TAB_COLORS],
             log_sources: [color; LOG_SOURCE_COLORS],
         }

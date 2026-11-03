@@ -26,6 +26,12 @@ pub enum Tone {
     Warn,
     /// Failed: `CrashLoopBackOff`, `Error`, `Failed`.
     Error,
+    /// Finished successfully: `Succeeded`, `Completed`, `Complete`.
+    Succeeded,
+    /// Being deleted: `Terminating`.
+    Terminating,
+    /// Nothing known: `Unknown`.
+    Unknown,
 }
 
 impl Tone {

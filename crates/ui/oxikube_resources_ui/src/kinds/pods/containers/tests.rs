@@ -114,7 +114,7 @@ fn rows_carry_image_state_restarts_probes_ports_and_resources() {
     let tones: Vec<Tone> = rows.iter().map(|r| r.state_tone).collect();
     assert_eq!(
         tones,
-        [Tone::Ok, Tone::Ok, Tone::Ok, Tone::Error, Tone::Warn],
+        [Tone::Succeeded, Tone::Ok, Tone::Ok, Tone::Error, Tone::Warn],
         "Completed, Running, Running, CrashLoopBackOff, running but not ready"
     );
 }
