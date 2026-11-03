@@ -22,8 +22,8 @@
 //!   text in place and keeps comments. Every field has one write in flight at a time; a newer
 //!   value waits for it.
 //! * "Reset" appears only where the user layer (or, on the cluster tab, the cluster layer) holds a
-//!   value, and removes the key so the default shows through; an empty input or an empty list
-//!   does the same. Editing a list rewrites that array, so comments inside the array may move.
+//!   value, and removes the key so the default shows through; an empty input does the same. An
+//!   empty list is written as `[]`. Editing a list rewrites that array, so comments inside the array may move.
 //! * The page follows the file: when the store changes, an input that is neither focused nor
 //!   waiting to be written shows the new value; the app's own writes echo the value already in the
 //!   input and change nothing, so the cursor does not jump.

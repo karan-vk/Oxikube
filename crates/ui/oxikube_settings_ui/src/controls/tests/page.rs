@@ -275,11 +275,61 @@ fn a_list_adds_removes_and_reorders_rows(cx: &mut TestAppContext) {
 
     page.click("settings-list-remove-terminal.exec_shells-0");
     assert_eq!(
-        page.file_json().get("terminal"),
-        None,
-        "an empty list resets: {}",
+        page.file_json()["terminal"]["exec_shells"],
+        json!([]),
+        "an empty list is written as []: {}",
         page.file()
     );
+}
+
+impl Harness {
+    fn list_texts(&mut self, path: &str) -> Vec<String> {
+        let page = self.page.clone();
+        self.vcx.update(|_, cx| {
+            page.read(cx)
+                .controls
+                .list_rows(path)
+                .expect("list editor")
+                .texts(cx)
+        })
+    }
+
+    fn touch_store(&mut self, json: &str) {
+        self.vcx.update(|_, cx| {
+            SettingsStore::update_global(cx, |store, _| store.set_user_settings(json))
+                .expect("valid settings");
+        });
+        self.vcx.run_until_parked();
+    }
+}
+
+#[gpui::test]
+fn list_rows_survive_the_echo_of_their_own_write(cx: &mut TestAppContext) {
+    let mut page = Harness::open(
+        cx,
+        r#"{ "terminal": { "exec_shells": ["bash", "sh"] } }"#,
+        "terminal",
+    );
+    page.type_at("settings-list-item-terminal.exec_shells-1", "sh ");
+    page.pause(WRITE_DEBOUNCE);
+    assert_eq!(
+        page.file_json()["terminal"]["exec_shells"],
+        json!(["bash", "sh"])
+    );
+    assert_eq!(
+        page.list_texts("terminal.exec_shells"),
+        ["bash", "sh "],
+        "the row being typed is not rebuilt"
+    );
+}
+
+#[gpui::test]
+fn a_blank_list_row_survives_a_store_change(cx: &mut TestAppContext) {
+    let json = r#"{ "terminal": { "exec_shells": ["bash"] } }"#;
+    let mut page = Harness::open(cx, json, "terminal");
+    page.click("settings-list-add-terminal.exec_shells");
+    page.touch_store(json);
+    assert_eq!(page.list_texts("terminal.exec_shells"), ["bash", ""]);
 }
 
 #[gpui::test]

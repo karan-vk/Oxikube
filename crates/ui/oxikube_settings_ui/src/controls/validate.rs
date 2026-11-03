@@ -67,15 +67,20 @@ fn text_of_colour(colour: ClusterColour, typed: &str) -> String {
 }
 
 fn validate_number(bounds: NumberBounds, text: &str) -> Result<Value, FieldError> {
-    let parsed = if bounds.integer {
+    let whole = if bounds.integer {
         text.parse::<i64>()
-            .map(|whole| whole as f64)
-            .map_err(|_| FieldError(format!("\"{text}\" is not a whole number.")))?
+            .map_err(|_| FieldError(format!("\"{text}\" is not a whole number.")))
+            .map(Some)?
     } else {
-        text.parse::<f64>()
+        None
+    };
+    let parsed = match whole {
+        Some(whole) => whole as f64,
+        None => text
+            .parse::<f64>()
             .ok()
             .filter(|number| number.is_finite())
-            .ok_or_else(|| FieldError(format!("\"{text}\" is not a number.")))?
+            .ok_or_else(|| FieldError(format!("\"{text}\" is not a number.")))?,
     };
     match (bounds.min, bounds.max) {
         (Some(min), _) if parsed < min => {
@@ -89,8 +94,8 @@ fn validate_number(bounds: NumberBounds, text: &str) -> Result<Value, FieldError
         }
         _ => {}
     }
-    let number = if bounds.integer {
-        Number::from(parsed as i64)
+    let number = if let Some(whole) = whole {
+        Number::from(whole)
     } else {
         Number::from_f64(parsed).ok_or_else(|| FieldError("Not a finite number.".to_owned()))?
     };
@@ -106,8 +111,9 @@ fn trim_number(number: f64) -> String {
     }
 }
 
-/// The JSON array for the items of a list editor. Items are trimmed; an empty list resets the
-/// field.
+/// The JSON array for the items of a list editor. Items are trimmed; an empty list is written as
+/// `[]` (it is a meaningful value, for example "notify about nothing"; the reset button restores
+/// the default).
 ///
 /// # Errors
 ///
@@ -126,9 +132,5 @@ pub fn validate_list(items: &[String]) -> Result<Value, FieldError> {
         seen.push(item);
         values.push(Value::String(item.to_owned()));
     }
-    if values.is_empty() {
-        Ok(Value::Null)
-    } else {
-        Ok(Value::Array(values))
-    }
+    Ok(Value::Array(values))
 }

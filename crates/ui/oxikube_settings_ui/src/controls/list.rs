@@ -52,6 +52,15 @@ impl ListRows {
             .collect()
     }
 
+    /// The texts as `validate_list` would write them: trimmed, blank rows left out.
+    fn committed_texts(&self, cx: &gpui::App) -> Vec<String> {
+        self.texts(cx)
+            .into_iter()
+            .map(|text| text.trim().to_owned())
+            .filter(|text| !text.is_empty())
+            .collect()
+    }
+
     /// Replaces the rows by the items of `value` when they differ from what is shown.
     pub(super) fn show(
         &mut self,
@@ -70,7 +79,9 @@ impl ListRows {
                     .collect()
             })
             .unwrap_or_default();
-        if self.texts(cx) == items {
+        // Compare what would be written (trimmed, blank rows left out), so a row still being
+        // typed ("foo ") or a freshly added blank row is not replaced by the echo of a write.
+        if self.committed_texts(cx) == items {
             return;
         }
         self.rows = items

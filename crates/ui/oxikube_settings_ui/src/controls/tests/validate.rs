@@ -74,7 +74,7 @@ fn lists_reject_blank_and_repeated_items() {
         validate_list(&items(&[" bash ", "sh"])),
         Ok(json!(["bash", "sh"]))
     );
-    assert_eq!(validate_list(&[]), Ok(Value::Null));
+    assert_eq!(validate_list(&[]), Ok(json!([])));
     assert_eq!(
         validate_list(&items(&["bash", ""])).expect_err("blank").0,
         "Item 2 is empty."
@@ -89,4 +89,12 @@ fn lists_reject_blank_and_repeated_items() {
 fn switches_and_json_are_not_text() {
     assert!(validate_text(&ControlSpec::Switch, "true").is_err());
     assert!(validate_text(&ControlSpec::Json, "{}").is_err());
+}
+
+#[test]
+fn large_integers_are_written_exactly() {
+    assert_eq!(
+        validate_text(&number(true, None, None), "9007199254740993"),
+        Ok(json!(9_007_199_254_740_993_i64))
+    );
 }
