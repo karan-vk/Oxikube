@@ -35,7 +35,6 @@ oxikube_assets.workspace = true
 oxikube_keymap.workspace = true
 oxikube_testkit = { workspace = true, features = ["gpui-screenshot"] }
 oxikube_workspace = { workspace = true, features = ["test-support"] }
-serde_json.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["rt"] }
 
