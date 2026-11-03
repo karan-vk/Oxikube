@@ -342,20 +342,13 @@ fn a_file_that_never_loaded_contributes_nothing() {
         problems: vec![failed("new.json", "bad")],
     });
     assert_eq!(registry.names().len(), 2);
-    assert_eq!(registry.user_files().count(), 0);
 }
 
 #[test]
 fn a_replaced_file_swaps_its_themes_and_tracks_them_by_path() {
     let mut registry = ThemeRegistry::with_bundled();
     registry.replace_user_themes(scan_of(&[("one.json", AYU)]));
-    assert_eq!(
-        registry
-            .user_files()
-            .next()
-            .map(|(path, names)| (path.clone(), names.len())),
-        Some((PathBuf::from("one.json"), 3))
-    );
+    assert!(registry.get("Ayu Dark").is_some());
     // The same path now holds a different family: its old themes are gone.
     registry.replace_user_themes(scan_of(&[("one.json", GRUVBOX)]));
     assert!(registry.get("Ayu Dark").is_none());

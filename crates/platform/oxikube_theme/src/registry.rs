@@ -2,9 +2,9 @@
 //!
 //! Pure data (no GPUI), so selection logic is unit-testable with a fake system appearance.
 //! Bundled themes (One Dark, One Light) are always present; user themes come from the
-//! `themes/` directory (`user_dir`) and are tracked per file: a deleted or renamed file
-//! disappears from [`ThemeRegistry::list`], an invalid one keeps its last good version. Extensions contribute
-//! families under their own [`ExtensionId`] and can be removed again without touching the other
+//! `themes/` directory (`user_dir`) and are tracked per file: a deleted or renamed
+//! file disappears from [`ThemeRegistry::list`], an invalid one keeps its last good version.
+//! Extensions contribute families under their own [`ExtensionId`] and can be removed again without touching the other
 //! sources.
 //!
 //! Duplicate names: within one source the later insert wins; across sources the order is
@@ -177,13 +177,6 @@ impl ThemeRegistry {
             }
         }
         self.user_files = files;
-    }
-
-    /// The theme names each file of the themes directory currently contributes, by path.
-    pub fn user_files(&self) -> impl Iterator<Item = (&PathBuf, Vec<&str>)> {
-        self.user_files
-            .iter()
-            .map(|(path, themes)| (path, themes.iter().map(|t| t.name.as_str()).collect()))
     }
 
     /// The theme called `name` and the source that wins for it.

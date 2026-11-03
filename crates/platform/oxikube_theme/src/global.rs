@@ -180,6 +180,7 @@ pub fn reload_now(cx: &mut App) {
 ///
 /// Files are tracked individually (see [`ThemeRegistry::replace_user_themes`]): a file that
 /// fails to parse keeps its last good themes, and raises a [`crate::ThemeNotice::BadThemeFile`] once.
+///
 /// What the watcher's apply task does for each finished scan; public so a host that scans
 /// itself (or a test with a scripted scan) can feed the registry.
 pub fn apply_user_scan(cx: &mut App, scan: UserThemes) {
