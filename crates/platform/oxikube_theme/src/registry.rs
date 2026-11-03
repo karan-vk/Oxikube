@@ -4,8 +4,8 @@
 //! Bundled themes (One Dark, One Light) are always present; user themes come from the
 //! `themes/` directory (`user_dir`) and are tracked per file: a deleted or renamed
 //! file disappears from [`ThemeRegistry::list`], an invalid one keeps its last good version.
-//! Extensions contribute families under their own [`ExtensionId`] and can be removed again without touching the other
-//! sources.
+//! Extensions contribute families under their own [`ExtensionId`] and can be removed again
+//! without touching the other sources.
 //!
 //! Duplicate names: within one source the later insert wins; across sources the order is
 //! user, then extension (lowest [`ExtensionId`] first), then bundled.
@@ -82,7 +82,7 @@ pub struct ThemeRegistry {
     extensions: BTreeMap<ExtensionId, BTreeMap<String, Arc<ThemeTokens>>>,
     user: BTreeMap<String, Arc<ThemeTokens>>,
     /// The themes each file of the themes directory gave, as of its last good read.
-    user_files: BTreeMap<PathBuf, Vec<ThemeTokens>>,
+    user_files: BTreeMap<PathBuf, Vec<Arc<ThemeTokens>>>,
     problems: Vec<ThemeFileProblem>,
     icon_themes: icon_themes::IconThemeLayers,
 }
@@ -148,10 +148,11 @@ impl ThemeRegistry {
     /// themes of its last good version, so a half-saved file never takes a theme away. Only
     /// the user layer changes; bundled and extension themes are untouched.
     pub fn replace_user_themes(&mut self, scan: UserThemes) {
-        let mut files: BTreeMap<PathBuf, Vec<ThemeTokens>> = BTreeMap::new();
-        for (path, family) in scan.families {
-            files.insert(path, family.themes);
-        }
+        let mut files: BTreeMap<PathBuf, Vec<Arc<ThemeTokens>>> = scan
+            .families
+            .into_iter()
+            .map(|(path, family)| (path, family.themes.into_iter().map(Arc::new).collect()))
+            .collect();
         for problem in &scan.problems {
             if files.contains_key(&problem.path) {
                 continue;
@@ -172,8 +173,7 @@ impl ThemeRegistry {
                     });
                     continue;
                 }
-                self.user
-                    .insert(theme.name.clone(), Arc::new(theme.clone()));
+                self.user.insert(theme.name.clone(), Arc::clone(theme));
             }
         }
         self.user_files = files;
