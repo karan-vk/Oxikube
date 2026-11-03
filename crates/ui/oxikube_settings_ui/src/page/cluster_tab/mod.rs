@@ -26,7 +26,7 @@
 //! | `model` | [`cluster_page_model`]: the per-cluster sections, from the schema |
 //! | `choice` | [`ClusterChoice`]: the picker's rows |
 //! | `precedence` | [`Precedence`], [`protection_warning`] and the explanation text: plain data |
-//! | `state` | [`ClusterTabState`]: scope, the other scope's model, the catalog and its tasks |
+//! | `state` | `ClusterTabState`: scope, the other scope's model, the catalog and its tasks |
 //! | `view` | scope switching, the catalog and the picked cluster |
 //! | `render` | the scope switch, the picker and the precedence strip on the page |
 
