@@ -17,6 +17,7 @@
 use crate::appearance::SystemAppearance;
 use crate::import::ThemeFamily;
 use crate::notices;
+use crate::preview;
 use crate::registry::{ThemeRegistry, ThemeSource};
 use crate::settings::{ThemeSelection, ThemeSettings};
 use crate::tokens::ThemeTokens;
@@ -213,13 +214,15 @@ pub fn remove_themes_by_source(cx: &mut App, source: &ThemeSource) -> usize {
     removed
 }
 
-/// Resolves the `theme` setting against the system appearance and sets [`ActiveTheme`] when the
-/// result differs from the current one.
+/// Resolves the `theme` setting against the system appearance (or takes the theme being
+/// previewed, see [`crate::preview`]) and sets [`ActiveTheme`] when the result differs from the
+/// current one.
 pub fn refresh_active(cx: &mut App) {
     let selection = ThemeSettings::try_get(cx)
         .map(|settings| settings.selection.clone())
         .unwrap_or_default();
-    let resolved = resolve(cx, &selection);
+    // A preview shows instead of the setting's theme; notices still follow the setting.
+    let resolved = preview::previewed(cx).unwrap_or_else(|| resolve(cx, &selection));
     let system = SystemAppearance::get(cx);
     let name = selection.name_for(system);
     let missing = cx.global::<ThemeRegistry>().get(name).is_none();

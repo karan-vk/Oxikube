@@ -64,6 +64,7 @@ mod storage;
 mod tail;
 mod terminal;
 mod theme;
+mod theme_picker;
 mod used_by;
 mod warning_badges;
 mod workloads;

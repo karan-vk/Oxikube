@@ -11,6 +11,8 @@
 //! - [`import`]: Zed theme-family JSON -> tokens through a table-driven mapper; lenient JSON,
 //!   defaults for unset keys, an [`ImportReport`] for what was wrong.
 //! - [`notices`]: the event channel for things worth a toast (an unknown theme name).
+//! - [`preview`], [`select`]: the theme picker's halves: preview a theme without selecting it, and
+//!   commit a pick to the `theme` setting (E22-S08).
 //! - [`registry`]: [`ThemeRegistry`], `get` / `list` / `resolve(selection, system)`; pure.
 //! - [`settings`]: the `theme` setting (`"Ayu Dark"` or `{ mode, light, dark }`).
 //! - [`appearance`]: [`Appearance`], [`ThemeMode`] and the [`SystemAppearance`] global.
@@ -39,7 +41,9 @@ pub mod glyph_warm;
 pub mod icons;
 pub mod import;
 pub mod notices;
+pub mod preview;
 pub mod registry;
+pub mod select;
 pub mod settings;
 pub mod tokens;
 pub mod user_dir;
@@ -58,8 +62,12 @@ pub use import::{
     ImportDiagnostic, ImportError, ImportReport, ImportedFamily, ThemeFamily, import_family,
 };
 pub use notices::{ThemeNotice, pending_file_problems, pending_unknown_theme, subscribe_notices};
+pub use preview::{clear_preview, is_previewing, preview_theme};
 pub use registry::{
     ExtensionId, IconThemeMeta, ThemeFileProblem, ThemeMeta, ThemeRegistry, ThemeSource,
+};
+pub use select::{
+    ThemeChoice, ThemeSlot, commit_theme, current_choice, edited_slot, set_theme_name,
 };
 pub use settings::{ThemeSelection, ThemeSelectionContent, ThemeSettings};
 pub use tokens::ThemeTokens;

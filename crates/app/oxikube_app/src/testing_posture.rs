@@ -522,6 +522,7 @@ fn build_sample(command: CommandId, name: &str, missing: impl FnOnce(&str) -> Co
         "palette::ClearRecents" => Command::PaletteClearRecents,
         "palette::OpenJump" => Command::PaletteOpenJump,
         "help::Show" => Command::HelpShow,
+        "theme::Select" => Command::ThemeSelect,
         "palette::ToggleShowAll" => Command::PaletteToggleShowAll,
         "jump::Back" => Command::JumpBack,
         "jump::Forward" => Command::JumpForward,

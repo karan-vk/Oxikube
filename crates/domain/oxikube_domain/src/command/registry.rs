@@ -146,6 +146,8 @@ impl CommandId {
     pub const EVENTS_TOGGLE_PAUSE: CommandId = CommandId::new("events::TogglePause");
     /// `help::Show`: show the key bindings that apply where the focus is (the `?` overlay).
     pub const HELP_SHOW: CommandId = CommandId::new("help::Show");
+    /// `theme::Select`: open the theme picker (arrow keys preview, Enter commits, Escape reverts).
+    pub const THEME_SELECT: CommandId = CommandId::new("theme::Select");
     /// `ingressclass::SetDefault`: make an IngressClass the cluster's default (annotation patch).
     pub const INGRESS_CLASS_SET_DEFAULT: CommandId = CommandId::new("ingressclass::SetDefault");
     /// `rbac::OpenUsers`: the users of a cluster's RBAC bindings (E17-S07, `:usr`).
@@ -1239,6 +1241,14 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::HELP_SHOW,
         "Show Key Bindings",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Opens the theme picker; a UI preference, not a cluster mutation: no guard tier. Committing
+    // writes the `theme` user setting through the settings store's comment-preserving update.
+    CommandMeta::read(
+        CommandId::THEME_SELECT,
+        "Select Theme",
         CommandScope::Global,
         NONE,
     ),

@@ -30,7 +30,7 @@
 //! | `oxikube_palette` | `palette::Toggle` (the palette: opens or closes it, E11-S03), `palette::ToggleShowAll` (lists the commands that cannot run here too) |
 //! | `oxikube_palette` | `palette::OpenJump` (the `:` jump bar, E11-S05), `jump::Back`, `jump::Forward`, `jump::Last` (its history: `[`, `]`, `-`) |
 //! | `oxikube_workspace` (quit) | `app::Quit`: asks first while operations run, like `cmd-q` (E11-S05, for `:q`, the palette and agents) |
-//! | `oxikube_palette` | `help::Show` (the `?` overlay of the keys that apply where the focus is; read-only, E11-S10) |
+//! | `oxikube_palette` | `help::Show` (the `?` overlay of the keys that apply where the focus is; read-only, E11-S10), `theme::Select` (the theme picker; a UI preference, E22-S08) |
 //! | `oxikube_app::metrics_provider` | `cluster::RedetectMetrics` (run provider detection again, or re-check the configured endpoint), `cluster::ToggleMetrics` (`prometheus.enabled` in `settings.json`); neither changes a cluster (E13-S05) |
 //! | `oxikube_app::os_notifications` | `app::ToggleOsNotifications` (the `events.os_notifications` opt-in in `settings.json`), `app::SendTestNotification` (one desktop notification, only once opted in); neither changes a cluster (E14-S06) |
 //! | `oxikube_app::notifications` | `notifications::MarkRead`, `notifications::MarkAllRead`, `notifications::MuteCluster`, `notifications::UnmuteCluster` (the notification centre's read state and the per-cluster mute, kept in the state db; no cluster is changed; E14-S05) |
@@ -99,6 +99,7 @@ use oxikube_logs_ui::LogCommandSink;
 use oxikube_palette::command_palette::PaletteSink;
 use oxikube_palette::help::HelpSink;
 use oxikube_palette::jump::JumpSink;
+use oxikube_palette::theme_picker::ThemeSink;
 use oxikube_resources_ui::ResourceCommandSink;
 use oxikube_resources_ui::navigate::OpenKind;
 use oxikube_settings_ui::page::SETTINGS_VIEW;
@@ -167,6 +168,8 @@ pub struct BusParts {
     pub terminal_views: TerminalViewSink,
     /// Where `help::Show` sends its request (the window shows the overlay on the UI thread).
     pub help: HelpSink,
+    /// Where `theme::Select` sends its request (the window shows the picker on the UI thread).
+    pub theme: ThemeSink,
     /// The node service `node::Drain` runs on (E12-S10): the kube adapter's drain algorithm, the
     /// followers of the drain dialog, the per-pod audit records.
     pub nodes: Arc<oxikube_app::nodes::NodeService>,
@@ -376,6 +379,9 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
     })?;
     registry.install("oxikube_palette::help", |r| {
         oxikube_palette::help::register_commands(r, parts.help)
+    })?;
+    registry.install("oxikube_palette::theme", |r| {
+        oxikube_palette::theme_picker::register_commands(r, parts.theme)
     })?;
     registry.install("oxikube_app::metrics_provider", |r| {
         oxikube_app::metrics_provider::register_commands(r, parts.metrics, parts.metrics_settings)

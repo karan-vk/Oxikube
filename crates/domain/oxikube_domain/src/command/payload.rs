@@ -713,6 +713,9 @@ pub enum Command {
     /// Show the key bindings that apply where the focus is (`?`).
     #[serde(rename = "help::Show")]
     HelpShow,
+    /// Open the theme picker (arrow keys preview a theme, Enter keeps it, Escape reverts).
+    #[serde(rename = "theme::Select")]
+    ThemeSelect,
     /// List the commands that cannot run in the open command palette too (marked, with the
     /// reason), or hide them again.
     #[serde(rename = "palette::ToggleShowAll")]
@@ -2244,6 +2247,7 @@ impl Command {
             Command::PaletteClearRecents => CommandId::PALETTE_CLEAR_RECENTS,
             Command::PaletteOpenJump => CommandId::PALETTE_OPEN_JUMP,
             Command::HelpShow => CommandId::HELP_SHOW,
+            Command::ThemeSelect => CommandId::THEME_SELECT,
             Command::PaletteToggleShowAll => CommandId::PALETTE_TOGGLE_SHOW_ALL,
             Command::KeymapOpenUser => CommandId::KEYMAP_OPEN_USER,
             Command::KeymapShowEditor => CommandId::KEYMAP_SHOW_EDITOR,
@@ -2948,6 +2952,7 @@ mod tests {
             Command::PaletteClearRecents,
             Command::PaletteOpenJump,
             Command::HelpShow,
+            Command::ThemeSelect,
             Command::PaletteToggleShowAll,
             Command::KeymapOpenUser,
             Command::KeymapShowEditor,
@@ -3556,6 +3561,7 @@ mod tests {
                     | Command::PaletteClearRecents
                     | Command::PaletteOpenJump
                     | Command::HelpShow
+                    | Command::ThemeSelect
                     | Command::PaletteToggleShowAll
                     | Command::KeymapOpenUser
                     | Command::KeymapShowEditor

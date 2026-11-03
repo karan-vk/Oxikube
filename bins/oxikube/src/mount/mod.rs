@@ -158,6 +158,7 @@ mod terminal;
 #[cfg(test)]
 mod tests;
 mod theme;
+mod theme_picker;
 mod views;
 
 use std::rc::Rc;
@@ -217,6 +218,8 @@ pub struct Wiring {
     _open_links: Task<()>,
     /// Shows the `?` help overlay for `help::Show`. Lives as long as the window.
     _help: Task<()>,
+    /// Shows the theme picker for `theme::Select`. Lives as long as the window.
+    _theme_picker: Task<()>,
     /// Opens the `keymap.json` that `keymap::OpenUser` prepared.
     _open_keymap: Task<()>,
     /// Shows the toast for problems in the user's `keymap.json` (E11-S08).
@@ -449,6 +452,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (jump_sink, jump_rx) = oxikube_palette::jump::JumpSink::channel();
     let (quit_sink, quit_rx) = oxikube_workspace::session::QuitSink::channel();
     let (help_sink, help_rx) = oxikube_palette::help::HelpSink::channel();
+    let (theme_sink, theme_rx) = oxikube_palette::theme_picker::ThemeSink::channel();
     let (editor_sink, editor_rx) = oxikube_editor::view::EditorViewSink::channel();
     let editor_for_apply = editor_sink.clone();
     let editor_for_keymap = editor_sink.clone();
@@ -539,6 +543,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         terminal_input: terminal_input_sink,
         terminal_views: terminal_views_sink.clone(),
         help: help_sink,
+        theme: theme_sink,
         exec: exec_service.clone(),
         palette: palette_sink,
         jump: jump_sink,
@@ -825,6 +830,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let open_kinds = resources::open_kinds(kinds_rx, tabs.downgrade(), &workspace, window, cx);
     let open_links = terminal::open_links(links_rx, cx);
     let help = help::mount(&workspace, help_rx, window, cx);
+    let theme_picker = theme_picker::mount(&workspace, theme_rx, window, cx);
     let open_keymap = keymap::open_requests(keymap_rx, editor_for_keymap, cx);
     keymap::install_action(window.window_handle(), &dispatcher_for_keymap, cx);
     settings_page::install_actions(window.window_handle(), &dispatcher_for_keymap, cx);
@@ -1045,6 +1051,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _open_kinds: open_kinds,
         _open_links: open_links,
         _help: help,
+        _theme_picker: theme_picker,
         _open_keymap: open_keymap,
         _follow_keymap: follow_keymap,
         _follow_theme: follow_theme,
