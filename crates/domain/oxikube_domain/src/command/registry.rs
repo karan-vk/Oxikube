@@ -205,6 +205,9 @@ impl CommandId {
     /// `keymap::OpenUser`: open the user's `keymap.json`, creating it from a commented template
     /// first when it does not exist.
     pub const KEYMAP_OPEN_USER: CommandId = CommandId::new("keymap::OpenUser");
+    /// `keymap::ShowEditor`: open the keymap editor page, the searchable list of every action,
+    /// its context, binding and source (E21-S07).
+    pub const KEYMAP_SHOW_EDITOR: CommandId = CommandId::new("keymap::ShowEditor");
     /// `kubeconfig::AddSource`: add a kubeconfig file, directory or pasted text as a source.
     pub const KUBECONFIG_ADD_SOURCE: CommandId = CommandId::new("kubeconfig::AddSource");
     /// `kubeconfig::Reload`: re-read every kubeconfig source.
@@ -1298,6 +1301,13 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::KEYMAP_OPEN_USER,
         "Open User Keymap",
+        CommandScope::Global,
+        NONE,
+    ),
+    // Opens the page that lists the keymap; reads only the app's own key bindings.
+    CommandMeta::read(
+        CommandId::KEYMAP_SHOW_EDITOR,
+        "Keymap Editor",
         CommandScope::Global,
         NONE,
     ),

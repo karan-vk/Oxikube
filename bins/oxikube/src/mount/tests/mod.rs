@@ -34,6 +34,7 @@ mod introspection;
 mod jump;
 mod keyboard;
 mod keymap;
+mod keymap_editor;
 mod live_metrics;
 mod logs;
 mod metrics;

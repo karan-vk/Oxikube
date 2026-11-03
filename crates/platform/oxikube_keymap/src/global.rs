@@ -247,6 +247,7 @@ fn apply(cx: &mut App, rebind: bool) {
     }
     if rebind {
         replace_layers(cx, merged.bindings);
+        crate::events::publish_change(cx);
     }
 }
 
@@ -265,6 +266,20 @@ fn replace_layers(cx: &mut App, bindings: Vec<KeyBinding>) {
     cx.clear_key_bindings();
     cx.bind_keys(foreign);
     cx.bind_keys(bindings);
+}
+
+/// The rows of the keymap editor for the installed keymap: every binding of every layer with its
+/// status, plus an unbound row per command nothing is bound to ([`crate::rows::build_rows`]).
+/// Empty before [`init`]. Builds each binding's action once to drop what the loader drops (a
+/// few hundred small allocations), so call it when the keymap changes
+/// ([`crate::subscribe_changes`]), not per frame.
+pub fn keymap_rows(cx: &App) -> Vec<crate::rows::KeymapRow> {
+    let Some(store) = cx.try_global::<KeymapStore>() else {
+        return Vec::new();
+    };
+    crate::rows::build_rows(&store.layer_bindings(), &|name, data| {
+        crate::registry::ActionRegistry::build(cx, name, data.cloned()).is_ok()
+    })
 }
 
 /// The problems found by the last load, in every layer, for the keymap editor.

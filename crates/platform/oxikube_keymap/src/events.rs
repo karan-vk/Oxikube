@@ -17,6 +17,13 @@ use crate::diagnostics::{KeymapDiagnostic, KeymapDiagnosticsEvent};
 struct Emitter;
 
 impl EventEmitter<KeymapDiagnosticsEvent> for Emitter {}
+impl EventEmitter<KeymapChanged> for Emitter {}
+
+/// Raised after the keymap's bindings were replaced: a reload of `keymap.json` that changed
+/// something, the vim layer switching, or an explicit [`crate::rebind`]. The keymap editor
+/// re-reads its rows on it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct KeymapChanged;
 
 struct Events {
     emitter: Entity<Emitter>,
@@ -62,4 +69,21 @@ pub(crate) fn publish(cx: &mut App, current: Vec<KeymapDiagnostic>) {
             diagnostics: current,
         });
     });
+}
+
+/// Run `on_change` after every replacement of the keymap's bindings. Keep the returned
+/// subscription for as long as the handler should run. Bindings installed before anyone
+/// subscribed raise nothing: read the current rows after subscribing.
+pub fn subscribe_changes(
+    cx: &mut App,
+    mut on_change: impl FnMut(&mut App) + 'static,
+) -> Subscription {
+    let emitter = events(cx).emitter.clone();
+    cx.subscribe(&emitter, move |_, _: &KeymapChanged, cx| on_change(cx))
+}
+
+/// Raise [`KeymapChanged`].
+pub(crate) fn publish_change(cx: &mut App) {
+    let emitter = events(cx).emitter.clone();
+    emitter.update(cx, |_, cx| cx.emit(KeymapChanged));
 }

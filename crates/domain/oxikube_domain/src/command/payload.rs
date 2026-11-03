@@ -721,6 +721,9 @@ pub enum Command {
     /// when it does not exist.
     #[serde(rename = "keymap::OpenUser")]
     KeymapOpenUser,
+    /// Open the keymap editor page: every action with its context, binding and source (E21-S07).
+    #[serde(rename = "keymap::ShowEditor")]
+    KeymapShowEditor,
     /// Open the chart gallery, every chart state on one page, as a tab.
     #[serde(rename = "charts::OpenGallery")]
     ChartsOpenGallery,
@@ -2240,6 +2243,7 @@ impl Command {
             Command::HelpShow => CommandId::HELP_SHOW,
             Command::PaletteToggleShowAll => CommandId::PALETTE_TOGGLE_SHOW_ALL,
             Command::KeymapOpenUser => CommandId::KEYMAP_OPEN_USER,
+            Command::KeymapShowEditor => CommandId::KEYMAP_SHOW_EDITOR,
             Command::ChartsOpenGallery => CommandId::CHARTS_OPEN_GALLERY,
             Command::AppQuit => CommandId::APP_QUIT,
             Command::AppSendTestNotification => CommandId::APP_SEND_TEST_NOTIFICATION,
@@ -2942,6 +2946,7 @@ mod tests {
             Command::HelpShow,
             Command::PaletteToggleShowAll,
             Command::KeymapOpenUser,
+            Command::KeymapShowEditor,
             Command::ChartsOpenGallery,
             Command::AppQuit,
             Command::AppSendTestNotification,
@@ -3548,6 +3553,7 @@ mod tests {
                     | Command::HelpShow
                     | Command::PaletteToggleShowAll
                     | Command::KeymapOpenUser
+                    | Command::KeymapShowEditor
                     | Command::ChartsOpenGallery
                     | Command::AppQuit
                     | Command::AppSendTestNotification

@@ -10,5 +10,9 @@ actions!(
         /// `keymap.json`, the palette and the MCP tool run one behaviour. The binary handles it:
         /// the keymap is platform code and cannot open a tab or an editor.
         OpenUser,
+        /// Open the keymap editor page (`keymap::ShowEditor`). Named like its command, so a key
+        /// bound to it in `keymap.json`, the palette and the MCP tool run one behaviour; the
+        /// binary handles it.
+        ShowEditor,
     ]
 );

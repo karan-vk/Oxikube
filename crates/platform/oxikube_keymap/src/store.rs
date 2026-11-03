@@ -8,17 +8,18 @@
 
 use std::path::{Path, PathBuf};
 
-use gpui::{App, KeyBinding};
+use gpui::{App, KeyBinding, KeyBindingContextPredicate, Keystroke};
 use oxikube_assets::KeymapPlatform;
 
 use crate::build::build_layer;
 use crate::conflicts::{KeymapConflict, find_conflicts};
 use crate::diagnostics::KeymapDiagnostic;
-use crate::file::{KeymapSection, parse_keymap};
+use crate::file::{KeymapAction, KeymapSection, parse_keymap};
 use crate::known::KnownNames;
 use crate::layer::KeymapLayer;
 use crate::lines::SourceLines;
 use crate::registry::ActionRegistry;
+use crate::rows::LayerBinding;
 use crate::validate::{sort_in_file_order, validate};
 
 /// Sections of one layer plus the problems found reading them.
@@ -265,6 +266,47 @@ impl KeymapStore {
         }
     }
 
+    /// Every binding of every enabled layer, weakest first (default, vim, user; sections and
+    /// bindings in file order), as the files state them, each context in the predicate's own
+    /// spelling (`A&&B` is `A && B`). What the loader rejects is left out like the loader leaves
+    /// it out (its problem is in [`Self::diagnostics`]): a section whose context does not parse,
+    /// a binding whose keystrokes or value do not. Whether the action exists is the caller's
+    /// check. The keymap editor builds its rows from this ([`crate::rows::build_rows`]).
+    pub fn layer_bindings(&self) -> Vec<LayerBinding> {
+        let mut out = Vec::new();
+        for layer in KeymapLayer::ORDER {
+            let state = match layer {
+                KeymapLayer::Default => Some(&self.default),
+                KeymapLayer::Vim => self.vim.as_ref().filter(|_| self.options.vim),
+                KeymapLayer::User => Some(&self.user),
+            };
+            let Some(state) = state else { continue };
+            for (_, section) in &state.sections {
+                let context = match section.context_expr() {
+                    None => None,
+                    Some(text) => match KeyBindingContextPredicate::parse(text) {
+                        Ok(predicate) => Some(predicate.to_string()),
+                        Err(_) => continue,
+                    },
+                };
+                for (keystrokes, value) in &section.bindings {
+                    if !keystrokes_parse(keystrokes) {
+                        continue;
+                    }
+                    if let Ok(action) = KeymapAction::from_json(value) {
+                        out.push(LayerBinding {
+                            layer,
+                            context: context.clone(),
+                            keystrokes: keystrokes.clone(),
+                            action,
+                        });
+                    }
+                }
+            }
+        }
+        out
+    }
+
     /// The problems found by the last merge, for the UI to surface.
     pub fn diagnostics(&self) -> &[KeymapDiagnostic] {
         &self.diagnostics
@@ -284,4 +326,10 @@ impl KeymapStore {
     pub fn conflicts(&self) -> &[KeymapConflict] {
         &self.conflicts
     }
+}
+
+/// Whether `keystrokes` is one or more keystrokes GPUI can read, as the loader requires.
+fn keystrokes_parse(keystrokes: &str) -> bool {
+    let mut parts = keystrokes.split_whitespace().peekable();
+    parts.peek().is_some() && parts.all(|part| Keystroke::parse(part).is_ok())
 }

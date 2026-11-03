@@ -101,6 +101,7 @@ pub fn tab_setup(
         super::helm_releases::install_tab(tab, session, &deps, window, cx);
         super::metrics::install_tab(tab, session, &deps, window, cx);
         super::helm_repos::install_tab(tab, &deps, window, cx);
+        super::keymap_editor::install_tab(tab, &deps, window, cx);
         super::helm_charts::install_tab(tab, &deps, window, cx);
         super::helm_upgrade::install_tab(tab, &deps, window, cx);
         super::pulses::install_tab(tab, session, &deps, window, cx);
