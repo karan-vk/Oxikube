@@ -15,7 +15,7 @@
 //! | `oxikube_app::sources` | `kubeconfig::AddSource`, `RemoveSource`, `Reload` |
 //! | `oxikube_app::posture` | `cluster::ToggleReadOnly`, `SetColour`, `ApplyPreset` (guarded posture) |
 //! | `oxikube_workspace` | `cluster::Select`, `SwitchTab`, `NextTab`, `PreviousTab`, `CloseTab` |
-//! | `oxikube` | `view::Open` for the catalog home, the kubeconfig sources screen and the chart gallery, `charts::OpenGallery` (the gallery's palette command, E13-S07); `keymap::OpenUser` (creates `keymap.json` from its template if missing and opens it, E11-S08) |
+//! | `oxikube` | `view::Open` for the catalog home, the kubeconfig sources screen, the chart gallery and the settings page, `charts::OpenGallery` (the gallery's palette command, E13-S07), `settings::Open` (the settings page, a tab of the main window; `cmd-,`; E21-S04); `keymap::OpenUser` (creates `keymap.json` from its template if missing and opens it, E11-S08) |
 //! | `oxikube_app::actions` | `resource::Delete` (guarded: read-only check, confirm tier by target, server dry run, audit; E07-S08) |
 //! | `oxikube_app::selection` | `selection::Delete`, `selection::Restart`, `selection::Label` (E12-S19: the bulk actions on a table's selection; guarded as one command: blocked read-only before any request, one confirmation at the highest tier among the objects, a server dry run per object, a result and one audit record per object under a shared batch id) |
 //! | `oxikube_app::nodes` | `node::Cordon`, `node::Uncordon` (guarded: blocked read-only, risk low so one click confirms, a server dry run of the `spec.unschedulable` patch before the real one, audit with the node and the initiator; E12-S09); `node::Drain` (guarded: blocked read-only, risk high so the node's name is typed, `kubectl drain` through the kube adapter's `KubeDrain` with the guard's writer, one audit record for the drain and one per pod sharing a batch id; E12-S10) |
@@ -101,6 +101,7 @@ use oxikube_palette::help::HelpSink;
 use oxikube_palette::jump::JumpSink;
 use oxikube_resources_ui::ResourceCommandSink;
 use oxikube_resources_ui::navigate::OpenKind;
+use oxikube_settings_ui::page::SETTINGS_VIEW;
 use oxikube_terminal::input::TerminalInputSink;
 use oxikube_terminal::open_link::LinkSink;
 use oxikube_terminal::view::TerminalViewSink;
@@ -110,7 +111,13 @@ use oxikube_workspace::{ClusterCommandRunner, CommandDispatcher};
 use serde_json::json;
 
 /// The views `view::Open` opens in the main window.
-pub const VIEWS: [&str; 4] = [CATALOG_VIEW, SOURCES_VIEW, CLOUD_VIEW, CHART_GALLERY_VIEW];
+pub const VIEWS: [&str; 5] = [
+    CATALOG_VIEW,
+    SOURCES_VIEW,
+    CLOUD_VIEW,
+    CHART_GALLERY_VIEW,
+    SETTINGS_VIEW,
+];
 
 /// What the registry's handlers run on.
 pub struct BusParts {
@@ -606,12 +613,25 @@ fn register_namespace_commands(
     )
 }
 
-/// `view::Open` for the [`VIEWS`] of the main window, and `charts::OpenGallery`: the view id goes
-/// to `views`, whose receiver opens it on the UI thread.
+/// `view::Open` for the [`VIEWS`] of the main window, `charts::OpenGallery` and `settings::Open`:
+/// the view id goes to `views`, whose receiver opens it on the UI thread.
 fn register_view_commands(
     registry: &mut CommandRegistry,
     views: mpsc::UnboundedSender<String>,
 ) -> Result<(), RegisterError> {
+    let settings = views.clone();
+    registry.register(
+        meta(CommandId::SETTINGS_OPEN)?,
+        move |_: Command, _: HandlerContext| {
+            let settings = settings.clone();
+            async move {
+                settings
+                    .unbounded_send(SETTINGS_VIEW.to_owned())
+                    .map_err(|_| OxiError::internal("the main window is gone"))?;
+                Ok(CommandOutput::none())
+            }
+        },
+    )?;
     let gallery = views.clone();
     registry.register(
         meta(CommandId::CHARTS_OPEN_GALLERY)?,

@@ -1,7 +1,7 @@
 [(everywhere)]
   alt-cmd-h        oxikube::HideOthers
   cmd-+            view::ZoomIn
-  cmd-,            oxikube::OpenPreferences
+  cmd-,            settings::Open
   cmd--            view::ZoomOut
   cmd-0            view::ZoomReset
   cmd-=            view::ZoomIn

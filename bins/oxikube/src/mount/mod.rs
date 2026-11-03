@@ -152,6 +152,7 @@ mod pulses;
 mod rbac;
 mod resources;
 mod role_dialogs;
+mod settings_page;
 mod tabs;
 mod terminal;
 #[cfg(test)]
@@ -826,6 +827,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let help = help::mount(&workspace, help_rx, window, cx);
     let open_keymap = keymap::open_requests(keymap_rx, editor_for_keymap, cx);
     keymap::install_action(window.window_handle(), &dispatcher_for_keymap, cx);
+    settings_page::install_actions(window.window_handle(), &dispatcher_for_keymap, cx);
     let follow_keymap =
         keymap::follow_diagnostics(workspace.downgrade(), dispatcher_for_keymap, cx);
     let follow_theme = theme::mount(workspace.downgrade(), window, cx);

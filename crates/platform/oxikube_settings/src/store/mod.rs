@@ -12,6 +12,7 @@
 //! are unit-tested directly; [`crate::init()`] installs it as a global and wires hot reload.
 
 mod layers;
+mod provenance;
 #[cfg(test)]
 mod tests;
 mod value;
@@ -28,6 +29,7 @@ use crate::diagnostics::{KeyTree, SettingsDiagnostic, collect_unknown_keys};
 use crate::jsonc::parse_jsonc_object;
 use crate::settings::{RegisteredSetting, Settings, SettingsLocation};
 use layers::MergedLayers;
+pub use provenance::SettingSource;
 use value::{AnySettingValue, SettingValue};
 
 /// Layered, typed settings: `default.json` → user `settings.json` → `clusters.<id>`.

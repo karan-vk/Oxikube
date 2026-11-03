@@ -20,7 +20,7 @@
   {
     "bindings": {
       "cmd-q": "app::Quit",
-      "cmd-,": "oxikube::OpenPreferences",
+      "cmd-,": "settings::Open",
       "cmd-h": "oxikube::Hide",
       "alt-cmd-h": "oxikube::HideOthers",
       "cmd-m": "oxikube::Minimize",

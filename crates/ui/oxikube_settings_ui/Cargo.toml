@@ -20,28 +20,33 @@ oxikube_domain.workspace = true
 oxikube_helm_ui.workspace = true
 oxikube_keymap.workspace = true
 oxikube_ports.workspace = true
+oxikube_settings.workspace = true
 oxikube_ui.workspace = true
 oxikube_workspace.workspace = true
+serde_json.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true
 gpui = { workspace = true, features = ["test-support"] }
 gpui_platform = { workspace = true, features = ["test-support"] }
+oxikube_assets.workspace = true
+oxikube_keymap.workspace = true
 oxikube_runtime.workspace = true
 oxikube_testkit = { workspace = true, features = ["gpui-screenshot"] }
 oxikube_workspace = { workspace = true, features = ["test-support"] }
-serde_json.workspace = true
+tempfile.workspace = true
 tokio = { workspace = true, features = ["rt"] }
 
 [features]
 default = []
-# `metrics::test_support`: a scripted backend and sample statuses, for the `#[gpui::test]`s of this
-# crate and of the crates that mount the page.
+# `metrics::test_support` and `page::test_support`: a scripted backend, sample statuses and a fixed
+# settings schema, for the `#[gpui::test]`s of this crate and of the crates that mount the pages.
 test-support = []
-# Headless GPU screenshots (`tests/metrics_screenshot.rs`; harness = false so it runs on the process
-# main thread). Needs Metal / Vulkan, so never part of the default gate; the nightly workflow runs
-# it: `cargo test -p oxikube_settings_ui --features screenshot --test metrics_screenshot`.
+# Headless GPU screenshots (`tests/metrics_screenshot.rs`, `tests/settings_page_screenshot.rs`;
+# harness = false so they run on the process main thread). Need Metal / Vulkan, so never part of
+# the default gate; the nightly workflow runs them:
+# `cargo test -p oxikube_settings_ui --features screenshot --test metrics_screenshot`.
 screenshot = ["test-support"]
 
 [[test]]
@@ -53,6 +58,8 @@ required-features = ["screenshot"]
 [[test]]
 name = "keymap_screenshot"
 path = "tests/keymap_screenshot.rs"
+name = "settings_page_screenshot"
+path = "tests/settings_page_screenshot.rs"
 harness = false
 required-features = ["screenshot"]
 

@@ -53,6 +53,7 @@ jobs:
           xvfb-run -a cargo test -p oxikube_editor --features screenshot --test dry_run_screenshot
           xvfb-run -a cargo test -p oxikube_settings_ui --features screenshot --test metrics_screenshot
           xvfb-run -a cargo test -p oxikube_settings_ui --features screenshot --test keymap_screenshot
+          xvfb-run -a cargo test -p oxikube_settings_ui --features screenshot --test settings_page_screenshot
           xvfb-run -a cargo test -p oxikube_overview_ui --features screenshot --test screenshot
           xvfb-run -a cargo test -p oxikube_events_ui --features screenshot --test screenshot
           xvfb-run -a cargo test -p oxikube_overview_ui --features screenshot --test overview_screenshot
@@ -71,6 +72,7 @@ jobs:
           xvfb-run -a cargo test -p oxikube_editor --features screenshot --test dry_run_screenshot
           xvfb-run -a cargo test -p oxikube_settings_ui --features screenshot --test metrics_screenshot
           xvfb-run -a cargo test -p oxikube_settings_ui --features screenshot --test keymap_screenshot
+          xvfb-run -a cargo test -p oxikube_settings_ui --features screenshot --test settings_page_screenshot
           xvfb-run -a cargo test -p oxikube_overview_ui --features screenshot --test screenshot
           xvfb-run -a cargo test -p oxikube_events_ui --features screenshot --test screenshot
           xvfb-run -a cargo test -p oxikube_overview_ui --features screenshot --test overview_screenshot

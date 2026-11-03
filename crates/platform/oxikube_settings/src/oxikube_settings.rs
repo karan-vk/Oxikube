@@ -28,7 +28,8 @@
 //! - [`metrics`]: the `metrics` setting, which extended resources count as GPUs (E13-S02).
 //! - [`portforward`]: the `portforward` setting, default bind, read-only policy, port range (E15-S08).
 //! - [`settings`]: the [`Settings`] trait, [`SettingsLocation`], registration.
-//! - [`store`]: [`SettingsStore`], layer merge, per-setting values and change tracking.
+//! - [`store`]: [`SettingsStore`], layer merge, per-setting values and change tracking, and
+//!   [`SettingSource`]: which layer a field's effective value comes from (E21-S04).
 //! - [`global`]: GPUI global, [`init`], startup load, hot reload task, file edits.
 //! - [`paths`]: config dir (`$OXIKUBE_CONFIG_DIR`), first-run `settings.json`, atomic writes.
 //! - [`watcher`]: `notify` watcher with debounce (no GPUI).
@@ -79,7 +80,7 @@ pub use metrics::{
 pub use portforward::{PortForwardSettings, PortForwardSettingsContent};
 pub use schema_dynamic::DynamicEnums;
 pub use settings::{RegisteredSetting, Settings, SettingsContent, SettingsLocation};
-pub use store::SettingsStore;
+pub use store::{SettingSource, SettingsStore};
 pub use update::{new_text_for_path_update, new_text_for_update};
 
 /// Re-exports used by [`register_settings!`]; not part of the API.
