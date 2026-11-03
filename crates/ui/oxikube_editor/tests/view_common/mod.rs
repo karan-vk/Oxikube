@@ -88,6 +88,7 @@ pub struct Fixture {
     pub vcx: VisualTestContext,
     pub sent: Rc<RefCell<Vec<Command>>>,
     pub port: Arc<FakeSchemaPort>,
+    pub sink: EditorViewSink,
     pub _views: Entity<EditorViews>,
 }
 
@@ -113,6 +114,7 @@ pub fn setup(cx: &mut TestAppContext, cluster_shown: bool) -> Fixture {
     );
     let sent = Rc::new(RefCell::new(Vec::new()));
     let (sink, requests) = EditorViewSink::channel();
+    let request_sink = sink.clone();
     let dispatcher: Rc<dyn CommandDispatcher> = Rc::new(SinkDispatcher {
         sink,
         sent: sent.clone(),
@@ -141,6 +143,7 @@ pub fn setup(cx: &mut TestAppContext, cluster_shown: bool) -> Fixture {
         vcx,
         sent,
         port,
+        sink: request_sink,
         _views: views,
     }
 }
