@@ -5,7 +5,9 @@
 
 use crate::import::{ThemeFamily, import_family};
 use crate::registry::ThemeFileProblem;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime};
 
 /// Name of the themes directory inside the config dir.
 const THEMES_DIR_NAME: &str = "themes";
@@ -34,6 +36,64 @@ pub struct UserThemes {
 /// contributes its themes and reports the first bad value. Files are read in name order so
 /// duplicate theme names resolve the same way every time.
 pub fn scan_dir(dir: &Path) -> UserThemes {
+    scan_dir_cached(dir, &mut ScanCache::default())
+}
+
+/// What reading one file produced: its family and first complaint, or why it failed.
+type FileOutcome = Result<(ThemeFamily, Option<String>), FileError>;
+
+/// Why a file produced no family.
+#[derive(Clone, Debug)]
+struct FileError {
+    message: String,
+    /// The failure came from the filesystem (permissions, transient IO), not from the file's
+    /// content, so it can clear without the stamp changing and must not be cached.
+    io: bool,
+}
+
+impl FileError {
+    fn io(err: &std::io::Error) -> Self {
+        Self {
+            message: format!("cannot read: {err}"),
+            io: true,
+        }
+    }
+
+    fn content(message: String) -> Self {
+        Self { message, io: false }
+    }
+}
+
+/// One remembered file: its stamp, whether the stamp can be trusted, and what it produced.
+#[derive(Debug)]
+struct CachedFile {
+    modified: Option<SystemTime>,
+    len: u64,
+    /// The file was last modified well before it was read. A file touched within
+    /// [`RACY_WINDOW`] of the read could change again without moving its timestamp (coarse
+    /// filesystem clocks), so it is read again next time.
+    stable: bool,
+    outcome: FileOutcome,
+}
+
+/// Timestamps closer than this to a read are not trusted (as in git's "racily clean" rule).
+const RACY_WINDOW: Duration = Duration::from_secs(2);
+
+/// Remembers what each file produced, so a rescan only re-imports files that changed.
+///
+/// A file counts as unchanged when its modification time and length are. Entries of files that
+/// are gone are dropped on the next scan.
+#[derive(Debug, Default)]
+pub struct ScanCache {
+    files: BTreeMap<PathBuf, CachedFile>,
+    /// How many files the last scan had to read and parse (the rest came from the cache).
+    pub imported: usize,
+}
+
+/// Like [`scan_dir`], re-importing only files that differ from what `cache` remembers.
+pub fn scan_dir_cached(dir: &Path, cache: &mut ScanCache) -> UserThemes {
+    cache.imported = 0;
+    let mut kept = BTreeMap::new();
     let mut scan = UserThemes::default();
     let Ok(entries) = std::fs::read_dir(dir) else {
         return scan;
@@ -50,7 +110,38 @@ pub fn scan_dir(dir: &Path) -> UserThemes {
     files.sort();
 
     for path in files {
-        match read_family(&path) {
+        let stamp = std::fs::metadata(&path)
+            .ok()
+            .map(|meta| (meta.modified().ok(), meta.len()));
+        let outcome = match (stamp, cache.files.remove(&path)) {
+            (Some((modified, len)), Some(cached))
+                if cached.stable
+                    && modified.is_some()
+                    && cached.modified == modified
+                    && cached.len == len =>
+            {
+                cached.outcome
+            }
+            _ => {
+                cache.imported += 1;
+                read_family(&path)
+            }
+        };
+        if let Some((modified, len)) = stamp {
+            let stable = modified
+                .and_then(|at| SystemTime::now().duration_since(at).ok())
+                .is_some_and(|age| age > RACY_WINDOW);
+            kept.insert(
+                path.clone(),
+                CachedFile {
+                    modified,
+                    len,
+                    stable: stable && !matches!(&outcome, Err(err) if err.io),
+                    outcome: outcome.clone(),
+                },
+            );
+        }
+        match outcome {
             Ok((family, problem)) => {
                 if let Some(message) = problem {
                     scan.problems.push(ThemeFileProblem {
@@ -60,9 +151,13 @@ pub fn scan_dir(dir: &Path) -> UserThemes {
                 }
                 scan.families.push((path, family));
             }
-            Err(message) => scan.problems.push(ThemeFileProblem { path, message }),
+            Err(err) => scan.problems.push(ThemeFileProblem {
+                path,
+                message: err.message,
+            }),
         }
     }
+    cache.files = kept;
     scan
 }
 
@@ -73,16 +168,16 @@ fn is_hidden(path: &Path) -> bool {
 }
 
 /// The family in `path` and, when some value was invalid, the first complaint.
-fn read_family(path: &Path) -> Result<(ThemeFamily, Option<String>), String> {
-    let meta = std::fs::metadata(path).map_err(|err| format!("cannot read: {err}"))?;
+fn read_family(path: &Path) -> FileOutcome {
+    let meta = std::fs::metadata(path).map_err(|err| FileError::io(&err))?;
     if meta.len() > MAX_THEME_FILE_BYTES {
-        return Err(format!(
+        return Err(FileError::content(format!(
             "file is {} bytes; theme files are limited to 8 MiB",
             meta.len()
-        ));
+        )));
     }
-    let text = std::fs::read_to_string(path).map_err(|err| format!("cannot read: {err}"))?;
-    let imported = import_family(&text).map_err(|err| err.to_string())?;
+    let text = std::fs::read_to_string(path).map_err(|err| FileError::io(&err))?;
+    let imported = import_family(&text).map_err(|err| FileError::content(err.to_string()))?;
     let problem = imported.report.diagnostics.first().map(ToString::to_string);
     Ok((imported.family, problem))
 }
@@ -91,6 +186,76 @@ fn read_family(path: &Path) -> Result<(ThemeFamily, Option<String>), String> {
 mod tests {
     use super::*;
     use crate::test_fixtures::AYU;
+
+    /// Makes a file look old enough for its timestamp to be trusted.
+    fn backdate(path: &Path) {
+        let old = SystemTime::now() - Duration::from_secs(60);
+        std::fs::File::options()
+            .write(true)
+            .open(path)
+            .unwrap()
+            .set_modified(old)
+            .unwrap();
+    }
+
+    #[test]
+    fn a_file_changed_just_now_is_read_again_even_if_the_stamp_matches() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.json"), AYU).unwrap();
+        let mut cache = ScanCache::default();
+        scan_dir_cached(dir.path(), &mut cache);
+        scan_dir_cached(dir.path(), &mut cache);
+        assert_eq!(cache.imported, 1, "a fresh file is not trusted yet");
+    }
+
+    #[test]
+    fn a_cached_rescan_only_imports_changed_files() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.json"), AYU).unwrap();
+        std::fs::write(dir.path().join("b.json"), "{ nope").unwrap();
+        for name in ["a.json", "b.json"] {
+            backdate(&dir.path().join(name));
+        }
+        let mut cache = ScanCache::default();
+        let first = scan_dir_cached(dir.path(), &mut cache);
+        assert_eq!(cache.imported, 2);
+        let second = scan_dir_cached(dir.path(), &mut cache);
+        assert_eq!(cache.imported, 0, "nothing changed");
+        assert_eq!(first, second);
+
+        std::fs::write(dir.path().join("b.json"), "{ nope still   }").unwrap();
+        backdate(&dir.path().join("b.json"));
+        scan_dir_cached(dir.path(), &mut cache);
+        assert_eq!(cache.imported, 1, "only the edited file is read again");
+
+        std::fs::remove_file(dir.path().join("a.json")).unwrap();
+        let after_delete = scan_dir_cached(dir.path(), &mut cache);
+        assert!(after_delete.families.is_empty());
+        assert_eq!(cache.files.len(), 1, "a deleted file leaves the cache");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_unreadable_file_is_read_again_once_permissions_are_fixed() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("a.json");
+        std::fs::write(&path, AYU).unwrap();
+        backdate(&path);
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000)).unwrap();
+        if std::fs::read_to_string(&path).is_ok() {
+            return; // running as root: permissions do not block reads
+        }
+        let mut cache = ScanCache::default();
+        let first = scan_dir_cached(dir.path(), &mut cache);
+        assert_eq!(first.problems.len(), 1, "{:?}", first.problems);
+
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        let second = scan_dir_cached(dir.path(), &mut cache);
+        assert_eq!(cache.imported, 1, "the failed read is retried");
+        assert!(second.problems.is_empty(), "{:?}", second.problems);
+        assert_eq!(second.families.len(), 1);
+    }
 
     #[test]
     fn missing_dir_is_empty() {

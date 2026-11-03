@@ -20,7 +20,7 @@ use crate::notices;
 use crate::registry::{ThemeRegistry, ThemeSource};
 use crate::settings::{ThemeSelection, ThemeSettings};
 use crate::tokens::ThemeTokens;
-use crate::user_dir::{UserThemes, scan_dir, themes_dir};
+use crate::user_dir::{ScanCache, UserThemes, scan_dir_cached, themes_dir};
 use crate::watcher::{DEFAULT_DEBOUNCE, ThemeDirWatcher};
 use futures::StreamExt as _;
 use gpui::{App, BorrowAppContext as _, Global, Task};
@@ -75,6 +75,14 @@ struct ThemeWatch {
 
 impl Global for ThemeWatch {}
 
+/// The directory [`reload_now`] rescans, with what the last rescan read.
+struct ThemeDir {
+    dir: PathBuf,
+    cache: ScanCache,
+}
+
+impl Global for ThemeDir {}
+
 /// Installs themes from the default config dir (`<config>/themes/`, see
 /// `oxikube_settings::paths::config_dir`) and starts hot reload. Idempotent.
 ///
@@ -119,10 +127,14 @@ fn install(cx: &mut App, dir: Option<&Path>, watch: bool) {
     let Some(dir) = dir else {
         return;
     };
+    cx.set_global(ThemeDir {
+        dir: dir.to_path_buf(),
+        cache: ScanCache::default(),
+    });
     if watch {
         start_watch(cx, dir.to_path_buf());
     } else {
-        apply_user_scan(cx, scan_dir(dir));
+        reload_now(cx);
     }
 }
 
@@ -149,14 +161,30 @@ fn start_watch(cx: &mut App, dir: PathBuf) {
     });
 }
 
-/// Replaces the registry's user themes with `scan` and re-resolves the active theme.
+/// Rescans the user themes directory on the calling thread and applies the result, as the
+/// watcher would after a change. Does nothing when no directory is installed.
+///
+/// For tests (which cannot run the OS watcher thread under GPUI's deterministic scheduler) and
+/// tools; the app reloads through the watcher, never on the UI thread. Only files that changed
+/// since the last scan are read again.
+pub fn reload_now(cx: &mut App) {
+    if !cx.has_global::<ThemeDir>() {
+        return;
+    }
+    let scan =
+        cx.update_global::<ThemeDir, _>(|state, _| scan_dir_cached(&state.dir, &mut state.cache));
+    apply_user_scan(cx, scan);
+}
+
+/// Applies `scan` to the registry's user themes and re-resolves the active theme.
+///
+/// Files are tracked individually (see [`ThemeRegistry::replace_user_themes`]): a file that
+/// fails to parse keeps its last good themes, and raises a [`crate::ThemeNotice::BadThemeFile`] once.
 ///
 /// What the watcher's apply task does for each finished scan; public so a host that scans
 /// itself (or a test with a scripted scan) can feed the registry.
 pub fn apply_user_scan(cx: &mut App, scan: UserThemes) {
-    for problem in &scan.problems {
-        tracing::warn!(path = %problem.path.display(), message = %problem.message, "theme file");
-    }
+    notices::report_file_problems(cx, &scan.problems);
     cx.update_global::<ThemeRegistry, _>(|registry, _| registry.replace_user_themes(scan));
     notices::mark_scanned(cx);
     refresh_active(cx);

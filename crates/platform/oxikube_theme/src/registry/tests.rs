@@ -298,3 +298,81 @@ fn user_beats_extension_beats_bundled_and_later_insert_wins_within_a_source() {
     assert_ne!(text_of(&registry), color("#222222"), "bundled again");
     assert_eq!(source_of(&registry, "One Dark"), ThemeSource::Bundled);
 }
+
+fn failed(path: &str, message: &str) -> ThemeFileProblem {
+    ThemeFileProblem {
+        path: PathBuf::from(path),
+        message: message.into(),
+    }
+}
+
+#[test]
+fn a_file_that_fails_keeps_its_last_good_themes() {
+    let mut registry = ThemeRegistry::with_bundled();
+    registry.replace_user_themes(scan_of(&[("ayu.json", AYU), ("gruvbox.json", GRUVBOX)]));
+    let before = registry.names();
+
+    // ayu.json is now half-saved: it appears only as a problem.
+    registry.replace_user_themes(UserThemes {
+        families: scan_of(&[("gruvbox.json", GRUVBOX)]).families,
+        problems: vec![failed("ayu.json", "expected value at line 1")],
+    });
+    assert_eq!(registry.names(), before, "no theme went away");
+    assert_eq!(registry.problems().len(), 1);
+
+    // It stays across further failed scans, until the file is deleted.
+    registry.replace_user_themes(UserThemes {
+        families: scan_of(&[("gruvbox.json", GRUVBOX)]).families,
+        problems: vec![failed("ayu.json", "expected value at line 1")],
+    });
+    assert!(registry.get("Ayu Dark").is_some());
+    registry.replace_user_themes(scan_of(&[("gruvbox.json", GRUVBOX)]));
+    assert!(
+        registry.get("Ayu Dark").is_none(),
+        "deleted file is removed"
+    );
+    assert!(registry.problems().is_empty());
+}
+
+#[test]
+fn a_file_that_never_loaded_contributes_nothing() {
+    let mut registry = ThemeRegistry::with_bundled();
+    registry.replace_user_themes(UserThemes {
+        families: Vec::new(),
+        problems: vec![failed("new.json", "bad")],
+    });
+    assert_eq!(registry.names().len(), 2);
+}
+
+#[test]
+fn a_replaced_file_swaps_its_themes_and_tracks_them_by_path() {
+    let mut registry = ThemeRegistry::with_bundled();
+    registry.replace_user_themes(scan_of(&[("one.json", AYU)]));
+    assert!(registry.get("Ayu Dark").is_some());
+    // The same path now holds a different family: its old themes are gone.
+    registry.replace_user_themes(scan_of(&[("one.json", GRUVBOX)]));
+    assert!(registry.get("Ayu Dark").is_none());
+    assert!(registry.get("Gruvbox Dark").is_some());
+}
+
+#[test]
+fn a_user_reload_leaves_bundled_and_extension_themes_alone() {
+    let mut registry = ThemeRegistry::with_bundled();
+    let extension = ThemeSource::Extension(ExtensionId::new("acme.themes"));
+    registry.insert_theme_families(&extension, [import_family(GRUVBOX).unwrap().family]);
+    registry.replace_user_themes(scan_of(&[("ayu.json", AYU)]));
+    registry.replace_user_themes(UserThemes {
+        families: Vec::new(),
+        problems: vec![failed("ayu.json", "bad")],
+    });
+    registry.replace_user_themes(UserThemes::default());
+    assert!(registry.get("Ayu Dark").is_none());
+    assert!(registry.get("One Dark").is_some());
+    let listed = registry.list();
+    assert!(
+        listed
+            .iter()
+            .any(|m| m.name == "Gruvbox Dark" && m.source == extension)
+    );
+    assert_eq!(listed.len(), 2 + 6);
+}

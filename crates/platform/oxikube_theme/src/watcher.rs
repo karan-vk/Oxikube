@@ -19,7 +19,7 @@
 //! Tests that run under GPUI's deterministic scheduler must not start this (it is an OS
 //! thread) unless they allow parking (see `tests/watch_gpui.rs`).
 
-use crate::user_dir::{UserThemes, scan_dir};
+use crate::user_dir::{ScanCache, UserThemes, scan_dir_cached};
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher as _};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, channel};
@@ -65,11 +65,12 @@ impl ThemeDirWatcher {
         debounce: Duration,
         on_scan: impl FnMut(UserThemes) -> bool + Send + 'static,
     ) -> Result<Self, WatchError> {
+        let mut cache = ScanCache::default();
         Self::spawn_scanning(
             dir,
             debounce,
             RecursiveMode::NonRecursive,
-            scan_dir,
+            move |path| scan_dir_cached(path, &mut cache),
             on_scan,
         )
     }
@@ -80,7 +81,7 @@ impl ThemeDirWatcher {
         dir: PathBuf,
         debounce: Duration,
         mode: RecursiveMode,
-        scan: impl Fn(&Path) -> T + Send + 'static,
+        scan: impl FnMut(&Path) -> T + Send + 'static,
         on_scan: impl FnMut(T) -> bool + Send + 'static,
     ) -> Result<Self, WatchError> {
         let watch_error = |message: String| WatchError::Watch {
@@ -122,7 +123,7 @@ fn run<T: Clone + PartialEq>(
     dir: &Path,
     debounce: Duration,
     rx: &Receiver<()>,
-    scan: impl Fn(&Path) -> T,
+    mut scan: impl FnMut(&Path) -> T,
     mut on_scan: impl FnMut(T) -> bool,
 ) {
     let mut last: Option<T> = None;
@@ -207,6 +208,42 @@ mod tests {
         assert!(wait_for(&rx, Duration::from_secs(10), |scan| scan
             .families
             .is_empty()));
+    }
+
+    /// Three writes in quick succession (an editor saving in steps) are one reload.
+    #[test]
+    fn a_burst_of_writes_causes_one_scan() {
+        let dir = tempfile::tempdir().unwrap();
+        let themes = dir.path().join("themes");
+        let (tx, rx) = mpsc::channel();
+        let _watcher = ThemeDirWatcher::spawn(themes.clone(), DEFAULT_DEBOUNCE, move |scan| {
+            tx.send(scan).is_ok()
+        })
+        .unwrap();
+        assert!(wait_for(&rx, Duration::from_secs(10), |scan| scan
+            .families
+            .is_empty()));
+        let file = themes.join("burst.json");
+        // The platform watch starts asynchronously: a burst that lands before it is not seen
+        // at all, so repeat the burst (each with different contents) until one is.
+        for attempt in 0..20 {
+            for step in 0..3 {
+                let padding = " ".repeat(attempt * 3 + step);
+                std::fs::write(&file, format!("{AYU}{padding}")).unwrap();
+            }
+            std::thread::sleep(DEFAULT_DEBOUNCE * 6);
+            let scans: Vec<_> = rx.try_iter().collect();
+            if !scans.is_empty() {
+                assert_eq!(
+                    scans.len(),
+                    1,
+                    "three quick writes, {} reloads",
+                    scans.len()
+                );
+                return;
+            }
+        }
+        panic!("the watcher never reported the burst");
     }
 
     #[test]
