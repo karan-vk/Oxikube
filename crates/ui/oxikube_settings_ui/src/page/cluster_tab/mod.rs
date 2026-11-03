@@ -27,11 +27,13 @@
 //! | `choice` | [`ClusterChoice`]: the picker's rows |
 //! | `precedence` | [`Precedence`], [`protection_warning`] and the explanation text: plain data |
 //! | `state` | [`ClusterTabState`]: scope, the other scope's model, the catalog and its tasks |
-//! | `view` | the scope switch, the picker and the precedence strip on the page |
+//! | `view` | scope switching, the catalog and the picked cluster |
+//! | `render` | the scope switch, the picker and the precedence strip on the page |
 
 mod choice;
 mod model;
 mod precedence;
+mod render;
 mod state;
 mod view;
 
