@@ -57,9 +57,9 @@ pub use icons::{ActiveIconTheme, IconTheme, IconThemeFamily, IconThemeSettings};
 pub use import::{
     ImportDiagnostic, ImportError, ImportReport, ImportedFamily, ThemeFamily, import_family,
 };
+pub use notices::{ThemeNotice, pending_unknown_theme, subscribe_notices};
 pub use registry::{
     ExtensionId, IconThemeMeta, ThemeFileProblem, ThemeMeta, ThemeRegistry, ThemeSource,
 };
-pub use notices::{ThemeNotice, pending_unknown_theme, subscribe_notices};
 pub use settings::{ThemeSelection, ThemeSelectionContent, ThemeSettings};
 pub use tokens::ThemeTokens;
