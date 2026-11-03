@@ -6329,11 +6329,14 @@ dependencies = [
  "oxikube_keymap",
  "oxikube_ports",
  "oxikube_runtime",
+ "oxikube_settings",
  "oxikube_testkit",
+ "oxikube_theme",
  "oxikube_ui",
  "oxikube_workspace",
  "parking_lot",
  "serde_json",
+ "tempfile",
  "tracing",
 ]
 
@@ -6619,6 +6622,7 @@ dependencies = [
  "gpui-pre-platform",
  "notify 8.2.0",
  "oxikube_assets",
+ "oxikube_domain",
  "oxikube_settings",
  "parking_lot",
  "schemars",

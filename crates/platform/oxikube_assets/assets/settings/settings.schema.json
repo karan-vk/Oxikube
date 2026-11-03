@@ -1831,7 +1831,7 @@
           "type": "object"
         }
       ],
-      "description": "What one settings layer says about the theme."
+      "description": "What one settings layer says about the theme.\n\nDeserialisation is hand-written (not `#[serde(untagged)]`) so a bad `mode` is reported with its\nkey (`theme.mode: unknown variant ...`) rather than as \"did not match any variant\"."
     },
     "ThresholdsContent": {
       "additionalProperties": false,

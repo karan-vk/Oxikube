@@ -246,6 +246,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::PaletteClearRecents
         | Command::PaletteOpenJump
         | Command::HelpShow
+        | Command::ThemeSelect
         | Command::PaletteToggleShowAll
         | Command::KeymapOpenUser
         | Command::KeymapShowEditor

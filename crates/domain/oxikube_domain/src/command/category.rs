@@ -88,7 +88,7 @@ impl CommandCategory {
 
     /// The category of the command `id`, from its namespace.
     pub const fn of(id: CommandId) -> Self {
-        const NAMESPACES: [(&str, CommandCategory); 40] = [
+        const NAMESPACES: [(&str, CommandCategory); 41] = [
             ("app", CommandCategory::App),
             ("notifications", CommandCategory::App),
             ("settings", CommandCategory::App),
@@ -96,6 +96,7 @@ impl CommandCategory {
             ("view", CommandCategory::View),
             ("palette", CommandCategory::View),
             ("help", CommandCategory::View),
+            ("theme", CommandCategory::View),
             ("jump", CommandCategory::View),
             ("keymap", CommandCategory::View),
             ("charts", CommandCategory::View),
