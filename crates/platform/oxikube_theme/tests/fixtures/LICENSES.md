@@ -1,6 +1,7 @@
 Licences of the third-party theme files in this directory, copied from Zed's
 `assets/themes/LICENSES` (zed-industries/zed @ 56cf49bc1afe05bbc777a7df5a01f79299ab4956).
-The fixtures are test input only and are not bundled in the application.
+The Ayu and Gruvbox files are the same ones bundled in `oxikube_assets/assets/themes/` (E22-S06);
+the copies here keep the import tests independent of the bundled list.
 
 ## [Ayu Dark](https://github.com/dempfi/ayu)
 

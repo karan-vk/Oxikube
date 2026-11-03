@@ -204,13 +204,20 @@ Theme families bundled under `crates/platform/oxikube_assets` list their own lic
   (`text.muted`, `text.accent`, `error`, `info`, `success`, `warning`) are adjusted in lightness so
   they reach WCAG AA (4.5:1) on the backgrounds they are drawn on (E05-U562; checked by
   `oxikube_ui::tokens::contrast`).
+- Ayu Dark, Ayu Light and Ayu Mirage (MIT, Copyright (c) 2016 Ike Ku, https://github.com/dempfi/ayu;
+  Zed's `assets/themes/ayu/ayu.json` @ 56cf49bc1afe05bbc777a7df5a01f79299ab4956, unmodified):
+  `crates/platform/oxikube_assets/assets/themes/ayu.json`, licence text in `assets/themes/LICENSES.md`.
+- Gruvbox Dark/Light in Hard, Medium and Soft contrast (MIT, https://github.com/morhetz/gruvbox;
+  Zed's `assets/themes/gruvbox/gruvbox.json` @ 56cf49bc1afe05bbc777a7df5a01f79299ab4956, unmodified):
+  `crates/platform/oxikube_assets/assets/themes/gruvbox.json`, licence text in
+  `assets/themes/LICENSES.md`.
+- Oxikube Dark and Oxikube Light: authored for this project (GPL-3.0-or-later like the rest of the
+  repository, no third-party palette): `crates/platform/oxikube_assets/assets/themes/oxikube.json`.
 
-Test-only fixtures (not bundled, not shipped in the application): `crates/platform/oxikube_theme/tests/fixtures/`
-holds Zed's `ayu/ayu.json` (MIT, Copyright (c) 2016 Ike Ku, https://github.com/dempfi/ayu) and
-`gruvbox/gruvbox.json` (MIT, https://github.com/morhetz/gruvbox), copied from Zed's `assets/themes`
-@ 56cf49bc1afe05bbc777a7df5a01f79299ab4956 with their licences in `tests/fixtures/LICENSES.md`.
-They are the import tests' input (E05-S08). Do not bundle another family without adding it here
-and checking its licence in Zed's `assets/themes/LICENSES`.
+The same Ayu and Gruvbox files are also copied under `crates/platform/oxikube_theme/tests/fixtures/`
+as import-test input (licences in `tests/fixtures/LICENSES.md`). Do not bundle another family without
+adding it here and checking its licence in Zed's `assets/themes/LICENSES`; the test
+`every_third_party_family_has_a_licence_and_notice` in `oxikube_assets` enforces the mention.
 
 `oxikube_theme` reads Zed's theme-family *file format* (schema v0.2.0) but contains no Zed code:
 its types and the key mapping table are our own.

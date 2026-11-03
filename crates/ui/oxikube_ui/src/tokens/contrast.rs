@@ -1,7 +1,7 @@
 //! WCAG 2.x contrast of every text-bearing token against every background it is drawn on.
 //!
-//! Small text needs 4.5:1 (AA). The check runs on the four token sets a user can see: the
-//! built-in [`Tokens::dark`] / [`Tokens::light`] and the bundled One Dark / One Light themes
+//! Small text needs 4.5:1 (AA). The check runs on the six token sets a user can see: the
+//! built-in [`Tokens::dark`] / [`Tokens::light`] and the bundled One and Oxikube Dark / Light themes
 //! that [`crate::set_theme`] applies by default. Every text token is held to 4.5:1 on every
 //! background, the selected-row fill included: a selected table row still draws its status text.
 
@@ -13,9 +13,13 @@ use oxikube_theme::{Appearance as ThemeAppearance, ThemeTokens};
 /// The WCAG AA threshold for normal-size text.
 const AA: f32 = 4.5;
 
-/// The four token sets, named.
-fn sets() -> [(&'static str, Tokens); 4] {
+/// The six token sets, named.
+fn sets() -> [(&'static str, Tokens); 6] {
+    let registry = oxikube_theme::ThemeRegistry::with_bundled();
+    let bundled = |name: &str| Tokens::from(&*registry.get(name).expect("bundled Oxikube theme"));
     [
+        ("Oxikube Dark", bundled("Oxikube Dark")),
+        ("Oxikube Light", bundled("Oxikube Light")),
         ("Tokens::dark", Tokens::dark()),
         ("Tokens::light", Tokens::light()),
         (
