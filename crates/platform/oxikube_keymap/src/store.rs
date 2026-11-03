@@ -216,18 +216,12 @@ impl KeymapStore {
             };
             let Some(state) = state else { continue };
             let built = build_layer(cx, layer, &state.sections);
-            let validated = match (&state.text, layer, state.stale) {
-                // The user's file: the one validator reports everything it can see in the text.
-                (Some(text), KeymapLayer::User, false) => Some(validate(
-                    text,
-                    &ActionRegistry::from_app(cx),
-                    &KnownNames::current(),
-                )),
-                _ => None,
-            };
-            if validated.is_none() {
-                diagnostics.extend(state.parse_diagnostics.iter().cloned());
-            }
+            // Only the user's layer keeps its text: the one validator reports everything it can
+            // see in it, unless the sections are stale.
+            let validated =
+                state.text.as_deref().filter(|_| !state.stale).map(|text| {
+                    validate(text, &ActionRegistry::from_app(cx), &KnownNames::current())
+                });
             if let Some(mut found) = validated {
                 // What only building can tell (an action rejecting its data) is added.
                 for mut extra in built.diagnostics {
@@ -246,12 +240,14 @@ impl KeymapStore {
                 conflicts.extend(find_conflicts(layer, &state.sections, &state.lines));
             } else if state.stale {
                 // Sections of an earlier file: their problems and line numbers are history.
+                diagnostics.extend(state.parse_diagnostics.iter().cloned());
                 conflicts.extend(find_conflicts(
                     layer,
                     &state.sections,
                     &SourceLines::default(),
                 ));
             } else {
+                diagnostics.extend(state.parse_diagnostics.iter().cloned());
                 diagnostics.extend(built.diagnostics.into_iter().map(|mut diagnostic| {
                     diagnostic.locate(&state.lines);
                     diagnostic
