@@ -17,6 +17,12 @@
     "light": "One Light",
     "dark": "One Dark"
   },
+  // Icon theme: a name, or a mode with a light and a dark one, like "theme". "Lucide" is built
+  // in. Icon themes are Zed icon-theme JSON in the `icon_themes/` folder next to settings.json,
+  // their SVGs in subfolders of it; besides Zed's file and folder icons they may set
+  // "kind:Pod" (or "kind:apps/Deployment"), "status:Running" and "icon:<lucide name>" in
+  // `file_icons`. Anything a theme leaves out stays Lucide. Changes apply without a restart.
+  "icon_theme": "Lucide",
   // UI zoom factor, 1.0 = 100 %. Clamped to 0.5 - 3.0. cmd/ctrl + and - and 0 change it and
   // write it back here.
   "ui_scale": 1.0,

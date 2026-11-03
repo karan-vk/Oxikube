@@ -21,6 +21,19 @@ macro_rules! icon_names {
             /// Every embedded icon, in declaration order.
             pub const ALL: &'static [IconName] = &[$(IconName::$variant,)*];
 
+            /// The icon's position in [`IconName::ALL`], for tables indexed by icon (an icon
+            /// theme's resolved paths).
+            pub const fn index(self) -> usize {
+                self as usize
+            }
+
+            /// The Lucide file stem, e.g. `box`: the name an icon theme overrides it by.
+            pub const fn stem(self) -> &'static str {
+                match self {
+                    $(IconName::$variant => $stem,)*
+                }
+            }
+
             /// Asset path the icon is served under, e.g. `icons/box.svg`.
             pub const fn path(self) -> &'static str {
                 match self {
@@ -141,6 +154,11 @@ impl IconName {
     /// The icon served at `path` (`icons/<stem>.svg`), if any.
     pub fn from_path(path: &str) -> Option<IconName> {
         Self::ALL.iter().copied().find(|icon| icon.path() == path)
+    }
+
+    /// The icon whose Lucide file stem is `stem` (`box`), if any.
+    pub fn from_stem(stem: &str) -> Option<IconName> {
+        Self::ALL.iter().copied().find(|icon| icon.stem() == stem)
     }
 }
 

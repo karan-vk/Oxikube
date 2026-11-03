@@ -6,6 +6,10 @@
 //! out, E17-S03). Every section but Workloads is collapsed so one frame shows the
 //! whole list.
 //!
+//! Every entry that lists a kind shows the kind's icon from the icon theme (E22-S11): Lucide in
+//! the default captures, and `sidebar_admin_icon_theme_dark` with the test icon theme of
+//! `oxikube_theme` (its `kind:Pod` and `kind:apps/Deployment` shapes replace Lucide's box icons).
+//!
 //! Same harness and gate as `screenshot.rs` (`harness = false`, needs a GPU device, feature
 //! `screenshot`, nightly job): `cargo test -p oxikube_workspace --features screenshot --test
 //! sidebar_screenshot`. Goldens live in `tests/goldens/<os>/sidebar_*.png`; regenerate with
@@ -26,6 +30,7 @@ use oxikube_domain::access::{AccessRule, AccessRules};
 use oxikube_domain::ids::{ContextName, Gvk};
 use oxikube_domain::kinds::{ResourceKind, Verb};
 use oxikube_ports::{ClusterContext, SourceId};
+use oxikube_settings::SettingsStore;
 use oxikube_testkit::{
     FakeClockPort, FakeClusterConnectorPort, FakeClusterSourcePort, FakeStatePort,
     headless::HEADLESS_SCALE_FACTOR,
@@ -55,6 +60,32 @@ fn headless() -> HeadlessAppContext {
     })
 }
 
+/// Which icon theme the sidebar is drawn with.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Icons {
+    /// The built-in Lucide icons.
+    Lucide,
+    /// `oxikube_theme`'s test icon theme "Kube Test Icons".
+    Themed,
+}
+
+/// Installs settings, themes and icon themes; with [`Icons::Themed`] the test icon themes are
+/// scanned and "Kube Test Icons" is selected. Installing every time also resets the icon paths
+/// this thread draws with, which a previous capture's app published.
+fn install_icons(icons: Icons, cx: &mut gpui::App) -> anyhow::Result<()> {
+    let mut store = SettingsStore::new(oxikube_assets::default_settings())?;
+    if icons == Icons::Themed {
+        store.set_user_settings(r#"{ "icon_theme": "Kube Test Icons" }"#)?;
+    }
+    cx.set_global(store);
+    oxikube_theme::init_with_dir(None, cx);
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../platform/oxikube_theme/tests/fixtures/icon_themes");
+    let dir = (icons == Icons::Themed).then_some(fixtures.as_path());
+    oxikube_theme::icons::init_icon_themes_with_dir(dir, cx);
+    Ok(())
+}
+
 fn rules_for(restricted: bool) -> AccessRules {
     if restricted {
         [("", "pods"), ("", "services")].iter().fold(
@@ -73,6 +104,16 @@ fn render(
     restricted: bool,
     show_all: bool,
     zoom: f32,
+) -> anyhow::Result<RgbaImage> {
+    render_with_icons(tokens, restricted, show_all, zoom, Icons::Lucide)
+}
+
+fn render_with_icons(
+    tokens: Tokens,
+    restricted: bool,
+    show_all: bool,
+    zoom: f32,
+    icons: Icons,
 ) -> anyhow::Result<RgbaImage> {
     let context = ClusterContext::new(
         CLUSTER.parse()?,
@@ -113,6 +154,7 @@ fn render(
         visibility: Arc::new(oxikube_app::kinds::AllowAll),
     };
     let mut cx = headless();
+    cx.update(|cx| install_icons(icons, cx))?;
     let mut shown = None;
     // The window grows with the zoom so the same content fits, as a user would size it.
     let window = cx.open_window(size(px(WIDTH * zoom), px(HEIGHT * zoom)), |window, cx| {
@@ -206,6 +248,12 @@ fn run() -> anyhow::Result<()> {
     check(
         "sidebar_restricted_show_all_light",
         render(Tokens::light(), true, true, 1.0)?,
+        1.0,
+    )?;
+    // The alternate icon theme (E22-S11): Pods and Deployments draw the theme's SVGs.
+    check(
+        "sidebar_admin_icon_theme_dark",
+        render_with_icons(Tokens::dark(), false, false, 1.0, Icons::Themed)?,
         1.0,
     )?;
     // ui_scale 1.5 (E05-U557): labels, count badges and rows all grow together.

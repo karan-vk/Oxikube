@@ -1,12 +1,19 @@
 //! Icons: [`IconName`] (our Lucide enum) and the [`Icon`] element that draws one.
+//!
+//! The active icon theme (`oxikube_theme::icons`, E22-S11) decides which SVG an icon is drawn
+//! from: [`Icon::new`] asks it for the path of an [`IconName`], [`Icon::kind`] for a Kubernetes
+//! kind's icon and [`Icon::status`] for a status's. The answer comes from a table built once per
+//! theme change, so building an icon in `render` is a lookup and a reference-count bump.
 
-use gpui::{App, Hsla, IntoElement, Pixels, RenderOnce, Window};
+use gpui::{App, Hsla, IntoElement, Pixels, RenderOnce, SharedString, Window};
 use gpui_component::Sizable as _;
 use gpui_component::Size as LibSize;
+use oxikube_theme::icons::{icon_path, kind_icon_path, status_icon_path};
 
 pub use oxikube_assets::IconName;
 
-/// A Lucide icon. Takes an [`IconName`], never a path.
+/// An icon. Takes an [`IconName`], a kind or a status, never a path: the active icon theme
+/// supplies the path (Lucide when it has nothing for it).
 ///
 /// Size and colour default to the surrounding text style, so an icon next to a label matches it.
 /// Pass pixel sizes through [`crate::u`] so they follow UI zoom.
@@ -16,7 +23,7 @@ pub use oxikube_assets::IconName;
 /// ```
 #[derive(IntoElement)]
 pub struct Icon {
-    name: IconName,
+    path: SharedString,
     size: Option<Pixels>,
     color: Option<Hsla>,
 }
@@ -24,8 +31,24 @@ pub struct Icon {
 impl Icon {
     /// An icon drawn with the surrounding text size and colour.
     pub fn new(name: IconName) -> Self {
+        Self::from_path(icon_path(name))
+    }
+
+    /// The icon of `kind` in API `group` (empty for the core group): the icon theme's
+    /// `kind:<group>/<Kind>` or `kind:<Kind>`, else the kind's Lucide icon.
+    pub fn kind(group: &str, kind: &str) -> Self {
+        Self::from_path(kind_icon_path(group, kind))
+    }
+
+    /// The icon of a status text (`Running`, `CrashLoopBackOff`): the icon theme's
+    /// `status:<Status>`, else a Lucide icon for what the status means.
+    pub fn status(status: &str) -> Self {
+        Self::from_path(status_icon_path(status))
+    }
+
+    fn from_path(path: SharedString) -> Self {
         Self {
-            name,
+            path,
             size: None,
             color: None,
         }
@@ -54,7 +77,7 @@ impl From<IconName> for Icon {
 
 impl Icon {
     fn into_library(self) -> gpui_component::Icon {
-        let mut icon = gpui_component::Icon::default().path(self.name.path());
+        let mut icon = gpui_component::Icon::default().path(self.path);
         if let Some(size) = self.size {
             icon = icon.with_size(LibSize::Size(size));
         }

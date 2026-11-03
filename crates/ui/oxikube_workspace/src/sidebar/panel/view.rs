@@ -20,7 +20,8 @@ use crate::sidebar::actions::{
 };
 use crate::sidebar::badges::badge_text;
 use crate::sidebar::rows::{
-    EntryRow, GroupRow, NO_LIST_PERMISSION, NoticeAction, NoticeKind, NoticeRow, Row, SectionRow,
+    EntryKind, EntryRow, GroupRow, NO_LIST_PERMISSION, NoticeAction, NoticeKind, NoticeRow, Row,
+    SectionRow,
 };
 
 /// Row height in unscaled pixels; the list is uniform.
@@ -176,6 +177,7 @@ impl SidebarPanel {
         self.row_frame(ix, &id, indent, cx)
             .debug_selector(move || format!("sidebar-entry-{id}"))
             .when(row.restricted, |frame| greyed_out(frame, disabled))
+            .child(entry_icon(&row.id, row.kind.as_ref(), cx))
             .child(div().flex_1().truncate().child(row.title.clone()))
             .when_some(row.count.as_ref(), |entry, state| {
                 entry.child(count_badge(&row.id, state, cx))
@@ -260,6 +262,28 @@ fn disclosure(expandable: bool, open: bool, cx: &mut Context<SidebarPanel>) -> i
             .color(colors.text_muted),
         )
     })
+}
+
+/// The icon of the kind an entry lists, from the active icon theme (E22-S11); an empty slot of
+/// the same width for an entry that lists no kind, so titles line up.
+fn entry_icon(
+    id: &SharedString,
+    kind: Option<&EntryKind>,
+    cx: &mut Context<SidebarPanel>,
+) -> impl IntoElement {
+    let colors = cx.colors();
+    let id = id.clone();
+    div()
+        .w(u(px(14.)))
+        .flex_none()
+        .debug_selector(move || format!("sidebar-entry-icon-{id}"))
+        .when_some(kind, |slot, kind| {
+            slot.child(
+                Icon::kind(&kind.group, &kind.kind)
+                    .size(u(px(14.)))
+                    .color(colors.text_muted),
+            )
+        })
 }
 
 /// The count badge: the number when the `ResourceStore` has one, a muted dash until then.

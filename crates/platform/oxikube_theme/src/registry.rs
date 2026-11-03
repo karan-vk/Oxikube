@@ -9,6 +9,10 @@
 //!
 //! Duplicate names: within one source the later insert wins; across sources the order is
 //! user, then extension (lowest [`ExtensionId`] first), then bundled.
+//!
+//! Icon themes (E22-S11) live here too, with the same sources and precedence
+//! ([`ThemeRegistry::get_icon_theme`], [`ThemeRegistry::insert_icon_theme_families`],
+//! [`ThemeRegistry::remove_icon_themes`]; see `registry/icon_themes.rs`).
 
 use crate::appearance::Appearance;
 use crate::import::{ThemeFamily, import_family};
@@ -18,6 +22,11 @@ use crate::user_dir::UserThemes;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::Arc;
+
+mod icon_themes;
+mod layers;
+
+pub use icon_themes::IconThemeMeta;
 
 /// The identity of an extension that contributes themes.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -73,6 +82,7 @@ pub struct ThemeRegistry {
     extensions: BTreeMap<ExtensionId, BTreeMap<String, Arc<ThemeTokens>>>,
     user: BTreeMap<String, Arc<ThemeTokens>>,
     problems: Vec<ThemeFileProblem>,
+    icon_themes: icon_themes::IconThemeLayers,
 }
 
 /// The name of the bundled dark theme: the default for a dark appearance.
@@ -81,10 +91,11 @@ pub const DEFAULT_DARK_THEME: &str = "One Dark";
 pub const DEFAULT_LIGHT_THEME: &str = "One Light";
 
 impl ThemeRegistry {
-    /// A registry holding the bundled themes (parses the embedded files: well under a
-    /// millisecond).
+    /// A registry holding the bundled themes and the built-in Lucide icon theme (parses the
+    /// embedded files: well under a millisecond).
     pub fn with_bundled() -> Self {
         let mut registry = Self::default();
+        registry.insert_bundled_icon_themes();
         for file in oxikube_assets::BUNDLED_THEME_FAMILIES {
             match import_family(file.json) {
                 Ok(imported) => registry.insert_bundled(imported.family),

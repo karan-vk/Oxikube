@@ -8,7 +8,9 @@
 use std::collections::BTreeMap;
 
 use gpui::SharedString;
-use oxikube_app::{AccessOutcome, CountState, CustomResourceGroup, IntegrationSection, KindGate};
+use oxikube_app::{
+    AccessOutcome, CountState, CountTarget, CustomResourceGroup, IntegrationSection, KindGate,
+};
 use oxikube_domain::access::AccessRequirement;
 use oxikube_ui::IconName;
 
@@ -129,6 +131,33 @@ pub struct EntryRow {
     /// The user may not list the kind (E17-S03): drawn greyed, with "no list permission" on
     /// hover. Only present while the sidebar shows restricted entries.
     pub restricted: bool,
+    /// The kind the entry lists, which picks its icon through the icon theme (E22-S11); `None`
+    /// for entries that are not a kind list (they keep an empty icon slot, so titles line up).
+    pub kind: Option<EntryKind>,
+}
+
+/// The kind of an entry, for its icon.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EntryKind {
+    /// API group (empty for core).
+    pub group: SharedString,
+    /// Kind (`Pod`).
+    pub kind: SharedString,
+}
+
+impl EntryKind {
+    /// The built-in kind a [`SidebarTarget::Kind`] lists; `None` for other targets and for
+    /// plurals the sidebar's built-in table does not know.
+    pub(super) fn of_target(target: Option<&SidebarTarget>) -> Option<Self> {
+        let Some(SidebarTarget::Kind { group, resource }) = target else {
+            return None;
+        };
+        let core = CountTarget::core(group, resource)?;
+        Some(Self {
+            group: group.clone(),
+            kind: core.gvk.kind.to_string().into(),
+        })
+    }
 }
 
 /// How a notice is drawn.

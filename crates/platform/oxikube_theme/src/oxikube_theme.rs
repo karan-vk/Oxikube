@@ -21,6 +21,8 @@
 //! - [`color`]: `#rgb` / `#rgba` / `#rrggbb` / `#rrggbbaa` <-> `Hsla`.
 //! - [`glyph_warm`]: the glyph atlas warmed for every installed theme's text colours, so a theme
 //!   switch draws without rasterising text in the frame (E05-P602).
+//! - [`icons`]: icon themes (E22-S11): Zed's icon-theme format mapped onto kinds and statuses,
+//!   Lucide by default, the `icon_theme` setting and the [`ActiveIconTheme`] that drawing reads.
 //!
 //! `oxikube_ui` turns the active [`ThemeTokens`] into gpui-component's theme (`ThemeConfig`)
 //! in its `theme_bridge`, since only that crate may import gpui-component.
@@ -33,6 +35,7 @@ pub mod color;
 pub mod content;
 pub mod global;
 pub mod glyph_warm;
+pub mod icons;
 pub mod import;
 pub mod registry;
 pub mod settings;
@@ -48,9 +51,12 @@ pub use global::{
     ActiveTheme, ActiveThemeExt, apply_user_scan, init, init_watching_dir, init_with_dir,
     insert_theme_families, refresh_active, remove_themes_by_source,
 };
+pub use icons::{ActiveIconTheme, IconTheme, IconThemeFamily, IconThemeSettings};
 pub use import::{
     ImportDiagnostic, ImportError, ImportReport, ImportedFamily, ThemeFamily, import_family,
 };
-pub use registry::{ExtensionId, ThemeFileProblem, ThemeMeta, ThemeRegistry, ThemeSource};
+pub use registry::{
+    ExtensionId, IconThemeMeta, ThemeFileProblem, ThemeMeta, ThemeRegistry, ThemeSource,
+};
 pub use settings::{ThemeSelection, ThemeSelectionContent, ThemeSettings};
 pub use tokens::ThemeTokens;

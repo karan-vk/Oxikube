@@ -23,3 +23,13 @@ fn unknown_paths_do_not_resolve() {
     assert_eq!(IconName::from_path("icons/not-a-real-icon.svg"), None);
     assert_eq!(IconName::from_path(""), None);
 }
+
+#[test]
+fn index_is_the_position_in_all_and_stems_resolve_back() {
+    for (ix, icon) in IconName::ALL.iter().enumerate() {
+        assert_eq!(icon.index(), ix);
+        assert_eq!(IconName::from_stem(icon.stem()), Some(*icon));
+        assert_eq!(icon.path(), format!("icons/{}.svg", icon.stem()));
+    }
+    assert_eq!(IconName::from_stem("not-an-icon"), None);
+}

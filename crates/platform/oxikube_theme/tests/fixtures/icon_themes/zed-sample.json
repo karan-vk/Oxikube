@@ -1,0 +1,41 @@
+// A Zed icon theme as Zed's extensions ship them: folders, chevrons, file stems and suffixes.
+// It has no Oxikube keys, so in Oxikube every kind and status falls back to Lucide.
+{
+  "$schema": "https://zed.dev/schema/icon_themes/v0.2.0.json",
+  "name": "Zed Sample Icons",
+  "author": "Oxikube tests",
+  "themes": [
+    {
+      "name": "Zed Sample Icons",
+      "appearance": "dark",
+      "directory_icons": {
+        "collapsed": "./zed-sample/icons/folder.svg",
+        "expanded": "./zed-sample/icons/folder-open.svg"
+      },
+      "named_directory_icons": {
+        ".git": {
+          "collapsed": "./zed-sample/icons/git.svg",
+          "expanded": "./zed-sample/icons/git.svg"
+        }
+      },
+      "chevron_icons": {
+        "collapsed": "./zed-sample/icons/chevron-right.svg",
+        "expanded": "./zed-sample/icons/chevron-down.svg"
+      },
+      "file_stems": {
+        "Dockerfile": "docker",
+        "Cargo.lock": "rust"
+      },
+      "file_suffixes": {
+        "rs": "rust",
+        "yaml": "yaml",
+        "yml": "yaml"
+      },
+      "file_icons": {
+        "docker": { "path": "./zed-sample/icons/docker.svg" },
+        "rust": { "path": "./zed-sample/icons/rust.svg" },
+        "yaml": { "path": "./zed-sample/icons/yaml.svg" },
+      }
+    }
+  ]
+}
