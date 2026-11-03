@@ -11,6 +11,7 @@ use oxikube_domain::ids::ClusterId;
 use serde_json::{Map, Value};
 
 use super::SettingsStore;
+use super::layers::ClusterLayer;
 use crate::diagnostics::CLUSTERS_KEY;
 
 /// The settings layer a field's effective value comes from, lowest first.
@@ -55,8 +56,8 @@ impl SettingsStore {
             return SettingSource::Default;
         }
         if self
-            .cluster_overrides(cluster)
-            .and_then(|overrides| lookup(overrides, path))
+            .cluster_layer(cluster)
+            .and_then(|layer| lookup(&layer.overrides, path))
             .is_some()
         {
             return SettingSource::Cluster;
@@ -70,13 +71,8 @@ impl SettingsStore {
     /// The effective value of the field at the dotted `path`, read at `cluster` (`None`: the
     /// global value): the merge of every layer. `None` when no layer sets it.
     pub fn effective_value(&self, path: &str, cluster: Option<&ClusterId>) -> Option<&Value> {
-        let merged = cluster
-            .and_then(|cluster| {
-                self.layers
-                    .clusters
-                    .iter()
-                    .find(|layer| layer.id == cluster.as_str())
-            })
+        let merged = self
+            .cluster_layer(cluster)
             .map_or(&self.layers.root, |layer| &layer.merged);
         lookup(merged.as_object()?, path)
     }
@@ -86,13 +82,12 @@ impl SettingsStore {
         lookup(self.layers.defaults.as_object()?, path)
     }
 
-    /// The raw `clusters.<id>` block of `cluster` in the user's file.
-    fn cluster_overrides(&self, cluster: Option<&ClusterId>) -> Option<&Map<String, Value>> {
+    /// The layer of `cluster`, if the user's file has a block for it.
+    fn cluster_layer(&self, cluster: Option<&ClusterId>) -> Option<&ClusterLayer> {
         let cluster = cluster?;
         self.layers
             .clusters
             .iter()
             .find(|layer| layer.id == cluster.as_str())
-            .map(|layer| &layer.overrides)
     }
 }
