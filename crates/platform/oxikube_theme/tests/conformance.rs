@@ -12,7 +12,6 @@ use gpui::hsla;
 use oxikube_theme::{
     Appearance, ImportError, ImportedFamily, ThemeRegistry, ThemeSource, ThemeTokens, import_family,
 };
-use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 const MIN_FAMILIES: usize = 20;
@@ -307,16 +306,12 @@ fn truncated_files_give_typed_errors_not_panics() {
 // Unmapped-key counts.
 
 fn report_line(label: &str, imported: &ImportedFamily) -> String {
-    let mut line = String::new();
-    write!(
-        line,
-        "{label}\tthemes={}\tdiagnostics={}\tunknown_keys={}",
+    format!(
+        "{label}\tthemes={}\tdiagnostics={}\tunknown_keys={}\n",
         imported.family.themes.len(),
         imported.report.diagnostics.len(),
         imported.report.unknown_keys.len()
     )
-    .expect("writing to a String");
-    line
 }
 
 #[test]
@@ -332,12 +327,10 @@ fn import_report_counts_match_the_golden_file() {
             .to_string_lossy()
             .into_owned();
         actual.push_str(&report_line(&relative, &import(&path)));
-        actual.push('\n');
     }
     for file in oxikube_assets::BUNDLED_THEME_FAMILIES {
         let imported = import_family(file.json).expect("bundled family imports");
         actual.push_str(&report_line(&format!("bundled/{}", file.file), &imported));
-        actual.push('\n');
     }
 
     let golden = fixtures().join("zed-themes/import-report.golden");
