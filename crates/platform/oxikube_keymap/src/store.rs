@@ -119,7 +119,10 @@ impl KeymapStore {
     /// A store with the embedded layers parsed and no user file.
     pub fn new(options: KeymapOptions) -> Self {
         let mut store = Self {
-            options,
+            options: KeymapOptions {
+                base_keymap: BaseKeymap::Default,
+                ..options
+            },
             default: LayerState::parse(
                 oxikube_assets::default_keymap(options.platform),
                 KeymapLayer::Default,
@@ -153,19 +156,15 @@ impl KeymapStore {
     /// Switch the base keymap: drop the old overlay and parse the new one's embedded file (a few
     /// dozen lines). Returns whether the base keymap changed.
     pub fn set_base_keymap(&mut self, base: BaseKeymap) -> bool {
-        let changed = self.options.base_keymap != base || self.base_missing(base);
-        self.options.base_keymap = base;
+        let changed = self.options.base_keymap != base;
         if changed {
+            self.options.base_keymap = base;
             self.base = base
                 .layer()
                 .zip(base.overlay_text())
                 .map(|(layer, text)| LayerState::parse(text, layer));
         }
         changed
-    }
-
-    fn base_missing(&self, base: BaseKeymap) -> bool {
-        base.layer().is_some() && self.base.is_none()
     }
 
     /// The parsed state of `layer`, when it is on.

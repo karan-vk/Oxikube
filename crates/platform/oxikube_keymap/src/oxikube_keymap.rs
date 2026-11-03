@@ -3,8 +3,8 @@
 //! Layered, hot-reloading key bindings in Zed's `keymap.json` format (E05-S07).
 //!
 //! Layers, lowest first: the embedded per-OS `default-*.json` ([`oxikube_assets::default_keymap`]),
-//! the optional embedded base keymap (`vim.json` or `k9s.json`, the `base_keymap` setting, [`KeymapOptions::base_keymap`] /
-//! [`set_base_keymap`]), then the user's `keymap.json` next to `settings.json`. The layers are
+//! the optional embedded base keymap (`vim.json` or `k9s.json`, the `base_keymap` setting,
+//! [`KeymapOptions::base_keymap`] / [`set_base_keymap`]), then the user's `keymap.json` next to `settings.json`. The layers are
 //! merged into one flat list of GPUI `KeyBinding`s and bound with `cx.bind_keys`; later layers
 //! win, and `null` unbinds.
 //!

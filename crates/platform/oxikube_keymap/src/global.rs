@@ -25,6 +25,7 @@ use oxikube_domain::{OxiError, OxiResult};
 use oxikube_settings::paths::config_dir;
 use oxikube_settings::watcher::{DEFAULT_DEBOUNCE, SettingsFileWatcher};
 
+use crate::base_keymap::BaseKeymap;
 use crate::conflicts::KeymapConflict;
 use crate::diagnostics::KeymapDiagnostic;
 use crate::layer::KeymapLayer;
@@ -213,14 +214,13 @@ pub fn reload(cx: &mut App) {
 /// Switch the base keymap (`default`, `k9s`, `vim`) and rebind: the overlay between the defaults
 /// and the user's file is swapped, the user's file is neither read nor written, and open windows
 /// keep working. The `base_keymap` setting calls this when it changes.
-pub fn set_base_keymap(cx: &mut App, base: crate::base_keymap::BaseKeymap) {
+pub fn set_base_keymap(cx: &mut App, base: BaseKeymap) {
     let changed = KeymapStore::update_global(cx, |store, _| store.set_base_keymap(base));
     apply(cx, changed);
 }
 
 /// [`set_base_keymap`] for the vim layer alone: `true` selects `vim`, `false` the defaults.
 pub fn set_vim_layer(cx: &mut App, enabled: bool) {
-    use crate::base_keymap::BaseKeymap;
     set_base_keymap(
         cx,
         if enabled {

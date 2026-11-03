@@ -2,8 +2,8 @@
 //! user's `keymap.json` (E11-S09, E21-S09).
 //!
 //! `"base_keymap": "vim"` in `settings.json` turns the embedded `vim.json` layer on, `"k9s"` the
-//! `k9s.json` layer, `"default"` (the default) none. The value is read once at [`init`](crate::init) and followed from
-//! then on: editing `settings.json` swaps the layer and rebinds without a restart, and a reload
+//! `k9s.json` layer, `"default"` (the default) none. The value is read once at
+//! [`init`](crate::init) and followed from then on: editing `settings.json` swaps the layer and rebinds without a restart, and a reload
 //! that leaves the value equal rebinds nothing (the settings observer only fires on a change).
 
 use gpui::App;
