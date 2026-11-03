@@ -9,10 +9,12 @@ use gpui::{
     ParentElement as _, SharedString, Styled as _, Task, Window, div,
 };
 use oxikube_theme::{
-    ActiveTheme, Appearance, SystemAppearance, ThemeChoice, ThemeMeta, ThemeRegistry,
+    ActiveTheme, Appearance, SystemAppearance, ThemeChoice, ThemeMeta, ThemeRegistry, ThemeSlot,
     clear_preview, commit_theme, current_choice, preview_theme,
 };
 use oxikube_ui::{ActiveTokens as _, u};
+
+use std::sync::Arc;
 
 use super::render;
 use crate::picker::fuzzy::{self, INLINE_MATCH_LIMIT, StringMatch, StringMatchCandidate};
@@ -66,9 +68,9 @@ impl ThemeDelegate {
         let current = ActiveTheme::get(cx).name.clone();
         let choice = current_choice(cx);
         let first = match choice.slot {
-            oxikube_theme::ThemeSlot::Light => Appearance::Light,
-            oxikube_theme::ThemeSlot::Dark => Appearance::Dark,
-            oxikube_theme::ThemeSlot::Any => SystemAppearance::get(cx),
+            ThemeSlot::Light => Appearance::Light,
+            ThemeSlot::Dark => Appearance::Dark,
+            ThemeSlot::Any => SystemAppearance::get(cx),
         };
         let mut delegate = Self {
             themes,
@@ -211,7 +213,7 @@ impl PickerDelegate for ThemeDelegate {
             self.sync_preview(cx);
             return Task::ready(());
         }
-        let candidates: std::sync::Arc<[StringMatchCandidate]> = self.names.clone().into();
+        let candidates: Arc<[StringMatchCandidate]> = self.names.clone().into();
         cx.spawn_in(window, async move |picker, cx| {
             let executor = cx.background_executor().clone();
             let matches =
