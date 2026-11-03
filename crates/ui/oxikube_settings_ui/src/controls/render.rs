@@ -34,9 +34,11 @@ impl Controls {
         cx: &mut Context<SettingsPage>,
     ) -> Option<AnyElement> {
         let control = match &field.control {
-            ControlSpec::Switch => self.switch(field, cluster, cx),
-            ControlSpec::Choice(values) => self.choice(field, values, cluster, cx),
-            ControlSpec::Number(_) | ControlSpec::Text => self.text(field, cx),
+            ControlSpec::Switch => Some(self.switch(field, cluster, cx)),
+            ControlSpec::Choice(values) => Some(self.choice(field, values, cluster, cx)),
+            ControlSpec::Number(_) | ControlSpec::Text => {
+                Some(self.input_box(field)?.into_any_element())
+            }
             ControlSpec::Color => self.colour(field, cx),
             ControlSpec::Font => self.font(field, cx),
             ControlSpec::List => self.list(field, cx),
@@ -102,7 +104,7 @@ impl Controls {
         field: &PageField,
         cluster: Option<&ClusterId>,
         cx: &mut Context<SettingsPage>,
-    ) -> Option<AnyElement> {
+    ) -> AnyElement {
         let on = effective_value(&field.path, cluster, cx)
             .and_then(|value| value.as_bool())
             .unwrap_or(false);
@@ -114,7 +116,7 @@ impl Controls {
                 this.controls
                     .chose(&path, Value::Bool(*checked), cluster, cx);
             }));
-        Some(Self::marked(&field.path, "settings-control", switch))
+        Self::marked(&field.path, "settings-control", switch)
     }
 
     fn choice(
@@ -123,7 +125,7 @@ impl Controls {
         values: &[SharedString],
         cluster: Option<&ClusterId>,
         cx: &mut Context<SettingsPage>,
-    ) -> Option<AnyElement> {
+    ) -> AnyElement {
         let tokens = cx.tokens();
         let current = effective_value(&field.path, cluster, cx);
         let current = current.as_ref().and_then(Value::as_str).map(str::to_owned);
@@ -151,13 +153,11 @@ impl Controls {
                         .chose(&path, Value::String(chosen.to_string()), cluster, cx);
                 })))
         });
-        Some(
-            h_flex()
-                .flex_wrap()
-                .gap(u(tokens.spacing.sm))
-                .children(buttons)
-                .into_any_element(),
-        )
+        h_flex()
+            .flex_wrap()
+            .gap(u(tokens.spacing.sm))
+            .children(buttons)
+            .into_any_element()
     }
 
     fn input_box(&self, field: &PageField) -> Option<gpui::Div> {
@@ -169,10 +169,6 @@ impl Controls {
                 .w(u(px(INPUT_WIDTH)))
                 .child(Input::new(input).small()),
         )
-    }
-
-    fn text(&self, field: &PageField, _cx: &mut Context<SettingsPage>) -> Option<AnyElement> {
-        Some(self.input_box(field)?.into_any_element())
     }
 
     fn colour(&self, field: &PageField, cx: &mut Context<SettingsPage>) -> Option<AnyElement> {

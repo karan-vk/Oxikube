@@ -186,7 +186,6 @@ impl Controls {
             Ok(value) => self.accept(path, value, cluster, immediately, cx),
             Err(error) => self.reject(path, error, cx),
         }
-        cx.notify();
     }
 }
 
