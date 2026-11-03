@@ -1,0 +1,21 @@
+{
+  "$schema": "https://zed.dev/schema/themes/v0.2.0.json",
+  "name": "Edge Unknown",
+  "author": "Oxikube",
+  "x-extra-top-level": [1, 2, 3],
+  "themes": [
+    {
+      "name": "Edge Unknown Dark",
+      "appearance": "dark",
+      "x-extra-entry": true,
+      "style": {
+        "background": "#202020ff",
+        "text": "#e0e0e0ff",
+        "future.surface.glow": "#ffffff10",
+        "another.future.key": "#00ff00ff",
+        "nonsense": { "nested": "value" },
+        "syntax": { "future_capture.deep": { "color": "#abcdefff" } }
+      }
+    }
+  ]
+}

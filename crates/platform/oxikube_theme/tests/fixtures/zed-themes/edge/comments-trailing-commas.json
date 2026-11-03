@@ -1,0 +1,23 @@
+// A hand-written theme with the JSON extensions Zed allows.
+{
+  "$schema": "https://zed.dev/schema/themes/v0.2.0.json",
+  "name": "Edge Comments", /* block comment */
+  "author": "Oxikube",
+  "themes": [
+    {
+      "name": "Edge Comments Dark",
+      "appearance": "dark",
+      "style": {
+        "background": "#202020ff", // trailing comment
+        "text": "#e0e0e0ff",
+        "editor.background": "#181818ff",
+        "players": [
+          { "cursor": "#ff8800ff", "background": "#ff8800ff", "selection": "#ff880040", },
+        ],
+        "syntax": {
+          "keyword": { "color": "#ff8800ff", },
+        },
+      },
+    },
+  ],
+}
