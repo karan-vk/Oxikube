@@ -56,6 +56,21 @@ impl Fixture {
             SystemAppearance::init(cx);
             SystemAppearance::set(cx, system);
             oxikube_theme::init_with_dir(Some(&themes), cx);
+            // The shipped set grows (Oxikube, Ayu, Gruvbox); these tests pin One plus the Ayu
+            // fixture so their arrow-key walks do not depend on it.
+            gpui::UpdateGlobal::update_global(
+                cx,
+                |registry: &mut oxikube_theme::registry::ThemeRegistry, _| {
+                    registry.remove_by_source(&oxikube_theme::registry::ThemeSource::Bundled);
+                    let one = oxikube_assets::BUNDLED_THEME_FAMILIES
+                        .iter()
+                        .find(|file| file.file == "one.json")
+                        .expect("one.json is bundled");
+                    let imported =
+                        oxikube_theme::import::import_family(one.json).expect("one.json");
+                    registry.insert_bundled(imported.family);
+                },
+            );
         });
         let host = Rc::new(ThemeHost::new(&workspace));
         let mut fixture = Self {

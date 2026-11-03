@@ -98,9 +98,10 @@ fn select_theme_from_the_palette_previews_reverts_and_commits(cx: &mut TestAppCo
         "Select Theme in the palette opens the picker"
     );
 
-    // Only One Dark and One Light are bundled: down from One Dark lands on One Light.
+    // Down from One Dark lands on the next bundled dark theme, whichever the set holds.
     app.press("down");
-    assert_eq!(app.active_theme(), "One Light", "previewed");
+    let next = app.active_theme();
+    assert_ne!(next, "One Dark", "previewed");
     app.press("escape");
     assert!(app.theme_picker().is_none());
     assert_eq!(app.active_theme(), "One Dark", "Escape reverted");
@@ -117,6 +118,6 @@ fn select_theme_from_the_palette_previews_reverts_and_commits(cx: &mut TestAppCo
     app.vcx.run_until_parked();
     let text = settings_text(&mut app);
     assert!(text.contains("// mine"), "{text}");
-    assert!(text.contains("\"dark\": \"One Light\""), "{text}");
-    assert_eq!(app.active_theme(), "One Light");
+    assert!(text.contains(&format!("\"dark\": \"{next}\"")), "{text}");
+    assert_eq!(app.active_theme(), next);
 }

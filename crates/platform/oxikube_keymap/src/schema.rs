@@ -22,7 +22,12 @@ use crate::registry::ActionRegistry;
 /// The schema for a keymap whose actions are `actions` and whose context names are `known`
 /// (offered as examples; a `context` is an expression, so it is not an enum).
 pub fn keymap_schema(actions: &ActionRegistry, known: &KnownNames) -> Value {
-    let names: Vec<&str> = actions.names().collect();
+    // Test-support actions link in only when a workspace-wide build unifies the `test-support`
+    // feature; the checked-in schema must not depend on that.
+    let names: Vec<&str> = actions
+        .names()
+        .filter(|name| !name.starts_with("test_support::"))
+        .collect();
     let contexts: Vec<&str> = known.contexts().collect();
     json!({
         "$schema": "https://json-schema.org/draft/2019-09/schema",

@@ -150,7 +150,7 @@ impl KeymapDelegate {
                 div()
                     .min_w_0()
                     .truncate()
-                    .text_xs()
+                    .text_size(u(px(12.)))
                     .text_color(colors.text_muted)
                     .child(SharedString::from(row.action.clone())),
             )
@@ -175,7 +175,7 @@ impl KeymapDelegate {
             cell = cell.child(
                 div()
                     .truncate()
-                    .text_xs()
+                    .text_size(u(px(12.)))
                     .text_color(colors.text_muted)
                     .child(SharedString::from(data.clone())),
             );

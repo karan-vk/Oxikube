@@ -99,7 +99,7 @@ impl Harness {
     /// would: click to focus, select all, type.
     pub fn type_at(&mut self, selector: &str, text: &str) {
         self.click(selector);
-        self.keys("cmd-a backspace");
+        self.keys("secondary-a backspace");
         if !text.is_empty() {
             self.type_text(text);
         }

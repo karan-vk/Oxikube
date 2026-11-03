@@ -505,5 +505,5 @@ fn the_setting_has_a_default_and_a_schema_entry() {
         .iter()
         .map(|v| v["const"].as_str().unwrap())
         .collect();
-    assert_eq!(names, ["default", "vim"]);
+    assert_eq!(names, ["default", "vim", "k9s"]);
 }

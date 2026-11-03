@@ -124,7 +124,7 @@ impl KeybindRecorder {
                     .child(
                         div()
                             .flex_1()
-                            .text_xs()
+                            .text_size(u(px(12.)))
                             .text_color(colors.text_muted)
                             .child(hint),
                     )
@@ -165,7 +165,7 @@ impl KeybindRecorder {
             .gap(u(tokens.spacing.sm))
             .child(
                 div()
-                    .text_xs()
+                    .text_size(u(px(12.)))
                     .text_color(tokens.colors.text_muted)
                     .child("Context (blank for everywhere), for example ResourceTable && !Editing"),
             )
@@ -205,7 +205,7 @@ impl KeybindRecorder {
             list = list.child(
                 h_flex()
                     .gap(u(tokens.spacing.md))
-                    .text_xs()
+                    .text_size(u(px(12.)))
                     .child(
                         div()
                             .flex_1()
@@ -226,7 +226,7 @@ impl KeybindRecorder {
             list = list.child(
                 div()
                     .debug_selector(|| "keymap-recorder-overwritten".to_owned())
-                    .text_xs()
+                    .text_size(u(px(12.)))
                     .text_color(colors.warning)
                     .child(
                         "Saving overwrites your binding of these keys in this context: \
@@ -277,7 +277,7 @@ impl KeybindRecorder {
                 .id("keymap-recorder-problems")
                 .debug_selector(|| "keymap-recorder-problems".to_owned())
                 .gap(u(px(4.)))
-                .text_xs()
+                .text_size(u(px(12.)))
                 .text_color(color)
                 .children(
                     lines
