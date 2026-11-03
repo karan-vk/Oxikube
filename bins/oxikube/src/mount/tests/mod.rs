@@ -61,6 +61,7 @@ mod signin;
 mod storage;
 mod tail;
 mod terminal;
+mod theme;
 mod used_by;
 mod warning_badges;
 mod workloads;

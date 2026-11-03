@@ -16,6 +16,7 @@
 
 use crate::appearance::SystemAppearance;
 use crate::import::ThemeFamily;
+use crate::notices;
 use crate::registry::{ThemeRegistry, ThemeSource};
 use crate::settings::{ThemeSelection, ThemeSettings};
 use crate::tokens::ThemeTokens;
@@ -109,6 +110,10 @@ fn install(cx: &mut App, dir: Option<&Path>, watch: bool) {
     }
     cx.observe_global::<SystemAppearance>(refresh_active)
         .detach();
+    if dir.is_none() {
+        // Nothing to wait for: every installed theme is registered already.
+        notices::mark_scanned(cx);
+    }
     refresh_active(cx);
 
     let Some(dir) = dir else {
@@ -129,6 +134,7 @@ fn start_watch(cx: &mut App, dir: PathBuf) {
         Ok(watcher) => watcher,
         Err(err) => {
             tracing::warn!(%err, "theme hot reload is off");
+            notices::mark_scanned(cx);
             return;
         }
     };
@@ -152,6 +158,7 @@ pub fn apply_user_scan(cx: &mut App, scan: UserThemes) {
         tracing::warn!(path = %problem.path.display(), message = %problem.message, "theme file");
     }
     cx.update_global::<ThemeRegistry, _>(|registry, _| registry.replace_user_themes(scan));
+    notices::mark_scanned(cx);
     refresh_active(cx);
 }
 
@@ -185,6 +192,10 @@ pub fn refresh_active(cx: &mut App) {
         .map(|settings| settings.selection.clone())
         .unwrap_or_default();
     let resolved = resolve(cx, &selection);
+    let system = SystemAppearance::get(cx);
+    let name = selection.name_for(system);
+    let missing = cx.global::<ThemeRegistry>().get(name).is_none();
+    notices::report_resolution(cx, missing.then_some((name, resolved.name.as_str())));
     let unchanged = cx
         .try_global::<ActiveTheme>()
         .is_some_and(|active| Arc::ptr_eq(&active.0, &resolved) || *active.0 == *resolved);

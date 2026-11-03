@@ -64,3 +64,19 @@ fn content_round_trips_without_null_fields() {
         json!("X")
     );
 }
+
+#[test]
+fn a_bad_mode_error_names_the_key() {
+    let err = serde_path_to_error::deserialize::<_, ThemeSelectionContent>(json!({
+        "mode": "auto"
+    }))
+    .expect_err("auto is not a mode");
+    assert_eq!(err.path().to_string(), "mode");
+    assert!(err.to_string().contains("auto"), "{err}");
+
+    let err = serde_path_to_error::deserialize::<_, ThemeSelectionContent>(json!({
+        "dark": 3
+    }))
+    .expect_err("a theme name is a string");
+    assert_eq!(err.path().to_string(), "dark");
+}

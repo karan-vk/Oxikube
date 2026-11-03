@@ -30,6 +30,7 @@ tracing.workspace = true
 gpui = { workspace = true, features = ["test-support"] }
 # The `glyph_warm` example measures on the platform's real text system.
 gpui_platform.workspace = true
+serde_path_to_error.workspace = true
 tempfile.workspace = true
 
 # The OS platform must be made on the main thread (AppKit), so this test is its own `main`.
