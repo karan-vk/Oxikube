@@ -40,6 +40,21 @@ pub const SEED_CONTEXTS: &[&str] = &[
     "Input",
     "NotificationPanel",
     "TerminalSearch",
+    // Contexts views set with a literal or a view-local constant.
+    "AuditView",
+    "ClusterOverview",
+    "ClusterSidebar",
+    "ClusterSidebarSearch",
+    "CodeView",
+    "DialogButton",
+    "DialogModal",
+    "Hotbar",
+    "ModalLayer",
+    "NamespaceList",
+    "NamespaceSearch",
+    "NamespaceSelector",
+    "Overview",
+    "ToastLayer",
 ];
 
 /// Flags and value keys the standard views set (see the table in [`crate::context`]).
