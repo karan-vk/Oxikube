@@ -8,7 +8,7 @@ use super::ops::{BindingLocation, KeybindTarget, KeybindUpdateOperation, normali
 use crate::conflicts::normalise;
 use crate::file::KeymapAction;
 use crate::layer::KeymapLayer;
-use crate::rows::KeymapRow;
+use crate::rows::{KeymapRow, RowStatus};
 
 /// Why a payload does not describe an edit.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -50,10 +50,15 @@ pub fn location_of(binding: &KeymapBindingRef) -> BindingLocation {
     }
 }
 
-/// The reference to a bound row of the keymap editor (`None` for a command bound nowhere).
+/// The reference to a bound row of the keymap editor that is in force (`None` for a command
+/// bound nowhere, and for a row out of force).
+///
+/// A row out of force ([`RowStatus::Overridden`] or [`RowStatus::UnboundByUser`]) cannot be
+/// edited by reference: an edit finds a binding by its context and keys, and at those keys it
+/// would find the binding in force (the user's override, or its `null`) and overwrite that.
 pub fn ref_of_row(row: &KeymapRow) -> Option<KeymapBindingRef> {
     let layer = row.source?;
-    if row.keystrokes.is_empty() {
+    if row.keystrokes.is_empty() || row.status != RowStatus::Active {
         return None;
     }
     Some(KeymapBindingRef {

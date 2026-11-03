@@ -22,6 +22,7 @@
 //! | `secret` | "Create secret" (E12-S11): `secret::Create` opens [`CreateSecretDialog`] (Opaque, Docker registry, TLS, checked before anything opens); a valid Secret opens in an editor with its values as text, base64-encoded when applied |
 //! | `resource_diff` | the cross-cluster resource diff (E20-S09): `resource::DiffWith` reads two objects (connecting a cluster on demand) and opens a tab with the changed-path summary and the side-by-side line diff; the "Diff with..." picker; read-only |
 //! | `config_file` | the user's `keymap.json` in the editor (E21-S03): [`ConfigFileKind`] associates the path with the keymap validator, which replaces the schema pass ([`validate_config`]); Save writes the file |
+//! | `config_save` | Save of a config file: atomic, off the UI thread, refused (with a warning) when another writer changed the file since it was read |
 //! | `open_text` | "Open in editor" from the apply panel (E20-S05): [`OpenText`], a document's text in a new tab with the cursor on its line |
 //! | `apply` | applying the buffer (E10-S08): `resource::Apply` (`cmd-s` / `ctrl-s`, the palette, the toolbar), the dry run, [`ApplyPreviewDialog`], [`ConflictDialog`], the server's errors on their fields |
 //! | `dry_run` | [`DryRunDiff`]: the guard's dry run of one object (E19-S07) as this diff, installed in the workspace's confirmation dialog |
@@ -33,6 +34,7 @@
 pub mod apply;
 mod commands;
 mod config_file;
+mod config_save;
 mod controller;
 mod convert;
 mod create;

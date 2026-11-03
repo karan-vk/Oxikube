@@ -74,6 +74,42 @@ pub fn write_user_keymap(
     })
 }
 
+/// What a whole-file save of `keymap.json` did ([`save_user_keymap_text`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum UserKeymapSave {
+    /// The text was written (or the file already held it).
+    Saved,
+    /// The file no longer holds the text the save started from (another writer, such as the
+    /// keymap editor's [`write_user_keymap`], changed it): nothing was written. This is what it
+    /// holds now.
+    ChangedOnDisk(String),
+}
+
+/// Replace the user's `keymap.json` at `path` with `text`, the whole-file save of the config file
+/// editor, only while the file still holds `base` (the text the editor's buffer started from).
+/// It takes the same lock as [`write_user_keymap`] and writes atomically, so a binding saved from
+/// the keymap editor in between is never silently overwritten by a stale buffer. A missing file
+/// counts as empty. Blocking file I/O: run it on the background executor.
+///
+/// # Errors
+///
+/// The file cannot be read or written.
+pub fn save_user_keymap_text(path: &Path, base: &str, text: &str) -> OxiResult<UserKeymapSave> {
+    // A poisoned lock only means another edit panicked; the file is still whole (atomic).
+    let _guard = EDIT_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let on_disk = read_or_empty(path)?;
+    if on_disk == text {
+        return Ok(UserKeymapSave::Saved);
+    }
+    if on_disk != base {
+        return Ok(UserKeymapSave::ChangedOnDisk(on_disk));
+    }
+    write_atomically(path, text)?;
+    Ok(UserKeymapSave::Saved)
+}
+
 /// The edited text, or why it must not be written.
 fn edited_text(
     old: &str,

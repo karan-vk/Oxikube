@@ -4,7 +4,7 @@ use gpui::Task;
 use oxikube_app::{CatalogEntry, ClusterCatalog};
 use oxikube_domain::ids::ClusterId;
 
-use super::choice::ClusterChoice;
+use super::choice::{ClusterChoice, ClusterRowText};
 use crate::page::{SearchIndex, SettingsPageModel};
 
 /// Which settings the page edits.
@@ -35,6 +35,9 @@ pub(crate) struct ClusterTabState {
     pub entries: Vec<CatalogEntry>,
     /// The picker's rows: the entries, then blocks the catalog does not list.
     pub choices: Vec<ClusterChoice>,
+    /// What each of [`choices`](Self::choices) shows, in the same order: worked out when the
+    /// list or the file changes, so a frame only lays out the rows in view.
+    pub rows: Vec<ClusterRowText>,
     /// The cluster picked last, kept across scope switches.
     pub last: Option<ClusterId>,
     pub catalog: Option<ClusterCatalog>,

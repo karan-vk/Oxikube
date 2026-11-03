@@ -128,3 +128,63 @@ fn save_writes_the_file_and_never_starts_a_cluster_apply(cx: &mut TestAppContext
     assert_eq!(level, NoticeLevel::Info, "{text}");
     assert_eq!(text, "Saved");
 }
+
+/// Run the save (`resource::Apply`) and wait for its background write to report (the notice
+/// changes).
+fn save(f: &mut Fixture, editor: &gpui::Entity<ManifestEditor>) -> (NoticeLevel, String) {
+    let notice = |f: &mut Fixture| {
+        f.vcx.read(|cx| {
+            editor
+                .read(cx)
+                .notice()
+                .map(|n| (n.level, n.text.to_string()))
+        })
+    };
+    let before = notice(f);
+    f.vcx.update(|window, cx| {
+        editor.update(cx, |editor, cx| editor.begin_apply(window, cx));
+    });
+    for _ in 0..100 {
+        f.vcx.run_until_parked();
+        if let Some(now) = notice(f).filter(|now| Some(now) != before.as_ref()) {
+            return now;
+        }
+        f.vcx.executor().allow_parking();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    panic!("the save never reported");
+}
+
+#[gpui::test]
+fn a_save_never_overwrites_a_change_made_on_disk_since_the_file_opened(cx: &mut TestAppContext) {
+    let mut f = setup(cx, false);
+    let dir = tempfile::tempdir().expect("a temp dir");
+    let editor = open_keymap(&mut f, dir.path(), "[]");
+    // The keymap editor records a binding meanwhile (its write goes straight to the file).
+    let recorded = r#"[{ "bindings": { "cmd-shift-p": "palette::Toggle" } }]"#;
+    std::fs::write(dir.path().join("keymap.json"), recorded).expect("write");
+    let code = f.vcx.read(|cx| editor.read(cx).editor().clone());
+    f.vcx.update(|window, cx| {
+        code.update(cx, |code, cx| {
+            code.api(window, cx).replace_text("[] // fixed")
+        });
+    });
+    f.advance(VALIDATION_DEBOUNCE);
+
+    let (level, text) = save(&mut f, &editor);
+    assert_eq!(level, NoticeLevel::Warning, "{text}");
+    assert!(text.contains("changed on disk"), "{text}");
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("keymap.json")).expect("the file"),
+        recorded,
+        "the recorded binding survives the stale buffer"
+    );
+
+    // Saving again, having been told, overwrites.
+    let (level, text) = save(&mut f, &editor);
+    assert_eq!((level, text.as_str()), (NoticeLevel::Info, "Saved"));
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("keymap.json")).expect("the file"),
+        "[] // fixed"
+    );
+}

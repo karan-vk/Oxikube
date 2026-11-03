@@ -26,6 +26,7 @@ use oxikube_domain::OxiError;
 use oxikube_domain::command::Command;
 use oxikube_domain::helm::{HelmCapabilities, RepoEntry};
 use oxikube_helm_ui::repos::{HelmReposView, ReposDeps, ServiceBackend};
+use oxikube_testkit::config_dir::TempConfigDir;
 use oxikube_testkit::headless::HEADLESS_SCALE_FACTOR;
 use oxikube_testkit::screenshot::{
     RgbaImage, Tolerance, check_golden, distinct_colors_at_least, golden_path,
@@ -105,9 +106,13 @@ fn service(scene: Scene) -> HelmReposService {
 
 fn render(scene: Scene) -> anyhow::Result<RgbaImage> {
     let service = service(scene);
+    // The quick-add row comes from `helm.default_repos`: the settings store with the shipped
+    // defaults (and an empty user file), as the running app has it.
+    let config = TempConfigDir::with_settings("{}");
     let mut cx = headless();
     let window = cx.open_window(size(px(WIDTH), px(HEIGHT)), |window, cx| {
         oxikube_ui::init(cx);
+        oxikube_settings::init_with_dir(config.path(), cx);
         // Pin the appearance: `init` follows the system, which differs between machines.
         oxikube_ui::set_tokens(cx, oxikube_ui::Tokens::dark());
         cx.set_reduce_motion(true);

@@ -102,6 +102,7 @@ impl SettingsPage {
         // The badges and values read the store at draw time: redraw when it changes.
         // Inputs that are not being edited follow the file.
         let settings = cx.observe_global_in::<SettingsStore>(window, |this, window, cx| {
+            this.refresh_cluster_rows(cx);
             this.controls
                 .sync_from_store(&this.model, this.cluster.as_ref(), window, cx);
             cx.notify();

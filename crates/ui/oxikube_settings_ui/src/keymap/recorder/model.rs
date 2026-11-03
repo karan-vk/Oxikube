@@ -3,8 +3,8 @@
 //! the validator's verdict on the edit, and the `keymap::SetBinding` payload a save sends.
 
 use oxikube_domain::command::KeymapBindingEdit;
+use oxikube_keymap::KeymapRow;
 use oxikube_keymap::edit::{ChainConflict, ContextModel, EditPreview, ref_of_row};
-use oxikube_keymap::{KeymapRow, RowStatus};
 
 /// The most keystrokes one binding records (`ctrl-k ctrl-s` is two); the recording stops there.
 pub const MAX_KEYSTROKES: usize = 4;
@@ -49,12 +49,13 @@ pub struct RecorderModel {
 }
 
 impl RecorderModel {
-    /// A recorder for the action of `row`: a bound row is the binding being changed (its context
-    /// is the starting one), a command bound nowhere gets a binding added. Recording starts at
-    /// once.
+    /// A recorder for the action of `row`: a binding in force is the one being changed (its
+    /// context is the starting one); a command bound nowhere, or a row out of force (overridden,
+    /// or unbound by the user), gets a binding added. A row out of force is never "replaced":
+    /// its keys belong to the binding that put it out of force, which the edit must not touch.
+    /// Recording starts at once.
     pub fn for_row(row: &KeymapRow) -> Self {
-        let editing =
-            (row.status != RowStatus::Unbound && !row.keystrokes.is_empty()).then(|| row.clone());
+        let editing = ref_of_row(row).is_some().then(|| row.clone());
         Self {
             action: row.action.clone(),
             title: row.title.clone(),

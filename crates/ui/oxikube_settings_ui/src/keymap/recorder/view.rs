@@ -37,7 +37,8 @@ pub struct KeybindRecorder {
     contexts: ContextModel,
     actions: ActionRegistry,
     user_text: String,
-    /// Ends the sequence after a pause; replaced (so cancelled) by every keystroke.
+    /// Ends the sequence after a pause; replaced (so cancelled) by every keystroke, and cancelled
+    /// by restart, stop and clear.
     idle: Task<()>,
     /// The debounced validation; replaced by every change.
     check: Task<()>,
@@ -127,6 +128,7 @@ impl KeybindRecorder {
             return true;
         }
         let still_recording = self.model.push(keystroke_text(keystroke, self.platform));
+        self.idle = Task::ready(());
         if still_recording {
             self.idle = cx.spawn(async move |this, cx| {
                 cx.background_executor().timer(IDLE_TIMEOUT).await;
@@ -141,8 +143,10 @@ impl KeybindRecorder {
         true
     }
 
-    /// Record from nothing again (the Record button), with the focus on the recorder.
+    /// Record from nothing again (the Record button), with the focus on the recorder. The pause
+    /// timer of the previous recording is cancelled, so it cannot end the new one.
     pub fn restart(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.idle = Task::ready(());
         self.model.restart();
         window.focus(&self.focus, cx);
         self.changed(cx);
@@ -150,12 +154,14 @@ impl KeybindRecorder {
 
     /// Stop recording, keeping the keys.
     pub fn stop(&mut self, cx: &mut Context<Self>) {
+        self.idle = Task::ready(());
         self.model.stop();
         cx.notify();
     }
 
     /// Forget the keys recorded (the Clear button).
     pub fn clear(&mut self, cx: &mut Context<Self>) {
+        self.idle = Task::ready(());
         self.model.clear();
         self.changed(cx);
     }

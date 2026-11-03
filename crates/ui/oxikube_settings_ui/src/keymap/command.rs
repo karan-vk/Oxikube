@@ -1,15 +1,17 @@
-//! `keymap::ShowEditor`: open the page in the active cluster's tab; `keymap::RecordBinding`: open
-//! the key recorder on its selected row (E21-S08).
+//! `keymap::ShowEditor`: open the page in the active cluster's tab (in the window's own workspace
+//! when no cluster tab is open); `keymap::RecordBinding`: open the key recorder on its selected
+//! row (E21-S08).
 
 use std::rc::Rc;
 
 use futures::StreamExt as _;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
-use gpui::{App, AppContext as _, SharedString, Task, WeakEntity, Window};
+use gpui::{App, AppContext as _, Entity, SharedString, Task, WeakEntity, Window};
 use oxikube_app::command_bus::{CommandOutput, CommandRegistry, HandlerContext, RegisterError};
 use oxikube_domain::command::{self, Command, CommandId};
+use oxikube_domain::ids::ClusterId;
 use oxikube_domain::{OxiError, OxiResult};
-use oxikube_workspace::{ClusterTabs, CommandDispatcher, OpenOptions};
+use oxikube_workspace::{ClusterTabs, CommandDispatcher, OpenOptions, Workspace};
 
 use super::view::{ITEM_KEY, KeymapEditorDeps, KeymapEditorView};
 
@@ -86,6 +88,10 @@ pub struct KeymapEditorViewsDeps {
     pub dispatcher: Rc<dyn CommandDispatcher>,
     /// The window's cluster tabs.
     pub tabs: WeakEntity<ClusterTabs>,
+    /// The window's own workspace (the one the catalog and the settings page open in): the page
+    /// opens there when no cluster tab is open, so key bindings can be edited before any cluster
+    /// is connected.
+    pub home: WeakEntity<Workspace>,
 }
 
 /// The window's keymap editor page.
@@ -109,38 +115,19 @@ impl KeymapEditorViews {
                     }
                     opened
                 });
-                match opened {
-                    Ok(true) => {}
-                    Ok(false) => {
-                        tracing::debug!(
-                            "keymap::ShowEditor: no cluster tab is open to show the page in"
-                        );
-                    }
-                    Err(_) => break,
+                if !matches!(opened, Ok(true)) {
+                    // The window, or both its workspaces, are gone.
+                    break;
                 }
             }
         })
     }
 
     /// Shows the page in the active cluster's tab (the first open one when none is active) and
-    /// brings the tab forward. `false` when no cluster tab is open.
+    /// brings the tab forward; with no cluster tab open, in the window's own workspace. `false`
+    /// only when the window is gone.
     pub fn open(deps: &KeymapEditorViewsDeps, window: &mut Window, cx: &mut App) -> bool {
-        let Some(tabs) = deps.tabs.upgrade() else {
-            return false;
-        };
-        let Some(cluster) = tabs
-            .read(cx)
-            .active()
-            .cloned()
-            .or_else(|| tabs.read(cx).clusters(cx).into_iter().next())
-        else {
-            return false;
-        };
-        let Some(workspace) = tabs
-            .read(cx)
-            .tab(&cluster)
-            .map(|tab| tab.read(cx).workspace().clone())
-        else {
+        let Some((cluster, workspace)) = Self::host(deps, cx) else {
             return false;
         };
         let key = SharedString::from(ITEM_KEY);
@@ -162,24 +149,18 @@ impl KeymapEditorViews {
                 });
             }
         }
-        tabs.update(cx, |tabs, cx| {
-            tabs.activate(&cluster, window, cx);
-        });
+        if let (Some(cluster), Some(tabs)) = (cluster, deps.tabs.upgrade()) {
+            tabs.update(cx, |tabs, cx| {
+                tabs.activate(&cluster, window, cx);
+            });
+        }
         true
     }
 
-    /// Opens the key recorder on the selected row of the page in the active cluster's tab.
+    /// Opens the key recorder on the selected row of the page [`open`](Self::open) shows.
     /// `false` when there is no page or nothing is selected.
     pub fn record(deps: &KeymapEditorViewsDeps, window: &mut Window, cx: &mut App) -> bool {
-        let Some(tabs) = deps.tabs.upgrade() else {
-            return false;
-        };
-        let Some(workspace) = tabs
-            .read(cx)
-            .active()
-            .and_then(|cluster| tabs.read(cx).tab(cluster))
-            .map(|tab| tab.read(cx).workspace().clone())
-        else {
+        let Some((_, workspace)) = Self::host(deps, cx) else {
             return false;
         };
         let Some(page) = workspace
@@ -195,5 +176,23 @@ impl KeymapEditorViews {
             tracing::debug!("keymap::RecordBinding: select a row of the keymap editor first");
         }
         opened
+    }
+
+    /// The workspace the page goes in: the active cluster's tab (the first open one when none is
+    /// active) with that cluster, else the window's own workspace.
+    fn host(
+        deps: &KeymapEditorViewsDeps,
+        cx: &App,
+    ) -> Option<(Option<ClusterId>, Entity<Workspace>)> {
+        let in_tab = deps.tabs.upgrade().and_then(|tabs| {
+            let tabs = tabs.read(cx);
+            let cluster = tabs
+                .active()
+                .cloned()
+                .or_else(|| tabs.clusters(cx).into_iter().next())?;
+            let workspace = tabs.tab(&cluster)?.read(cx).workspace().clone();
+            Some((Some(cluster), workspace))
+        });
+        in_tab.or_else(|| deps.home.upgrade().map(|home| (None, home)))
     }
 }

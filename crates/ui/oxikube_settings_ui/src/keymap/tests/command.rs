@@ -130,9 +130,26 @@ fn the_page_opens_in_the_active_cluster_tab_once(cx: &mut TestAppContext) {
     let views = KeymapEditorViewsDeps {
         dispatcher: inner,
         tabs: tabs.downgrade(),
+        home: ws.downgrade(),
     };
-    // No cluster tab: nowhere to show the page, and nothing is invented.
-    assert!(!vcx.update(|window, cx| KeymapEditorViews::open(&views, window, cx)));
+    // No cluster tab: the page opens in the window's own workspace, once.
+    for _ in 0..2 {
+        assert!(vcx.update(|window, cx| KeymapEditorViews::open(&views, window, cx)));
+        vcx.run_until_parked();
+    }
+    let home_pages = |vcx: &mut gpui::VisualTestContext| {
+        vcx.update(|_, cx| {
+            ws.read(cx)
+                .items()
+                .filter(|item| item.item_key(cx).as_deref() == Some(ITEM_KEY))
+                .count()
+        })
+    };
+    assert_eq!(
+        home_pages(&mut vcx),
+        1,
+        "the page is reachable with no cluster"
+    );
 
     for name in ["a", "b"] {
         block_on(sessions.connect(&id(name))).expect("connect");

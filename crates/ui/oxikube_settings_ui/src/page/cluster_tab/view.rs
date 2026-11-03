@@ -8,7 +8,7 @@ use oxikube_domain::ids::ClusterId;
 use oxikube_runtime::spawn_kube;
 use oxikube_settings::SettingsStore;
 
-use super::choice::{ClusterChoice, choices};
+use super::choice::{ClusterChoice, ClusterRowText, choices};
 use super::model::cluster_page_model;
 use super::state::{Parked, Scope};
 use crate::page::{SearchIndex, SettingsPage, SettingsPageModel};
@@ -81,6 +81,12 @@ impl SettingsPage {
     fn refresh_choices(&mut self, cx: &mut Context<Self>) {
         let store = cx.try_global::<SettingsStore>();
         self.tab.choices = choices(&self.tab.entries, store);
+        self.tab.rows = self
+            .tab
+            .choices
+            .iter()
+            .map(|choice| choice.row_text(store))
+            .collect();
         if self.tab.scope == Scope::Cluster {
             let listed = |id: &ClusterId| self.tab.choices.iter().any(|row| row.id == *id);
             if !self.cluster.as_ref().is_some_and(listed) {
@@ -89,6 +95,26 @@ impl SettingsPage {
             }
         }
         cx.notify();
+    }
+
+    /// The file changed: the rows' display names and override counts follow it. Nothing to do
+    /// on the global scope (the rows are rebuilt when the tab is shown).
+    pub(in crate::page) fn refresh_cluster_rows(&mut self, cx: &Context<Self>) {
+        if self.tab.scope != Scope::Cluster {
+            return;
+        }
+        let store = cx.try_global::<SettingsStore>();
+        self.tab.rows = self
+            .tab
+            .choices
+            .iter()
+            .map(|choice| choice.row_text(store))
+            .collect();
+    }
+
+    /// What each row of the cluster list shows, in the list's order.
+    pub fn cluster_rows(&self) -> &[ClusterRowText] {
+        &self.tab.rows
     }
 
     /// Shows the all-settings page or the per-cluster tab. Clears the search; the per-cluster

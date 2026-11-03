@@ -168,3 +168,22 @@ fn a_blocked_verdict_disables_save_and_carries_the_reasons() {
         Verdict::Blocked(vec!["keymap.json cannot be edited".into()])
     );
 }
+
+#[test]
+fn a_row_out_of_force_gets_a_binding_added_never_replaced() {
+    // Replacing an overridden row would find the binding in force at its keys (the user's
+    // override) and overwrite it with `null`: the recorder adds a binding instead.
+    for status in [RowStatus::Overridden, RowStatus::UnboundByUser] {
+        for layer in [KeymapLayer::Default, KeymapLayer::User] {
+            let mut overridden = row("x::Old", Some("Workspace"), "cmd-k", Some(layer));
+            overridden.status = status;
+            let mut m = RecorderModel::for_row(&overridden);
+            assert!(m.editing().is_none(), "{status:?} {layer:?}");
+            assert_eq!(m.context(), "Workspace", "starts in the row's context");
+            m.push("cmd-j".into());
+            let edit = m.edit().expect("keys recorded");
+            assert!(edit.replaces.is_none(), "{status:?} {layer:?}: {edit:?}");
+            assert!(!m.is_unchanged());
+        }
+    }
+}

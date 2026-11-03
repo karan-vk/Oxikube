@@ -930,6 +930,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let keymap_editor_pages = keymap_editor::start_views(
         dispatcher_for_keymap_editor,
         tabs.downgrade(),
+        workspace.downgrade(),
         keymap_editor_rx,
         window,
         cx,
