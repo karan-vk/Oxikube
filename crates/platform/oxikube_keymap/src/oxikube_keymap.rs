@@ -34,6 +34,9 @@
 //! - [`query`]: the bindings of an action or a command, for the palette.
 //! - [`mod@dispatch`]: what a key does in a context stack written as data, and the bindings in
 //!   force there (tests, the help overlay).
+//! - [`mod@validate`]: [`validate()`], the pure validator (text to positioned diagnostics with a severity
+//!   and a code) that the store's load path and the editor both call; [`known`]: the registry of
+//!   context names views add to; [`suggest`]: "did you mean"; [`schema`]: `keymap.schema.json`.
 //! - [`stands_for`]: which commands the view actions (`resource_table::ViewYaml`) stand for.
 //!
 //! The design (sections, `null`, context predicates, layering) follows Zed's `keymap_file.rs`;
@@ -52,19 +55,23 @@ pub mod dispatch;
 pub mod events;
 pub mod file;
 pub mod global;
+pub mod known;
 pub mod layer;
 pub mod lines;
 pub mod paths;
 pub mod query;
 pub mod registry;
+pub mod schema;
 pub mod stands_for;
 pub mod store;
+pub mod suggest;
+pub mod validate;
 
 pub use actions::OpenUser;
 pub use base_keymap::{BaseKeymap, KeymapSettings, KeymapSettingsContent};
 pub use conflicts::{ConflictEntry, KeymapConflict};
 pub use context::{KeyContextBuilder, KeyContextual, contexts};
-pub use diagnostics::{KeymapDiagnostic, KeymapDiagnosticsEvent, KeymapProblem};
+pub use diagnostics::{KeymapDiagnostic, KeymapDiagnosticsEvent, KeymapProblem, Severity};
 pub use dispatch::{
     ActiveBinding, Resolution, SuppressedBinding, active_bindings, all_bindings, parse_stack,
     resolve, suppressed_bindings,
@@ -75,6 +82,7 @@ pub use global::{
     conflicts, diagnostics, init, init_with_dir, init_with_options, init_with_text, rebind, reload,
     reload_user_keymap, set_vim_layer, user_diagnostics, user_keymap_file,
 };
+pub use known::{KnownNames, register_context, register_flag};
 pub use layer::KeymapLayer;
 /// Where a resolved binding came from (default, base keymap or the user's file): the layer it was
 /// loaded from, kept on every binding GPUI holds ([`BindingInfo::layer`]) so the help overlay can
@@ -85,3 +93,4 @@ pub use paths::{ensure_user_keymap, user_keymap_path};
 pub use query::{BindingInfo, bindings_for_action, bindings_for_action_name, bindings_for_command};
 pub use registry::ActionRegistry;
 pub use store::{KeymapOptions, KeymapStore, ParsedUserKeymap};
+pub use validate::validate;

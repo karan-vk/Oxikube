@@ -6,9 +6,10 @@
 //! - [`follow_diagnostics`]: when the user's file has problems, one persistent toast lists them
 //!   with their `keymap.json:<line>` and an "Open keymap" button; fixing the file takes it away.
 //! - `keymap::OpenUser` ([`register_commands`], [`open_requests`], [`install_action`]): creates
-//!   `keymap.json` from the commented template when it is missing and opens it in the editor.
-//!   There is no manifest editor tab yet (E10-S10 opens it in JSON mode when it lands), so the
-//!   system's editor for `.json` files opens it.
+//!   `keymap.json` from the commented template when it is missing and opens it in the manifest
+//!   editor (E21-S03): a tab in JSON mode whose problems (unknown actions and contexts, bad keys,
+//!   with line and column) are underlined as the user types and which cmd-s saves to the file.
+//!   A session with no window to show it falls back to the system's editor for `.json` files.
 //!
 //! The command is a bus command like any other, so the palette (E11-S03), a key bound to the
 //! `keymap::OpenUser` action in `keymap.json`, and the MCP tool all run the same handler.
@@ -22,6 +23,9 @@ use gpui::{AnyWindowHandle, App, Global, Subscription, Task, WeakEntity};
 use oxikube_app::command_bus::{CommandOutput, CommandRegistry, HandlerContext, RegisterError};
 use oxikube_domain::OxiError;
 use oxikube_domain::command::{self, Command, CommandId};
+use oxikube_editor::view::{
+    ConfigFile, ConfigFileKind, EditorRequest, EditorViewSink, OpenConfigFile,
+};
 use oxikube_keymap::{KeymapDiagnosticsEvent, OpenUser};
 use oxikube_workspace::{CommandDispatcher, Toast, ToastAction, Workspace};
 use serde_json::json;
@@ -79,21 +83,40 @@ fn create_if_missing(file: &Path) -> Result<(PathBuf, bool), OxiError> {
     Ok((path, !existed))
 }
 
-/// How `keymap.json` is shown to the user: the system's editor for the file unless a global of
-/// this type says otherwise. The seam where the manifest editor in JSON mode (E10-S10) replaces
-/// the system editor, and where tests see the file without launching one.
+/// How `keymap.json` is shown to the user when a global of this type is set: the seam where tests
+/// see the file without a window. Without it the file opens in the manifest editor
+/// ([`open_requests`]).
 #[derive(Clone)]
 pub struct KeymapFileOpener(pub Rc<dyn Fn(&Path, &mut App)>);
 
 impl Global for KeymapFileOpener {}
 
-/// Opens each file `keymap::OpenUser` prepared, on the UI thread.
-pub fn open_requests(mut files: mpsc::UnboundedReceiver<PathBuf>, cx: &mut App) -> Task<()> {
+/// Opens each file `keymap::OpenUser` prepared, on the UI thread: in the window's manifest
+/// editor through `editors` (the keymap validator checks it there), or with the system's editor
+/// when the editor is gone or the path is not the user's keymap.
+pub fn open_requests(
+    mut files: mpsc::UnboundedReceiver<PathBuf>,
+    editors: EditorViewSink,
+    cx: &mut App,
+) -> Task<()> {
     cx.spawn(async move |cx| {
         while let Some(path) = files.next().await {
-            cx.update(|cx| match cx.try_global::<KeymapFileOpener>().cloned() {
-                Some(opener) => (opener.0)(&path, cx),
-                None => cx.open_with_system(&path),
+            cx.update(|cx| {
+                if let Some(opener) = cx.try_global::<KeymapFileOpener>().cloned() {
+                    return (opener.0)(&path, cx);
+                }
+                let sent = ConfigFileKind::of_path(&path, cx).is_some_and(|kind| {
+                    let file = ConfigFile {
+                        kind,
+                        path: path.clone(),
+                    };
+                    editors
+                        .send(EditorRequest::OpenConfigFile(OpenConfigFile { file }))
+                        .is_ok()
+                });
+                if !sent {
+                    cx.open_with_system(&path);
+                }
             });
         }
     })

@@ -28,6 +28,18 @@ impl KeymapPlatform {
     }
 }
 
+/// Path of the generated keymap schema, relative to the workspace root. `cargo xtask
+/// gen-keymap-schema` writes it; [`keymap_schema`] embeds it.
+pub const KEYMAP_SCHEMA_PATH: &str =
+    "crates/platform/oxikube_assets/assets/keymaps/keymap.schema.json";
+
+/// The generated JSON schema for the user's `keymap.json` (`assets/keymaps/keymap.schema.json`),
+/// with the action names registered when the app binary generated it; the editor builds a live
+/// one from the running app's registry (`oxikube_keymap::schema`).
+pub fn keymap_schema() -> &'static str {
+    include_str!("../assets/keymaps/keymap.schema.json")
+}
+
 /// The embedded default keymap for `platform` (the bottom layer of the keymap).
 pub fn default_keymap(platform: KeymapPlatform) -> &'static str {
     match platform {

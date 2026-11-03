@@ -47,7 +47,6 @@ mod object;
 mod options;
 mod run;
 pub(crate) mod scalar;
-mod suggest;
 mod units;
 mod walk;
 

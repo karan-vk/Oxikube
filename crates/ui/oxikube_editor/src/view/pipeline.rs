@@ -50,6 +50,12 @@ impl ManifestEditor {
             });
             return;
         }
+        if let Some(file) = &self.config_file {
+            // A config file is checked by its own validator, not the Kubernetes schemas.
+            let kind = file.kind;
+            self.schedule_config_validation(kind, delay, window, cx);
+            return;
+        }
         let cancel = CancelToken::new();
         self.pass_cancel = CancelOnDrop::new(cancel.clone());
         self.validation = Some(cx.spawn_in(window, async move |this, cx| {

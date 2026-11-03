@@ -9,9 +9,9 @@ use regex::{Regex, RegexBuilder};
 use super::diagnostic::{Diagnostic, DiagnosticCode, Severity};
 use super::options::ValidateOptions;
 use super::scalar::{ValueType, matches_enum, scalar_type};
-use super::suggest::nearest;
 use crate::cancel::CancelToken;
 use crate::yaml::{DocTree, NodeId, NodeKind, ScalarStyle};
+use oxikube_keymap::suggest::nearest;
 
 /// Nodes visited between two polls of the [`CancelToken`]: well under a millisecond of work.
 const NODES_PER_POLL: u32 = 256;

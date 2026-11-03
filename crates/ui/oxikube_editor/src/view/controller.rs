@@ -61,6 +61,9 @@ pub struct EditorViews {
     /// The templates scan behind the running `resource::Create`; a newer one replaces (and so
     /// cancels) it. Never cleared from inside itself.
     pub(super) scan: Option<Task<()>>,
+    /// The read of the config file being opened; a newer open replaces it. Never cleared from
+    /// inside itself.
+    pub(super) file_read: Option<Task<()>>,
     /// The setting problems the last notice was about, so an unrelated change of the settings
     /// does not show it again.
     reported: Vec<String>,
@@ -101,6 +104,7 @@ impl EditorViews {
                 deps,
                 opened: 0,
                 scan: None,
+                file_read: None,
                 reported: Vec::new(),
                 _requests: pump,
                 _settings: settings,
@@ -125,6 +129,7 @@ impl EditorViews {
                 this.show_resource_diff(request, state, window, cx)
             }
             EditorRequest::OpenText(open) => this.open_text(open, window, cx),
+            EditorRequest::OpenConfigFile(open) => this.open_config_file(open, window, cx),
             EditorRequest::ToggleManagedFields => {
                 this.on_target(window, cx, |editor, window, cx| {
                     editor.toggle_managed_fields(window, cx);
@@ -301,7 +306,7 @@ impl EditorViews {
     }
 
     /// The workspace on screen: the shown cluster's, else the window's.
-    fn shown_workspace(&self, cx: &App) -> Option<Entity<Workspace>> {
+    pub(super) fn shown_workspace(&self, cx: &App) -> Option<Entity<Workspace>> {
         if let Some(cluster) = self.deps.host.active_cluster(cx)
             && let Some(workspace) = self.deps.host.workspace(&cluster, cx)
         {

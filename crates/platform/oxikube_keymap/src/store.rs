@@ -15,8 +15,11 @@ use crate::build::build_layer;
 use crate::conflicts::{KeymapConflict, find_conflicts};
 use crate::diagnostics::KeymapDiagnostic;
 use crate::file::{KeymapSection, parse_keymap};
+use crate::known::KnownNames;
 use crate::layer::KeymapLayer;
 use crate::lines::SourceLines;
+use crate::registry::ActionRegistry;
+use crate::validate::{sort_in_file_order, validate};
 
 /// Sections of one layer plus the problems found reading them.
 #[derive(Default)]
@@ -26,6 +29,9 @@ struct LayerState {
     parse_diagnostics: Vec<KeymapDiagnostic>,
     /// Where the sections are in the text, to give later problems their lines.
     lines: SourceLines,
+    /// The user's file text, kept so each merge can run the validator over it with the actions
+    /// registered by then (the embedded layers are ours and not validated this way).
+    text: Option<String>,
     /// The sections come from an earlier text than the diagnostics: the file on disk is
     /// currently unreadable or invalid. Their binding problems were reported when that text
     /// loaded, and their lines no longer match the file, so a merge does not repeat them.
@@ -39,12 +45,14 @@ impl LayerState {
                 sections: parsed.sections,
                 parse_diagnostics: parsed.diagnostics,
                 lines: parsed.lines,
+                text: None,
                 stale: false,
             },
             Err(diagnostic) => Self {
                 sections: Vec::new(),
                 parse_diagnostics: vec![diagnostic],
                 lines: SourceLines::default(),
+                text: None,
                 stale: false,
             },
         }
@@ -61,7 +69,9 @@ pub struct ParsedUserKeymap(LayerState);
 impl ParsedUserKeymap {
     /// Parse `text`, the contents of a `keymap.json` (blank for none).
     pub fn parse(text: &str) -> Self {
-        Self(LayerState::parse(text, KeymapLayer::User))
+        let mut state = LayerState::parse(text, KeymapLayer::User);
+        state.text = Some(text.to_owned());
+        Self(state)
     }
 }
 
@@ -205,16 +215,39 @@ impl KeymapStore {
                 KeymapLayer::User => Some(&self.user),
             };
             let Some(state) = state else { continue };
-            diagnostics.extend(state.parse_diagnostics.iter().cloned());
             let built = build_layer(cx, layer, &state.sections);
-            if state.stale {
+            // Only the user's layer keeps its text: the one validator reports everything it can
+            // see in it, unless the sections are stale.
+            let validated =
+                state.text.as_deref().filter(|_| !state.stale).map(|text| {
+                    validate(text, &ActionRegistry::from_app(cx), &KnownNames::current())
+                });
+            if let Some(mut found) = validated {
+                // What only building can tell (an action rejecting its data) is added.
+                for mut extra in built.diagnostics {
+                    extra.locate(&state.lines);
+                    let seen = found.iter().any(|d| {
+                        d.section == extra.section
+                            && d.keystrokes == extra.keystrokes
+                            && d.code() == extra.code()
+                    });
+                    if !seen {
+                        found.push(extra);
+                    }
+                }
+                sort_in_file_order(&mut found);
+                diagnostics.extend(found);
+                conflicts.extend(find_conflicts(layer, &state.sections, &state.lines));
+            } else if state.stale {
                 // Sections of an earlier file: their problems and line numbers are history.
+                diagnostics.extend(state.parse_diagnostics.iter().cloned());
                 conflicts.extend(find_conflicts(
                     layer,
                     &state.sections,
                     &SourceLines::default(),
                 ));
             } else {
+                diagnostics.extend(state.parse_diagnostics.iter().cloned());
                 diagnostics.extend(built.diagnostics.into_iter().map(|mut diagnostic| {
                     diagnostic.locate(&state.lines);
                     diagnostic

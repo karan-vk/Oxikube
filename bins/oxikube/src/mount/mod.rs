@@ -446,6 +446,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (help_sink, help_rx) = oxikube_palette::help::HelpSink::channel();
     let (editor_sink, editor_rx) = oxikube_editor::view::EditorViewSink::channel();
     let editor_for_apply = editor_sink.clone();
+    let editor_for_keymap = editor_sink.clone();
     let (apply_sink, apply_rx) = oxikube_resources_ui::apply::ApplyRequestSink::channel();
     let (metrics_sink, metrics_rx) = oxikube_settings_ui::metrics::MetricsRequestSink::channel();
     let (role_sink, role_rx) = oxikube_rbac_ui::role::RoleRequestSink::channel();
@@ -816,7 +817,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let open_kinds = resources::open_kinds(kinds_rx, tabs.downgrade(), &workspace, window, cx);
     let open_links = terminal::open_links(links_rx, cx);
     let help = help::mount(&workspace, help_rx, window, cx);
-    let open_keymap = keymap::open_requests(keymap_rx, cx);
+    let open_keymap = keymap::open_requests(keymap_rx, editor_for_keymap, cx);
     keymap::install_action(window.window_handle(), &dispatcher_for_keymap, cx);
     let follow_keymap =
         keymap::follow_diagnostics(workspace.downgrade(), dispatcher_for_keymap, cx);

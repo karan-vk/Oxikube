@@ -61,7 +61,7 @@ pub fn run(args: &Args) -> Result<()> {
 }
 
 /// Run the app binary with one of the hidden print flags and return its stdout.
-fn run_generator(root: &Path, flag: &str) -> Result<String> {
+pub(crate) fn run_generator(root: &Path, flag: &str) -> Result<String> {
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
     let output = Command::new(cargo)
         .current_dir(root)
