@@ -227,6 +227,15 @@ impl SettingsStore {
         self.user_settings_path = path;
     }
 
+    /// [`json_schema`](Self::json_schema) with the live lists in `enums` overlaid on every field
+    /// annotated with `x-oxikube-dynamic-enum` (theme names, base keymaps, fonts; see
+    /// [`crate::schema_dynamic`]). The checked-in static schema never goes through this.
+    pub fn json_schema_with(&self, enums: &crate::schema_dynamic::DynamicEnums) -> Value {
+        let mut schema = self.json_schema();
+        enums.apply(&mut schema);
+        schema
+    }
+
     /// JSON schema of `settings.json` for every registered setting (see [`crate::schema`]).
     pub fn json_schema(&self) -> Value {
         let mut generator = crate::schema::generator();
