@@ -150,8 +150,11 @@ pub fn replace_top_level_array_value_in_json_text(
             index += 1;
         }
         if !cursor.goto_next_sibling() {
-            if let Some(new_value) = new_value {
-                return append_top_level_array_value_in_json_text(text, new_value, tab_size);
+            if new_value.is_some() {
+                // `key_path` addresses inside the new element, so the appended element is the
+                // value wrapped in the objects (or arrays, for `#N`) the path describes.
+                let element = construct_json_value(key_path, new_value);
+                return append_top_level_array_value_in_json_text(text, &element, tab_size);
             } else {
                 return (0..0, String::new());
             }
@@ -174,13 +177,7 @@ pub fn replace_top_level_array_value_in_json_text(
             if cursor.node().kind() == "," {
                 remove_range.end = cursor.node().range().end_byte;
             }
-            if let Some(next_newline) = &text[remove_range.end + 1..].find('\n')
-                && text[remove_range.end + 1..remove_range.end + next_newline]
-                    .chars()
-                    .all(|c| c.is_ascii_whitespace())
-            {
-                remove_range.end += next_newline;
-            }
+            remove_range.end = end_of_line_break_and_indent(text, remove_range.end);
         } else {
             while cursor.goto_previous_sibling()
                 && (cursor.node().is_extra() || cursor.node().is_missing())
@@ -222,6 +219,27 @@ pub fn replace_top_level_array_value_in_json_text(
 
         (replace_range, replace_value)
     }
+}
+
+/// Where the removal of a first array element that ends at `end` should stop: past the rest of
+/// its line when that is only blank (spaces, tabs, a `\r` of a CRLF ending), the line break, and
+/// the next line's indentation, so the next element moves into the removed one's place. Returns
+/// `end` unchanged when anything else (another element, a comment) follows on the same line or
+/// the text ends first.
+///
+/// Oxikube fix: Zed's version sliced `text[end + 1..end + n]` with `n` relative to `end + 1`,
+/// which panicked on CRLF endings, a trailing space after the comma, or unterminated input.
+fn end_of_line_break_and_indent(text: &str, end: usize) -> usize {
+    let Some(rest) = text.get(end..) else {
+        return end;
+    };
+    let blank_len = rest.len() - rest.trim_start_matches([' ', '\t', '\r']).len();
+    if rest.as_bytes().get(blank_len) != Some(&b'\n') {
+        return end;
+    }
+    let next_line = &rest[blank_len + 1..];
+    let indent_len = next_line.len() - next_line.trim_start_matches([' ', '\t']).len();
+    end + blank_len + 1 + indent_len
 }
 
 /// Append `new_value` to the document's top-level array (creating the array if there is none).

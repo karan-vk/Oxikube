@@ -100,6 +100,33 @@ fn a_rescan_replaces_the_user_themes_and_reports_duplicates() {
 }
 
 #[test]
+fn a_rescan_keeps_the_arc_of_an_unchanged_theme_and_replaces_a_changed_one() {
+    let mut registry = ThemeRegistry::with_bundled();
+    let mounted = IconThemeFamily::mount(read("kube.json"));
+    registry.replace_user_icon_themes(vec![("kube.json".into(), mounted.clone())], Vec::new());
+    let name = mounted.themes[0].name.clone();
+    let before = registry.get_icon_theme(&name).expect("user theme");
+
+    // The same mounted family again (what `apply_user_icon_scan` hands back for an unchanged
+    // file): the registry keeps the existing Arc, so the active theme is untouched.
+    registry.replace_user_icon_themes(vec![("kube.json".into(), mounted)], Vec::new());
+    let after = registry.get_icon_theme(&name).expect("user theme");
+    assert!(
+        Arc::ptr_eq(&before, &after),
+        "an unchanged theme keeps its Arc"
+    );
+
+    // A fresh mount (a changed file) serves under new asset paths: a new Arc.
+    let remounted = IconThemeFamily::mount(read("kube.json"));
+    registry.replace_user_icon_themes(vec![("kube.json".into(), remounted)], Vec::new());
+    let changed = registry.get_icon_theme(&name).expect("user theme");
+    assert!(
+        !Arc::ptr_eq(&after, &changed),
+        "a remounted theme is replaced"
+    );
+}
+
+#[test]
 fn a_dynamic_selection_picks_by_appearance() {
     let mut registry = ThemeRegistry::with_bundled();
     registry.insert_icon_theme_families(&ThemeSource::User, [family("Day"), family("Night")]);

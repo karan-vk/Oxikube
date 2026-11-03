@@ -1452,3 +1452,60 @@ fn hash_n_paths_edit_nested_array_elements() {
         "{text}"
     );
 }
+
+/// Applies a top-level array replace (or, with `None` and an empty path, removal) to `input`.
+fn replaced(input: &str, key_path: &[&str], value: Option<Value>, index: usize) -> String {
+    let (range, replacement) =
+        replace_top_level_array_value_in_json_text(input, key_path, value.as_ref(), None, index, 2);
+    let mut text = input.to_owned();
+    text.replace_range(range, &replacement);
+    text
+}
+
+#[test]
+fn removing_the_first_element_handles_crlf_trailing_blanks_and_unterminated_input() {
+    let crlf = "[\r\n  {\"a\": 1},\r\n  {\"b\": 2}\r\n]";
+    assert_eq!(replaced(crlf, &[], None, 0), "[\r\n  {\"b\": 2}\r\n]");
+
+    let trailing_space = "[\n  {\"a\": 1}, \n  {\"b\": 2}\n]";
+    assert_eq!(replaced(trailing_space, &[], None, 0), "[\n  {\"b\": 2}\n]");
+
+    let blank_line_after = "[\n  1,\n\n  2\n]";
+    assert_eq!(
+        crate::jsonc::parse_jsonc_value(&replaced(blank_line_after, &[], None, 0)),
+        json!([2])
+    );
+
+    // Unterminated documents (a half-typed keymap.json) must not panic.
+    for text in ["[1", "[1,", "[1, ", "[\r\n1,\r"] {
+        let _ = replaced(text, &[], None, 0);
+    }
+
+    // The same removal reached through a `#N` key path.
+    let nested = "{\r\n  \"a\": [\r\n    1,\r\n    2\r\n  ]\r\n}";
+    let (range, replacement) = replace_value_in_json_text(nested, &["a", "#0"], 2, None, None);
+    let mut text = nested.to_owned();
+    text.replace_range(range, &replacement);
+    assert_eq!(
+        crate::jsonc::parse_jsonc_value(&text),
+        json!({ "a": [2] }),
+        "{text}"
+    );
+}
+
+#[test]
+fn replacing_past_the_end_appends_the_element_the_key_path_describes() {
+    let text = replaced("[\n  {}\n]", &["bindings", "cmd-k"], Some(json!("a::B")), 5);
+    assert_eq!(
+        crate::jsonc::parse_jsonc_value(&text),
+        json!([{}, { "bindings": { "cmd-k": "a::B" } }]),
+        "{text}"
+    );
+    // An empty path still appends the bare value.
+    assert_eq!(
+        crate::jsonc::parse_jsonc_value(&replaced("[1]", &[], Some(json!(2)), 9)),
+        json!([1, 2])
+    );
+    // Removing past the end is a no-op.
+    assert_eq!(replaced("[1]", &[], None, 9), "[1]");
+}
