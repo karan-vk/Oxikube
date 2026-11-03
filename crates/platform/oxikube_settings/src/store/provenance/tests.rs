@@ -100,3 +100,24 @@ fn unknown_and_reserved_paths_are_defaults_without_a_value() {
     assert_eq!(store.effective_value("nope", None), None);
     assert_eq!(SettingSource::Cluster.label(), "Cluster");
 }
+
+#[test]
+fn layer_values_report_each_layer_separately() {
+    let a = cluster(1);
+    let store = loaded(&format!(
+        r#"{{
+            "terminal": {{ "font_size": 14 }},
+            "clusters": {{ "{a}": {{ "terminal": {{ "font_size": 16 }} }} }},
+        }}"#
+    ));
+    let values = store.layer_values("terminal.font_size", Some(&a));
+    assert_eq!(values.default, Some(json!(12)));
+    assert_eq!(values.user, Some(json!(14)));
+    assert_eq!(values.cluster, Some(json!(16)));
+    let global = store.layer_values("terminal.font_size", None);
+    assert_eq!(global.cluster, None);
+    assert_eq!(
+        store.layer_values("nope", Some(&a)),
+        super::LayerValues::default()
+    );
+}

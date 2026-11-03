@@ -8,7 +8,7 @@
 //! | [`keymap`] | E21-S07 | the keymap editor page: a searchable, virtualised table of every action with its context, binding and source, unbound commands included (`keymap::ShowEditor`) |
 //! | [`metrics`] | E13-S05 | the cluster's metrics page: which Prometheus-compatible service its history graphs come from, what detection found and which services it probed, the `prometheus` settings in effect; `cluster::ShowMetricsSettings` |
 //! | [`controls`] | E21-S05 | the settings page's controls: a switch, buttons, number / text / colour / font inputs and a list editor chosen by the schema type, validated, written after a 300 ms pause, reset to default |
-//! | [`page`] | E21-S04 | the settings page, a tab of the main window (`settings::Open`, `cmd-,`): sections from the settings schema, fuzzy search, a layer badge per field |
+//! | [`page`] | E21-S04 | the settings page, a tab of the main window (`settings::Open`, `cmd-,`): sections from the settings schema, fuzzy search, a layer badge per field; its per-cluster scope (E21-S06) edits `clusters.<id>` with a precedence strip per field |
 //!
 //! See `README.md` in this crate and `docs/ARCHITECTURE.md` for the allowed
 //! dependency direction. `cargo xtask lint-deps` enforces it.

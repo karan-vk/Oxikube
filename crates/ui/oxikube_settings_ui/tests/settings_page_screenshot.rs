@@ -4,6 +4,8 @@
 //! - `settings_page_search`: the results of a search, the title match highlighted.
 //! - `settings_page_user_badge`: the Terminal section with a value from the user's file (the
 //!   `User` badge next to `Default` ones).
+//! - `settings_page_cluster`: the per-cluster tab (E21-S06): the precedence panel, the cluster
+//!   list and the precedence strip under each field, with one override.
 //!
 //! Over the fixed schema of `page::test_support` and a settings store installed from a temporary
 //! directory. `harness = false` and `--features screenshot`, like the other screenshot tests (see
@@ -22,8 +24,11 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use gpui::{AppContext as _, HeadlessAppContext, px, size};
-use oxikube_settings_ui::page::SettingsPage;
+use oxikube_app::CatalogEntry;
+use oxikube_domain::ids::{ClusterId, ContextName};
+use oxikube_ports::{ClusterContext, SourceId};
 use oxikube_settings_ui::page::test_support::{fixture_model, install_settings};
+use oxikube_settings_ui::page::{Scope, SettingsPage};
 use oxikube_testkit::headless::HEADLESS_SCALE_FACTOR;
 use oxikube_testkit::screenshot::{
     RgbaImage, Tolerance, check_golden, distinct_colors_at_least, golden_path,
@@ -34,6 +39,31 @@ const HEIGHT: f32 = 640.0;
 
 const USER_SETTINGS: &str = r#"{ "terminal": { "font_size": 15 }, "ui_scale": 1.25 }"#;
 
+fn cluster_id(name: &str) -> ClusterId {
+    ClusterId::new("/home/me/.kube/config", &ContextName::new(name))
+}
+
+/// The user's file of the cluster scene: `prod` overrides two fields and has a display name.
+fn cluster_settings() -> String {
+    format!(
+        r#"{{ "read_only": false, "clusters": {{ "{}": {{ "display_name": "Production", "read_only": true }} }} }}"#,
+        cluster_id("prod")
+    )
+}
+
+fn entry(name: &str) -> CatalogEntry {
+    CatalogEntry {
+        context: ClusterContext::new(
+            cluster_id(name),
+            ContextName::new(name),
+            SourceId("kubeconfig:~/.kube/config".into()),
+        ),
+        source: None,
+        favourite: false,
+        last_used: None,
+    }
+}
+
 /// What the page shows when it is captured.
 enum Scene {
     /// The first section.
@@ -42,6 +72,8 @@ enum Scene {
     Search(&'static str),
     /// The section with this key.
     Section(&'static str),
+    /// The per-cluster tab, on the first cluster.
+    Cluster,
 }
 
 fn headless() -> HeadlessAppContext {
@@ -66,7 +98,12 @@ fn render(scene: Scene, dark: bool) -> anyhow::Result<RgbaImage> {
         oxikube_ui::set_tokens(cx, tokens);
         cx.set_reduce_motion(true);
         oxikube_runtime::init_deterministic(cx);
-        install_settings(config.path(), USER_SETTINGS, cx);
+        let user = if matches!(scene, Scene::Cluster) {
+            cluster_settings()
+        } else {
+            USER_SETTINGS.to_owned()
+        };
+        install_settings(config.path(), &user, cx);
         let view = cx.new(|cx| SettingsPage::with_model(fixture_model(), window, cx));
         page = Some(view.clone());
         oxikube_ui::root::new_root(view, window, cx)
@@ -81,6 +118,10 @@ fn render(scene: Scene, dark: bool) -> anyhow::Result<RgbaImage> {
                 page.query_input()
                     .update(cx, |input, cx| input.set_value(query, window, cx));
                 page.set_query(query, cx);
+            }
+            Scene::Cluster => {
+                page.set_catalog_entries(vec![entry("prod"), entry("staging")], cx);
+                page.set_scope(Scope::Cluster, window, cx);
             }
             Scene::Section(key) => {
                 if let Some(ix) = page.model().section_index(key) {
@@ -132,7 +173,8 @@ fn run() -> anyhow::Result<()> {
     check(
         "settings_page_user_badge",
         render(Scene::Section("terminal"), true)?,
-    )
+    )?;
+    check("settings_page_cluster", render(Scene::Cluster, true)?)
 }
 
 fn main() -> ExitCode {

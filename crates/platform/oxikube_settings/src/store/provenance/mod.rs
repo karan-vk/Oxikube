@@ -36,6 +36,18 @@ impl SettingSource {
     }
 }
 
+/// What each layer says about one field, for the precedence view of the per-cluster tab
+/// (E21-S06). A layer that does not set the field has `None`.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct LayerValues {
+    /// The embedded `default.json`.
+    pub default: Option<Value>,
+    /// The user's `settings.json`, outside any `clusters` block.
+    pub user: Option<Value>,
+    /// The `clusters.<id>` block of the cluster asked about.
+    pub cluster: Option<Value>,
+}
+
 /// The value at the dotted `path` inside `root`, if every segment is present.
 fn lookup<'a>(root: &'a Map<String, Value>, path: &str) -> Option<&'a Value> {
     let mut segments = path.split('.');
@@ -75,6 +87,19 @@ impl SettingsStore {
             .cluster_layer(cluster)
             .map_or(&self.layers.root, |layer| &layer.merged);
         lookup(merged.as_object()?, path)
+    }
+
+    /// What each of the three layers says about the field at the dotted `path`, read at
+    /// `cluster`. Explicit `null`s count as unset, as they do in the merge.
+    pub fn layer_values(&self, path: &str, cluster: Option<&ClusterId>) -> LayerValues {
+        let set = |value: Option<&Value>| value.filter(|value| !value.is_null()).cloned();
+        LayerValues {
+            default: set(self.default_value(path)),
+            user: set(lookup(&self.user, path)),
+            cluster: set(self
+                .cluster_layer(cluster)
+                .and_then(|layer| lookup(&layer.overrides, path))),
+        }
     }
 
     /// The value `default.json` gives the field at the dotted `path`, if any.

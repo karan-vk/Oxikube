@@ -148,6 +148,13 @@ impl SettingsPageModel {
         Self { sections }
     }
 
+    /// The "General" section, for the per-cluster tab to retitle.
+    pub(crate) fn general_mut(&mut self) -> Option<&mut PageSection> {
+        self.sections
+            .iter_mut()
+            .find(|section| section.key == GENERAL_KEY)
+    }
+
     /// The sections, in navigation order.
     pub fn sections(&self) -> &[PageSection] {
         &self.sections

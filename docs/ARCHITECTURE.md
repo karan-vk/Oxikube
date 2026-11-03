@@ -1188,6 +1188,13 @@ crate's `README.md` for its allowed dependencies. Highlights:
   search field, only the selected section or the results built). `settings::Open` (`cmd-,` / `ctrl-,`, the menu's Settings…,
   palette "Open Settings", tool stub `app.settings_open`; the former `oxikube::OpenPreferences` still answers) opens it once
   through `view::Open { view: "settings" }`. `tests/settings_page_screenshot.rs` photographs it.
+- `oxikube_settings_ui::page::cluster_tab` (E21-S06) — the page's "Per cluster" scope: the same page (sections, search, controls, badge)
+  swapped to `cluster_page_model(schema)`, the schema properties marked `x-oxikube-cluster-scoped`
+  (`oxikube_settings::CLUSTER_SCOPED_KEY`, added by `schema::assemble` to the `ClusterSettings` fields), and pointed at a
+  `ClusterId`; the controls then write `clusters.<id>.<path>` and "Reset for this cluster" removes the key (and the emptied block).
+  The cluster list is `ClusterCatalog::load()` (via `SettingsPage::set_catalog`) plus blocks of the file the catalog does not list.
+  `Precedence` (over `SettingsStore::layer_values`) shows default / user / cluster values and the winner; `protection_warning`
+  flags a weakening override without blocking. Namespace favourites stay in `StatePort` (not a setting).
 - `oxikube_settings_ui::controls` (E21-S05) — the page's controls: `ControlSpec::of(schema node)` picks one per schema type
   (switch, a button per enum value, number input with the schema's `minimum`/`maximum`, text input, colour input with a swatch
   (`format: "color"` or the hex `pattern`, declared once as `oxikube_settings::COLOR_FORMAT`), font input over the installed

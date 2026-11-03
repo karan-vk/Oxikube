@@ -13,6 +13,7 @@ use schemars::{JsonSchema, SchemaGenerator, generate::SchemaSettings};
 use serde_json::{Map, Value, json};
 
 use crate::diagnostics::{CLUSTERS_KEY, SCHEMA_KEY};
+use crate::schema_dynamic::CLUSTER_SCOPED_KEY;
 
 /// Name of the shared definition for one cluster's overrides.
 const CLUSTER_DEF: &str = "ClusterSettings";
@@ -44,17 +45,24 @@ pub(crate) fn assemble(
 ) -> Value {
     let mut definitions = generator.take_definitions(true);
     let mut properties = Map::new();
-    for (key, _type_name, schema) in sections {
+    let cluster_type = std::any::type_name::<crate::ClusterSettings>();
+    for (key, type_name, schema) in sections {
         match key {
             Some(key) => {
                 properties.insert(key.to_owned(), schema);
             }
             None => {
-                let fields = resolve_ref(&schema, &definitions)
+                let mut fields = resolve_ref(&schema, &definitions)
                     .and_then(|schema| schema.get("properties"))
                     .and_then(Value::as_object)
                     .cloned()
                     .unwrap_or_default();
+                if type_name == cluster_type {
+                    // The per-cluster settings: the fields a cluster block is meant to override.
+                    for field in fields.values_mut().filter_map(Value::as_object_mut) {
+                        field.insert(CLUSTER_SCOPED_KEY.to_owned(), Value::Bool(true));
+                    }
+                }
                 properties.extend(fields);
             }
         }

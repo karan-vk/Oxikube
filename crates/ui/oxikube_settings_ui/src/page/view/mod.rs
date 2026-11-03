@@ -7,6 +7,8 @@
 //! | `field.rs` | one field's row: title, layer badge, description, value |
 //! | `item.rs` | the workspace `Item` |
 //!
+//! The per-cluster scope (E21-S06) swaps the model and index in place (`crate::page::cluster_tab`).
+//!
 //! Only the selected section is built into elements (or, while searching, the results), never
 //! the whole schema. The model and the search index are built once when the page opens; a
 //! keystroke filters the index and redraws once. A change of the settings (a hot reload, an edit)
@@ -27,29 +29,32 @@ use oxikube_settings::{SettingSource, SettingsStore};
 use oxikube_ui::input::{InputEvent, InputState};
 use oxikube_workspace::ItemEvent;
 
+use super::cluster_tab::ClusterTabState;
 use super::model::SettingsPageModel;
 use super::search::{SearchHit, SearchIndex};
 use crate::controls::Controls;
 
 /// The settings page. See the [page module](crate::page).
 pub struct SettingsPage {
-    model: SettingsPageModel,
-    index: SearchIndex,
+    pub(crate) model: SettingsPageModel,
+    pub(crate) index: SearchIndex,
     /// The section shown when there is no query.
-    selected: usize,
-    query: Entity<InputState>,
+    pub(crate) selected: usize,
+    pub(crate) query: Entity<InputState>,
     /// The query the results are for (the field's text, trimmed).
-    query_text: String,
-    hits: Vec<SearchHit>,
+    pub(crate) query_text: String,
+    pub(crate) hits: Vec<SearchHit>,
     /// The field of the selected section a result jumped to, drawn highlighted.
-    highlighted: Option<usize>,
+    pub(crate) highlighted: Option<usize>,
     /// Where the badges read the layers at: `None` for the global value (the cluster tab of
     /// E21-S06 sets one).
     pub(crate) cluster: Option<ClusterId>,
+    /// The per-cluster tab's state (E21-S06).
+    pub(crate) tab: ClusterTabState,
     /// The controls of the fields shown (E21-S05).
     pub(crate) controls: Controls,
     focus: FocusHandle,
-    content_scroll: ScrollHandle,
+    pub(crate) content_scroll: ScrollHandle,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -115,6 +120,7 @@ impl SettingsPage {
             hits: Vec::new(),
             highlighted: None,
             cluster: None,
+            tab: ClusterTabState::default(),
             controls: Controls::default(),
             focus,
             content_scroll: ScrollHandle::new(),
@@ -187,9 +193,11 @@ impl SettingsPage {
         self.hits.clear();
         self.selected = hit.section;
         self.highlighted = hit.field;
-        // Child 0 of the section's column is its header; field `n` is child `n + 1`.
+        // Child 0 of the section's column is its header (after the cluster list, on the
+        // per-cluster tab); field `n` is the child after it plus `n`.
+        let header = self.header_offset();
         self.content_scroll
-            .scroll_to_item(hit.field.map_or(0, |field| field + 1));
+            .scroll_to_item(hit.field.map_or(0, |field| field + 1 + header));
         cx.notify();
     }
 

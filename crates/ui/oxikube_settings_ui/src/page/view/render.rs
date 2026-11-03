@@ -11,6 +11,7 @@ use oxikube_ui::layout::{h_flex, v_flex};
 use oxikube_ui::{ActiveTokens as _, Sizable as _, u};
 
 use super::SettingsPage;
+use crate::page::cluster_tab::Scope;
 use crate::page::search::SearchHit;
 
 /// Width of the navigation column, unscaled.
@@ -81,6 +82,7 @@ impl SettingsPage {
         let tokens = cx.tokens();
         let colors = tokens.colors;
         let searching = !self.query_text.is_empty();
+        let switch = self.scope_switch(cx);
         let rows = self
             .model
             .sections()
@@ -144,6 +146,7 @@ impl SettingsPage {
                     .font_weight(FontWeight::SEMIBOLD)
                     .child("Settings"),
             )
+            .child(switch)
             .children(rows)
             .into_any_element()
     }
@@ -152,14 +155,25 @@ impl SettingsPage {
     fn section_content(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let tokens = cx.tokens();
         let colors = tokens.colors;
+        let mut children = Vec::new();
+        if self.scope() == Scope::Cluster {
+            children.push(self.cluster_header(cx));
+            if self.cluster.is_none() {
+                return children;
+            }
+        }
         let Some(section) = self.model.section(self.selected) else {
-            return vec![
+            children.push(
                 div()
                     .py(u(tokens.spacing.xl))
                     .text_color(colors.text_muted)
-                    .child("No settings are registered.")
+                    .child(match self.scope() {
+                        Scope::Global => "No settings are registered.",
+                        Scope::Cluster => "No settings can be set per cluster.",
+                    })
                     .into_any_element(),
-            ];
+            );
+            return children;
         };
         let header = v_flex()
             .debug_selector(|| "settings-section-header".into())
@@ -179,7 +193,6 @@ impl SettingsPage {
                     .map(|text| div().text_color(colors.text_muted).child(text)),
             )
             .into_any_element();
-        let mut children = Vec::with_capacity(section.fields.len() + 1);
         children.push(header);
         for (ix, field) in section.fields.iter().enumerate() {
             let highlighted = self.highlighted == Some(ix);

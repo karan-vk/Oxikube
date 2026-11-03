@@ -61,7 +61,11 @@ impl Controls {
                     Button::new(SharedString::from(format!("settings-reset-{path}")))
                         .xsmall()
                         .ghost()
-                        .label("Reset to default")
+                        .label(if cluster.is_some() {
+                            "Reset for this cluster"
+                        } else {
+                            "Reset to default"
+                        })
                         .on_click(cx.listener(move |this, _, _, cx| {
                             let cluster = this.cluster.clone();
                             this.controls.reset(&target, cluster, cx);

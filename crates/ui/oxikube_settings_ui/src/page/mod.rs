@@ -13,13 +13,14 @@
 //!   (the palette's engine); a result opens its section scrolled to the field, highlighted.
 //! * Each field shows a badge for the layer its value comes from (`Default`, `User`, `Cluster`)
 //!   with a tooltip on how the layers stack, and the control that edits it ([`crate::controls`],
-//!   E21-S05); the per-cluster tab is E21-S06's.
+//!   E21-S05); the per-cluster tab ([`cluster_tab`], E21-S06) edits one cluster's block instead.
 //!
 //! | Module | Holds |
 //! |---|---|
 //! | `model` | [`SettingsPageModel`]: sections and fields as plain data, built from the schema |
 //! | `search` | [`SearchIndex`]: the fuzzy search over the model, built once per page open |
 //! | `badge` | [`LayerBadge`]: the badge's words for a [`SettingSource`](oxikube_settings::SettingSource) |
+//! | `cluster_tab` | the per-cluster scope (E21-S06): the cluster list, the precedence strip |
 //! | `view` | [`SettingsPage`]: the entity, its frame and the workspace item |
 //!
 //! Built from `oxikube_ui` primitives rather than gpui-component's `setting::Settings`: that
@@ -27,6 +28,7 @@
 //! badge, while this page needs the shared fuzzy engine, a jump to a field and lazy sections.
 
 mod badge;
+pub mod cluster_tab;
 mod model;
 pub(crate) mod schema_walk;
 mod search;
@@ -39,6 +41,7 @@ pub mod test_support;
 mod tests;
 
 pub use badge::LayerBadge;
+pub use cluster_tab::{ClusterChoice, Scope, cluster_page_model, supports_cluster_scope};
 pub use model::{FieldKind, PageField, PageSection, SettingsPageModel};
 pub use search::{MAX_HITS, MatchedIn, SearchHit, SearchIndex};
 pub use titles::{GENERAL_KEY, humanize};
