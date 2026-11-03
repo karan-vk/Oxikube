@@ -152,7 +152,8 @@ fn an_unknown_action_is_a_diagnostic_and_the_rest_of_the_file_loads(cx: &mut Tes
     assert_eq!(
         found[0].problem,
         KeymapProblem::UnknownAction {
-            name: "nope::Missing".into()
+            name: "nope::Missing".into(),
+            suggestion: None,
         }
     );
 }
@@ -193,6 +194,31 @@ fn bad_keystrokes_data_context_and_binding_values_are_reported_individually(
             ]
         ),
         "{kinds:#?}"
+    );
+}
+
+/// The load path reports what the editor's validator reports (E21-S03): one validator, so a
+/// context nobody registered is a warning with its line and a suggestion, and the binding in it
+/// still loads.
+#[gpui::test]
+fn the_load_path_uses_the_shared_validator(cx: &mut TestAppContext) {
+    install(
+        cx,
+        mac(),
+        "[\n  {\"context\": \"Pnae\", \"bindings\": {\"ctrl-a\": \"kmtest::Alpha\"}}\n]",
+    );
+    let (window, log) = probe(cx, "Pnae");
+    assert_eq!(press(cx, window, &log, "ctrl-a"), ["Alpha"]);
+    let found = diagnostics_of(cx);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0].severity(), oxikube_keymap::Severity::Warning);
+    assert_eq!(found[0].line, Some(2));
+    assert_eq!(
+        found[0].problem,
+        KeymapProblem::UnknownContext {
+            name: "Pnae".into(),
+            suggestion: Some("Pane".into()),
+        }
     );
 }
 

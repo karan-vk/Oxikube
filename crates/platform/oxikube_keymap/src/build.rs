@@ -133,7 +133,11 @@ fn build_binding(
                     return Err(Rejected::Tolerated);
                 }
                 Err(BuildActionError::Unknown) => {
-                    return Err(KeymapProblem::UnknownAction { name }.into());
+                    return Err(KeymapProblem::UnknownAction {
+                        name,
+                        suggestion: None,
+                    }
+                    .into());
                 }
                 Err(BuildActionError::InvalidData(message)) => {
                     return Err(KeymapProblem::InvalidActionData { name, message }.into());

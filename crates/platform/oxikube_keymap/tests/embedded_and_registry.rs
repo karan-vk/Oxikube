@@ -159,7 +159,7 @@ fn reload_cost_is_small(cx: &mut TestAppContext) {
     let per_section = letters.len();
     let mut text = String::from("[\n");
     for s in 0..sections {
-        text.push_str("{\"context\": \"Table && selection == one\", \"bindings\": {");
+        text.push_str("{\"context\": \"ResourceTable && selection == one\", \"bindings\": {");
         for (b, letter) in letters.iter().enumerate() {
             let action = ["kmtest::Alpha", "kmtest::Beta", "kmtest::Gamma"][b % 3];
             // A different modifier set per section keeps every binding in the file distinct.

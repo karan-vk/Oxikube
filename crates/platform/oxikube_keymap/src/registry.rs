@@ -57,6 +57,29 @@ impl ActionRegistry {
         Self { by_namespace }
     }
 
+    /// Every action compiled into the running binary, from GPUI's link-time table, without an
+    /// app: what the schema generator (`oxikube --print-keymap-schema`) lists.
+    pub fn from_inventory() -> Self {
+        Self::from_names(gpui::generate_list_of_all_registered_actions().map(|action| action.name))
+    }
+
+    /// A registry of exactly `names`, for a validator run without an app (tests, a background
+    /// pass over a snapshot).
+    pub fn from_names(names: impl IntoIterator<Item = &'static str>) -> Self {
+        let mut by_namespace: BTreeMap<&'static str, Vec<&'static str>> = BTreeMap::new();
+        for name in names {
+            by_namespace
+                .entry(namespace_of(name))
+                .or_default()
+                .push(name);
+        }
+        for names in by_namespace.values_mut() {
+            names.sort_unstable();
+            names.dedup();
+        }
+        Self { by_namespace }
+    }
+
     /// The namespaces that have at least one action, sorted (`""` holds un-namespaced ones).
     pub fn namespaces(&self) -> impl Iterator<Item = &'static str> + '_ {
         self.by_namespace.keys().copied()

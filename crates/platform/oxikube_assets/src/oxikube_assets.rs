@@ -37,7 +37,10 @@ pub mod themes;
 
 pub use icon_mount::{ICON_MOUNT_PREFIX, IconMount};
 pub use icons::IconName;
-pub use keymap::{KeymapPlatform, default_keymap, initial_user_keymap_content, vim_keymap};
+pub use keymap::{
+    KEYMAP_SCHEMA_PATH, KeymapPlatform, default_keymap, initial_user_keymap_content, keymap_schema,
+    vim_keymap,
+};
 pub use settings::{
     SETTINGS_SCHEMA_PATH, aliases_schema, default_settings, initial_user_settings_content,
     settings_schema,

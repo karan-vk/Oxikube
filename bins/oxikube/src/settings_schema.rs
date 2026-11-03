@@ -25,6 +25,7 @@ pub fn print(what: Print) -> ExitCode {
         Print::SettingsSchema => schema_text().map_err(|err| err.to_string()),
         Print::LiveSettingsSchema => live_schema_text().map_err(|err| err.to_string()),
         Print::SettingsCrates => Ok(crates_text()),
+        Print::KeymapSchema => Ok(keymap_schema_text()),
     };
     match text {
         Ok(text) => {
@@ -64,6 +65,19 @@ pub fn live_enums(registry: &ThemeRegistry, fonts: Vec<String>) -> DynamicEnums 
 pub fn live_schema_text() -> oxikube_domain::OxiResult<String> {
     let store = SettingsStore::new(oxikube_assets::default_settings())?;
     Ok(to_schema_text(&store.json_schema_with(&bundled_enums())))
+}
+
+/// The text of `keymap.schema.json`: the actions linked into this binary and the standard key
+/// contexts (`oxikube --print-keymap-schema`, run by `cargo xtask gen-keymap-schema`).
+pub fn keymap_schema_text() -> String {
+    let schema = oxikube_keymap::schema::keymap_schema(
+        &oxikube_keymap::ActionRegistry::from_inventory(),
+        &oxikube_keymap::KnownNames::of(
+            oxikube_keymap::known::SEED_CONTEXTS.iter().copied(),
+            oxikube_keymap::known::SEED_FLAGS.iter().copied(),
+        ),
+    );
+    to_schema_text(&schema)
 }
 
 /// The distinct crates that registered a setting, sorted, one per line.
@@ -124,6 +138,25 @@ mod tests {
             fixed["$defs"]["ThemeSelectionContent"]["anyOf"][0]["x-oxikube-dynamic-enum"],
             "themes"
         );
+    }
+
+    /// `keymap.schema.json` is checked in and CI's `gen-keymap-schema --check` fails when it is
+    /// stale; the same comparison as a unit test, plus the action enum covering real actions.
+    #[test]
+    fn the_checked_in_keymap_schema_is_current_and_lists_the_commands() {
+        let generated = keymap_schema_text();
+        assert!(
+            generated == oxikube_assets::keymap_schema(),
+            "keymap.schema.json is stale: run `cargo xtask gen-keymap-schema`"
+        );
+        let schema: serde_json::Value = serde_json::from_str(&generated).unwrap();
+        let names = schema["$defs"]["ActionName"]["enum"].as_array().unwrap();
+        for wanted in ["palette::Toggle", "keymap::OpenUser", "catalog::SelectNext"] {
+            assert!(
+                names.iter().any(|n| n == wanted),
+                "`{wanted}` is not in the enum"
+            );
+        }
     }
 
     /// `settings.schema.json` is checked in and CI's `gen-settings-schema --check` fails when it

@@ -22,6 +22,7 @@ use oxikube_domain::command::{self, Command, CommandId};
 use oxikube_domain::ids::{ClusterId, ResourceRef};
 use oxikube_domain::{OxiError, OxiResult};
 
+use super::config_file::OpenConfigFile;
 use super::open_text::OpenText;
 use crate::diff::MergeSide;
 use crate::json::Language;
@@ -149,6 +150,9 @@ pub enum EditorRequest {
     /// "Open in editor" from the apply panel (E20-S05): this text in a new tab, the cursor on the
     /// document's line. Not a command: the panel's own action sends it.
     OpenText(OpenText),
+    /// The user's `keymap.json` (`keymap::OpenUser`, E21-S03): read and opened in an editor that
+    /// checks it with the keymap validator and saves it to its path.
+    OpenConfigFile(OpenConfigFile),
 }
 
 impl EditorRequest {

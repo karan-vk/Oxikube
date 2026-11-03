@@ -6,10 +6,7 @@
 /// neighbours) on lowercase text, so `Replicas` finds `replicas` and `contianers` finds
 /// `containers`. The allowed distance grows with the name's length (1 up to 4 characters, 2 up
 /// to 8, then 3) and is always below the name's length. Ties keep the first candidate.
-pub(super) fn nearest<'a>(
-    name: &str,
-    candidates: impl Iterator<Item = &'a str>,
-) -> Option<&'a str> {
+pub fn nearest<'a>(name: &str, candidates: impl Iterator<Item = &'a str>) -> Option<&'a str> {
     let wanted: Vec<char> = name.chars().flat_map(char::to_lowercase).collect();
     let limit = match wanted.len() {
         0 => return None,

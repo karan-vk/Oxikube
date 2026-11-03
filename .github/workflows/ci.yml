@@ -64,6 +64,8 @@ jobs:
       - run: cargo test --workspace --no-fail-fast
       # settings.schema.json must match the registered settings types (E05-S06).
       - run: cargo run -q -p xtask -- gen-settings-schema --check
+      # keymap.schema.json must list the registered actions (E21-S03).
+      - run: cargo run -q -p xtask -- gen-keymap-schema --check
       # Feature-gated screenshot harness (E01-S11): lint everything with the feature on, and run
       # the pure-image golden-compare tests (no GPU needed). GPU smoke tests run in nightly. The
       # perf-scenarios feature is linted here too: only the nightly built it before (E01-F542).

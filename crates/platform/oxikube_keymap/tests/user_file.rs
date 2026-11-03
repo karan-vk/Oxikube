@@ -67,7 +67,7 @@ fn a_user_file_layers_over_the_defaults_and_null_unbinds(cx: &mut TestAppContext
 fn null_on_a_binding_that_does_not_exist_is_silent(cx: &mut TestAppContext) {
     install(
         cx,
-        r#"[{"context": "Nowhere", "bindings": {"ctrl-alt-shift-z": null}}, {"bindings": {"f13": null}}]"#,
+        r#"[{"context": "ResourceTable", "bindings": {"ctrl-alt-shift-z": null}}, {"bindings": {"f13": null}}]"#,
     );
     assert_eq!(cx.read(user_diagnostics), []);
 }

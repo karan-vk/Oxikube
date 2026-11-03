@@ -118,13 +118,25 @@ pub struct ParsedKeymap {
 
 /// Parse a keymap file. `Err` is a whole-file problem (not JSON, not a list): the caller keeps
 /// the layer's previous sections. Blank text is an empty keymap.
+#[expect(
+    clippy::result_large_err,
+    reason = "the whole-file diagnostic is returned once per load, never on a hot path"
+)]
 pub fn parse_keymap(text: &str, layer: KeymapLayer) -> Result<ParsedKeymap, KeymapDiagnostic> {
     if text.trim().is_empty() {
         return Ok(ParsedKeymap::default());
     }
     let mut deserializer = serde_json_lenient::Deserializer::from_str(text);
     let syntax = |err: serde_json_lenient::Error| {
-        KeymapDiagnostic::file(layer, Some(err.line()), err.to_string())
+        let mut diagnostic = KeymapDiagnostic::file(layer, Some(err.line()), err.to_string());
+        let start = SourceLines::offset(text, err.line(), err.column());
+        let end = text[start..]
+            .chars()
+            .next()
+            .map_or(start, |next| start + next.len_utf8());
+        diagnostic.column = Some(err.column());
+        diagnostic.span = Some(start..end);
+        diagnostic
     };
     let value = Value::deserialize(&mut deserializer).map_err(syntax)?;
     deserializer.end().map_err(syntax)?;

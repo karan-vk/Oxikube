@@ -7,9 +7,20 @@
 //! `oxikube_settings::SettingsDiagnostic`.
 
 use std::fmt;
+use std::ops::Range;
 
 use crate::layer::KeymapLayer;
-use crate::lines::SourceLines;
+use crate::lines::{Location, SourceLines};
+
+/// How serious a problem is. An error means a binding or section was not applied; a warning
+/// means it was applied but is probably not what the author meant.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Severity {
+    /// Something that is probably a mistake but does not stop the binding from loading.
+    Warning,
+    /// The binding or section was skipped, or the file was not loaded.
+    Error,
+}
 
 /// What is wrong.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -52,6 +63,8 @@ pub enum KeymapProblem {
     UnknownAction {
         /// The name as written.
         name: String,
+        /// The nearest registered action name, when one is close enough to be a typo of it.
+        suggestion: Option<String>,
     },
     /// The action exists but rejected the data given for it.
     InvalidActionData {
@@ -60,6 +73,49 @@ pub enum KeymapProblem {
         /// Deserialiser message.
         message: String,
     },
+    /// A name in a `context` expression that no view has registered (a warning: extensions and
+    /// later views register theirs at run time).
+    UnknownContext {
+        /// The identifier as written.
+        name: String,
+        /// The nearest known context or flag, when one is close enough to be a typo of it.
+        suggestion: Option<String>,
+    },
+    /// A keystroke sequence written twice in one section; the later one wins.
+    DuplicateKeystrokes {
+        /// The keystrokes as written.
+        keystrokes: String,
+        /// The line of the earlier one, which is overridden.
+        first_line: usize,
+    },
+}
+
+impl KeymapProblem {
+    /// How serious the problem is: an unknown context or a duplicate key is a warning, the rest
+    /// are errors.
+    pub fn severity(&self) -> Severity {
+        match self {
+            Self::UnknownContext { .. } | Self::DuplicateKeystrokes { .. } => Severity::Warning,
+            _ => Severity::Error,
+        }
+    }
+
+    /// A stable, machine-readable code for the problem (`keymap/unknown-action`), what an editor
+    /// shows next to the message.
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::InvalidFile { .. } => "keymap/invalid-file",
+            Self::Unreadable { .. } => "keymap/unreadable",
+            Self::InvalidSection { .. } => "keymap/invalid-section",
+            Self::InvalidContext { .. } => "keymap/invalid-context",
+            Self::InvalidKeystrokes { .. } => "keymap/invalid-keystrokes",
+            Self::InvalidBinding { .. } => "keymap/invalid-binding",
+            Self::UnknownAction { .. } => "keymap/unknown-action",
+            Self::InvalidActionData { .. } => "keymap/invalid-action-data",
+            Self::UnknownContext { .. } => "keymap/unknown-context",
+            Self::DuplicateKeystrokes { .. } => "keymap/duplicate-keystrokes",
+        }
+    }
 }
 
 /// One problem and where it was found.
@@ -74,6 +130,11 @@ pub struct KeymapDiagnostic {
     /// The 1-based line in the file the problem is on: the binding's, the section's, or the
     /// parser's for a syntax error. `None` for the embedded layers and an unreadable file.
     pub line: Option<usize>,
+    /// The 1-based column (in characters) the problem starts at, with [`line`](Self::line).
+    pub column: Option<usize>,
+    /// The bytes of the text the problem is about (a binding's key, a section's `context`), when
+    /// known: what an editor underlines.
+    pub span: Option<Range<usize>>,
     /// What is wrong.
     pub problem: KeymapProblem,
 }
@@ -85,6 +146,8 @@ impl KeymapDiagnostic {
             section: None,
             keystrokes: None,
             line,
+            column: None,
+            span: None,
             problem: KeymapProblem::InvalidFile { message },
         }
     }
@@ -95,6 +158,8 @@ impl KeymapDiagnostic {
             section: None,
             keystrokes: None,
             line: None,
+            column: None,
+            span: None,
             problem: KeymapProblem::Unreadable { message },
         }
     }
@@ -105,6 +170,8 @@ impl KeymapDiagnostic {
             section: Some(section),
             keystrokes: None,
             line: None,
+            column: None,
+            span: None,
             problem,
         }
     }
@@ -120,23 +187,51 @@ impl KeymapDiagnostic {
             section: Some(section),
             keystrokes: Some(keystrokes.to_owned()),
             line: None,
+            column: None,
+            span: None,
             problem,
         }
     }
 
-    /// Fill in the line from the file's [`SourceLines`], when this problem has none yet: the
-    /// binding's line, else the `context`'s for a bad context, else the section's.
+    /// How serious the problem is.
+    pub fn severity(&self) -> Severity {
+        self.problem.severity()
+    }
+
+    /// The problem's stable code.
+    pub fn code(&self) -> &'static str {
+        self.problem.code()
+    }
+
+    /// The message an editor shows: the problem, and the "did you mean" when there is one.
+    pub fn message(&self) -> String {
+        self.problem.to_string()
+    }
+
+    /// Point this problem at `at`.
+    pub(crate) fn place(&mut self, at: &Location) {
+        self.line = Some(at.line);
+        self.column = Some(at.column);
+        self.span = Some(at.span.clone());
+    }
+
+    /// Fill in the position from the file's [`SourceLines`], when this problem has none yet: the
+    /// binding's, else the `context`'s for a bad context, else the section's.
     pub(crate) fn locate(&mut self, lines: &SourceLines) {
         if self.line.is_some() {
             return;
         }
         let Some(section) = self.section else { return };
         let exact = match (&self.keystrokes, &self.problem) {
-            (Some(keystrokes), _) => lines.binding(section, keystrokes),
-            (None, KeymapProblem::InvalidContext { .. }) => lines.context(section),
+            (Some(keystrokes), _) => lines.binding_location(section, keystrokes),
+            (None, KeymapProblem::InvalidContext { .. } | KeymapProblem::UnknownContext { .. }) => {
+                lines.context_location(section)
+            }
             (None, _) => None,
         };
-        self.line = exact.or_else(|| lines.section(section));
+        if let Some(at) = exact.or_else(|| lines.section_location(section)) {
+            self.place(at);
+        }
     }
 }
 
@@ -151,10 +246,30 @@ impl fmt::Display for KeymapProblem {
             }
             Self::InvalidKeystrokes { message } => f.write_str(message),
             Self::InvalidBinding { message } => write!(f, "invalid binding: {message}"),
-            Self::UnknownAction { name } => write!(f, "unknown action `{name}`"),
+            Self::UnknownAction { name, suggestion } => {
+                write!(f, "unknown action `{name}`")?;
+                match suggestion {
+                    Some(nearest) => write!(f, "; did you mean `{nearest}`?"),
+                    None => Ok(()),
+                }
+            }
             Self::InvalidActionData { name, message } => {
                 write!(f, "invalid data for action `{name}`: {message}")
             }
+            Self::UnknownContext { name, suggestion } => {
+                write!(f, "unknown context `{name}`")?;
+                match suggestion {
+                    Some(nearest) => write!(f, "; did you mean `{nearest}`?"),
+                    None => Ok(()),
+                }
+            }
+            Self::DuplicateKeystrokes {
+                keystrokes,
+                first_line,
+            } => write!(
+                f,
+                "`{keystrokes}` is bound twice in this section (first on line {first_line}); the later one wins"
+            ),
         }
     }
 }
@@ -234,6 +349,7 @@ mod tests {
             "cmd-k",
             KeymapProblem::UnknownAction {
                 name: "x::Y".into(),
+                suggestion: None,
             },
         );
         d.line = line;
@@ -274,6 +390,7 @@ mod tests {
             "cmd-k",
             KeymapProblem::UnknownAction {
                 name: "x::Y".into(),
+                suggestion: None,
             },
         );
         binding.locate(&lines);
@@ -304,6 +421,7 @@ mod tests {
             "cmd-z",
             KeymapProblem::UnknownAction {
                 name: "x::Y".into(),
+                suggestion: None,
             },
         );
         missing.locate(&lines);

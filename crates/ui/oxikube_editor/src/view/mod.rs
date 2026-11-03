@@ -21,6 +21,7 @@
 //! | `create` | create from template (E10-S09): `resource::Create` lists the templates off the UI thread, opens the picker, and opens the chosen template in a new editor with the namespace filled in |
 //! | `secret` | "Create secret" (E12-S11): `secret::Create` opens [`CreateSecretDialog`] (Opaque, Docker registry, TLS, checked before anything opens); a valid Secret opens in an editor with its values as text, base64-encoded when applied |
 //! | `resource_diff` | the cross-cluster resource diff (E20-S09): `resource::DiffWith` reads two objects (connecting a cluster on demand) and opens a tab with the changed-path summary and the side-by-side line diff; the "Diff with..." picker; read-only |
+//! | `config_file` | the user's `keymap.json` in the editor (E21-S03): [`ConfigFileKind`] associates the path with the keymap validator, which replaces the schema pass ([`validate_config`]); Save writes the file |
 //! | `open_text` | "Open in editor" from the apply panel (E20-S05): [`OpenText`], a document's text in a new tab with the cursor on its line |
 //! | `apply` | applying the buffer (E10-S08): `resource::Apply` (`cmd-s` / `ctrl-s`, the palette, the toolbar), the dry run, [`ApplyPreviewDialog`], [`ConflictDialog`], the server's errors on their fields |
 //! | `dry_run` | [`DryRunDiff`]: the guard's dry run of one object (E19-S07) as this diff, installed in the workspace's confirmation dialog |
@@ -31,6 +32,7 @@
 
 pub mod apply;
 mod commands;
+mod config_file;
 mod controller;
 mod convert;
 mod create;
@@ -58,6 +60,9 @@ use oxikube_workspace::CommandDispatcher;
 
 pub use apply::{ApplyPreviewDialog, ApplyStage, BatchPreviewDialog, BatchSession, ConflictDialog};
 pub use commands::{EDITOR_COMMANDS, EditorRequest, EditorViewSink, register_commands};
+pub use config_file::{
+    ConfigFile, ConfigFileKind, KeymapNames, OpenConfigFile, keymap_diagnostics, validate_config,
+};
 pub use controller::{EditorViews, EditorViewsDeps};
 pub use create::Create;
 pub use dry_run::DryRunDiff;

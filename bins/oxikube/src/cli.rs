@@ -45,8 +45,9 @@ Options:
   --perf-no-probe         Run --perf-scenario without the frame hook (overhead measurement)
   -h, --help              Print this help";
 
-/// Hidden tooling flags (not in [`USAGE`]): what `cargo xtask gen-settings-schema` runs, because
-/// this binary links every crate that registers settings.
+/// Hidden tooling flags (not in [`USAGE`]): what `cargo xtask gen-settings-schema` and `cargo
+/// xtask gen-keymap-schema` run, because this binary links every crate that registers settings
+/// and actions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Print {
     /// `--print-settings-schema`: the `settings.schema.json` text.
@@ -56,6 +57,8 @@ pub enum Print {
     LiveSettingsSchema,
     /// `--print-settings-crates`: the crates that registered settings, one per line.
     SettingsCrates,
+    /// `--print-keymap-schema`: the `keymap.schema.json` text (E21-S03).
+    KeymapSchema,
 }
 
 /// Parsed flags.
@@ -116,6 +119,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Parsed, String>
             "--print-settings-schema" => out.print = Some(Print::SettingsSchema),
             "--print-live-settings-schema" => out.print = Some(Print::LiveSettingsSchema),
             "--print-settings-crates" => out.print = Some(Print::SettingsCrates),
+            "--print-keymap-schema" => out.print = Some(Print::KeymapSchema),
             "--perf" => out.perf = true,
             "--perf-no-probe" => out.perf_no_probe = true,
             "--perf-dir" => {
@@ -390,8 +394,13 @@ mod tests {
             run(&["--print-settings-crates"]).unwrap().print,
             Some(Print::SettingsCrates)
         );
+        assert_eq!(
+            run(&["--print-keymap-schema"]).unwrap().print,
+            Some(Print::KeymapSchema)
+        );
         assert!(!USAGE.contains("--print-settings"));
         assert!(!USAGE.contains("--print-live"));
+        assert!(!USAGE.contains("--print-keymap"));
     }
 
     #[test]

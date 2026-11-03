@@ -49,6 +49,11 @@ impl ManifestEditor {
         if self.apply.stage != ApplyStage::Idle {
             return;
         }
+        if let Some(file) = self.config_file.clone() {
+            // A config file is saved to its path, not applied to a cluster.
+            self.save_config_file(file, window, cx);
+            return;
+        }
         let (Some(service), Some(cluster)) = (self.apply.service.clone(), self.cluster().cloned())
         else {
             self.apply_notice(
