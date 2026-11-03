@@ -1188,6 +1188,14 @@ crate's `README.md` for its allowed dependencies. Highlights:
   search field, only the selected section or the results built). `settings::Open` (`cmd-,` / `ctrl-,`, the menu's Settings…,
   palette "Open Settings", tool stub `app.settings_open`; the former `oxikube::OpenPreferences` still answers) opens it once
   through `view::Open { view: "settings" }`. `tests/settings_page_screenshot.rs` photographs it.
+- `oxikube_settings_ui::controls` (E21-S05) — the page's controls: `ControlSpec::of(schema node)` picks one per schema type
+  (switch, a button per enum value, number input with the schema's `minimum`/`maximum`, text input, colour input with a swatch
+  (`format: "color"` or the hex `pattern`, declared once as `oxikube_settings::COLOR_FORMAT`), font input over the installed
+  families (`x-oxikube-dynamic-enum: "fonts"`), a list editor for arrays of strings; other shapes keep the read-only summary
+  and "edit in settings.json"). `validate_text` / `validate_list` check typed input first (an invalid value shows an inline error
+  and is never written); `Controls` (owned by the page entity) debounces valid values 300 ms (switches and choices at once),
+  keeps one write in flight per field and sends it through `oxikube_settings::update_user_settings_path` (comment-preserving,
+  background executor); "Reset to default" shows where the user (or cluster) layer holds a value and removes the key.
 - `oxikube_overview_ui::pulses` (E13-S10) — the pulses page (`:pulses`, k9s' pulses): sixteen tiles on a four-column grid, the
   cluster's CPU and memory and fourteen core kinds (nodes, namespaces, pods, deployments, stateful sets, daemon sets, jobs, cron
   jobs, PVs, PVCs, HPAs, ingresses, network policies, service accounts), each with a number, a gauge and a 60-sample sparkline.

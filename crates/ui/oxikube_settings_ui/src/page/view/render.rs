@@ -17,7 +17,14 @@ use crate::page::search::SearchHit;
 const NAV_WIDTH: f32 = 220.0;
 
 impl Render for SettingsPage {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Controls are made for the selected section only, when it is first shown.
+        if self.query_text.is_empty()
+            && let Some(section) = self.model.section(self.selected)
+        {
+            self.controls
+                .ensure(&section.fields, self.cluster.as_ref(), window, cx);
+        }
         let tokens = cx.tokens();
         let colors = tokens.colors;
         let nav = self.navigation(cx);

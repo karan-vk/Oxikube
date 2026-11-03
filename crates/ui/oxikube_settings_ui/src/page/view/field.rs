@@ -1,6 +1,6 @@
 //! One field's row: its title and layer badge, the value in effect, its description, its path
-//! and kind. The control that edits it is E21-S05's; until then (and for the shapes no control
-//! covers) the row says to edit it in `settings.json`.
+//! and kind, then the control that edits it ([`crate::controls`], E21-S05). The shapes no control
+//! covers show their value and say to edit it in `settings.json`.
 
 use gpui::{
     AnyElement, App, Context, FontWeight, Hsla, InteractiveElement as _, IntoElement,
@@ -31,10 +31,14 @@ impl SettingsPage {
         let tokens = cx.tokens();
         let colors = tokens.colors;
         let source = self.source_of(&field.path, cx);
-        let value = self.value_text(&field.path, cx);
+        let json_only = field.control.is_json_only();
+        let value = json_only.then(|| self.value_text(&field.path, cx));
+        let control = self
+            .controls
+            .render(field, source, self.cluster.as_ref(), cx);
         let mono = cx.mono_font_family();
         let path = field.path.clone();
-        let kind = if field.kind.edited_in_json() {
+        let kind = if json_only {
             format!("{}, edit in settings.json", field.kind.label())
         } else {
             field.kind.label().to_owned()
@@ -65,7 +69,7 @@ impl SettingsPage {
                     )
                     .child(badge(&path, LayerBadge::new(source), cx))
                     .child(div().flex_1())
-                    .child(
+                    .children(value.map(|value| {
                         div()
                             .debug_selector({
                                 let path = path.clone();
@@ -76,8 +80,8 @@ impl SettingsPage {
                             .font_family(mono.clone())
                             .text_size(u(tokens.font.small))
                             .text_color(colors.text_muted)
-                            .child(value),
-                    ),
+                            .child(value)
+                    })),
             )
             .when(!field.description.is_empty(), |row| {
                 row.child(
@@ -87,6 +91,7 @@ impl SettingsPage {
                         .child(field.description.clone()),
                 )
             })
+            .children(control)
             .child(
                 h_flex()
                     .gap(u(tokens.spacing.md))

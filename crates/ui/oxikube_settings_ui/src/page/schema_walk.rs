@@ -10,7 +10,7 @@ use serde_json::{Map, Value};
 use super::model::FieldKind;
 
 /// The schema's `$defs`, for resolving references.
-pub(super) struct Definitions<'a>(Option<&'a Map<String, Value>>);
+pub(crate) struct Definitions<'a>(Option<&'a Map<String, Value>>);
 
 impl<'a> Definitions<'a> {
     /// The definitions of `schema` (none when it has no `$defs`).

@@ -78,7 +78,7 @@ pub use metrics::{
     MetricsSettings, MetricsSettingsContent,
 };
 pub use portforward::{PortForwardSettings, PortForwardSettingsContent};
-pub use schema_dynamic::DynamicEnums;
+pub use schema_dynamic::{COLOR_FORMAT, DYNAMIC_ENUM_KEY, DynamicEnums, FONTS};
 pub use settings::{RegisteredSetting, Settings, SettingsContent, SettingsLocation};
 pub use store::{SettingSource, SettingsStore};
 pub use update::{new_text_for_path_update, new_text_for_update};

@@ -13,6 +13,7 @@ use serde_json::Value;
 
 use super::schema_walk::Definitions;
 use super::titles::{GENERAL_KEY, humanize, section_meta};
+use crate::controls::ControlSpec;
 
 /// Top-level keys that are not settings.
 const HIDDEN_KEYS: &[&str] = &["$schema", "clusters"];
@@ -61,7 +62,7 @@ impl FieldKind {
 }
 
 /// One setting on the page.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PageField {
     /// The dotted path in `settings.json` (`terminal.font_size`, `ui_scale`).
     pub path: SharedString,
@@ -71,10 +72,12 @@ pub struct PageField {
     pub description: SharedString,
     /// What it holds.
     pub kind: FieldKind,
+    /// The control that edits it (E21-S05), chosen by its schema type.
+    pub control: ControlSpec,
 }
 
 /// One section of the page: a top-level key of `settings.json`, or "General".
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PageSection {
     /// The top-level key (`terminal`), or `general`.
     pub key: SharedString,
@@ -87,7 +90,7 @@ pub struct PageSection {
 }
 
 /// The whole page: its sections in navigation order. See the [page module](crate::page).
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct SettingsPageModel {
     sections: Vec<PageSection>,
 }
@@ -212,6 +215,7 @@ fn page_field(path: &str, name: &str, node: &Value, definitions: &Definitions<'_
             .unwrap_or_default()
             .into(),
         kind: definitions.kind_of(node),
+        control: ControlSpec::of(node, definitions),
     }
 }
 
