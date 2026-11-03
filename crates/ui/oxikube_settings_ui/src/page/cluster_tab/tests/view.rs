@@ -17,10 +17,10 @@ use crate::page::{Scope, SettingsPage};
 
 #[gpui::test]
 fn picking_a_cluster_shows_only_the_fields_that_support_cluster_scope(cx: &mut TestAppContext) {
-    let mut page = Harness::open(cx, "{}", &["prod", "dev"]);
-    assert_eq!(page.page(|p| p.scope()), Scope::Cluster);
+    let mut page = Harness::open_clusters(cx, "{}", &["prod", "dev"]);
+    assert_eq!(page.read(|p| p.scope()), Scope::Cluster);
     assert_eq!(
-        page.page(|p| p.selected_cluster().cloned()),
+        page.read(|p| p.selected_cluster().cloned()),
         Some(id("prod"))
     );
     assert!(page.is_laid_out("settings-field-read_only"));
@@ -34,13 +34,13 @@ fn picking_a_cluster_shows_only_the_fields_that_support_cluster_scope(cx: &mut T
 
     page.click(&format!("settings-cluster-{}", id("dev")));
     assert_eq!(
-        page.page(|p| p.selected_cluster().cloned()),
+        page.read(|p| p.selected_cluster().cloned()),
         Some(id("dev"))
     );
 
     // Back to all settings: the global sections return.
     page.click("settings-scope-global");
-    assert_eq!(page.page(|p| p.scope()), Scope::Global);
+    assert_eq!(page.read(|p| p.scope()), Scope::Global);
     assert!(page.is_laid_out("settings-field-ui_scale"));
     assert!(!page.is_laid_out("settings-field-read_only"));
 }
@@ -53,7 +53,7 @@ fn an_edit_changes_only_the_cluster_block_and_keeps_the_rest_byte_for_byte(
     let before = format!(
         "{{\n  // my notes\n  \"ui_scale\": 1.25,\n  \"clusters\": {{\n    // dev is mine\n    \"{dev}\": {{ \"read_only\": true }}\n  }}\n}}\n"
     );
-    let mut page = Harness::open(cx, &before, &["prod", "dev"]);
+    let mut page = Harness::open_clusters(cx, &before, &["prod", "dev"]);
     page.reveal("read_only");
     page.click("settings-control-read_only");
     let after = page.file();
@@ -88,7 +88,7 @@ fn resetting_removes_the_key_and_the_empty_block(cx: &mut TestAppContext) {
     let before = format!(
         "{{ \"clusters\": {{ \"{prod}\": {{ \"read_only\": true }}, \"{dev}\": {{ \"read_only\": true, \"colour\": \"red\" }} }} }}"
     );
-    let mut page = Harness::open(cx, &before, &["prod", "dev"]);
+    let mut page = Harness::open_clusters(cx, &before, &["prod", "dev"]);
     assert!(page.is_laid_out("settings-reset-read_only"));
     page.reveal("read_only");
     page.click("settings-reset-read_only");
@@ -120,7 +120,7 @@ fn the_strip_shows_which_layer_wins(cx: &mut TestAppContext) {
     let user = format!(
         "{{ \"default_namespace\": \"shared\", \"clusters\": {{ \"{prod}\": {{ \"terminal_cwd\": \"/srv\", \"default_namespace\": \"payments\" }} }} }}"
     );
-    let mut page = Harness::open(cx, &user, &["prod", "dev"]);
+    let mut page = Harness::open_clusters(cx, &user, &["prod", "dev"]);
     assert!(page.is_laid_out("settings-precedence-default_namespace"));
     assert!(page.is_laid_out("settings-layer-default_namespace-Cluster-winner"));
     assert!(page.is_laid_out("settings-layer-terminal_cwd-Cluster-winner"));
@@ -140,7 +140,7 @@ fn an_override_that_weakens_a_protection_warns_without_blocking(cx: &mut TestApp
     let user = format!(
         "{{ \"read_only\": true, \"clusters\": {{ \"{prod}\": {{ \"read_only\": true }} }} }}"
     );
-    let mut page = Harness::open(cx, &user, &["prod"]);
+    let mut page = Harness::open_clusters(cx, &user, &["prod"]);
     assert!(!page.is_laid_out("settings-warning-read_only"));
     // Turning the switch off for this cluster while it is on for the others is allowed...
     page.reveal("read_only");
@@ -156,7 +156,7 @@ fn an_override_that_weakens_a_protection_warns_without_blocking(cx: &mut TestApp
 #[gpui::test]
 fn a_cluster_edit_reaches_a_consumer_of_the_settings_live(cx: &mut TestAppContext) {
     let (prod, dev) = (id("prod"), id("dev"));
-    let mut page = Harness::open(cx, "{}", &["prod", "dev"]);
+    let mut page = Harness::open_clusters(cx, "{}", &["prod", "dev"]);
     // A fake tab: reads the cluster's colour whenever the settings change.
     let seen: Rc<RefCell<Vec<Option<ClusterColour>>>> = Rc::default();
     let sink = seen.clone();
@@ -168,7 +168,7 @@ fn a_cluster_edit_reaches_a_consumer_of_the_settings_live(cx: &mut TestAppContex
         });
         subscription.detach();
     });
-    page.type_into("colour", "#e5484d");
+    page.type_into_revealed("colour", "#e5484d");
     page.pause(WRITE_DEBOUNCE);
     let latest = seen.borrow().last().cloned().flatten();
     assert_eq!(
@@ -193,7 +193,7 @@ fn the_list_comes_from_the_catalog_and_names_clusters_by_display_name(cx: &mut T
     let prod = id("prod");
     let user =
         format!("{{ \"clusters\": {{ \"{prod}\": {{ \"display_name\": \"Production\" }} }} }}");
-    let mut page = Harness::open(cx, &user, &["prod", "dev"]);
+    let mut page = Harness::open_clusters(cx, &user, &["prod", "dev"]);
     assert!(page.is_laid_out(&format!("settings-cluster-{prod}")));
     assert!(page.is_laid_out(&format!("settings-cluster-{}", id("dev"))));
     let labels: Vec<String> = page.vcx.read(|cx| {
@@ -255,10 +255,10 @@ fn the_page_lists_the_clusters_of_a_real_catalog(cx: &mut TestAppContext) {
 #[gpui::test]
 fn the_same_field_typed_for_two_clusters_inside_one_pause_reaches_both(cx: &mut TestAppContext) {
     let (prod, dev) = (id("prod"), id("dev"));
-    let mut page = Harness::open(cx, "{}", &["prod", "dev"]);
-    page.type_into("display_name", "Production");
+    let mut page = Harness::open_clusters(cx, "{}", &["prod", "dev"]);
+    page.type_into_revealed("display_name", "Production");
     page.click(&format!("settings-cluster-{}", id("dev")));
-    page.type_into("display_name", "Development");
+    page.type_into_revealed("display_name", "Development");
     page.pause(WRITE_DEBOUNCE * 2);
     let file = page.file_json();
     assert_eq!(
@@ -276,12 +276,12 @@ fn the_same_field_typed_for_two_clusters_inside_one_pause_reaches_both(cx: &mut 
 #[gpui::test]
 fn a_value_queued_behind_another_clusters_write_keeps_its_own_cluster(cx: &mut TestAppContext) {
     let (prod, dev) = (id("prod"), id("dev"));
-    let mut page = Harness::open(cx, "{}", &["prod", "dev"]);
-    page.type_into("display_name", "Production");
+    let mut page = Harness::open_clusters(cx, "{}", &["prod", "dev"]);
+    page.type_into_revealed("display_name", "Production");
     // Let the first timer fire (write goes in flight) without letting the write finish.
     page.pause(WRITE_DEBOUNCE);
     page.click(&format!("settings-cluster-{}", id("dev")));
-    page.type_into("display_name", "Development");
+    page.type_into_revealed("display_name", "Development");
     page.pause(WRITE_DEBOUNCE * 2);
     let file = page.file_json();
     assert_eq!(

@@ -35,6 +35,8 @@ mod search;
 mod titles;
 mod view;
 
+#[cfg(test)]
+pub(crate) mod harness;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
 #[cfg(test)]

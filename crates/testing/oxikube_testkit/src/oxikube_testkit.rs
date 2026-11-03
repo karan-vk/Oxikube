@@ -18,6 +18,8 @@
 //!   points are re-exported here.
 //! - [`commands`]: `fixture_commands(n)`, a deterministic mix of command metadata (every view,
 //!   selection shape and category) for palette, help and keymap tests.
+//! - [`config_dir`]: [`config_dir::TempConfigDir`], a temporary config directory with a seeded
+//!   `settings.json` (E21-S10).
 //! - [`contracts`]: behavioural contracts a fake and the real adapters both satisfy
 //!   ([`contracts::cloud_discovery`] for `CloudDiscoveryPort`).
 //! - [`discovery_sets`]: whole discovery answers for the kind registry and sidebar tests (E12-S01):
@@ -53,6 +55,7 @@
 
 pub mod builders;
 pub mod commands;
+pub mod config_dir;
 pub mod contracts;
 pub mod discovery_sets;
 pub mod events_scope;
