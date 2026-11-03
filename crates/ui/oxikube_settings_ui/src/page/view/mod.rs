@@ -143,6 +143,12 @@ impl SettingsPage {
         self.highlighted
     }
 
+    /// The controls of the fields shown: their inputs, errors and unsaved values (the screenshot
+    /// test drives an input through it, without the keyboard).
+    pub fn controls(&self) -> &Controls {
+        &self.controls
+    }
+
     /// The query the results are for.
     pub fn query(&self) -> &str {
         &self.query_text

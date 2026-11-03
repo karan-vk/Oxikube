@@ -69,7 +69,9 @@ pub use cloud::{CloudSettings, CloudSettingsContent};
 pub use cluster::{ClusterSettings, ClusterSettingsContent};
 pub use diagnostics::SettingsDiagnostic;
 pub use diff::{DiffSettings, DiffSettingsContent};
-pub use global::{init, init_with_dir, update_user_settings, update_user_settings_path};
+pub use global::{
+    init, init_with_dir, is_watching, update_user_settings, update_user_settings_path,
+};
 pub use helm::{HelmRepoContent, HelmSettings, HelmSettingsContent};
 pub use kubeconfig::{KubeconfigSettings, KubeconfigSettingsContent};
 pub use kustomize::{KustomizeSettings, KustomizeSettingsContent};

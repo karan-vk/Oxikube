@@ -61,6 +61,13 @@ pub fn init_with_dir(config_dir: &Path, cx: &mut App) {
     install(cx, Some(config_dir), false);
 }
 
+/// Whether the user file is watched for hot reload: `true` after [`init`] (when the watcher
+/// started), `false` after [`init_with_dir`]. Tests assert it to prove they run without the
+/// watcher's OS thread.
+pub fn is_watching(cx: &App) -> bool {
+    cx.has_global::<SettingsWatch>()
+}
+
 fn install(cx: &mut App, config_dir: Option<&Path>, watch: bool) {
     let mut store = match SettingsStore::new(oxikube_assets::default_settings()) {
         Ok(store) => store,

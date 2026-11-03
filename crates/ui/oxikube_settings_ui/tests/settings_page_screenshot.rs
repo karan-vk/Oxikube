@@ -4,6 +4,8 @@
 //! - `settings_page_search`: the results of a search, the title match highlighted.
 //! - `settings_page_user_badge`: the Terminal section with a value from the user's file (the
 //!   `User` badge next to `Default` ones).
+//! - `settings_page_error`: a number field holding text that is not a number: the inline error,
+//!   the file untouched (E21-S10).
 //! - `settings_page_cluster`: the per-cluster tab (E21-S06): the precedence panel, the cluster
 //!   list and the precedence strip under each field, with one override.
 //!
@@ -33,6 +35,7 @@ use oxikube_testkit::headless::HEADLESS_SCALE_FACTOR;
 use oxikube_testkit::screenshot::{
     RgbaImage, Tolerance, check_golden, distinct_colors_at_least, golden_path,
 };
+use oxikube_ui::input::InputEvent;
 
 const WIDTH: f32 = 1000.0;
 const HEIGHT: f32 = 640.0;
@@ -74,6 +77,8 @@ enum Scene {
     Section(&'static str),
     /// The per-cluster tab, on the first cluster.
     Cluster,
+    /// The General section with text typed into a number field that is not a number.
+    InvalidNumber,
 }
 
 fn headless() -> HeadlessAppContext {
@@ -118,6 +123,18 @@ fn render(scene: Scene, dark: bool) -> anyhow::Result<RgbaImage> {
                 page.query_input()
                     .update(cx, |input, cx| input.set_value(query, window, cx));
                 page.set_query(query, cx);
+            }
+            Scene::InvalidNumber => {
+                let input = page
+                    .controls()
+                    .input("ui_scale")
+                    .cloned()
+                    .expect("ui_scale has an input");
+                // `set_value` is silent; the page listens for the change a keystroke emits.
+                input.update(cx, |input, cx| {
+                    input.set_value("abc", window, cx);
+                    cx.emit(InputEvent::Change);
+                });
             }
             Scene::Cluster => {
                 page.set_catalog_entries(vec![entry("prod"), entry("staging")], cx);
@@ -174,6 +191,7 @@ fn run() -> anyhow::Result<()> {
         "settings_page_user_badge",
         render(Scene::Section("terminal"), true)?,
     )?;
+    check("settings_page_error", render(Scene::InvalidNumber, true)?)?;
     check("settings_page_cluster", render(Scene::Cluster, true)?)
 }
 
