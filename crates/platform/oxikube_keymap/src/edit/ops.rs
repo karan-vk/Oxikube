@@ -2,8 +2,9 @@
 //! with the comment-preserving array helpers of `oxikube_settings::json_edit`.
 //!
 //! The operations follow the design of Zed's keymap editor (written from scratch here):
-//! - [`KeybindUpdateOperation::Add`] puts a binding in the section of its context, or appends a
-//!   section for it, so the file keeps one section per context;
+//! - [`KeybindUpdateOperation::Add`] sets the binding in force when the keys are already bound in
+//!   its context (the last such, in whichever section), else puts it in the section of its
+//!   context, or appends a section for it, so the file keeps one section per context;
 //! - [`KeybindUpdateOperation::Replace`] edits a user binding in place (a key renamed, its value
 //!   set), or, for a default binding, adds the override and unbinds the old keys with `null`;
 //! - [`KeybindUpdateOperation::Remove`] deletes a user binding (and its section once empty), or
@@ -50,7 +51,8 @@ pub struct BindingLocation {
 /// `oxikube_keymap::edit::ops`).
 #[derive(Clone, Debug, PartialEq)]
 pub enum KeybindUpdateOperation {
-    /// Write `0` into the section of its context (appending one when there is none).
+    /// Set `0`: over the binding in force of the same keys in its context, else into the section
+    /// of its context (appending one when there is none).
     Add(KeybindTarget),
     /// Make the binding at `target` be `with` instead.
     Replace {
@@ -182,38 +184,28 @@ fn add(text: &str, target: &KeybindTarget) -> Result<String, EditError> {
     let all = sections(text)?;
     let value = action_value(&target.action);
     let tab_size = infer_json_indent_size(text);
+    // The same keys already bound in the context (spelled any way) are the same binding: edit
+    // the one in force (the last, as `find_binding` finds it) rather than add a second one that
+    // GPUI would treat as a duplicate, or one in an earlier section that it would outrank.
+    if let Some((index, key)) = find_binding(&all, target.context.as_deref(), &target.keystrokes) {
+        let rename = (key != target.keystrokes).then_some(target.keystrokes.as_str());
+        let edit = replace_top_level_array_value_in_json_text(
+            text,
+            &["bindings", key.as_str()],
+            Some(&value),
+            rename,
+            index,
+            tab_size,
+        );
+        return Ok(apply(text, edit));
+    }
     let Some(index) = section_for(&all, target.context.as_deref()) else {
         return Ok(append_section(text, target, value, tab_size));
     };
-    // The same keys spelled another way are the same binding: rename the key rather than add a
-    // second one GPUI would treat as a duplicate.
-    let existing = all
-        .iter()
-        .find(|(i, _)| *i == index)
-        .and_then(|(_, section)| {
-            let keys = normalise(&target.keystrokes);
-            section
-                .bindings
-                .keys()
-                .find(|key| normalise(key) == keys)
-                .cloned()
-        });
-    let Some(key) = existing else {
-        return match insert_first_binding(text, &all, index, &target.keystrokes, &value) {
-            Some(edit) => Ok(apply(text, edit)),
-            None => Ok(append_section(text, target, value, tab_size)),
-        };
-    };
-    let rename = (key != target.keystrokes).then_some(target.keystrokes.as_str());
-    let edit = replace_top_level_array_value_in_json_text(
-        text,
-        &["bindings", key.as_str()],
-        Some(&value),
-        rename,
-        index,
-        tab_size,
-    );
-    Ok(apply(text, edit))
+    match insert_first_binding(text, &all, index, &target.keystrokes, &value) {
+        Some(edit) => Ok(apply(text, edit)),
+        None => Ok(append_section(text, target, value, tab_size)),
+    }
 }
 
 fn replace_user(

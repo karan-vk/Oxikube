@@ -188,6 +188,61 @@ fn adding_keys_spelled_another_way_replaces_the_binding_instead_of_duplicating_i
 }
 
 #[test]
+fn adding_keys_bound_in_a_later_section_of_the_context_edits_the_one_in_force() {
+    // Two sections share a context and both bind `ctrl-k`; the later one wins, so the edit must
+    // land there (editing the first would leave the old action in force).
+    let text = r#"[
+  { "context": "ResourceTable", "bindings": { "ctrl-k": "table::SelectPrevious", "ctrl-j": "table::SelectNext" } },
+  { "context": "ResourceTable", "bindings": { "ctrl-k": "palette::Toggle" } }
+]"#;
+    let new = target(
+        Some("ResourceTable"),
+        "ctrl-k",
+        "workspace::CloseActiveItem",
+    );
+    let out = edit(text, &[KeybindUpdateOperation::Add(new.clone())]);
+    let parsed = parse_keymap(&out, KeymapLayer::User).unwrap();
+    let (_, last) = parsed.sections.last().unwrap();
+    assert_eq!(
+        last.bindings
+            .get("ctrl-k")
+            .map(ToString::to_string)
+            .as_deref(),
+        Some("\"workspace::CloseActiveItem\""),
+        "{out}"
+    );
+    let (_, first) = parsed.sections.first().unwrap();
+    assert_eq!(
+        first
+            .bindings
+            .get("ctrl-k")
+            .map(ToString::to_string)
+            .as_deref(),
+        Some("\"table::SelectPrevious\""),
+        "{out}"
+    );
+
+    // Replacing a default with the same keys goes through Add, so it lands there too.
+    let out = edit(
+        text,
+        &[KeybindUpdateOperation::Replace {
+            target: at(Some("ResourceTable"), "ctrl-k", KeymapLayer::Default),
+            with: new,
+        }],
+    );
+    let parsed = parse_keymap(&out, KeymapLayer::User).unwrap();
+    let (_, last) = parsed.sections.last().unwrap();
+    assert_eq!(
+        last.bindings
+            .get("ctrl-k")
+            .map(ToString::to_string)
+            .as_deref(),
+        Some("\"workspace::CloseActiveItem\""),
+        "{out}"
+    );
+}
+
+#[test]
 fn replace_edits_a_user_binding_in_place() {
     let out = edit(
         USER,
