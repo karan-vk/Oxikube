@@ -121,3 +121,33 @@ fn layer_values_report_each_layer_separately() {
         super::LayerValues::default()
     );
 }
+
+#[test]
+fn an_explicit_null_is_unset_as_in_the_merge() {
+    let a = cluster(1);
+    let store = loaded(&format!(
+        r#"{{
+            "read_only": null,
+            "terminal": {{ "font_size": null }},
+            "clusters": {{ "{a}": {{ "read_only": null, "terminal": {{ "font_size": null }} }} }}
+        }}"#
+    ));
+    for at in [None, Some(&a)] {
+        for path in ["read_only", "terminal.font_size", "terminal"] {
+            assert_eq!(
+                store.field_source(path, at),
+                SettingSource::Default,
+                "{path} at {at:?}"
+            );
+        }
+        let values = store.layer_values("read_only", at);
+        assert!(
+            values.user.is_none() && values.cluster.is_none(),
+            "{values:?}"
+        );
+    }
+    assert_eq!(
+        store.effective_value("terminal.font_size", Some(&a)),
+        Some(&json!(12))
+    );
+}

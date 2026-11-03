@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use gpui::{TestAppContext, UpdateGlobal as _};
+use gpui::{AppContext as _, TestAppContext, UpdateGlobal as _};
 use oxikube_settings::SettingsStore;
 use serde_json::json;
 
@@ -302,6 +302,58 @@ fn the_page_writes_the_cluster_block_when_it_has_a_cluster(cx: &mut TestAppConte
         "{}",
         page.file()
     );
+}
+
+#[gpui::test]
+fn the_font_families_are_listed_off_the_ui_thread_once_per_app(cx: &mut TestAppContext) {
+    let mut page = Harness::open_section(cx, "{}", "general");
+    let fields = page.read(|p| {
+        p.model()
+            .sections()
+            .iter()
+            .find(|section| section.key == "editor")
+            .expect("the editor section")
+            .fields
+            .clone()
+    });
+    let entity = page.page.clone();
+    // Showing a font field (what `render` does) only starts the listing: the frame never waits
+    // for the platform to walk every font face.
+    page.vcx.update(|window, cx| {
+        entity.update(cx, |p, cx| {
+            p.controls.ensure(&fields, None, window, cx);
+            assert!(!p.controls.fonts_listed(), "listed inside the frame");
+            assert!(
+                p.controls.fonts_task.is_some(),
+                "the listing was not started"
+            );
+        });
+    });
+    page.vcx.run_until_parked();
+    assert!(page.read_controls(|c| c.fonts_listed()), "the list arrives");
+
+    // A page opened later reads the app's list at once, with no second listing.
+    let other = page.vcx.update(|window, cx| {
+        cx.new(|cx| crate::page::SettingsPage::with_model(model(), window, cx))
+    });
+    page.vcx.update(|window, cx| {
+        other.update(cx, |p, cx| {
+            p.controls.ensure(&fields, None, window, cx);
+            assert!(p.controls.fonts_listed() && p.controls.fonts_task.is_none());
+        });
+    });
+}
+
+#[test]
+fn the_suggested_families_drop_hidden_ones_and_are_sorted_once_each() {
+    let names = crate::controls::fonts::suggestable(vec![
+        "Menlo".into(),
+        ".SF NS".into(),
+        "Arial".into(),
+        "Menlo".into(),
+    ]);
+    let names: Vec<&str> = names.iter().map(|name| name.as_ref()).collect();
+    assert_eq!(names, ["Arial", "Menlo"]);
 }
 
 impl Harness {

@@ -167,6 +167,23 @@ mod tests {
     }
 
     #[test]
+    fn equal_scores_order_alphabetically_whatever_the_candidates_order() {
+        // The picker screenshot's fixture: the four `coredns` objects match `core` equally well,
+        // so they rank by text (configmap, deployment, then the pods), not in the order given.
+        let list = candidates(&[
+            "pod/kube-system/coredns-7db6d8ff4d-2xk9q",
+            "pod/kube-system/coredns-7db6d8ff4d-wq8tz",
+            "deployment/kube-system/coredns",
+            "configmap/kube-system/coredns",
+        ]);
+        let ids: Vec<_> = match_strings(&list, "core", 10)
+            .iter()
+            .map(|m| m.candidate_id)
+            .collect();
+        assert_eq!(ids, [3, 2, 0, 1]);
+    }
+
+    #[test]
     fn every_word_must_match_and_case_is_smart() {
         let list = candidates(&["kube-system coredns", "default nginx", "Kube"]);
         let ids: Vec<_> = match_strings(&list, "kube dns", 10)

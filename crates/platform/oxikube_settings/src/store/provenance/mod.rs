@@ -58,11 +58,22 @@ fn lookup<'a>(root: &'a Map<String, Value>, path: &str) -> Option<&'a Value> {
     Some(current)
 }
 
+/// Whether a layer's `value` for a field changes the merge: `null` does not (the merge skips
+/// it, as [`SettingsStore::layer_values`] does), and an object only through a member that does.
+fn sets(value: &Value) -> bool {
+    match value {
+        Value::Null => false,
+        Value::Object(members) => members.values().any(sets),
+        _ => true,
+    }
+}
+
 impl SettingsStore {
     /// The layer the effective value of the field at the dotted `path` comes from, read at
     /// `cluster` (`None`: the global value). The highest layer that sets the field wins: the
     /// cluster's own block, then the user's file, else the defaults. A path that names an object
-    /// counts as set by a layer that sets any part of it.
+    /// counts as set by a layer that sets any part of it. An explicit `null` sets nothing, as in
+    /// the merge: the badge, the reset button and the precedence view agree on it.
     pub fn field_source(&self, path: &str, cluster: Option<&ClusterId>) -> SettingSource {
         if path.is_empty() || path.split('.').next() == Some(CLUSTERS_KEY) {
             return SettingSource::Default;
@@ -70,11 +81,11 @@ impl SettingsStore {
         if self
             .cluster_layer(cluster)
             .and_then(|layer| lookup(&layer.overrides, path))
-            .is_some()
+            .is_some_and(sets)
         {
             return SettingSource::Cluster;
         }
-        if lookup(&self.user, path).is_some() {
+        if lookup(&self.user, path).is_some_and(sets) {
             return SettingSource::User;
         }
         SettingSource::Default

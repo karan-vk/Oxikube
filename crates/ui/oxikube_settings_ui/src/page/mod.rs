@@ -43,7 +43,9 @@ pub mod test_support;
 mod tests;
 
 pub use badge::LayerBadge;
-pub use cluster_tab::{ClusterChoice, Scope, cluster_page_model, supports_cluster_scope};
+pub use cluster_tab::{
+    ClusterChoice, ClusterRowText, Scope, cluster_page_model, supports_cluster_scope,
+};
 pub use model::{FieldKind, PageField, PageSection, SettingsPageModel};
 pub use search::{MAX_HITS, MatchedIn, SearchHit, SearchIndex};
 pub use titles::{GENERAL_KEY, humanize};

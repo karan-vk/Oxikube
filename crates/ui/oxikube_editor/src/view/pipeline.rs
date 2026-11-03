@@ -50,9 +50,9 @@ impl ManifestEditor {
             });
             return;
         }
-        if let Some(file) = &self.config_file {
+        if let Some(link) = &self.config_file {
             // A config file is checked by its own validator, not the Kubernetes schemas.
-            let kind = file.kind;
+            let kind = link.file.kind;
             self.schedule_config_validation(kind, delay, window, cx);
             return;
         }

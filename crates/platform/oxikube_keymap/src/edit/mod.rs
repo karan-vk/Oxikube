@@ -7,7 +7,7 @@
 //! | `plan` | the `keymap::SetBinding` / `keymap::RemoveBinding` payloads to operations, and rows to payloads |
 //! | `chain` | [`ContextModel`]: which bindings in force a new one clashes with (same keys or a prefix, contexts that can be active together) |
 //! | `gate` | [`preview_edit`]: the edited text through the one validator; an edit that adds an error is never written |
-//! | `write` | [`write_user_keymap`]: read, edit, validate and write off the UI thread, then put the result in force |
+//! | `write` | [`write_user_keymap`]: read, edit, validate and write off the UI thread, then put the result in force; [`save_user_keymap_text`]: the config editor's whole-file save, under the same lock, refused when the file changed since it was read |
 //! | `keystrokes` | [`keystroke_text`]: a recorded keystroke with the platform's own modifier names |
 //!
 //! Default and base keymaps are never edited: an override or a `null` goes to the user's file.
@@ -37,4 +37,4 @@ pub use plan::{
     PlanError, layer_of, location_of, ref_of_row, remove_binding_operations,
     set_binding_operations, source_of,
 };
-pub use write::{user_text, write_user_keymap};
+pub use write::{UserKeymapSave, save_user_keymap_text, user_text, write_user_keymap};

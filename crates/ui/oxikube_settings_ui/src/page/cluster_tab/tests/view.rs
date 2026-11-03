@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use gpui::{AppContext as _, TestAppContext};
+use gpui::{AppContext as _, TestAppContext, UpdateGlobal as _};
 use oxikube_app::ClusterCatalog;
 use oxikube_domain::ClusterColour;
 use oxikube_settings::{ClusterSettings, SettingsStore};
@@ -294,4 +294,43 @@ fn a_value_queued_behind_another_clusters_write_keeps_its_own_cluster(cx: &mut T
         json!("Development"),
         "{file}"
     );
+}
+
+#[gpui::test]
+fn a_long_cluster_list_builds_only_the_rows_in_view_and_follows_the_file(cx: &mut TestAppContext) {
+    let names: Vec<String> = (0..500).map(|i| format!("context-{i:03}")).collect();
+    let refs: Vec<&str> = names.iter().map(String::as_str).collect();
+    let (first, last) = (id(&names[0]), id(&names[499]));
+    let user = format!("{{ \"clusters\": {{ \"{first}\": {{ \"display_name\": \"First\" }} }} }}");
+    let mut page = Harness::open_clusters(cx, &user, &refs);
+    // The list is virtualised: the first rows are laid out, the 500th is not built at all.
+    assert!(page.is_laid_out(&format!("settings-cluster-{first}")));
+    assert!(!page.is_laid_out(&format!("settings-cluster-{last}")));
+    let list = page
+        .bounds("settings-cluster-list")
+        .expect("the list is laid out");
+    assert!(
+        list.size.height <= gpui::px(200.0 * 2.0),
+        "the list keeps its height: {list:?}"
+    );
+    let rows = page.read(|p| p.cluster_rows().to_vec());
+    assert_eq!(rows.len(), 500);
+    assert_eq!(rows[0].label.as_ref(), "First");
+    assert_eq!(rows[0].overrides, 1);
+    assert_eq!(rows[1].label.as_ref(), "context-001");
+
+    // The texts are worked out when the file changes, not read per frame.
+    page.vcx.update(|_, cx| {
+        SettingsStore::update_global(cx, |store, _| {
+            store
+                .set_user_settings(&format!(
+                    "{{ \"clusters\": {{ \"{first}\": {{ \"display_name\": \"Renamed\", \"read_only\": true }} }} }}"
+                ))
+                .expect("valid settings");
+        });
+    });
+    page.vcx.run_until_parked();
+    let rows = page.read(|p| p.cluster_rows().to_vec());
+    assert_eq!(rows[0].label.as_ref(), "Renamed");
+    assert_eq!(rows[0].overrides, 2);
 }

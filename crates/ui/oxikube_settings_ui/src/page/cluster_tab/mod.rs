@@ -24,11 +24,11 @@
 //! | Module | Holds |
 //! |---|---|
 //! | `model` | [`cluster_page_model`]: the per-cluster sections, from the schema |
-//! | `choice` | [`ClusterChoice`]: the picker's rows |
+//! | `choice` | [`ClusterChoice`]: the picker's rows, and [`ClusterRowText`], what each shows (worked out per change, not per frame) |
 //! | `precedence` | [`Precedence`], [`protection_warning`] and the explanation text: plain data |
 //! | `state` | `ClusterTabState`: scope, the other scope's model, the catalog and its tasks |
 //! | `view` | scope switching, the catalog and the picked cluster |
-//! | `render` | the scope switch, the picker and the precedence strip on the page |
+//! | `render` | the scope switch, the picker (a `uniform_list`: only the rows in view are built) and the precedence strip on the page |
 
 mod choice;
 mod model;
@@ -40,7 +40,7 @@ mod view;
 #[cfg(test)]
 mod tests;
 
-pub use choice::{ClusterChoice, choices};
+pub use choice::{ClusterChoice, ClusterRowText, choices};
 pub use model::{cluster_page_model, supports_cluster_scope};
 pub use precedence::{EXPLANATION, Precedence, PrecedenceCell, protection_warning};
 pub(crate) use state::ClusterTabState;

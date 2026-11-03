@@ -8,7 +8,7 @@
 //! | `integer`, `number` (`minimum`, `maximum`) | a text input checked against the bounds |
 //! | `string` | a text input |
 //! | `string`, `format: "color"` (or a hex `pattern`) | an input with a swatch |
-//! | `x-oxikube-dynamic-enum: "fonts"` | an input with the installed font families |
+//! | `x-oxikube-dynamic-enum: "fonts"` | an input with the installed font families (listed in the background) |
 //! | array of strings | a list editor: add, remove, reorder |
 //! | anything else | a read-only summary and "edit in settings.json" |
 //!
@@ -33,10 +33,12 @@
 //! | `spec` | [`ControlSpec`]: the control for a schema node |
 //! | `validate` | the pure checks of typed input |
 //! | `state` | [`Controls`]: the input entities, errors and write bookkeeping of a page |
+//! | `fonts` | the installed font families, listed once per app off the UI thread |
 //! | `write` | the debounce, the one-in-flight write and reset |
 //! | `list` | the list editor's rows |
 //! | `render` | the control elements and the inline error |
 
+mod fonts;
 mod list;
 mod render;
 mod spec;

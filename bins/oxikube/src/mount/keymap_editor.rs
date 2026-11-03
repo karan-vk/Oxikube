@@ -1,5 +1,6 @@
 //! The keymap editor page of the main window (E21-S07): `keymap::ShowEditor` opens it in the
-//! active cluster's tab, and the sidebar's Settings > Keymap entry asks for it.
+//! active cluster's tab (in the window's own workspace when no cluster tab is open), and the
+//! sidebar's Settings > Keymap entry asks for it.
 //!
 //! * [`start_views`] applies each `keymap::ShowEditor` / `keymap::RecordBinding` request on the UI
 //!   thread (`oxikube_settings_ui::keymap::KeymapEditorViews`).
@@ -13,21 +14,27 @@ use gpui::{App, Entity, Task, WeakEntity, Window};
 use oxikube_domain::command::{Command, CommandId};
 use oxikube_settings_ui::keymap::{KeymapEditorRequest, KeymapEditorViews, KeymapEditorViewsDeps};
 use oxikube_workspace::sidebar::{SidebarEvent, SidebarPanel, SidebarTarget};
-use oxikube_workspace::{ClusterTab, ClusterTabs, CommandDispatcher};
+use oxikube_workspace::{ClusterTab, ClusterTabs, CommandDispatcher, Workspace};
 
 use super::tabs::TabDeps;
 
 /// Starts the window's keymap editor page over `requests` (the bus's `keymap::ShowEditor` and
-/// `keymap::RecordBinding` handlers). Keep the task for the life of the window.
+/// `keymap::RecordBinding` handlers), in the cluster tabs or, with none open, in `home` (the
+/// window's own workspace). Keep the task for the life of the window.
 pub fn start_views(
     dispatcher: Rc<dyn CommandDispatcher>,
     tabs: WeakEntity<ClusterTabs>,
+    home: WeakEntity<Workspace>,
     requests: UnboundedReceiver<KeymapEditorRequest>,
     window: &mut Window,
     cx: &mut App,
 ) -> Task<()> {
     KeymapEditorViews::start(
-        KeymapEditorViewsDeps { dispatcher, tabs },
+        KeymapEditorViewsDeps {
+            dispatcher,
+            tabs,
+            home,
+        },
         requests,
         window,
         cx,

@@ -1,9 +1,11 @@
 //! The per-cluster scope's drawing: the scope switch, the cluster list and the precedence strip.
 
+use std::ops::Range;
+
 use gpui::{
     AnyElement, Context, FontWeight, Hsla, InteractiveElement as _, IntoElement,
-    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, div,
-    prelude::FluentBuilder as _, px,
+    ListSizingBehavior, ParentElement as _, SharedString, StatefulInteractiveElement as _,
+    Styled as _, div, prelude::FluentBuilder as _, px, uniform_list,
 };
 use oxikube_settings::{SettingSource, SettingsStore};
 use oxikube_ui::layout::{h_flex, v_flex};
@@ -57,67 +59,28 @@ impl SettingsPage {
     }
 
     /// The precedence explanation and the cluster list: one element, the first of the content.
+    /// The list is a `uniform_list` (only the rows in view are built and laid out, whatever the
+    /// number of kubeconfig contexts) over the row texts worked out when the list or the file
+    /// changed.
     pub(in crate::page) fn cluster_header(&self, cx: &mut Context<Self>) -> AnyElement {
         let tokens = cx.tokens();
         let colors = tokens.colors;
-        let store = cx.try_global::<SettingsStore>();
-        let rows: Vec<AnyElement> = self
-            .tab
-            .choices
-            .iter()
-            .enumerate()
-            .map(|(ix, choice)| {
-                let selected = self.cluster.as_ref() == Some(&choice.id);
-                let id = choice.id.clone();
-                let overrides = choice.override_count(store);
-                h_flex()
-                    .id(("settings-cluster", ix))
-                    .debug_selector({
-                        let id = id.clone();
-                        move || format!("settings-cluster-{id}")
-                    })
-                    .gap(u(tokens.spacing.md))
-                    .px(u(tokens.spacing.lg))
-                    .py(u(tokens.spacing.sm))
-                    .rounded(u(tokens.radius.md))
-                    .cursor_pointer()
-                    .when(selected, |row| row.bg(colors.element_selected))
-                    .hover(|style| style.bg(colors.element_hover))
-                    .child(
-                        v_flex()
-                            .flex_1()
-                            .min_w_0()
-                            .child(
-                                div()
-                                    .truncate()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .child(choice.label(store)),
-                            )
-                            .child(
-                                div()
-                                    .truncate()
-                                    .text_size(u(tokens.font.small))
-                                    .text_color(colors.text_muted)
-                                    .child(choice.detail(store)),
-                            ),
-                    )
-                    .when(overrides > 0, |row| {
-                        row.child(
-                            div()
-                                .flex_none()
-                                .text_size(u(tokens.font.small))
-                                .text_color(colors.warning)
-                                .child(match overrides {
-                                    1 => "1 override".to_owned(),
-                                    n => format!("{n} overrides"),
-                                }),
-                        )
-                    })
-                    .on_click(cx.listener(move |this, _, _, cx| this.select_cluster(&id, cx)))
-                    .into_any_element()
-            })
-            .collect();
-        let empty = rows.is_empty().then(|| {
+        let count = self.tab.rows.len();
+        let list = (count > 0).then(|| {
+            uniform_list(
+                "settings-cluster-list",
+                count,
+                cx.processor(|this, range: Range<usize>, _, cx| this.cluster_list_rows(range, cx)),
+            )
+            // As tall as its rows, up to the cap; a scrolling column must not squeeze it.
+            .with_sizing_behavior(ListSizingBehavior::Infer)
+            .debug_selector(|| "settings-cluster-list".into())
+            .w_full()
+            .flex_none()
+            .max_h(u(px(LIST_HEIGHT)))
+            .into_any_element()
+        });
+        let empty = (count == 0).then(|| {
             div()
                 .debug_selector(|| "settings-cluster-none".into())
                 .px(u(tokens.spacing.lg))
@@ -149,17 +112,79 @@ impl SettingsPage {
                     .child(EXPLANATION)
                     .child(EDITS_ONLY_THE_CLUSTER),
             )
-            .child(
-                v_flex()
-                    .id("settings-cluster-list")
-                    .debug_selector(|| "settings-cluster-list".into())
-                    .max_h(u(px(LIST_HEIGHT)))
-                    .overflow_y_scroll()
-                    .gap(u(tokens.spacing.xs))
-                    .children(rows)
-                    .children(empty),
-            )
+            .children(list)
+            .children(empty)
             .into_any_element()
+    }
+
+    /// The rows of the cluster list in `range` (the ones in view).
+    fn cluster_list_rows(&self, range: Range<usize>, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        let tokens = cx.tokens();
+        let colors = tokens.colors;
+        let end = range
+            .end
+            .min(self.tab.choices.len())
+            .min(self.tab.rows.len());
+        let start = range.start.min(end);
+        (start..end)
+            .map(|ix| {
+                let choice = &self.tab.choices[ix];
+                let text = &self.tab.rows[ix];
+                let selected = self.cluster.as_ref() == Some(&choice.id);
+                let id = choice.id.clone();
+                // Every row is the same height (two lines, the same padding), as the list needs;
+                // the gap between rows is a bottom padding inside it.
+                div()
+                    .id(("settings-cluster", ix))
+                    .pb(u(tokens.spacing.xs))
+                    .child(
+                        h_flex()
+                            .debug_selector({
+                                let id = id.clone();
+                                move || format!("settings-cluster-{id}")
+                            })
+                            .gap(u(tokens.spacing.md))
+                            .px(u(tokens.spacing.lg))
+                            .py(u(tokens.spacing.sm))
+                            .rounded(u(tokens.radius.md))
+                            .cursor_pointer()
+                            .when(selected, |row| row.bg(colors.element_selected))
+                            .hover(|style| style.bg(colors.element_hover))
+                            .child(
+                                v_flex()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .child(
+                                        div()
+                                            .truncate()
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .child(text.label.clone()),
+                                    )
+                                    .child(
+                                        div()
+                                            .truncate()
+                                            .text_size(u(tokens.font.small))
+                                            .text_color(colors.text_muted)
+                                            .child(text.detail.clone()),
+                                    ),
+                            )
+                            .when(text.overrides > 0, |row| {
+                                row.child(
+                                    div()
+                                        .flex_none()
+                                        .text_size(u(tokens.font.small))
+                                        .text_color(colors.warning)
+                                        .child(match text.overrides {
+                                            1 => "1 override".to_owned(),
+                                            n => format!("{n} overrides"),
+                                        }),
+                                )
+                            }),
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| this.select_cluster(&id, cx)))
+                    .into_any_element()
+            })
+            .collect()
     }
 
     /// The strip under a field on the per-cluster tab: what each layer says, which wins, and a

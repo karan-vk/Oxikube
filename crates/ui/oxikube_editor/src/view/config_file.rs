@@ -9,7 +9,11 @@
 //!   executor after the same [`VALIDATION_DEBOUNCE`](super::VALIDATION_DEBOUNCE) as a manifest, and a
 //!   result for an older buffer version is dropped.
 //! - Saving (`resource::Apply`, cmd-s / ctrl-s) writes the file; the keymap's file watcher
-//!   reloads it, so the notification and the live rebinding follow with no second path.
+//!   reloads it, so the notification and the live rebinding follow with no second path. The save
+//!   goes through [`oxikube_keymap::edit::save_user_keymap_text`]: under the lock the keymap
+//!   editor's writes take, and only while the file still holds the text the buffer started from.
+//!   When another writer (a binding recorded in the keymap editor) changed it, nothing is written
+//!   and a warning says so; saving again overwrites knowingly.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -57,6 +61,14 @@ pub struct ConfigFile {
     pub kind: ConfigFileKind,
     /// Where Save writes.
     pub path: PathBuf,
+}
+
+/// The config file an editor edits and the text on disk its buffer started from (what it was
+/// opened with, or last saved or warned about), so a save can tell another writer changed it.
+#[derive(Clone, Debug)]
+pub(super) struct ConfigFileLink {
+    pub(super) file: ConfigFile,
+    pub(super) on_disk: String,
 }
 
 /// Text to open in an editor as the user's config file `file` (the keymap's `keymap::OpenUser`
@@ -187,6 +199,7 @@ impl EditorViews {
             }
         };
         let kind = file.kind;
+        let on_disk = text.clone();
         let parts = ManifestEditorParts {
             title: SharedString::from(kind.title()),
             text,
@@ -198,7 +211,7 @@ impl EditorViews {
         let editor = cx.new(|cx| ManifestEditor::new(parts, window, cx));
         self.mount(&editor, None, &workspace, cx);
         editor.update(cx, |editor, cx| {
-            editor.set_config_file(file, window, cx);
+            editor.set_config_file(file, on_disk, window, cx);
             editor.set_notice(opened_notice(kind), cx);
         });
         workspace.update(cx, |ws, cx| ws.open_item(editor, window, cx));
@@ -206,21 +219,24 @@ impl EditorViews {
 }
 
 impl ManifestEditor {
-    /// Makes this editor edit the config file `file`: its buffer is read as JSON, checked by the
-    /// file's validator instead of the Kubernetes schemas, and saved to its path (`resource::Apply`).
+    /// Makes this editor edit the config file `file`, whose text on disk is `on_disk` (what the
+    /// buffer was opened with): its buffer is read as JSON, checked by the file's validator
+    /// instead of the Kubernetes schemas, and saved to its path (`resource::Apply`) unless another
+    /// writer changed the file since.
     pub fn set_config_file(
         &mut self,
         file: ConfigFile,
+        on_disk: String,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.config_file = Some(file);
+        self.config_file = Some(ConfigFileLink { file, on_disk });
         self.use_language(Language::Json, window, cx);
     }
 
     /// The config file this editor edits, if it is one.
     pub fn config_file(&self) -> Option<&ConfigFile> {
-        self.config_file.as_ref()
+        self.config_file.as_ref().map(|link| &link.file)
     }
 
     /// Validates the buffer as a config file after `delay`: the same debounce, snapshot and
@@ -274,45 +290,6 @@ impl ManifestEditor {
             });
         }));
     }
-
-    /// Writes the buffer to the config file's path, off the UI thread: to a temporary file next
-    /// to it and then renamed over it, so a reader (the keymap's watcher) never sees half a file.
-    pub(super) fn save_config_file(
-        &mut self,
-        file: ConfigFile,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let snapshot = self.editor.read(cx).snapshot(cx);
-        let version = snapshot.version();
-        let path = file.path;
-        self.apply.task = Some(cx.spawn_in(window, async move |this, cx| {
-            let written = cx
-                .background_spawn(async move { write_atomically(&path, &snapshot.to_text()) })
-                .await;
-            let _ = this.update(cx, |view, cx| match written {
-                Ok(()) => {
-                    view.clean_version = version;
-                    view.set_notice(Notice::new(NoticeLevel::Info, "Saved"), cx);
-                    cx.emit(oxikube_workspace::ItemEvent::UpdateTab);
-                }
-                Err(error) => {
-                    let text = format!("Could not save: {error}");
-                    view.set_notice(Notice::new(NoticeLevel::Error, text), cx);
-                }
-            });
-        }));
-    }
-}
-
-fn write_atomically(path: &Path, text: &str) -> std::io::Result<()> {
-    let mut temporary = path.as_os_str().to_owned();
-    temporary.push(".tmp");
-    let temporary = PathBuf::from(temporary);
-    std::fs::write(&temporary, text)?;
-    std::fs::rename(&temporary, path).inspect_err(|_| {
-        let _ = std::fs::remove_file(&temporary);
-    })
 }
 
 /// Shared so the controller and the tests build the same notice when a file opens.
@@ -365,15 +342,5 @@ mod tests {
         assert_eq!(result.version, 7);
         assert!(result.diagnostics.is_empty() && result.missing.is_empty());
         assert!(result.coverage.is_complete());
-    }
-
-    #[test]
-    fn a_save_replaces_the_file_whole() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("keymap.json");
-        std::fs::write(&path, "old").unwrap();
-        write_atomically(&path, "[]").unwrap();
-        assert_eq!(std::fs::read_to_string(&path).unwrap(), "[]");
-        assert!(!dir.path().join("keymap.json.tmp").exists());
     }
 }

@@ -113,7 +113,7 @@ pub struct ManifestEditor {
     pub(super) plaintext_secrets: bool,
     /// The user's config file this editor edits (`keymap.json`, E21-S03): checked by its own
     /// validator and saved to its path.
-    pub(super) config_file: Option<super::config_file::ConfigFile>,
+    pub(super) config_file: Option<super::config_file::ConfigFileLink>,
     _subscriptions: Vec<Subscription>,
 }
 

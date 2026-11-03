@@ -181,6 +181,27 @@ fn a_sequence_ends_after_a_pause_and_keys_then_work_again(cx: &mut TestAppContex
 }
 
 #[gpui::test]
+fn restarting_cancels_the_previous_pause_so_the_new_recording_keeps_going(cx: &mut TestAppContext) {
+    let mut h = Harness::open(cx, USER);
+    let (open, _) = count_actions(&mut h);
+    let recorder = record(&mut h, "keymap::OpenUser");
+    h.vcx.simulate_keystrokes("x");
+    after(&mut h, IDLE_TIMEOUT / 2);
+    // Record again within the pause: the old pause timer must not end the new recording.
+    h.vcx
+        .update(|window, cx| recorder.update(cx, |r, cx| r.restart(window, cx)));
+    after(&mut h, IDLE_TIMEOUT);
+    assert!(
+        h.vcx.read(|cx| recorder.read(cx).model().is_recording()),
+        "the restarted recording still records"
+    );
+    h.vcx.simulate_keystrokes("ctrl-alt-shift-k");
+    h.settle();
+    assert_eq!(keys(&mut h, &recorder), ["ctrl-alt-shift-k"]);
+    assert_eq!(open.get(), 0, "the key was recorded, not dispatched");
+}
+
+#[gpui::test]
 fn conflicts_are_listed_and_replace_unbinds_them(cx: &mut TestAppContext) {
     let user = r#"[
       { "context": "Workspace", "bindings": { "ctrl-alt-shift-j": "keymap::OpenUser" } }

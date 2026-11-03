@@ -1,6 +1,7 @@
 //! [`Controls`]: what a settings page keeps for its controls.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use gpui::{
     App, AppContext as _, Context, Entity, Focusable as _, SharedString, Subscription, Task, Window,
@@ -62,7 +63,10 @@ pub struct Controls {
     /// a reset).
     pub(super) resync: HashSet<SharedString>,
     pub(super) writes: Vec<Task<()>>,
-    pub(super) fonts: Option<Vec<SharedString>>,
+    /// The installed font families, once listed (`Controls::request_fonts`).
+    pub(super) fonts: Option<Arc<[SharedString]>>,
+    /// The listing of the font families, while it runs on the background executor.
+    pub(super) fonts_task: Option<Task<()>>,
 }
 
 impl Controls {
@@ -86,22 +90,6 @@ impl Controls {
         }
     }
 
-    /// The installed font families, asked of the text system once.
-    pub(super) fn fonts(&mut self, window: &Window) -> &[SharedString] {
-        self.fonts.get_or_insert_with(|| {
-            let mut names: Vec<SharedString> = window
-                .text_system()
-                .all_font_names()
-                .into_iter()
-                .filter(|name| !name.starts_with('.'))
-                .map(SharedString::from)
-                .collect();
-            names.sort();
-            names.dedup();
-            names
-        })
-    }
-
     /// Makes the input entities of `fields` that have none yet, showing the value in effect.
     pub(crate) fn ensure(
         &mut self,
@@ -116,7 +104,8 @@ impl Controls {
             }
             let editor = match &field.control {
                 ControlSpec::Font => {
-                    self.fonts(window);
+                    // Listed off the UI thread; suggestions appear when the list arrives.
+                    self.request_fonts(cx);
                     Some(text_editor(field, cluster, window, cx))
                 }
                 ControlSpec::Number(_) | ControlSpec::Text | ControlSpec::Color => {

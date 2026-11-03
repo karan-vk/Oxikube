@@ -3,7 +3,9 @@
 
 use oxikube_domain::command::{KeymapBindingEdit, KeymapBindingRef, KeymapSource};
 
-use crate::edit::{ConflictKind, ContextModel, apply_operations, set_binding_operations};
+use crate::edit::{
+    ConflictKind, ContextModel, apply_operations, ref_of_row, set_binding_operations,
+};
 use crate::known::KnownNames;
 use crate::layer::KeymapLayer;
 use crate::rows::{KeymapRow, RowStatus};
@@ -323,4 +325,39 @@ fn an_overwritten_binding_is_gone_whichever_answer_the_user_gives() {
         kept.contains("\"ctrl-k\": \"bar::Action\"") && !kept.contains("foo::Action"),
         "{kept}"
     );
+}
+
+#[test]
+fn a_row_out_of_force_has_no_reference_so_re_recording_it_keeps_the_winning_binding() {
+    // The audit's case: the default `cmd-k` -> `x::Old` is overridden by the user's
+    // `cmd-k` -> `x::New`. Re-recording the overridden row as `cmd-j` must add `cmd-j` and leave
+    // the user's `cmd-k` alone (it used to replace it with `null`).
+    let text = r#"[{ "context": "Workspace", "bindings": { "cmd-k": "x::New" } }]"#;
+    let mut overridden = row("x::Old", Some("Workspace"), "cmd-k", KeymapLayer::Default);
+    overridden.status = RowStatus::Overridden;
+    assert!(ref_of_row(&overridden).is_none());
+    let mut unbound = row("x::Old", Some("Workspace"), "cmd-k", KeymapLayer::Default);
+    unbound.status = RowStatus::UnboundByUser;
+    assert!(ref_of_row(&unbound).is_none());
+    let mut user_overridden = row("x::Mine", Some("Workspace"), "cmd-k", KeymapLayer::User);
+    user_overridden.status = RowStatus::Overridden;
+    assert!(ref_of_row(&user_overridden).is_none());
+    let active = row("x::New", Some("Workspace"), "cmd-k", KeymapLayer::User);
+    assert!(ref_of_row(&active).is_some());
+
+    let edit = KeymapBindingEdit {
+        action: "x::Old".into(),
+        data: None,
+        context: Some("Workspace".into()),
+        keystrokes: "cmd-j".into(),
+        replaces: ref_of_row(&overridden),
+        unbind: Vec::new(),
+    };
+    let written =
+        apply_operations(text, &set_binding_operations(&edit).expect("a plan")).expect("an edit");
+    assert!(
+        written.contains("\"cmd-k\": \"x::New\"") && written.contains("\"cmd-j\": \"x::Old\""),
+        "{written}"
+    );
+    assert!(!written.contains("null"), "{written}");
 }
