@@ -248,6 +248,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::HelpShow
         | Command::PaletteToggleShowAll
         | Command::KeymapOpenUser
+        | Command::KeymapShowEditor
         | Command::ChartsOpenGallery
         | Command::AppQuit
         | Command::AppSendTestNotification

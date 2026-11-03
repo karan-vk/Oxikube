@@ -527,6 +527,7 @@ fn build_sample(command: CommandId, name: &str, missing: impl FnOnce(&str) -> Co
         "jump::Forward" => Command::JumpForward,
         "jump::Last" => Command::JumpLast,
         "keymap::OpenUser" => Command::KeymapOpenUser,
+        "keymap::ShowEditor" => Command::KeymapShowEditor,
         "charts::OpenGallery" => Command::ChartsOpenGallery,
         "pod::Delete" => Command::PodDelete {
             target: target(),

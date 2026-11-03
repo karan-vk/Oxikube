@@ -52,7 +52,7 @@ impl KeymapConflict {
 
 /// Spell keystrokes one way (`shift-ctrl-a` and `ctrl-shift-a` are the same key), falling back to
 /// the text with its spaces collapsed when it does not parse (that binding is reported elsewhere).
-fn normalise(keystrokes: &str) -> String {
+pub(crate) fn normalise(keystrokes: &str) -> String {
     keystrokes
         .split_whitespace()
         .map(|part| Keystroke::parse(part).map_or_else(|_| part.to_owned(), |k| k.unparse()))

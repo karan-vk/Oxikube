@@ -140,6 +140,7 @@ mod helm_upgrade;
 mod help;
 mod jump;
 mod keymap;
+mod keymap_editor;
 mod kustomize;
 mod logs;
 mod metrics;
@@ -249,6 +250,8 @@ pub struct Wiring {
     _metrics_pages: Task<()>,
     /// Opens the Helm repositories page for `helm::ShowRepos` (E16-S07).
     _helm_repos_pages: Task<()>,
+    /// Opens the keymap editor page for `keymap::ShowEditor` (E21-S07).
+    _keymap_editor_pages: Task<()>,
     /// Opens the Role / ClusterRole rule dialog for `role::OpenDialog` (E17-S05).
     _role_dialogs: Task<()>,
     /// Opens the RoleBinding / ClusterRoleBinding dialog for `binding::OpenDialog` (E17-S06).
@@ -313,6 +316,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let dispatcher_for_keymap = dispatcher.clone();
     let dispatcher_for_metrics = dispatcher.clone();
     let dispatcher_for_helm_repos = dispatcher.clone();
+    let dispatcher_for_keymap_editor = dispatcher.clone();
     let dispatcher_for_roles = dispatcher.clone();
     let dispatcher_for_bindings = dispatcher.clone();
     let dispatcher_for_helm_charts = dispatcher.clone();
@@ -453,6 +457,8 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     let (binding_sink, binding_rx) = oxikube_rbac_ui::binding::BindingRequestSink::channel();
     let (helm_repos_sink, helm_repos_rx) =
         oxikube_settings_ui::helm_repos::HelmReposRequestSink::channel();
+    let (keymap_editor_sink, keymap_editor_rx) =
+        oxikube_settings_ui::keymap::KeymapEditorRequestSink::channel();
     // Installs (E16-S09) run against each session's own kubeconfig context and file.
     let helm_targets = helm_install::targets(
         services.sessions.clone(),
@@ -545,6 +551,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         role_dialogs: role_sink,
         binding_dialogs: binding_sink,
         helm_repos_pages: helm_repos_sink,
+        keymap_editor_pages: keymap_editor_sink,
         helm_charts: helm_services.charts.clone(),
         helm_charts_pages: helm_charts_sink,
         helm_releases: helm_releases.clone(),
@@ -908,6 +915,13 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         window,
         cx,
     );
+    let keymap_editor_pages = keymap_editor::start_views(
+        dispatcher_for_keymap_editor,
+        tabs.downgrade(),
+        keymap_editor_rx,
+        window,
+        cx,
+    );
     // Pulses (E13-S10): `cluster::ShowPulses` (`:pulses`, the palette, the sidebar's Pulses entry)
     // opens the page in the cluster tab.
     let pulses_pages = pulses::start_views(
@@ -1044,6 +1058,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _apply_pages: apply_pages,
         _metrics_pages: metrics_pages,
         _helm_repos_pages: helm_repos_pages,
+        _keymap_editor_pages: keymap_editor_pages,
         _role_dialogs: role_dialogs,
         _binding_dialogs: binding_dialogs,
         _helm_releases_pages: helm_releases_pages,

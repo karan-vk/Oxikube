@@ -37,6 +37,8 @@
 //! - [`mod@validate`]: [`validate()`], the pure validator (text to positioned diagnostics with a severity
 //!   and a code) that the store's load path and the editor both call; [`known`]: the registry of
 //!   context names views add to; [`suggest`]: "did you mean"; [`schema`]: `keymap.schema.json`.
+//! - [`rows`]: [`KeymapRow`], the flat list the keymap editor shows (a row per binding with its
+//!   status, plus the unbound commands); [`subscribe_changes`] says when to re-read it.
 //! - [`stands_for`]: which commands the view actions (`resource_table::ViewYaml`) stand for.
 //!
 //! The design (sections, `null`, context predicates, layering) follows Zed's `keymap_file.rs`;
@@ -61,13 +63,14 @@ pub mod lines;
 pub mod paths;
 pub mod query;
 pub mod registry;
+pub mod rows;
 pub mod schema;
 pub mod stands_for;
 pub mod store;
 pub mod suggest;
 pub mod validate;
 
-pub use actions::OpenUser;
+pub use actions::{OpenUser, ShowEditor};
 pub use base_keymap::{BaseKeymap, KeymapSettings, KeymapSettingsContent};
 pub use conflicts::{ConflictEntry, KeymapConflict};
 pub use context::{KeyContextBuilder, KeyContextual, contexts};
@@ -76,11 +79,11 @@ pub use dispatch::{
     ActiveBinding, Resolution, SuppressedBinding, active_bindings, all_bindings, parse_stack,
     resolve, suppressed_bindings,
 };
-pub use events::subscribe_diagnostics;
+pub use events::{KeymapChanged, subscribe_changes, subscribe_diagnostics};
 pub use file::{KeymapAction, KeymapSection};
 pub use global::{
-    conflicts, diagnostics, init, init_with_dir, init_with_options, init_with_text, rebind, reload,
-    reload_user_keymap, set_vim_layer, user_diagnostics, user_keymap_file,
+    conflicts, diagnostics, init, init_with_dir, init_with_options, init_with_text, keymap_rows,
+    rebind, reload, reload_user_keymap, set_vim_layer, user_diagnostics, user_keymap_file,
 };
 pub use known::{KnownNames, register_context, register_flag};
 pub use layer::KeymapLayer;
@@ -92,5 +95,6 @@ pub use oxikube_assets::KeymapPlatform;
 pub use paths::{ensure_user_keymap, user_keymap_path};
 pub use query::{BindingInfo, bindings_for_action, bindings_for_action_name, bindings_for_command};
 pub use registry::ActionRegistry;
+pub use rows::{KeymapRow, LayerBinding, RowStatus, build_rows};
 pub use store::{KeymapOptions, KeymapStore, ParsedUserKeymap};
 pub use validate::validate;
