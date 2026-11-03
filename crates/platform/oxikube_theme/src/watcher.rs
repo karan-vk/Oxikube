@@ -123,7 +123,7 @@ fn run<T: Clone + PartialEq>(
     dir: &Path,
     debounce: Duration,
     rx: &Receiver<()>,
-    scan: impl FnMut(&Path) -> T,
+    mut scan: impl FnMut(&Path) -> T,
     mut on_scan: impl FnMut(T) -> bool,
 ) {
     let mut last: Option<T> = None;
