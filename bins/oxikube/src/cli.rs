@@ -59,6 +59,8 @@ pub enum Print {
     SettingsCrates,
     /// `--print-keymap-schema`: the `keymap.schema.json` text (E21-S03).
     KeymapSchema,
+    /// `--print-keymap-docs`: the `docs/keymap.md` text (E21-S09).
+    KeymapDocs,
 }
 
 /// Parsed flags.
@@ -120,6 +122,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Parsed, String>
             "--print-live-settings-schema" => out.print = Some(Print::LiveSettingsSchema),
             "--print-settings-crates" => out.print = Some(Print::SettingsCrates),
             "--print-keymap-schema" => out.print = Some(Print::KeymapSchema),
+            "--print-keymap-docs" => out.print = Some(Print::KeymapDocs),
             "--perf" => out.perf = true,
             "--perf-no-probe" => out.perf_no_probe = true,
             "--perf-dir" => {
@@ -397,6 +400,10 @@ mod tests {
         assert_eq!(
             run(&["--print-keymap-schema"]).unwrap().print,
             Some(Print::KeymapSchema)
+        );
+        assert_eq!(
+            run(&["--print-keymap-docs"]).unwrap().print,
+            Some(Print::KeymapDocs)
         );
         assert!(!USAGE.contains("--print-settings"));
         assert!(!USAGE.contains("--print-live"));

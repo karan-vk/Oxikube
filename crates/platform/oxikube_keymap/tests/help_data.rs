@@ -26,7 +26,11 @@ fn install(cx: &mut TestAppContext, user: &str, vim: bool) {
             user,
             KeymapOptions {
                 platform: KeymapPlatform::MacOs,
-                vim,
+                base_keymap: if vim {
+                    oxikube_keymap::BaseKeymap::Vim
+                } else {
+                    oxikube_keymap::BaseKeymap::Default
+                },
             },
             cx,
         )

@@ -26,6 +26,7 @@ pub fn print(what: Print) -> ExitCode {
         Print::LiveSettingsSchema => live_schema_text().map_err(|err| err.to_string()),
         Print::SettingsCrates => Ok(crates_text()),
         Print::KeymapSchema => Ok(keymap_schema_text()),
+        Print::KeymapDocs => Ok(oxikube_keymap::docs::keymap_markdown()),
     };
     match text {
         Ok(text) => {
@@ -129,7 +130,7 @@ mod tests {
         assert!(light.as_array().unwrap().contains(&serde_json::Value::Null));
         assert_eq!(
             live["properties"]["base_keymap"]["enum"],
-            serde_json::json!(["default", "vim", null])
+            serde_json::json!(["default", "k9s", "vim", null])
         );
 
         let fixed: serde_json::Value = serde_json::from_str(&schema_text().unwrap()).unwrap();

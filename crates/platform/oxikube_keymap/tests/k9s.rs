@@ -89,7 +89,7 @@ fn install(cx: &mut TestAppContext, platform: KeymapPlatform, user: &str) {
             user,
             KeymapOptions {
                 platform,
-                vim: false,
+                base_keymap: oxikube_keymap::BaseKeymap::Default,
             },
             cx,
         )

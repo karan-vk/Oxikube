@@ -16,7 +16,18 @@ actions!(oxikube, [Hide]);
 actions!(app, [Quit]);
 actions!(palette, [Toggle]);
 // Actions of the vim layer.
-actions!(resource_table, [SelectFirst, SelectLast]);
+actions!(
+    resource_table,
+    [
+        SelectFirst,
+        SelectLast,
+        CopyName,
+        SelectHalfPageDown,
+        DeleteSelected
+    ]
+);
+// Action of the k9s layer.
+actions!(resource_detail, [Close]);
 // Plain test actions.
 actions!(kmtest, [Alpha, Beta, Gamma]);
 
@@ -61,6 +72,10 @@ impl Render for Probe {
             .on_action(log_action!(cx, Toggle))
             .on_action(log_action!(cx, SelectFirst))
             .on_action(log_action!(cx, SelectLast))
+            .on_action(log_action!(cx, CopyName))
+            .on_action(log_action!(cx, SelectHalfPageDown))
+            .on_action(log_action!(cx, DeleteSelected))
+            .on_action(log_action!(cx, Close))
             .on_action(log_action!(cx, Alpha))
             .on_action(log_action!(cx, Beta))
             .on_action(log_action!(cx, Gamma))

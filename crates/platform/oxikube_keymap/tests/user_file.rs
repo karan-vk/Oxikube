@@ -23,7 +23,7 @@ use oxikube_keymap::{
 fn mac() -> KeymapOptions {
     KeymapOptions {
         platform: KeymapPlatform::MacOs,
-        vim: false,
+        base_keymap: oxikube_keymap::BaseKeymap::Default,
     }
 }
 
@@ -340,7 +340,7 @@ fn the_shipped_defaults_have_no_duplicates_and_a_user_override_is_not_one(cx: &m
     ] {
         let options = KeymapOptions {
             platform,
-            vim: true,
+            base_keymap: oxikube_keymap::BaseKeymap::Vim,
         };
         cx.update(|cx| {
             init_with_text(

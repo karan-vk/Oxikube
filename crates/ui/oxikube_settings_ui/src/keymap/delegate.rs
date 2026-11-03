@@ -80,6 +80,7 @@ impl KeymapDelegate {
         match row.source {
             Some(KeymapLayer::Default) => default_file_name(self.platform).into(),
             Some(KeymapLayer::Vim) => "vim.json (the base keymap)".into(),
+            Some(KeymapLayer::K9s) => "k9s.json (the base keymap)".into(),
             Some(KeymapLayer::User) => self.user_file_name.clone(),
             None => "No binding in any keymap".into(),
         }
@@ -101,12 +102,15 @@ pub fn source_label(row: &KeymapRow) -> &'static str {
         (None, _) | (_, RowStatus::Unbound) => "Not bound",
         (Some(KeymapLayer::Default), RowStatus::Active) => "Default",
         (Some(KeymapLayer::Vim), RowStatus::Active) => "Vim",
+        (Some(KeymapLayer::K9s), RowStatus::Active) => "k9s",
         (Some(KeymapLayer::User), RowStatus::Active) => "Your keymap",
         (Some(KeymapLayer::Default), RowStatus::Overridden) => "Default (overridden)",
         (Some(KeymapLayer::Vim), RowStatus::Overridden) => "Vim (overridden)",
+        (Some(KeymapLayer::K9s), RowStatus::Overridden) => "k9s (overridden)",
         (Some(KeymapLayer::User), RowStatus::Overridden) => "Your keymap (overridden)",
         (Some(KeymapLayer::Default), RowStatus::UnboundByUser) => "Default (unbound by you)",
         (Some(KeymapLayer::Vim), RowStatus::UnboundByUser) => "Vim (unbound by you)",
+        (Some(KeymapLayer::K9s), RowStatus::UnboundByUser) => "k9s (unbound by you)",
         (Some(KeymapLayer::User), RowStatus::UnboundByUser) => "Your keymap (unbound by you)",
     }
 }

@@ -26,6 +26,7 @@ impl std::error::Error for PlanError {}
 pub fn layer_of(source: KeymapSource) -> KeymapLayer {
     match source {
         KeymapSource::Default => KeymapLayer::Default,
+        // Base keymaps are never edited, so which overlay is meant does not matter.
         KeymapSource::Base => KeymapLayer::Vim,
         KeymapSource::User => KeymapLayer::User,
     }
@@ -35,7 +36,7 @@ pub fn layer_of(source: KeymapSource) -> KeymapLayer {
 pub fn source_of(layer: KeymapLayer) -> KeymapSource {
     match layer {
         KeymapLayer::Default => KeymapSource::Default,
-        KeymapLayer::Vim => KeymapSource::Base,
+        KeymapLayer::Vim | KeymapLayer::K9s => KeymapSource::Base,
         KeymapLayer::User => KeymapSource::User,
     }
 }

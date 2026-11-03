@@ -14,7 +14,7 @@ use oxikube_keymap::{
 fn mac() -> KeymapOptions {
     KeymapOptions {
         platform: KeymapPlatform::MacOs,
-        vim: false,
+        base_keymap: oxikube_keymap::BaseKeymap::Default,
     }
 }
 
@@ -34,7 +34,7 @@ fn embedded_defaults_dispatch_in_any_context(cx: &mut TestAppContext) {
 fn the_default_keymap_follows_the_os(cx: &mut TestAppContext) {
     let linux = KeymapOptions {
         platform: KeymapPlatform::Linux,
-        vim: false,
+        base_keymap: oxikube_keymap::BaseKeymap::Default,
     };
     install(cx, linux, "");
     let (window, log) = probe(cx, "Pane");
@@ -299,7 +299,10 @@ fn the_vim_layer_applies_only_when_the_flag_is_set(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn the_vim_flag_can_be_set_at_init_and_the_user_layer_still_wins(cx: &mut TestAppContext) {
-    let options = KeymapOptions { vim: true, ..mac() };
+    let options = KeymapOptions {
+        base_keymap: oxikube_keymap::BaseKeymap::Vim,
+        ..mac()
+    };
     install(
         cx,
         options,

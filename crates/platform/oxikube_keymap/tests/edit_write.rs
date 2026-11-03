@@ -18,7 +18,7 @@ const USER: &str = "// my keys\n[\n  // the probe\n  {\n    \"context\": \"Pane\
 fn mac() -> KeymapOptions {
     KeymapOptions {
         platform: KeymapPlatform::MacOs,
-        vim: false,
+        base_keymap: oxikube_keymap::BaseKeymap::Default,
     }
 }
 

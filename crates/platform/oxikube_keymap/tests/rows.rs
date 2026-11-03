@@ -12,7 +12,7 @@ fn rows_for(cx: &mut TestAppContext, user: &str) -> Vec<KeymapRow> {
     cx.update(|cx| {
         let options = KeymapOptions {
             platform: KeymapPlatform::MacOs,
-            vim: false,
+            base_keymap: oxikube_keymap::BaseKeymap::Default,
         };
         init_with_text(user, options, cx);
         keymap_rows(cx)

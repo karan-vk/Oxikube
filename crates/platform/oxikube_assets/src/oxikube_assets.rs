@@ -19,7 +19,7 @@
 //!   JSON for One Dark and One Light, parsed by `oxikube_theme`.
 //!
 //! - [`keymap`]: the keymap assets (E05-S07): [`default_keymap`] per OS ([`KeymapPlatform`]),
-//!   the optional [`vim_keymap`] layer and [`initial_user_keymap_content`].
+//!   the optional [`vim_keymap`] and [`k9s_keymap`] layers and [`initial_user_keymap_content`].
 //!
 //! Fonts join this crate with their own story. `oxikube_ui` composes [`Assets`] with the
 //! component library's own icon bundle; applications register the composite when they build the
@@ -38,8 +38,8 @@ pub mod themes;
 pub use icon_mount::{ICON_MOUNT_PREFIX, IconMount};
 pub use icons::IconName;
 pub use keymap::{
-    KEYMAP_SCHEMA_PATH, KeymapPlatform, default_keymap, initial_user_keymap_content, keymap_schema,
-    vim_keymap,
+    KEYMAP_SCHEMA_PATH, KeymapPlatform, default_keymap, initial_user_keymap_content, k9s_keymap,
+    keymap_schema, vim_keymap,
 };
 pub use settings::{
     SETTINGS_SCHEMA_PATH, aliases_schema, default_settings, initial_user_settings_content,

@@ -1,9 +1,9 @@
 //! The `base_keymap` setting: which optional layer sits between the per-OS defaults and the
-//! user's `keymap.json` (E11-S09).
+//! user's `keymap.json` (E11-S09, E21-S09).
 //!
-//! `"base_keymap": "vim"` in `settings.json` turns the embedded `vim.json` layer on, `"default"`
-//! (the default) turns it off. The value is read once at [`init`](crate::init) and followed from
-//! then on: editing `settings.json` swaps the layer and rebinds without a restart, and a reload
+//! `"base_keymap": "vim"` in `settings.json` turns the embedded `vim.json` layer on, `"k9s"` the
+//! `k9s.json` layer, `"default"` (the default) none. The value is read once at
+//! [`init`](crate::init) and followed from then on: editing `settings.json` swaps the layer and rebinds without a restart, and a reload
 //! that leaves the value equal rebinds nothing (the settings observer only fires on a change).
 
 use gpui::App;
@@ -11,7 +11,8 @@ use oxikube_settings::Settings;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::global::set_vim_layer;
+use crate::global::set_base_keymap;
+use crate::layer::KeymapLayer;
 use crate::store::KeymapStore;
 
 /// The base keymap a user chooses: the layer under their own `keymap.json`.
@@ -25,17 +26,21 @@ pub enum BaseKeymap {
     /// `ctrl-u` in tables, `d d` to delete, `y y` to copy the name. Nothing changes in text
     /// fields, the terminal or the manifest editor.
     Vim,
+    /// The defaults plus the k9s layer (`k9s.json`): what k9s has that the defaults lack (`c`
+    /// copies the name, `q` closes the detail drawer). The defaults already carry k9s's verbs.
+    K9s,
 }
 
 impl BaseKeymap {
     /// Every base keymap this build ships, in the order the settings page lists them.
-    pub const ALL: [Self; 2] = [Self::Default, Self::Vim];
+    pub const ALL: [Self; 3] = [Self::Default, Self::K9s, Self::Vim];
 
     /// The `settings.json` spelling (`default`, `vim`).
     pub const fn name(self) -> &'static str {
         match self {
             Self::Default => "default",
             Self::Vim => "vim",
+            Self::K9s => "k9s",
         }
     }
 
@@ -47,6 +52,24 @@ impl BaseKeymap {
             .collect()
     }
 
+    /// The overlay layer this base keymap switches on; `None` for the defaults alone.
+    pub const fn layer(self) -> Option<KeymapLayer> {
+        match self {
+            Self::Default => None,
+            Self::Vim => Some(KeymapLayer::Vim),
+            Self::K9s => Some(KeymapLayer::K9s),
+        }
+    }
+
+    /// The embedded file of the overlay ([`layer`](Self::layer)); `None` for the defaults.
+    pub fn overlay_text(self) -> Option<&'static str> {
+        match self {
+            Self::Default => None,
+            Self::Vim => Some(oxikube_assets::vim_keymap()),
+            Self::K9s => Some(oxikube_assets::k9s_keymap()),
+        }
+    }
+
     /// Whether this base keymap switches the vim layer on.
     pub const fn is_vim(self) -> bool {
         matches!(self, Self::Vim)
@@ -56,7 +79,8 @@ impl BaseKeymap {
 /// What one settings layer says about the base keymap.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 pub struct KeymapSettingsContent {
-    /// The keymap layered under your `keymap.json`: `default` (the per-OS defaults) or `vim`
+    /// The keymap layered under your `keymap.json`: `default` (the per-OS defaults), `k9s` (adds
+    /// `c` copy name and `q` close detail to the k9s verbs the defaults already have) or `vim`
     /// (adds `j` / `k` / `g g` / `shift-g` / `ctrl-d` / `ctrl-u`, `d d` delete and `y y` copy name
     /// to resource tables; the editor, the terminal and text fields are untouched).
     #[schemars(extend("x-oxikube-dynamic-enum" = "base_keymaps"))]
@@ -84,12 +108,12 @@ impl Settings for KeymapSettings {
 
 oxikube_settings::register_settings!(KeymapSettings);
 
-/// Let the `base_keymap` setting decide the vim layer of `store`, which is about to be installed
+/// Let the `base_keymap` setting decide the base layer of `store`, which is about to be installed
 /// (so the first merge already has the chosen layer). Without a settings store, or without this
 /// setting registered in it, the store keeps the options it was built with.
 pub(crate) fn apply_to_new_store(cx: &App, store: &mut KeymapStore) {
     if let Some(settings) = KeymapSettings::try_get(cx) {
-        store.set_vim(settings.base_keymap.is_vim());
+        store.set_base_keymap(settings.base_keymap);
     }
 }
 
@@ -103,13 +127,13 @@ pub(crate) fn follow_base_keymap(cx: &mut App) {
         let Some(settings) = KeymapSettings::try_get(cx) else {
             return;
         };
-        let wanted = settings.base_keymap.is_vim();
+        let wanted = settings.base_keymap;
         if cx
             .try_global::<KeymapStore>()
-            .is_some_and(|store| store.vim_enabled() != wanted)
+            .is_some_and(|store| store.base_keymap() != wanted)
         {
-            tracing::info!(base_keymap = ?settings.base_keymap, "base keymap changed");
-            set_vim_layer(cx, wanted);
+            tracing::info!(base_keymap = ?wanted, "base keymap changed");
+            set_base_keymap(cx, wanted);
         }
     })
     .detach();
@@ -124,7 +148,7 @@ mod tests {
         for keymap in BaseKeymap::ALL {
             assert_eq!(serde_json::to_value(keymap).unwrap(), keymap.name());
         }
-        assert_eq!(BaseKeymap::names(), ["default", "vim"]);
+        assert_eq!(BaseKeymap::names(), ["default", "k9s", "vim"]);
     }
 
     #[test]
@@ -134,6 +158,9 @@ mod tests {
             BaseKeymap::Default
         );
         assert!(!BaseKeymap::default().is_vim());
+        assert_eq!(BaseKeymap::Default.layer(), None);
+        assert_eq!(BaseKeymap::K9s.layer(), Some(KeymapLayer::K9s));
+        assert_eq!(BaseKeymap::Vim.layer(), Some(KeymapLayer::Vim));
     }
 
     #[test]

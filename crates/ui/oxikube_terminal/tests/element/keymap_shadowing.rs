@@ -300,7 +300,7 @@ fn the_shell_keys_reach_the_process_under_the_off_macos_keymap(cx: &mut gpui::Te
                 "[]",
                 oxikube_keymap::KeymapOptions {
                     platform,
-                    vim: false,
+                    base_keymap: oxikube_keymap::BaseKeymap::Default,
                 },
                 cx,
             );
