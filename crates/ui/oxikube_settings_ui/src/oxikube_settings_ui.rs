@@ -7,6 +7,7 @@
 //! | [`helm_repos`] | E16-S07 | the Helm repositories page as a tab of the active cluster's tab (`helm::ShowRepos`: the palette's "Helm: Repositories", the sidebar's Helm > Repositories entry); the view itself is `oxikube_helm_ui::repos` |
 //! | [`keymap`] | E21-S07 | the keymap editor page: a searchable, virtualised table of every action with its context, binding and source, unbound commands included (`keymap::ShowEditor`) |
 //! | [`metrics`] | E13-S05 | the cluster's metrics page: which Prometheus-compatible service its history graphs come from, what detection found and which services it probed, the `prometheus` settings in effect; `cluster::ShowMetricsSettings` |
+//! | [`page`] | E21-S04 | the settings page, a tab of the main window (`settings::Open`, `cmd-,`): sections from the settings schema, fuzzy search, a layer badge per field |
 //!
 //! See `README.md` in this crate and `docs/ARCHITECTURE.md` for the allowed
 //! dependency direction. `cargo xtask lint-deps` enforces it.
@@ -14,6 +15,7 @@
 pub mod helm_repos;
 pub mod keymap;
 pub mod metrics;
+pub mod page;
 
 /// Registers what the settings pages add to the app: the sidebar's Metrics section and the Helm
 /// section's Charts and Repositories entries. Call once at

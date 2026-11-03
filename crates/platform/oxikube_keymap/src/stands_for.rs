@@ -19,6 +19,9 @@ use oxikube_domain::command::CommandId;
 /// `(action, command)` pairs. An action may appear more than once when the view picks the command
 /// by kind (`s` is `pod::Shell` on a Pod and `node::Shell` on a Node).
 pub const STANDS_FOR: &[(&str, CommandId)] = &[
+    // The application menu's former Preferences action (E21-S04): still honoured in a user's
+    // `keymap.json`, it opens the settings page like `settings::Open`.
+    ("oxikube::OpenPreferences", CommandId::SETTINGS_OPEN),
     // The resource table (E07-S03/S04/S08, E09-S08/S10, E11-S07).
     ("resource_table::OpenSelected", CommandId::RESOURCE_OPEN),
     ("resource_table::CopyName", CommandId::RESOURCE_COPY_NAME),

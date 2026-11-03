@@ -1,5 +1,5 @@
 [(everywhere)]
-  ctrl-,           oxikube::OpenPreferences
+  ctrl-,           settings::Open
   ctrl-shift-n     window::New
   ctrl-shift-p     palette::Toggle
   ctrl-shift-q     app::Quit

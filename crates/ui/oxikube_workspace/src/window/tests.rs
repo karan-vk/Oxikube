@@ -100,7 +100,7 @@ fn root_layers_render_exactly_once(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn about_action_opens_a_dialog_and_preferences_does_not_panic(cx: &mut TestAppContext) {
+fn about_action_opens_a_dialog_and_settings_does_not_panic(cx: &mut TestAppContext) {
     let (_handle, mut vcx) = open(cx);
     assert!(!vcx.update(|window, cx| window.has_active_dialog(cx)));
     vcx.update(|window, _| window.activate_window());
@@ -108,6 +108,8 @@ fn about_action_opens_a_dialog_and_preferences_does_not_panic(cx: &mut TestAppCo
     vcx.dispatch_action(About);
     vcx.run_until_parked();
     assert!(vcx.update(|window, cx| window.has_active_dialog(cx)));
+    // Answered by the binary (it dispatches `settings::Open` on the bus); unanswered here.
+    vcx.dispatch_action(super::menus::settings::Open);
     vcx.dispatch_action(OpenPreferences);
     vcx.run_until_parked();
 }
@@ -154,7 +156,7 @@ fn the_menu_bar_waits_for_the_first_frame(cx: &mut TestAppContext) {
 }
 
 #[test]
-fn app_menu_has_about_preferences_and_quit() {
+fn app_menu_has_about_settings_and_quit() {
     let menus = app_menus();
     let items = |ix: usize| -> Vec<String> {
         menus[ix]
@@ -167,7 +169,7 @@ fn app_menu_has_about_preferences_and_quit() {
             .collect()
     };
     let app = items(0);
-    for wanted in ["About Oxikube", "Preferences…", "Quit Oxikube"] {
+    for wanted in ["About Oxikube", "Settings…", "Quit Oxikube"] {
         assert!(app.iter().any(|n| n == wanted), "app menu lacks {wanted}");
     }
     let edit = items(1);
@@ -325,4 +327,18 @@ fn the_mount_hook_fills_the_window_before_its_first_frame(cx: &mut TestAppContex
             "the item is open"
         );
     });
+}
+
+#[test]
+fn cmd_comma_opens_the_settings_on_macos() {
+    let bindings = default_bindings(true);
+    let settings = bindings
+        .iter()
+        .find(|b| b.action().partial_eq(&super::menus::settings::Open))
+        .expect("cmd-, is bound to settings::Open");
+    assert_eq!(settings.keystrokes()[0].unparse(), "cmd-,");
+    assert_eq!(
+        gpui::Action::name(&super::menus::settings::Open),
+        "settings::Open"
+    );
 }

@@ -439,6 +439,9 @@ impl CommandId {
     pub const SERVICE_OPEN_IN_BROWSER: CommandId = CommandId::new("service::OpenInBrowser");
     /// `service::ShowPods`: open the pods a Service selects, in a table filtered by its selector.
     pub const SERVICE_SHOW_PODS: CommandId = CommandId::new("service::ShowPods");
+    /// `settings::Open`: open the settings page (sections, search, where each value comes from),
+    /// or show it again when it is open (E21-S04).
+    pub const SETTINGS_OPEN: CommandId = CommandId::new("settings::Open");
     /// `storageclass::SetDefault`: make a StorageClass the cluster's default.
     pub const STORAGECLASS_SET_DEFAULT: CommandId = CommandId::new("storageclass::SetDefault");
     /// `resource::ShowUsedBy`: open a ServiceAccount, ConfigMap, Secret, claim or PriorityClass on
@@ -2303,6 +2306,14 @@ pub static COMMANDS: &[CommandMeta] = &[
     )
     .in_views(TABLE_VIEWS)
     .selecting(SelectionKind::core("ServiceAccount")),
+    // Opens (or shows again) the settings page, a tab of the main window: navigation only; an edit
+    // made on the page writes the user's own `settings.json`, never a cluster.
+    CommandMeta::read(
+        CommandId::SETTINGS_OPEN,
+        "Open Settings",
+        CommandScope::Global,
+        NONE,
+    ),
     // One annotation on one StorageClass (and the previous default's, when asked): reversible by
     // setting another class, hence `Low`; the per-session skip of low-risk confirms is E19's.
     CommandMeta::mutation(

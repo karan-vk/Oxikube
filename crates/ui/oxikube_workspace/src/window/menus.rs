@@ -9,9 +9,10 @@
 //! slowest step after the window itself (about 19 ms with AppKit on an M-series Mac) and nothing
 //! needs it before the window is on screen (E05-S13, cold-start budget).
 //!
-//! The items are placeholders: Quit works, About opens a dialog, Preferences says it is not
-//! there yet. Once the `CommandBus` and keymap core land (E05-S07, E11) they dispatch `Command`s
-//! and the bindings move into `keymap.json`.
+//! Quit works, About opens a dialog, and Settings… runs [`settings::Open`], the action of the
+//! `settings::Open` command (E21-S04): the binary answers it by dispatching the command, which opens
+//! the settings page. The former `oxikube::OpenPreferences` action is kept for user keymaps that
+//! bind it; the binary answers it the same way.
 
 use crate::session::{NewWindow, Quit, ZoomIn, ZoomOut, ZoomReset};
 use gpui::{
@@ -19,7 +20,7 @@ use gpui::{
     SystemMenuType, actions,
 };
 use oxikube_ui::{
-    dialog::{Dialog, OverlayExt as _, Toast},
+    dialog::{Dialog, OverlayExt as _},
     input::actions::{Copy, Cut, Paste, Redo, SelectAll, Undo},
 };
 
@@ -28,7 +29,8 @@ actions!(
     [
         /// Shows the About dialog.
         About,
-        /// Opens the preferences (placeholder until the settings UI, E21).
+        /// Opens the settings page: an alias of [`settings::Open`] kept for user keymaps that bind
+        /// it (the menu and the default keymaps use `settings::Open`).
         OpenPreferences,
         /// Hides the application (macOS).
         Hide,
@@ -43,13 +45,25 @@ actions!(
     ]
 );
 
+/// The `settings` actions.
+pub mod settings {
+    gpui::actions!(
+        settings,
+        [
+            /// Opens the settings page, or shows it again when it is open. Named like its command
+            /// (`settings::Open`), so a key bound to it runs what the palette and an agent run.
+            Open,
+        ]
+    );
+}
+
 /// The menu bar, in macOS order: application, Edit, View, Window.
 pub fn app_menus() -> Vec<Menu> {
     vec![
         Menu::new("Oxikube").items([
             MenuItem::action("About Oxikube", About),
             MenuItem::separator(),
-            MenuItem::action("Preferences…", OpenPreferences),
+            MenuItem::action("Settings…", settings::Open),
             MenuItem::separator(),
             MenuItem::os_submenu("Services", SystemMenuType::Services),
             MenuItem::separator(),
@@ -111,7 +125,7 @@ pub fn default_bindings(macos: bool) -> Vec<KeyBinding> {
         bindings.extend([
             KeyBinding::new("cmd-shift-n", NewWindow, None),
             KeyBinding::new("cmd-q", Quit, None),
-            KeyBinding::new("cmd-,", OpenPreferences, None),
+            KeyBinding::new("cmd-,", settings::Open, None),
             KeyBinding::new("cmd-h", Hide, None),
             KeyBinding::new("alt-cmd-h", HideOthers, None),
             KeyBinding::new("cmd-m", Minimize, None),
@@ -158,14 +172,6 @@ pub(super) fn register(cx: &mut App) {
     cx.on_action(|_: &Minimize, cx| with_active_window(cx, |window, _| window.minimize_window()));
     cx.on_action(|_: &Zoom, cx| with_active_window(cx, |window, _| window.zoom_window()));
     cx.on_action(|_: &About, cx| with_active_window(cx, show_about));
-    cx.on_action(|_: &OpenPreferences, cx| {
-        with_active_window(cx, |window, cx| {
-            window.push_notification(
-                Toast::new().message("Preferences are not available yet."),
-                cx,
-            )
-        })
-    });
     cx.bind_keys(default_bindings(cfg!(target_os = "macos")));
 }
 

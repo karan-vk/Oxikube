@@ -529,6 +529,7 @@ fn build_sample(command: CommandId, name: &str, missing: impl FnOnce(&str) -> Co
         "keymap::OpenUser" => Command::KeymapOpenUser,
         "keymap::ShowEditor" => Command::KeymapShowEditor,
         "charts::OpenGallery" => Command::ChartsOpenGallery,
+        "settings::Open" => Command::SettingsOpen,
         "pod::Delete" => Command::PodDelete {
             target: target(),
             grace_period_seconds: None,

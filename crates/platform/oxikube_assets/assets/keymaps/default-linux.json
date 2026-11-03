@@ -25,7 +25,7 @@
     // here (or in the workspace) shadows a key the terminal sends to its process.
     "bindings": {
       "ctrl-shift-q": "app::Quit",
-      "ctrl-,": "oxikube::OpenPreferences",
+      "ctrl-,": "settings::Open",
       "ctrl-shift-p": "palette::Toggle",
       "ctrl-shift-n": "window::New"
     }

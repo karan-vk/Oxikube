@@ -1180,6 +1180,14 @@ crate's `README.md` for its allowed dependencies. Highlights:
   `MetricsSettingsView` (a workspace item of the cluster's tab; "Look again" and "Turn history metrics off / on" are bus
   commands) and `MetricsViews` (`cluster::ShowMetricsSettings` opens the page in the cluster's tab). The sidebar's "Metrics"
   section ("Provider and settings") and the palette ("Cluster Metrics Settings") reach it.
+- `oxikube_settings_ui::page` (E21-S04) — the settings page, a tab of the main window (not of a cluster): `SettingsPageModel`
+  (plain data walked from `SettingsStore::json_schema()`: a "General" section for the top-level scalars, then one section per
+  top-level object, fields with path, title, doc-comment description and `FieldKind`), `SearchIndex` (built once per page open,
+  fuzzy over section and field titles, paths and descriptions through the shared `FuzzyService`), `LayerBadge` (over
+  `SettingsStore::field_source`, which answers `SettingSource::{Default, User, Cluster}`) and `SettingsPage` (left navigation,
+  search field, only the selected section or the results built). `settings::Open` (`cmd-,` / `ctrl-,`, the menu's Settings…,
+  palette "Open Settings", tool stub `app.settings_open`; the former `oxikube::OpenPreferences` still answers) opens it once
+  through `view::Open { view: "settings" }`. `tests/settings_page_screenshot.rs` photographs it.
 - `oxikube_overview_ui::pulses` (E13-S10) — the pulses page (`:pulses`, k9s' pulses): sixteen tiles on a four-column grid, the
   cluster's CPU and memory and fourteen core kinds (nodes, namespaces, pods, deployments, stateful sets, daemon sets, jobs, cron
   jobs, PVs, PVCs, HPAs, ingresses, network policies, service accounts), each with a number, a gauge and a 60-sample sparkline.

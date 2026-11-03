@@ -250,6 +250,7 @@ pub fn cluster_of(command: &Command) -> Option<&ClusterId> {
         | Command::KeymapOpenUser
         | Command::KeymapShowEditor
         | Command::ChartsOpenGallery
+        | Command::SettingsOpen
         | Command::AppQuit
         | Command::AppSendTestNotification
         | Command::AppToggleOsNotifications { .. }

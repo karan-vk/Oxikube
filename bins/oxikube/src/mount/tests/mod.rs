@@ -58,6 +58,7 @@ mod sa_kubeconfig;
 mod scale;
 mod secrets;
 mod sections;
+mod settings_page;
 mod signin;
 mod storage;
 mod tail;

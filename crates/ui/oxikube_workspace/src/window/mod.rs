@@ -37,7 +37,9 @@ use gpui::{
 use oxikube_ui::root::{Root, new_root};
 
 pub use crate::session::Quit;
-pub use menus::{About, Hide, HideOthers, Minimize, OpenPreferences, ShowAll, Zoom, app_menus};
+pub use menus::{
+    About, Hide, HideOthers, Minimize, OpenPreferences, ShowAll, Zoom, app_menus, settings,
+};
 pub use options::{
     APP_ID, Chrome, WINDOW_TITLE, main_window_options, main_window_options_for, window_options,
 };

@@ -727,6 +727,9 @@ pub enum Command {
     /// Open the chart gallery, every chart state on one page, as a tab.
     #[serde(rename = "charts::OpenGallery")]
     ChartsOpenGallery,
+    /// Open the settings page as a tab of the main window, or show it again when it is open.
+    #[serde(rename = "settings::Open")]
+    SettingsOpen,
     /// Quit the application; asks first while operations are running.
     #[serde(rename = "app::Quit")]
     AppQuit,
@@ -2245,6 +2248,7 @@ impl Command {
             Command::KeymapOpenUser => CommandId::KEYMAP_OPEN_USER,
             Command::KeymapShowEditor => CommandId::KEYMAP_SHOW_EDITOR,
             Command::ChartsOpenGallery => CommandId::CHARTS_OPEN_GALLERY,
+            Command::SettingsOpen => CommandId::SETTINGS_OPEN,
             Command::AppQuit => CommandId::APP_QUIT,
             Command::AppSendTestNotification => CommandId::APP_SEND_TEST_NOTIFICATION,
             Command::AppToggleOsNotifications { .. } => CommandId::APP_TOGGLE_OS_NOTIFICATIONS,
@@ -2948,6 +2952,7 @@ mod tests {
             Command::KeymapOpenUser,
             Command::KeymapShowEditor,
             Command::ChartsOpenGallery,
+            Command::SettingsOpen,
             Command::AppQuit,
             Command::AppSendTestNotification,
             Command::AppToggleOsNotifications { enabled: None },
@@ -3555,6 +3560,7 @@ mod tests {
                     | Command::KeymapOpenUser
                     | Command::KeymapShowEditor
                     | Command::ChartsOpenGallery
+                    | Command::SettingsOpen
                     | Command::AppQuit
                     | Command::AppSendTestNotification
                     | Command::AppToggleOsNotifications { .. }

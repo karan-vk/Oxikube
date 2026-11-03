@@ -1,5 +1,5 @@
-//! The main window's own views: the catalog home, the kubeconfig sources screen and the Cloud
-//! section, opened (or shown again) by `view::Open`.
+//! The main window's own views: the catalog home, the kubeconfig sources screen, the Cloud
+//! section, the chart gallery and the settings page, opened (or shown again) by `view::Open`.
 
 use std::rc::Rc;
 use std::sync::Arc;
@@ -14,6 +14,7 @@ use oxikube_catalog_ui::cloud::{CLOUD_VIEW, CloudDeps, CloudView, ServiceBackend
 use oxikube_catalog_ui::sources::SOURCES_VIEW;
 use oxikube_catalog_ui::{CatalogDeps, CatalogView, ServiceBackend, SourcesDeps, SourcesView};
 use oxikube_ports::ClockPort;
+use oxikube_settings_ui::page::{SETTINGS_VIEW, SettingsPage};
 use oxikube_workspace::{CommandDispatcher, OpenOptions, Workspace};
 
 /// What the main window's own views are built from.
@@ -45,7 +46,8 @@ impl ViewDeps {
         cx.new(|cx| CatalogView::new(deps, window, cx))
     }
 
-    /// Shows `view` ([`CATALOG_VIEW`], [`SOURCES_VIEW`], [`CLOUD_VIEW`] or `CHART_GALLERY_VIEW`) in
+    /// Shows `view` ([`CATALOG_VIEW`], [`SOURCES_VIEW`], [`CLOUD_VIEW`], `CHART_GALLERY_VIEW` or
+    /// [`SETTINGS_VIEW`]) in
     /// `workspace`: the open tab when there is one, else a new one. Any other id is ignored (`view::Open` validates it first).
     pub fn open(
         &self,
@@ -80,6 +82,8 @@ impl ViewDeps {
                 let now = self.clock.now().as_second() as f64;
                 Box::new(cx.new(|cx| ChartGalleryPage::new(now, cx)))
             }
+            // The settings page (E21-S04): built over the settings store's schema.
+            SETTINGS_VIEW => Box::new(cx.new(|cx| SettingsPage::new(window, cx))),
             _ => return,
         };
         let options = OpenOptions {

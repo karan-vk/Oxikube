@@ -259,7 +259,6 @@ const VIEW_LOCAL: &[&str] = &[
     "oxikube::Hide",
     "oxikube::HideOthers",
     "oxikube::Minimize",
-    "oxikube::OpenPreferences",
 ];
 
 /// Actions bound by a default whose handler only toasts "not available yet": they stand for no
