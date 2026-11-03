@@ -13,7 +13,7 @@
 //! | 2 | `Assets` | `Application::with_platform(..).with_assets(oxikube_ui::Assets)`, the platform wrapped by `oxikube_theme::glyph_warm::wrap_platform` (its warmer is installed first thing inside `run`) | GPUI fixes the asset source and the text system when the `Application` is built, so this happens in `main` just before `run`; it needs no `App`, which is why it can precede the runtime | 84–108 / 50 (the platform: app object, GPU device, text system) |
 //! | 3 | `Runtime` | `oxikube_runtime::init` | needs an `App`, so it is the first stage inside `run` (hence after assets); nothing may spawn Kubernetes work before it | 0.05 / 0.07 |
 //! | 4 | `Settings` | `oxikube_settings::init`, then `oxikube_logging::follow` | everything below reads settings; the log filter follows the `log.filter` setting from here on | 1.4 / 0.3 |
-//! | 5 | `Theme` | `oxikube_theme::init` | reads the `theme` setting and the system appearance | 1.4 / 0.4 |
+//! | 5 | `Theme` | `oxikube_theme::init`, `oxikube_theme::icons::init_icon_themes` | reads the `theme` and `icon_theme` settings and the system appearance; the `themes/` and `icon_themes/` watchers read their directories on their own threads | 1.4 / 0.4 |
 //! | 6 | `Keymap` | `oxikube_keymap::init` | binds the layered key bindings; needs settings' config dir | 0.7 / 0.04 |
 //! | 7 | `Ui` | `oxikube_ui::init`, `follow_active_theme` | component library and tokens; consumes the active theme | 72–81 / 71 (gpui-component enumerates the installed fonts, about 56 ms) |
 //! | 8 | `StateDb` | build `LazyState` and start its open on the background executor; build the cluster adapters ([`crate::kube_ports`]: kubeconfig catalog, kube connector, clock) | construction is instant; the open (SQLite, migrations) must not block the first frame, so it is not awaited; no kubeconfig is read until the catalog's first use | 0.01 / 0.003 (the open itself, off the UI thread: 2.6) |
@@ -154,11 +154,19 @@ pub(crate) fn init_with_features(
 
     report.time(Stage::Settings, || init_settings(cx, &env))?;
     report.time(Stage::Theme, || match &env.config {
-        ConfigSource::UserDir => oxikube_theme::init(cx),
-        ConfigSource::Dir(dir) => {
-            oxikube_theme::init_with_dir(Some(&oxikube_theme::user_dir::themes_dir(dir)), cx)
+        ConfigSource::UserDir => {
+            oxikube_theme::init(cx);
+            oxikube_theme::icons::init_icon_themes(cx);
         }
-        ConfigSource::Memory => oxikube_theme::init_with_dir(None, cx),
+        ConfigSource::Dir(dir) => {
+            oxikube_theme::init_with_dir(Some(&oxikube_theme::user_dir::themes_dir(dir)), cx);
+            let icons = oxikube_theme::icons::icon_themes_dir(dir);
+            oxikube_theme::icons::init_icon_themes_with_dir(Some(&icons), cx);
+        }
+        ConfigSource::Memory => {
+            oxikube_theme::init_with_dir(None, cx);
+            oxikube_theme::icons::init_icon_themes_with_dir(None, cx);
+        }
     });
     report.time(Stage::Keymap, || match &env.config {
         ConfigSource::UserDir => oxikube_keymap::init(cx),

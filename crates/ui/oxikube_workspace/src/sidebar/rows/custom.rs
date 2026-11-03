@@ -19,8 +19,8 @@ use oxikube_domain::command::CommandId;
 
 use super::sections::Shown;
 use super::{
-    CRD_GROUP, CRD_PLURAL, DEFINITIONS_ENTRY, EntryRow, GroupRow, NoticeKind, NoticeRow, Row,
-    RowInputs, SEARCH_ROW, SearchRow, SectionRow, is_open,
+    CRD_GROUP, CRD_PLURAL, DEFINITIONS_ENTRY, EntryKind, EntryRow, GroupRow, NoticeKind, NoticeRow,
+    Row, RowInputs, SEARCH_ROW, SearchRow, SectionRow, is_open,
 };
 use crate::sidebar::section::{SectionBody, SidebarSection, SidebarTarget};
 
@@ -71,6 +71,10 @@ pub(super) fn custom_rows(section: &SidebarSection, open: bool, input: &RowInput
             target: Some(SidebarTarget::Command(CommandId::CRD_OPEN_LIST)),
             count: None,
             restricted: false,
+            kind: Some(EntryKind {
+                group: CRD_GROUP.into(),
+                kind: "CustomResourceDefinition".into(),
+            }),
         }));
     }
     if groups.is_empty() {
@@ -103,6 +107,10 @@ pub(super) fn custom_rows(section: &SidebarSection, open: bool, input: &RowInput
                     )),
                     count: None,
                     restricted: false,
+                    kind: Some(EntryKind {
+                        group: group.group.clone().into(),
+                        kind: kind.kind.clone().into(),
+                    }),
                 })
             }));
         }

@@ -4,9 +4,12 @@
 //!
 //! `cargo run --release -p oxikube_theme --example theme_load` (budget: settings + keymap + theme
 //! < 30 ms combined on the main thread at startup, E05-S13; a theme switch is one `resolve` and
-//! one `ActiveTheme` write).
+//! one `ActiveTheme` write). Icon themes (E22-S11): starting the `icon_themes/` watcher, reading
+//! and mounting a family, building its resolver (once per icon-theme switch) and the per-icon
+//! lookups drawing does.
 #![allow(clippy::print_stdout, reason = "an example reports on stdout")]
 
+use oxikube_theme::icons::{IconResolver, IconThemeFamily, read_icon_theme_file};
 use oxikube_theme::watcher::{DEFAULT_DEBOUNCE, ThemeDirWatcher};
 use oxikube_theme::{Appearance, ThemeMode, ThemeRegistry, ThemeSelection, import_family};
 use std::time::{Duration, Instant};
@@ -80,5 +83,55 @@ fn main() {
     report(
         "resolve(selection, system) (a theme switch)",
         measure(200, || drop(registry.resolve(&selection, Appearance::Dark))),
+    );
+
+    icon_themes(&dir);
+}
+
+fn icon_themes(dir: &std::path::Path) {
+    report(
+        "icon watcher spawn_scanning (mkdir + watch)",
+        measure(20, || {
+            drop(
+                ThemeDirWatcher::spawn_scanning(
+                    dir.join("icon_themes"),
+                    DEFAULT_DEBOUNCE,
+                    notify::RecursiveMode::Recursive,
+                    oxikube_theme::icons::scan_icon_themes_dir,
+                    |_| true,
+                )
+                .expect("icon theme watcher starts on a temp dir"),
+            );
+        }),
+    );
+    let _ = std::fs::remove_dir_all(dir);
+
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/icon_themes");
+    let read = || read_icon_theme_file(&root.join("kube.json"), &root).expect("fixture reads");
+    report(
+        "read kube icon theme (7 SVGs, watcher thread)",
+        measure(200, || drop(read())),
+    );
+    let source = read();
+    report(
+        "mount it (UI thread)",
+        measure(200, || drop(IconThemeFamily::mount(source.clone()))),
+    );
+    let theme = std::sync::Arc::new(IconThemeFamily::mount(read()).themes.remove(0));
+    report(
+        "IconResolver::new (an icon-theme switch)",
+        measure(200, || drop(IconResolver::new(theme.clone()))),
+    );
+    let icons = IconResolver::new(theme);
+    const LOOKUPS: u32 = 10_000;
+    let (median, worst) = measure(50, || {
+        for _ in 0..LOOKUPS {
+            std::hint::black_box(icons.kind(std::hint::black_box(""), "Pod"));
+            std::hint::black_box(icons.status(std::hint::black_box("Pending")));
+        }
+    });
+    report(
+        "10k kind + 10k status lookups (a 10k-row table)",
+        (median, worst),
     );
 }

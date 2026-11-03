@@ -1,0 +1,20 @@
+{
+  "$schema": "https://zed.dev/schema/icon_themes/v0.2.0.json",
+  "name": "Kube Test Icons",
+  "author": "Oxikube tests",
+  "themes": [
+    {
+      "name": "Kube Test Icons",
+      "appearance": "dark",
+      "file_icons": {
+        "kind:Pod": { "path": "./kube/pod.svg" },
+        "kind:apps/Deployment": { "path": "./kube/deployment.svg" },
+        "kind:Service": { "path": "./kube/service.svg" },
+        "kind:argoproj.io/Application": { "path": "./kube/app.svg" },
+        "status:Running": { "path": "./kube/running.svg" },
+        "status:Failed": { "path": "./kube/failed.svg" },
+        "icon:server": { "path": "./kube/server.svg" }
+      }
+    }
+  ]
+}

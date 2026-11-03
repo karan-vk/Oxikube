@@ -6,7 +6,9 @@
 //! - [`icons`]: [`IconName`], the closed enum of Lucide SVGs Oxikube ships. Only the icons listed
 //!   there are embedded in the binary, so an unused icon costs nothing.
 //! - [`source`]: [`Assets`], the `gpui::AssetSource` that serves those icons by path
-//!   (`icons/<name>.svg`).
+//!   (`icons/<name>.svg`) and the mounted icon-theme files.
+//! - [`icon_mount`]: [`IconMount`], icon-theme SVGs loaded at run time (E22-S11), held in memory
+//!   and served at `icon-themes/<id>/<path>` while the theme that loaded them is alive.
 //! - [`settings`]: the settings assets (E05-S06), embedded with `include_str!`:
 //!   [`default_settings`] (`assets/settings/default.json`, the bottom layer of the settings
 //!   store), [`initial_user_settings_content`] (the commented template written to a new user
@@ -26,12 +28,14 @@
 //! See `README.md` in this crate and `docs/ARCHITECTURE.md` for the allowed
 //! dependency direction. `cargo xtask lint-deps` enforces it.
 
+pub mod icon_mount;
 pub mod icons;
 pub mod keymap;
 pub mod settings;
 pub mod source;
 pub mod themes;
 
+pub use icon_mount::{ICON_MOUNT_PREFIX, IconMount};
 pub use icons::IconName;
 pub use keymap::{KeymapPlatform, default_keymap, initial_user_keymap_content, vim_keymap};
 pub use settings::{

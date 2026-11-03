@@ -34,8 +34,11 @@ tracing.workspace = true
 async-trait.workspace = true
 gpui = { workspace = true, features = ["test-support"] }
 gpui_platform = { workspace = true, features = ["test-support"] }
+oxikube_assets.workspace = true
 oxikube_state_sqlite.workspace = true
 oxikube_testkit = { workspace = true, features = ["gpui-screenshot"] }
+# The sidebar screenshot draws its kind icons with an icon theme (E22-S11).
+oxikube_theme.workspace = true
 parking_lot.workspace = true
 tempfile.workspace = true
 # A current-thread runtime the sidebar tests connect on, so the session's kind forwarder runs.

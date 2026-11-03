@@ -401,6 +401,9 @@
         "helm": {
           "$ref": "#/$defs/HelmSettingsContent"
         },
+        "icon_theme": {
+          "$ref": "#/$defs/ThemeSelectionContent"
+        },
         "kubeconfig": {
           "$ref": "#/$defs/KubeconfigSettingsContent"
         },
@@ -2140,6 +2143,9 @@
     },
     "helm": {
       "$ref": "#/$defs/HelmSettingsContent"
+    },
+    "icon_theme": {
+      "$ref": "#/$defs/ThemeSelectionContent"
     },
     "kubeconfig": {
       "$ref": "#/$defs/KubeconfigSettingsContent"

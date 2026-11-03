@@ -7,7 +7,7 @@ use oxikube_app::kinds::Shown as KindShown;
 use oxikube_app::{IntegrationSection, KindGate};
 use oxikube_ui::IconName;
 
-use super::{EntryRow, Row, RowInputs, SectionRow, is_open};
+use super::{EntryKind, EntryRow, Row, RowInputs, SectionRow, is_open};
 use crate::sidebar::section::{SectionBody, SidebarEntry, SidebarSection, SidebarTarget};
 
 /// What a section turned into.
@@ -115,6 +115,7 @@ pub(super) fn section_rows(
                         target: e.target.clone(),
                         count: None,
                         restricted: greyed,
+                        kind: EntryKind::of_target(e.target.as_ref()),
                     })
                 }));
             }
@@ -161,6 +162,7 @@ pub(super) fn integration_rows(
                 target: Some(SidebarTarget::Command(item.command)),
                 count: None,
                 restricted: false,
+                kind: None,
             })
         }));
     }

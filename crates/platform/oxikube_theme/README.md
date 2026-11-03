@@ -5,7 +5,7 @@
 Themes (E05-S08): Zed theme-family JSON (schema v0.2.0) importer into `ThemeTokens`, the
 `oxikube` block of Kubernetes status colours, `ThemeRegistry` (bundled One Dark / One Light plus
 the user's hot-reloaded `themes/` directory), system-appearance following and the `theme`
-setting. Only Zed's file *format* is shared; its GPL `theme` crate is not copied.
+setting; icon themes (E22-S11) with the `icon_theme` setting. Only Zed's file *format* is shared; its GPL `theme` crate is not copied.
 
 ## Using it
 
@@ -49,6 +49,15 @@ cx.observe_global::<oxikube_theme::ActiveTheme>(|cx| { /* theme changed */ }).de
   the frame that shows a new theme only uploads them. Same platform calls, same bitmaps; between
   frames only; at most 8 MiB kept. `cargo run --release -p oxikube_theme --example glyph_warm`
   prints a switch frame's rasterisation with and without it on CoreText.
+- **Icon themes** (`icons`, E22-S11, ADR 0019): Zed icon-theme JSON in `<config>/icon_themes/`
+  (SVGs in subfolders, paths relative to that directory; `..`, absolute paths and symlinks out of
+  it are refused), selected by the `icon_theme` setting (`"Lucide"`, built in, by default; a name
+  or `{ mode, light, dark }`). Besides Zed's folder, chevron and file keys, `file_icons` may set
+  `kind:Pod` / `kind:apps/Deployment`, `status:Running` and `icon:<lucide stem>`; the rest stays
+  Lucide. The bin calls `oxikube_theme::icons::init_icon_themes(cx)` after `init`; a watcher
+  thread reads the files, `ActiveIconTheme` holds the resolved icons, and `oxikube_ui::Icon`
+  (`new` / `kind` / `status`) draws from them. Extensions use `icons::load_icon_theme` /
+  `remove_icon_themes` with their `ThemeSource::Extension`.
 - **Cost**: `cargo run --release -p oxikube_theme --example theme_load` (cold init is about
   0.5 ms; the startup budget for settings + keymap + theme together is 30 ms).
 

@@ -1,4 +1,5 @@
-//! Hot reload of the `themes/` directory: a `notify` watcher plus a thread that rescans.
+//! Hot reload of the `themes/` directory (and, through [`ThemeDirWatcher::spawn_scanning`], the
+//! `icon_themes/` one): a `notify` watcher plus a thread that rescans.
 //!
 //! Independent of GPUI. The thread does all the file I/O and JSON parsing, so the UI thread only
 //! swaps the finished result into the registry. Details that matter:
@@ -64,6 +65,24 @@ impl ThemeDirWatcher {
         debounce: Duration,
         on_scan: impl FnMut(UserThemes) -> bool + Send + 'static,
     ) -> Result<Self, WatchError> {
+        Self::spawn_scanning(
+            dir,
+            debounce,
+            RecursiveMode::NonRecursive,
+            scan_dir,
+            on_scan,
+        )
+    }
+
+    /// Like [`ThemeDirWatcher::spawn`] with another scan of the directory (the icon-themes
+    /// directory's, E22-S11) and a choice of watching subdirectories too.
+    pub fn spawn_scanning<T: Clone + PartialEq + Send + 'static>(
+        dir: PathBuf,
+        debounce: Duration,
+        mode: RecursiveMode,
+        scan: impl Fn(&Path) -> T + Send + 'static,
+        on_scan: impl FnMut(T) -> bool + Send + 'static,
+    ) -> Result<Self, WatchError> {
         let watch_error = |message: String| WatchError::Watch {
             path: dir.clone(),
             message,
@@ -84,13 +103,13 @@ impl ThemeDirWatcher {
         })
         .map_err(|err| watch_error(err.to_string()))?;
         watcher
-            .watch(&dir, RecursiveMode::NonRecursive)
+            .watch(&dir, mode)
             .map_err(|err| watch_error(err.to_string()))?;
 
-        let scan_dir = dir.clone();
+        let thread_dir = dir.clone();
         let thread = std::thread::Builder::new()
             .name("oxikube-theme-watch".into())
-            .spawn(move || run(&scan_dir, debounce, &rx, on_scan))
+            .spawn(move || run(&thread_dir, debounce, &rx, scan, on_scan))
             .map_err(|err| watch_error(err.to_string()))?;
         Ok(Self {
             _watcher: watcher,
@@ -99,23 +118,24 @@ impl ThemeDirWatcher {
     }
 }
 
-fn run(
+fn run<T: Clone + PartialEq>(
     dir: &Path,
     debounce: Duration,
     rx: &Receiver<()>,
-    mut on_scan: impl FnMut(UserThemes) -> bool,
+    scan: impl Fn(&Path) -> T,
+    mut on_scan: impl FnMut(T) -> bool,
 ) {
-    let mut last: Option<UserThemes> = None;
+    let mut last: Option<T> = None;
     let mut pending = true;
     loop {
         if !pending && (rx.recv().is_err() || !settle(rx, debounce)) {
             return;
         }
         pending = false;
-        let scan = scan_dir(dir);
-        if last.as_ref() != Some(&scan) {
-            last = Some(scan.clone());
-            if !on_scan(scan) {
+        let found = scan(dir);
+        if last.as_ref() != Some(&found) {
+            last = Some(found.clone());
+            if !on_scan(found) {
                 return;
             }
         }
