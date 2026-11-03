@@ -11,10 +11,18 @@ use crate::appearance::{Appearance, ThemeMode};
 use crate::registry::{DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME};
 use oxikube_settings::Settings;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::de;
+use serde::de::MapAccess;
+use serde::de::Visitor;
+use serde::de::value::MapAccessDeserializer;
+use serde::{Deserialize, Deserializer, Serialize};
+use std::fmt;
 
 /// What one settings layer says about the theme.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+///
+/// Deserialisation is hand-written (not `#[serde(untagged)]`) so a bad `mode` is reported with its
+/// key (`theme.mode: unknown variant ...`) rather than as "did not match any variant".
+#[derive(Clone, Debug, PartialEq, Serialize, JsonSchema)]
 #[serde(untagged)]
 pub enum ThemeSelectionContent {
     /// One theme, whatever the system appearance.
@@ -34,6 +42,50 @@ pub enum ThemeSelectionContent {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         dark: Option<String>,
     },
+}
+
+/// The fields of the object form, for the derive to do the per-key work.
+#[derive(Deserialize)]
+struct DynamicFields {
+    #[serde(default)]
+    mode: Option<ThemeMode>,
+    #[serde(default)]
+    light: Option<String>,
+    #[serde(default)]
+    dark: Option<String>,
+}
+
+struct ContentVisitor;
+
+impl<'de> Visitor<'de> for ContentVisitor {
+    type Value = ThemeSelectionContent;
+
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("a theme name or an object with `mode`, `light` and `dark`")
+    }
+
+    fn visit_str<E: de::Error>(self, name: &str) -> Result<Self::Value, E> {
+        Ok(ThemeSelectionContent::Static(name.to_owned()))
+    }
+
+    fn visit_string<E: de::Error>(self, name: String) -> Result<Self::Value, E> {
+        Ok(ThemeSelectionContent::Static(name))
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<Self::Value, A::Error> {
+        let fields = DynamicFields::deserialize(MapAccessDeserializer::new(map))?;
+        Ok(ThemeSelectionContent::Dynamic {
+            mode: fields.mode,
+            light: fields.light,
+            dark: fields.dark,
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for ThemeSelectionContent {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(ContentVisitor)
+    }
 }
 
 impl Default for ThemeSelectionContent {

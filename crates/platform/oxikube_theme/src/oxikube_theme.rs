@@ -10,6 +10,7 @@
 //!   `gpui::Hsla` from GPUI, so it is `Send + Sync`).
 //! - [`import`]: Zed theme-family JSON -> tokens through a table-driven mapper; lenient JSON,
 //!   defaults for unset keys, an [`ImportReport`] for what was wrong.
+//! - [`notices`]: the event channel for things worth a toast (an unknown theme name).
 //! - [`registry`]: [`ThemeRegistry`], `get` / `list` / `resolve(selection, system)`; pure.
 //! - [`settings`]: the `theme` setting (`"Ayu Dark"` or `{ mode, light, dark }`).
 //! - [`appearance`]: [`Appearance`], [`ThemeMode`] and the [`SystemAppearance`] global.
@@ -37,6 +38,7 @@ pub mod global;
 pub mod glyph_warm;
 pub mod icons;
 pub mod import;
+pub mod notices;
 pub mod registry;
 pub mod settings;
 pub mod tokens;
@@ -55,6 +57,7 @@ pub use icons::{ActiveIconTheme, IconTheme, IconThemeFamily, IconThemeSettings};
 pub use import::{
     ImportDiagnostic, ImportError, ImportReport, ImportedFamily, ThemeFamily, import_family,
 };
+pub use notices::{ThemeNotice, pending_unknown_theme, subscribe_notices};
 pub use registry::{
     ExtensionId, IconThemeMeta, ThemeFileProblem, ThemeMeta, ThemeRegistry, ThemeSource,
 };

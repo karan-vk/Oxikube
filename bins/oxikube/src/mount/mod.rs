@@ -155,6 +155,7 @@ mod tabs;
 mod terminal;
 #[cfg(test)]
 mod tests;
+mod theme;
 mod views;
 
 use std::rc::Rc;
@@ -218,6 +219,8 @@ pub struct Wiring {
     _open_keymap: Task<()>,
     /// Shows the toast for problems in the user's `keymap.json` (E11-S08).
     _follow_keymap: Subscription,
+    /// Follows the OS appearance (main window only) and toasts an unknown theme name (E22-S07).
+    _follow_theme: theme::ThemeFollow,
     /// Runs `terminal::Copy` / `terminal::Paste` on the focused terminal. Lives as long as the
     /// window.
     _terminal_input: Task<()>,
@@ -817,6 +820,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
     keymap::install_action(window.window_handle(), &dispatcher_for_keymap, cx);
     let follow_keymap =
         keymap::follow_diagnostics(workspace.downgrade(), dispatcher_for_keymap, cx);
+    let follow_theme = theme::mount(workspace.downgrade(), window, cx);
     let terminal_input = terminal::terminal_input(terminal_input_rx, window, cx);
     // History metrics (E13-S05): the provider service follows the sessions and the settings, and the
     // page opens in the cluster tab.
@@ -1026,6 +1030,7 @@ pub fn mount_main_window(main: &Entity<MainView>, window: &mut Window, cx: &mut 
         _help: help,
         _open_keymap: open_keymap,
         _follow_keymap: follow_keymap,
+        _follow_theme: follow_theme,
         _terminal_input: terminal_input,
         _resource_views: resource_views,
         _log_views: log_views,
