@@ -238,19 +238,22 @@ fn ext(id: &str) -> ThemeSource {
 fn extension_families_are_listed_tagged_and_removed_by_source_only() {
     let mut registry = ThemeRegistry::with_bundled();
     registry.replace_user_themes(scan_of(&[("gruvbox.json", GRUVBOX)]));
-    registry.insert_theme_families(&ext("acme.ayu"), [family(AYU)]);
+    let before = registry.names().len();
+    // Renamed so the extension's themes do not collide with the bundled Ayu family.
+    let acme = family(&AYU.replace("Ayu", "Acme"));
+    registry.insert_theme_families(&ext("acme.ayu"), [acme]);
 
-    let ayu = registry
+    let acme_dark = registry
         .list()
         .into_iter()
-        .find(|meta| meta.name == "Ayu Dark")
-        .expect("Ayu Dark listed");
-    assert_eq!(ayu.source, ext("acme.ayu"));
-    assert!(registry.get("Ayu Light").is_some());
-    assert_eq!(registry.names().len(), 2 + 3 + 6);
+        .find(|meta| meta.name == "Acme Dark")
+        .expect("Acme Dark listed");
+    assert_eq!(acme_dark.source, ext("acme.ayu"));
+    assert!(registry.get("Acme Light").is_some());
+    assert_eq!(registry.names().len(), before + 3);
 
     assert_eq!(registry.remove_by_source(&ext("acme.ayu")), 3);
-    assert!(registry.get("Ayu Dark").is_none());
+    assert!(registry.get("Acme Dark").is_none());
     assert_eq!(registry.remove_by_source(&ext("acme.ayu")), 0, "idempotent");
     // User and bundled themes survive an extension unload.
     assert!(registry.get("Gruvbox Light").is_some());
@@ -266,20 +269,32 @@ fn user_beats_extension_beats_bundled_and_later_insert_wins_within_a_source() {
     };
     let text_of = |registry: &ThemeRegistry| registry.get("One Dark").unwrap().colors.text;
     let color = |hex: &str| crate::color::parse_color(hex).unwrap();
+    let source_of = |registry: &ThemeRegistry, name: &str| {
+        registry
+            .list()
+            .into_iter()
+            .find(|meta| meta.name == name)
+            .expect("theme listed")
+            .source
+    };
 
     let mut registry = ThemeRegistry::with_bundled();
     registry.insert_theme_families(&ext("a"), [one("#111111")]);
     registry.insert_theme_families(&ext("a"), [one("#222222")]);
     assert_eq!(text_of(&registry), color("#222222"), "later insert wins");
-    assert_eq!(registry.list()[0].source, ext("a"));
+    assert_eq!(source_of(&registry, "One Dark"), ext("a"));
 
     registry.insert_theme_families(&ThemeSource::User, [one("#333333")]);
     assert_eq!(text_of(&registry), color("#333333"), "user beats extension");
-    assert_eq!(registry.names(), ["One Dark", "One Light"], "listed once");
+    let listed = registry
+        .names()
+        .into_iter()
+        .filter(|name| name == "One Dark");
+    assert_eq!(listed.count(), 1, "listed once");
 
     assert_eq!(registry.remove_by_source(&ThemeSource::User), 1);
     assert_eq!(text_of(&registry), color("#222222"));
     registry.remove_by_source(&ext("a"));
     assert_ne!(text_of(&registry), color("#222222"), "bundled again");
-    assert_eq!(registry.list()[0].source, ThemeSource::Bundled);
+    assert_eq!(source_of(&registry, "One Dark"), ThemeSource::Bundled);
 }
