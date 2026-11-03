@@ -74,6 +74,62 @@
             "null"
           ]
         },
+        "diff.added": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "diff.changed": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "diff.removed": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "health.degraded": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "health.healthy": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "health.missing": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "health.progressing": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "health.suspended": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "log.source.1": {
           "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
           "type": [
@@ -180,6 +236,27 @@
           ]
         },
         "status.unknown": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "syncStatus.outOfSync": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "syncStatus.synced": {
+          "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "syncStatus.unknown": {
           "pattern": "^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
           "type": [
             "string",
