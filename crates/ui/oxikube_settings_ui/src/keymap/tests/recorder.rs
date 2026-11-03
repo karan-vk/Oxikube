@@ -224,6 +224,33 @@ fn conflicts_are_listed_and_replace_unbinds_them(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn a_user_binding_on_the_same_keys_here_is_shown_as_overwritten_without_keep_both(
+    cx: &mut TestAppContext,
+) {
+    let user = r#"[
+      { "context": "ResourceTable", "bindings": { "ctrl-alt-shift-j": "keymap::OpenUser" } }
+    ]"#;
+    let mut h = Harness::open(cx, user);
+    let recorder = record(&mut h, "keymap::ShowEditor");
+    h.vcx.update(|window, cx| {
+        recorder.update(cx, |r, cx| r.type_context("ResourceTable", window, cx));
+    });
+    h.vcx.simulate_keystrokes("ctrl-alt-shift-j");
+    after(&mut h, IDLE_TIMEOUT);
+    let conflicts = h
+        .vcx
+        .read(|cx| recorder.read(cx).model().conflicts().to_vec());
+    assert_eq!(conflicts.len(), 1, "{conflicts:?}");
+    assert!(conflicts[0].overwritten, "{conflicts:?}");
+    assert!(h.is_laid_out("keymap-recorder-overwritten"));
+    assert!(
+        !h.is_laid_out("keymap-recorder-keep"),
+        "Keep both is not offered for a binding the save overwrites"
+    );
+    assert!(!h.is_laid_out("keymap-recorder-replace"));
+}
+
+#[gpui::test]
 fn an_invalid_edit_shows_its_errors_and_cannot_be_saved(cx: &mut TestAppContext) {
     let mut h = Harness::open(cx, USER);
     let recorder = record(&mut h, "keymap::OpenUser");

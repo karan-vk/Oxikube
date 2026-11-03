@@ -15,7 +15,10 @@
 //! together, in any layer), and validates the edit after [`CHECK_DEBOUNCE`] on the background
 //! executor with the one keymap validator; Save stays disabled while the edit would add an error.
 //! The user answers a conflict with "Keep both" (the later layer wins, the user's), "Replace them"
-//! (the others are deleted, or unbound with `null` when they are defaults) or Cancel.
+//! (the others are deleted, or unbound with `null` when they are defaults) or Cancel. A user
+//! binding of the same keys in the same context cannot be kept (a `keymap.json` section holds one
+//! action per keys): the recorder says the save overwrites it, and offers no choice when that is
+//! the only kind of conflict.
 //!
 //! | Module | Holds |
 //! |---|---|

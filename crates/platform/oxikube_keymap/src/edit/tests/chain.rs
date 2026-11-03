@@ -1,7 +1,9 @@
 //! Conflicts across the context chain: same context, parent and child, prefix shadowing, and the
 //! non-conflicts (siblings, contradictory flags, other keys).
 
-use crate::edit::{ConflictKind, ContextModel};
+use oxikube_domain::command::{KeymapBindingEdit, KeymapBindingRef, KeymapSource};
+
+use crate::edit::{ConflictKind, ContextModel, apply_operations, set_binding_operations};
 use crate::known::KnownNames;
 use crate::layer::KeymapLayer;
 use crate::rows::{KeymapRow, RowStatus};
@@ -229,4 +231,96 @@ fn the_shipped_stacks_know_the_standard_hierarchy() {
     assert!(!m.can_be_active_together(Some("ResourceTable"), Some("Catalog")));
     assert!(m.can_be_active_together(Some("Palette"), Some("Picker")));
     assert!(!m.can_be_active_together(Some("Palette"), Some("ClusterTab")));
+}
+
+#[test]
+fn a_user_binding_of_the_same_keys_in_the_same_context_is_marked_overwritten() {
+    let m = model();
+    let rows = [
+        row(
+            "a::Mine",
+            Some("ResourceTable&&!Editing"),
+            "ctrl-k",
+            KeymapLayer::User,
+        ),
+        row(
+            "a::Default",
+            Some("ResourceTable && !Editing"),
+            "ctrl-k",
+            KeymapLayer::Default,
+        ),
+        row("a::Parent", Some("Workspace"), "ctrl-k", KeymapLayer::User),
+        row(
+            "a::Longer",
+            Some("ResourceTable && !Editing"),
+            "ctrl-k ctrl-s",
+            KeymapLayer::User,
+        ),
+    ];
+    let found = m.conflicts(
+        "b::New",
+        Some("ResourceTable && !Editing"),
+        "ctrl-k",
+        &rows,
+        None,
+    );
+    let overwritten: Vec<_> = found
+        .iter()
+        .map(|c| (c.row.action.as_str(), c.overwritten))
+        .collect();
+    assert_eq!(
+        overwritten,
+        [
+            ("a::Mine", true),
+            ("a::Default", false),
+            ("a::Parent", false),
+            ("a::Longer", false),
+        ]
+    );
+}
+
+#[test]
+fn an_overwritten_binding_is_gone_whichever_answer_the_user_gives() {
+    // What the flag promises: "Keep both" and "Replace them" write the same file, and the other
+    // action's binding is not in it.
+    let text = r#"[{ "context": "ResourceTable", "bindings": { "ctrl-k": "foo::Action" } }]"#;
+    let found = model().conflicts(
+        "bar::Action",
+        Some("ResourceTable"),
+        "ctrl-k",
+        &[row(
+            "foo::Action",
+            Some("ResourceTable"),
+            "ctrl-k",
+            KeymapLayer::User,
+        )],
+        None,
+    );
+    assert_eq!(found.len(), 1);
+    assert!(found[0].overwritten, "{found:?}");
+    let keep_both = KeymapBindingEdit {
+        action: "bar::Action".into(),
+        data: None,
+        context: Some("ResourceTable".into()),
+        keystrokes: "ctrl-k".into(),
+        replaces: None,
+        unbind: Vec::new(),
+    };
+    let replace = KeymapBindingEdit {
+        unbind: vec![KeymapBindingRef {
+            context: Some("ResourceTable".into()),
+            keystrokes: "ctrl-k".into(),
+            source: KeymapSource::User,
+        }],
+        ..keep_both.clone()
+    };
+    let written = |edit: &KeymapBindingEdit| {
+        apply_operations(text, &set_binding_operations(edit).expect("a plan")).expect("an edit")
+    };
+    let kept = written(&keep_both);
+    assert_eq!(kept, written(&replace));
+    assert!(
+        kept.contains("\"ctrl-k\": \"bar::Action\"") && !kept.contains("foo::Action"),
+        "{kept}"
+    );
 }

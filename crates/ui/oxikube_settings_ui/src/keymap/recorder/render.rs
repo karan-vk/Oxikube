@@ -197,6 +197,7 @@ impl KeybindRecorder {
         for conflict in conflicts {
             let row = &conflict.row;
             let how = match conflict.kind {
+                ConflictKind::SameKeys if conflict.overwritten => "overwritten",
                 ConflictKind::SameKeys => "same keys",
                 ConflictKind::ShadowsLonger => "your keys start it",
                 ConflictKind::ShadowedByShorter => "its keys start yours",
@@ -220,6 +221,21 @@ impl KeybindRecorder {
                     .child(div().text_color(colors.text_muted).child(source_label(row)))
                     .child(div().text_color(colors.text_muted).child(how)),
             );
+        }
+        if self.model.overwritten().next().is_some() {
+            list = list.child(
+                div()
+                    .debug_selector(|| "keymap-recorder-overwritten".to_owned())
+                    .text_xs()
+                    .text_color(colors.warning)
+                    .child(
+                        "Saving overwrites your binding of these keys in this context: \
+                         keymap.json holds one action per keys in a context, so it cannot be kept.",
+                    ),
+            );
+        }
+        if !self.model.has_choice() {
+            return Some(list.into_any_element());
         }
         let choice = self.model.choice();
         let option = |id: &'static str, label: &'static str, value: ConflictChoice| {

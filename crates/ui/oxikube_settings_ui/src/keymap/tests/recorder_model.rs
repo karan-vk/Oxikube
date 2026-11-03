@@ -122,6 +122,42 @@ fn replace_unbinds_the_conflicts_and_keep_both_leaves_them() {
 }
 
 #[test]
+fn an_overwritten_user_binding_is_reported_and_leaves_no_choice() {
+    let rows = [
+        row(
+            "a::Mine",
+            Some("ResourceTable"),
+            "ctrl-k",
+            Some(KeymapLayer::User),
+        ),
+        row(
+            "a::Other",
+            Some("Workspace"),
+            "ctrl-k",
+            Some(KeymapLayer::Default),
+        ),
+    ];
+    let contexts = ContextModel::of(
+        ContextStacks::of(&[&["Workspace", "Pane", "ResourceTable"]]),
+        KnownNames::of(["Workspace", "Pane", "ResourceTable"], ["Editing"]),
+    );
+    let mut m = RecorderModel::for_row(&row("a::Run", None, "", None));
+    m.push("ctrl-k".into());
+    m.set_context("ResourceTable");
+    m.refresh_conflicts(&contexts, &rows[..1]);
+    let overwritten: Vec<_> = m.overwritten().map(|c| c.row.action.clone()).collect();
+    assert_eq!(overwritten, ["a::Mine"]);
+    assert!(
+        !m.has_choice(),
+        "Keep both would write the same file as Replace"
+    );
+    // A conflict that can be kept brings the choice back; the overwritten one stays reported.
+    m.refresh_conflicts(&contexts, &rows);
+    assert!(m.has_choice());
+    assert_eq!(m.overwritten().count(), 1);
+}
+
+#[test]
 fn a_blocked_verdict_disables_save_and_carries_the_reasons() {
     let mut m = RecorderModel::for_row(&row("a::Run", None, "", None));
     m.push("ctrl-k".into());

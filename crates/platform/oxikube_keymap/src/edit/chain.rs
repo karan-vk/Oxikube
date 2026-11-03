@@ -17,8 +17,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use gpui::{KeyBindingContextPredicate, KeyContext};
 
+use super::ops::normalise_context;
 use crate::conflicts::normalise;
 use crate::known::KnownNames;
+use crate::layer::KeymapLayer;
 use crate::rows::{KeymapRow, RowStatus};
 use crate::stacks::ContextStacks;
 
@@ -44,6 +46,10 @@ pub struct ChainConflict {
     pub row: KeymapRow,
     /// How the keys meet.
     pub kind: ConflictKind,
+    /// Whether saving the new binding overwrites this one whatever the user answers: a user
+    /// binding of the same keys in the same context. A section of `keymap.json` holds one action
+    /// per keystrokes, so the two cannot both be kept there ("Keep both" does not apply to it).
+    pub overwritten: bool,
 }
 
 /// What the conflict check knows about contexts: where they sit and which names are flags.
@@ -96,7 +102,9 @@ impl ContextModel {
 
     /// The bindings in force among `rows` that `keystrokes` for `action` in `context` would clash
     /// with, in row order. A row equal to `editing` (the binding being changed) is left out, and
-    /// so is the same action already on the same keys.
+    /// so is the same action already on the same keys. A user binding of the same keys in the
+    /// same context is marked [`ChainConflict::overwritten`]: the write puts the new action in
+    /// its place.
     pub fn conflicts(
         &self,
         action: &str,
@@ -112,6 +120,7 @@ impl ContextModel {
         if keys.is_empty() {
             return Vec::new();
         }
+        let place = normalise_context(context);
         let mut together: BTreeMap<Option<&str>, bool> = BTreeMap::new();
         let mut found = Vec::new();
         for row in rows {
@@ -131,9 +140,13 @@ impl ContextModel {
                 .entry(row.context.as_deref())
                 .or_insert_with(|| self.can_be_active_together(context, row.context.as_deref()));
             if overlap {
+                let overwritten = kind == ConflictKind::SameKeys
+                    && row.source == Some(KeymapLayer::User)
+                    && normalise_context(row.context.as_deref()) == place;
                 found.push(ChainConflict {
                     row: row.clone(),
                     kind,
+                    overwritten,
                 });
             }
         }

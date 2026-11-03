@@ -12,7 +12,9 @@ pub const MAX_KEYSTROKES: usize = 4;
 /// What to do with the bindings the new one clashes with.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ConflictChoice {
-    /// Leave them: where both apply the later layer wins, which is the user's binding.
+    /// Leave them: where both apply the later layer wins, which is the user's binding. A conflict
+    /// that is [`overwritten`](oxikube_keymap::edit::ChainConflict::overwritten) is not left: the
+    /// new binding takes its place in `keymap.json` whatever the answer.
     #[default]
     KeepBoth,
     /// Take them out of force: a user binding is deleted, a default one unbound with `null`.
@@ -110,6 +112,20 @@ impl RecorderModel {
     /// The bindings in force the new one clashes with.
     pub fn conflicts(&self) -> &[ChainConflict] {
         &self.conflicts
+    }
+
+    /// Whether the answer to the conflicts changes the edit: some conflict can be kept beside the
+    /// new binding. When every one is overwritten (a user binding of the same keys in the same
+    /// context), "Keep both" and "Replace them" would write the same file.
+    pub fn has_choice(&self) -> bool {
+        self.conflicts.iter().any(|conflict| !conflict.overwritten)
+    }
+
+    /// The conflicts the save overwrites whatever the answer.
+    pub fn overwritten(&self) -> impl Iterator<Item = &ChainConflict> {
+        self.conflicts
+            .iter()
+            .filter(|conflict| conflict.overwritten)
     }
 
     /// The answer to the conflicts.
