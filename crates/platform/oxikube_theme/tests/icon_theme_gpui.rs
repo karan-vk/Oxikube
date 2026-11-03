@@ -8,12 +8,13 @@ use gpui::{AssetSource as _, TestAppContext, UpdateGlobal as _};
 use oxikube_assets::IconName;
 use oxikube_settings::{Settings as _, SettingsStore, init_with_dir as init_settings};
 use oxikube_theme::icons::{
-    ActiveIconTheme, DEFAULT_ICON_THEME, IconThemeSettings, icon_path, icon_themes_dir,
-    init_icon_themes_with_dir, kind_icon_path, load_icon_theme, read_icon_theme_file,
-    remove_icon_themes, status_icon_path,
+    ActiveIconTheme, DEFAULT_ICON_THEME, IconThemeSettings, apply_user_icon_scan, icon_path,
+    icon_themes_dir, init_icon_themes_with_dir, kind_icon_path, load_icon_theme,
+    read_icon_theme_file, remove_icon_themes, scan_icon_themes_dir, status_icon_path,
 };
 use oxikube_theme::{Appearance, ExtensionId, SystemAppearance, ThemeRegistry, ThemeSource};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 fn fixtures() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/icon_themes")
@@ -165,4 +166,39 @@ fn an_extension_icon_theme_loads_and_unloads_by_source(cx: &mut TestAppContext) 
             ["Kube Test Icons", DEFAULT_ICON_THEME, "Zed Sample Icons"]
         );
     });
+}
+
+#[gpui::test]
+fn a_rescan_with_unchanged_files_keeps_the_active_theme_and_its_asset_paths(
+    cx: &mut TestAppContext,
+) {
+    let config = setup(cx, Some(r#"{ "icon_theme": "Kube Test Icons" }"#));
+    let dir = icon_themes_dir(config.path());
+    let active = cx.read(ActiveIconTheme::get);
+    let pod = kind_icon_path("", "Pod");
+    assert!(pod.ends_with("/kube/pod.svg"), "{pod}");
+
+    // A save elsewhere in `icon_themes/` rescans every file; unchanged ones keep their mount.
+    std::fs::write(dir.join("unrelated.txt"), "x").expect("write unrelated file");
+    cx.update(|cx| apply_user_icon_scan(cx, scan_icon_themes_dir(&dir)));
+    assert!(
+        Arc::ptr_eq(&active, &cx.read(ActiveIconTheme::get)),
+        "an unchanged active theme is not re-resolved"
+    );
+    assert_eq!(
+        kind_icon_path("", "Pod"),
+        pod,
+        "unchanged icons keep their asset path (GPUI's sprite atlas keys by path)"
+    );
+
+    // Editing the active theme's SVG remounts it under a new path, so no stale picture shows.
+    std::fs::write(
+        dir.join("kube/pod.svg"),
+        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="4"/></svg>"#,
+    )
+    .expect("edit pod.svg");
+    cx.update(|cx| apply_user_icon_scan(cx, scan_icon_themes_dir(&dir)));
+    let edited = kind_icon_path("", "Pod");
+    assert_ne!(edited, pod, "an edited file is served under a new path");
+    assert!(edited.ends_with("/kube/pod.svg"), "{edited}");
 }

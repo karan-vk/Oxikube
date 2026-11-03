@@ -160,17 +160,48 @@ fn start_watch(cx: &mut App, dir: PathBuf) {
     });
 }
 
-/// Replaces the registry's user icon themes with `scan` (mounting their files) and re-resolves
-/// the active icon theme. Public so a host that scans itself, or a test, can feed the registry.
+/// The user icon-theme files of the last applied scan, each with the family mounted from it, so
+/// a rescan reuses the mount of a file that did not change.
+///
+/// Why: every mount serves its files under a fresh `icon-themes/<id>/` prefix, and GPUI's sprite
+/// atlas is keyed by path and never evicts SVG tiles. Remounting unchanged files on every rescan
+/// (any save in `icon_themes/`) would re-rasterise every visible icon in one frame and leak the
+/// old tiles for the life of the window.
+struct MountedUserIconThemes(Vec<(PathBuf, IconThemeSource, IconThemeFamily)>);
+
+impl Global for MountedUserIconThemes {}
+
+/// Replaces the registry's user icon themes with `scan` (mounting the files of new or changed
+/// families, reusing the mount of unchanged ones) and re-resolves the active icon theme. Public
+/// so a host that scans itself, or a test, can feed the registry.
 pub fn apply_user_icon_scan(cx: &mut App, scan: UserIconThemes) {
     for problem in &scan.problems {
         tracing::warn!(path = %problem.path.display(), message = %problem.message, "icon theme");
     }
-    let families = scan
+    let mut previous = if cx.has_global::<MountedUserIconThemes>() {
+        cx.remove_global::<MountedUserIconThemes>().0
+    } else {
+        Vec::new()
+    };
+    let mounted: Vec<(PathBuf, IconThemeSource, IconThemeFamily)> = scan
         .families
         .into_iter()
-        .map(|(path, source)| (path, IconThemeFamily::mount(source)))
+        .map(|(path, source)| {
+            let unchanged = previous
+                .iter()
+                .position(|(old_path, old_source, _)| *old_path == path && *old_source == source);
+            let family = match unchanged {
+                Some(index) => previous.swap_remove(index).2,
+                None => IconThemeFamily::mount(source.clone()),
+            };
+            (path, source, family)
+        })
         .collect();
+    let families = mounted
+        .iter()
+        .map(|(path, _, family)| (path.clone(), family.clone()))
+        .collect();
+    cx.set_global(MountedUserIconThemes(mounted));
     cx.update_global::<ThemeRegistry, _>(|registry, _| {
         registry.replace_user_icon_themes(families, scan.problems);
     });

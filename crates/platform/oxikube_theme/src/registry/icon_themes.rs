@@ -68,6 +68,13 @@ impl ThemeRegistry {
 
     /// Replaces every user icon theme with a fresh scan of the `icon_themes/` directory. Within
     /// the scan the first file (by name) that defines a theme name keeps it.
+    ///
+    /// A theme equal to the one it replaces (same content and same [`IconMount`], which is what
+    /// [`apply_user_icon_scan`](crate::icons::apply_user_icon_scan) hands back for an unchanged
+    /// file) keeps its existing `Arc`, so the active icon theme sees no change and nothing is
+    /// re-resolved or redrawn.
+    ///
+    /// [`IconMount`]: oxikube_assets::IconMount
     pub fn replace_user_icon_themes(
         &mut self,
         families: Vec<(PathBuf, IconThemeFamily)>,
@@ -76,7 +83,7 @@ impl ThemeRegistry {
         let layers = &mut self.icon_themes;
         layers.problems = problems;
         let user = layers.layers.layer_mut(&ThemeSource::User);
-        user.clear();
+        let mut previous = std::mem::take(user);
         for (path, family) in families {
             for theme in family.themes {
                 if user.contains_key(&theme.name) {
@@ -86,7 +93,11 @@ impl ThemeRegistry {
                     });
                     continue;
                 }
-                user.insert(theme.name.clone(), Arc::new(theme));
+                let theme = match previous.remove(&theme.name) {
+                    Some(kept) if *kept == theme => kept,
+                    _ => Arc::new(theme),
+                };
+                user.insert(theme.name.clone(), theme);
             }
         }
     }
