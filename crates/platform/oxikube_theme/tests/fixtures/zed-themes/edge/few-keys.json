@@ -1,0 +1,10 @@
+{
+  "name": "Edge Sparse",
+  "author": "Oxikube",
+  "themes": [
+    { "name": "Edge Sparse Dark", "appearance": "dark", "style": { "background": "#101820ff", "text": "#f0f0f0ff" } },
+    { "name": "Edge Sparse Light", "appearance": "light", "style": { "background": "#fafafaff" } },
+    { "name": "Edge Empty Style", "appearance": "light", "style": {} },
+    { "name": "Edge No Style", "appearance": "dark" }
+  ]
+}

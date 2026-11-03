@@ -225,5 +225,13 @@ as import-test input (licences in `tests/fixtures/LICENSES.md`). Do not bundle a
 adding it here and checking its licence in Zed's `assets/themes/LICENSES`; the test
 `every_third_party_family_has_a_licence_and_notice` in `oxikube_assets` enforces the mention.
 
+### Theme conformance fixtures (test input only, not shipped)
+`crates/platform/oxikube_theme/tests/fixtures/zed-themes/` holds unmodified, MIT-licensed Zed theme
+files used by `tests/conformance.rs`: Catppuccin (catppuccin/zed), Dracula (dracula/zed), Rose Pine
+(rose-pine/zed), Tokyo Night (ssaunderss/zed-tokyo-night) and twelve Base16 schemes
+(tinted-theming/base16-zed). Source repository, commit, author and licence per file are in
+`tests/fixtures/zed-themes/LICENSES.md`; the test `every_fixture_has_a_licence_row` fails for a file
+without a row.
+
 `oxikube_theme` reads Zed's theme-family *file format* (schema v0.2.0) but contains no Zed code:
 its types and the key mapping table are our own.

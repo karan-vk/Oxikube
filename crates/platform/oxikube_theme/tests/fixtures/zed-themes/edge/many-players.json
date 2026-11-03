@@ -1,0 +1,242 @@
+{
+  "name": "Edge Players",
+  "author": "Oxikube",
+  "themes": [
+    {
+      "name": "Edge Players Dark",
+      "appearance": "dark",
+      "style": {
+        "background": "#202020ff",
+        "text": "#e0e0e0ff",
+        "players": [
+          {
+            "cursor": "#a5cd68ff",
+            "background": "#4d3c1aff",
+            "selection": "#ca264e3d"
+          },
+          {
+            "cursor": "#18b8ffff",
+            "background": "#25165eff",
+            "selection": "#3031d03d"
+          },
+          {
+            "cursor": "#bb3b93ff",
+            "background": "#1db208ff",
+            "selection": "#6deceb3d"
+          },
+          {
+            "cursor": "#1332a1ff",
+            "background": "#2c0146ff",
+            "selection": "#de06ce3d"
+          },
+          {
+            "cursor": "#d61aa9ff",
+            "background": "#23c417ff",
+            "selection": "#7b382e3d"
+          },
+          {
+            "cursor": "#2e71efff",
+            "background": "#d95a94ff",
+            "selection": "#1e43bb3d"
+          },
+          {
+            "cursor": "#3f62f8ff",
+            "background": "#724c60ff",
+            "selection": "#1fac613d"
+          },
+          {
+            "cursor": "#cb19b4ff",
+            "background": "#1963c5ff",
+            "selection": "#7131a33d"
+          },
+          {
+            "cursor": "#17d9afff",
+            "background": "#442f7dff",
+            "selection": "#9447ab3d"
+          },
+          {
+            "cursor": "#d69964ff",
+            "background": "#49dbcdff",
+            "selection": "#3c4f433d"
+          },
+          {
+            "cursor": "#9df154ff",
+            "background": "#5c882bff",
+            "selection": "#34c3b73d"
+          },
+          {
+            "cursor": "#6030a1ff",
+            "background": "#beaae4ff",
+            "selection": "#31e26b3d"
+          },
+          {
+            "cursor": "#2025e0ff",
+            "background": "#1e840bff",
+            "selection": "#69736b3d"
+          },
+          {
+            "cursor": "#fe2a0aff",
+            "background": "#daed60ff",
+            "selection": "#a0d7e53d"
+          },
+          {
+            "cursor": "#ee635eff",
+            "background": "#e807c8ff",
+            "selection": "#b921523d"
+          },
+          {
+            "cursor": "#997b0fff",
+            "background": "#7f31c4ff",
+            "selection": "#5c0a633d"
+          },
+          {
+            "cursor": "#7cfa37ff",
+            "background": "#29e8e6ff",
+            "selection": "#99ba403d"
+          },
+          {
+            "cursor": "#fd7fe4ff",
+            "background": "#afdc0bff",
+            "selection": "#e5cd983d"
+          },
+          {
+            "cursor": "#936c94ff",
+            "background": "#257a95ff",
+            "selection": "#3c731e3d"
+          },
+          {
+            "cursor": "#d61431ff",
+            "background": "#5475e9ff",
+            "selection": "#af21f03d"
+          },
+          {
+            "cursor": "#4dd0eaff",
+            "background": "#fa595fff",
+            "selection": "#d7e8d83d"
+          },
+          {
+            "cursor": "#1412f9ff",
+            "background": "#27bddfff",
+            "selection": "#a0a3833d"
+          },
+          {
+            "cursor": "#ae2484ff",
+            "background": "#b34a94ff",
+            "selection": "#fe4c283d"
+          },
+          {
+            "cursor": "#e993beff",
+            "background": "#2334e5ff",
+            "selection": "#2febd03d"
+          },
+          {
+            "cursor": "#8a357bff",
+            "background": "#f2bd04ff",
+            "selection": "#2147ad3d"
+          },
+          {
+            "cursor": "#1f1010ff",
+            "background": "#9e84dbff",
+            "selection": "#e42b063d"
+          },
+          {
+            "cursor": "#91b681ff",
+            "background": "#c58674ff",
+            "selection": "#b1aaac3d"
+          },
+          {
+            "cursor": "#0b8d5eff",
+            "background": "#ec6353ff",
+            "selection": "#b5ff643d"
+          },
+          {
+            "cursor": "#560a6fff",
+            "background": "#3bf3faff",
+            "selection": "#fcc5543d"
+          },
+          {
+            "cursor": "#1e2f46ff",
+            "background": "#6fb8edff",
+            "selection": "#932a473d"
+          },
+          {
+            "cursor": "#4238e1ff",
+            "background": "#7ec75fff",
+            "selection": "#cbb93e3d"
+          },
+          {
+            "cursor": "#c82a8fff",
+            "background": "#fe3620ff",
+            "selection": "#2941f33d"
+          },
+          {
+            "cursor": "#552df6ff",
+            "background": "#e5fbe4ff",
+            "selection": "#cda4503d"
+          },
+          {
+            "cursor": "#8e40eeff",
+            "background": "#461b2eff",
+            "selection": "#dc6d553d"
+          },
+          {
+            "cursor": "#8e8d34ff",
+            "background": "#d4a1beff",
+            "selection": "#b7b0da3d"
+          },
+          {
+            "cursor": "#c2c933ff",
+            "background": "#76250fff",
+            "selection": "#4d45813d"
+          },
+          {
+            "cursor": "#2a7cf8ff",
+            "background": "#5a3935ff",
+            "selection": "#4d76fb3d"
+          },
+          {
+            "cursor": "#76c30cff",
+            "background": "#7777d3ff",
+            "selection": "#062d213d"
+          },
+          {
+            "cursor": "#f84d08ff",
+            "background": "#5d5c0bff",
+            "selection": "#8686b93d"
+          },
+          {
+            "cursor": "#905939ff",
+            "background": "#02188eff",
+            "selection": "#4a96183d"
+          }
+        ],
+        "accents": [
+          "#d68027ff",
+          "#bd0ecdff",
+          "#a32111ff",
+          "#40406cff",
+          "#1ba4f4ff",
+          "#e9cd34ff",
+          "#c8e5e3ff",
+          "#cbcfc8ff",
+          "#cc46f4ff",
+          "#c9ca19ff",
+          "#3502d0ff",
+          "#f68a28ff",
+          "#cd06d1ff",
+          "#1fdef2ff",
+          "#619792ff",
+          "#227b62ff",
+          "#6ae302ff",
+          "#e199d8ff",
+          "#531967ff",
+          "#384885ff",
+          "#ae1b83ff",
+          "#1aeb30ff",
+          "#346b19ff",
+          "#001e93ff"
+        ]
+      }
+    }
+  ]
+}
