@@ -14,7 +14,9 @@ use std::path::Path;
 use std::rc::Rc;
 
 const AYU: &str = include_str!("fixtures/ayu.json");
-const GRUVBOX: &str = include_str!("fixtures/gruvbox.json");
+const DROPPED: &str = r##"{ "name": "Dropped", "themes": [
+  { "name": "Dropped Dark", "appearance": "dark", "style": { "text": "#010203" } },
+  { "name": "Dropped Light", "appearance": "light", "style": { "text": "#040506" } } ] }"##;
 
 struct Harness {
     config: tempfile::TempDir,
@@ -131,23 +133,20 @@ fn settings_edits_switch_themes_once(cx: &mut TestAppContext) {
 fn an_unknown_theme_name_falls_back_until_it_is_dropped_into_the_directory(
     cx: &mut TestAppContext,
 ) {
-    let harness = setup(
-        cx,
-        Appearance::Dark,
-        Some(r#"{ "theme": "Gruvbox Dark Hard" }"#),
-    );
+    let harness = setup(cx, Appearance::Dark, Some(r#"{ "theme": "Dropped Dark" }"#));
     assert_eq!(active_name(cx), "One Dark", "not installed yet");
+    let dropped = DROPPED.to_owned();
 
     // The file arrives (the watcher does this in the app; tests feed the scan directly).
-    std::fs::write(harness.themes().join("gruvbox.json"), GRUVBOX).unwrap();
+    std::fs::write(harness.themes().join("dropped.json"), dropped).unwrap();
     cx.update(|cx| apply_user_scan(cx, scan_dir(&harness.themes())));
-    assert_eq!(active_name(cx), "Gruvbox Dark Hard");
+    assert_eq!(active_name(cx), "Dropped Dark");
     cx.read(|cx| {
-        assert!(ThemeRegistry::global(cx).get("Gruvbox Light").is_some());
+        assert!(ThemeRegistry::global(cx).get("Dropped Light").is_some());
     });
 
     // And leaves again.
-    std::fs::remove_file(harness.themes().join("gruvbox.json")).unwrap();
+    std::fs::remove_file(harness.themes().join("dropped.json")).unwrap();
     cx.update(|cx| apply_user_scan(cx, scan_dir(&harness.themes())));
     assert_eq!(active_name(cx), "One Dark");
 }
@@ -178,10 +177,11 @@ fn works_without_a_settings_store_or_a_themes_dir(cx: &mut TestAppContext) {
         init_with_dir(None, cx);
         SystemAppearance::set(cx, Appearance::Light);
         assert_eq!(ActiveTheme::get(cx).name, "One Light");
-        assert_eq!(ThemeRegistry::global(cx).names(), ["One Dark", "One Light"]);
+        let bundled = ThemeRegistry::with_bundled().names();
+        assert_eq!(ThemeRegistry::global(cx).names(), bundled);
         // Idempotent.
         init_with_dir(Some(Path::new("/nonexistent")), cx);
-        assert_eq!(ThemeRegistry::global(cx).names().len(), 2);
+        assert_eq!(ThemeRegistry::global(cx).names().len(), bundled.len());
     });
 }
 

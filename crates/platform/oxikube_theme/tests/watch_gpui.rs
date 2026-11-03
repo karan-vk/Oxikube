@@ -10,7 +10,8 @@ use oxikube_settings::{SettingsStore, init_with_dir as init_settings};
 use oxikube_theme::{ActiveTheme, Appearance, SystemAppearance, ThemeRegistry, init_watching_dir};
 use std::time::{Duration, Instant};
 
-const AYU: &str = include_str!("fixtures/ayu.json");
+const WATCHED: &str = r##"{ "name": "Watched", "themes": [
+  { "name": "Watched Dark", "appearance": "dark", "style": { "text": "#010203" } } ] }"##;
 
 /// Runs the foreground executor and re-checks `done` until it holds or ten seconds pass. Real
 /// time passes here: the file events come from the OS.
@@ -44,35 +45,39 @@ fn a_theme_file_dropped_into_the_directory_appears_and_can_be_selected(cx: &mut 
         SystemAppearance::set(cx, Appearance::Dark);
         init_watching_dir(&themes, cx);
     });
-    assert_eq!(names(cx), ["One Dark", "One Light"]);
+    let bundled = ThemeRegistry::with_bundled().names();
+    assert_eq!(names(cx), bundled);
 
     // Drop the file in. The OS watch starts asynchronously (FSEvents), so rewrite it every
     // half second until it is seen rather than guessing a delay.
-    let file = themes.join("ayu.json");
+    let file = themes.join("watched.json");
     let mut written: Option<Instant> = None;
-    wait_until(cx, "Ayu Dark to be listed", |cx| {
+    wait_until(cx, "Watched Dark to be listed", |cx| {
         if written.is_none_or(|at| at.elapsed() > Duration::from_millis(500)) {
-            std::fs::write(&file, AYU).unwrap();
+            std::fs::write(&file, WATCHED).unwrap();
             written = Some(Instant::now());
         }
-        names(cx).iter().any(|name| name == "Ayu Dark")
+        names(cx).iter().any(|name| name == "Watched Dark")
     });
-    assert_eq!(names(cx).len(), 5);
+    assert_eq!(names(cx).len(), bundled.len() + 1);
 
     // Selecting it takes effect.
     cx.update(|cx| {
         gpui::UpdateGlobal::update_global(cx, |store: &mut SettingsStore, _| {
             store
-                .set_user_settings(r#"{ "theme": "Ayu Dark" }"#)
+                .set_user_settings(r#"{ "theme": "Watched Dark" }"#)
                 .unwrap()
         });
     });
-    assert_eq!(cx.read(|cx| ActiveTheme::get(cx).name.clone()), "Ayu Dark");
+    assert_eq!(
+        cx.read(|cx| ActiveTheme::get(cx).name.clone()),
+        "Watched Dark"
+    );
 
     // Deleting the file removes the themes; the selection falls back.
     std::fs::remove_file(&file).unwrap();
-    wait_until(cx, "Ayu Dark to disappear", |cx| {
-        !names(cx).iter().any(|name| name == "Ayu Dark")
+    wait_until(cx, "Watched Dark to disappear", |cx| {
+        !names(cx).iter().any(|name| name == "Watched Dark")
     });
     assert_eq!(cx.read(|cx| ActiveTheme::get(cx).name.clone()), "One Dark");
 }

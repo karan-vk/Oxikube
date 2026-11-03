@@ -4,6 +4,9 @@ use crate::settings::ThemeSelection;
 use crate::test_fixtures::{AYU, GRUVBOX};
 use std::path::PathBuf;
 
+/// One(2) + Oxikube(2) + Ayu(3) + Gruvbox(6).
+const BUNDLED_COUNT: usize = 13;
+
 fn scan_of(files: &[(&str, &str)]) -> UserThemes {
     UserThemes {
         families: files
@@ -23,22 +26,32 @@ fn dynamic(mode: ThemeMode, light: &str, dark: &str) -> ThemeSelection {
 }
 
 #[test]
-fn bundled_registry_has_one_dark_and_one_light() {
+fn bundled_registry_has_one_oxikube_ayu_and_gruvbox() {
     let registry = ThemeRegistry::with_bundled();
-    assert_eq!(
-        registry.list(),
-        vec![
-            ThemeMeta {
-                name: "One Dark".into(),
-                appearance: Appearance::Dark,
-                source: ThemeSource::Bundled
-            },
-            ThemeMeta {
-                name: "One Light".into(),
-                appearance: Appearance::Light,
-                source: ThemeSource::Bundled
-            },
-        ]
+    let names: Vec<_> = registry.list().into_iter().map(|meta| meta.name).collect();
+    for expected in [
+        "One Dark",
+        "One Light",
+        "Oxikube Dark",
+        "Oxikube Light",
+        "Ayu Dark",
+        "Ayu Light",
+        "Ayu Mirage",
+        "Gruvbox Dark",
+        "Gruvbox Light",
+    ] {
+        assert!(
+            names.contains(&expected.to_owned()),
+            "{expected} in {names:?}"
+        );
+    }
+    assert_eq!(names.len(), BUNDLED_COUNT, "{names:?}");
+    assert!(
+        registry
+            .list()
+            .iter()
+            .all(|meta| meta.source == ThemeSource::Bundled),
+        "everything here is bundled"
     );
     assert_eq!(registry.default_for(Appearance::Dark).name, "One Dark");
     assert_eq!(registry.default_for(Appearance::Light).name, "One Light");
@@ -46,11 +59,35 @@ fn bundled_registry_has_one_dark_and_one_light() {
 }
 
 #[test]
+fn oxikube_family_sets_its_status_block_explicitly() {
+    let family = import_family(oxikube_assets::BUNDLED_THEME_FAMILIES[1].json).unwrap();
+    assert_eq!(family.family.name, "Oxikube");
+    for theme in &family.family.themes {
+        let colors = &theme.oxikube;
+        assert_ne!(
+            colors.status_running, colors.status_failed,
+            "{}",
+            theme.name
+        );
+        assert_ne!(
+            colors.status_pending, colors.status_unknown,
+            "{}",
+            theme.name
+        );
+    }
+    assert!(family.report.is_clean(), "{:?}", family.report.diagnostics);
+}
+
+#[test]
 fn user_themes_are_listed_sorted_and_replaced_wholesale() {
     let mut registry = ThemeRegistry::with_bundled();
     registry.replace_user_themes(scan_of(&[("ayu.json", AYU), ("gruvbox.json", GRUVBOX)]));
     let names = registry.names();
-    assert_eq!(names.len(), 2 + 3 + 6);
+    assert_eq!(
+        names.len(),
+        BUNDLED_COUNT,
+        "user Ayu/Gruvbox shadow the bundled ones"
+    );
     let mut sorted = names.clone();
     sorted.sort_by_key(|name| name.to_lowercase());
     assert_eq!(names, sorted);
@@ -61,10 +98,16 @@ fn user_themes_are_listed_sorted_and_replaced_wholesale() {
 
     // A rescan without gruvbox drops it again.
     registry.replace_user_themes(scan_of(&[("ayu.json", AYU)]));
-    assert!(registry.get("Gruvbox Light").is_none());
+    assert!(
+        registry
+            .list()
+            .iter()
+            .any(|m| m.name == "Gruvbox Light" && m.source == ThemeSource::Bundled),
+        "dropping the user file reveals the bundled Gruvbox again"
+    );
     assert!(registry.get("Ayu Dark").is_some());
     registry.replace_user_themes(UserThemes::default());
-    assert_eq!(registry.names(), ["One Dark", "One Light"]);
+    assert_eq!(registry.names(), ThemeRegistry::with_bundled().names());
 }
 
 #[test]
@@ -72,13 +115,24 @@ fn a_user_theme_shadows_a_bundled_one_of_the_same_name() {
     let mut registry = ThemeRegistry::with_bundled();
     let text = r##"{ "name": "Mine", "themes": [{ "name": "One Dark", "appearance": "dark", "style": { "text": "#010203" } }] }"##;
     registry.replace_user_themes(scan_of(&[("mine.json", text)]));
-    assert_eq!(registry.names(), ["One Dark", "One Light"], "listed once");
+    assert_eq!(
+        registry.names(),
+        ThemeRegistry::with_bundled().names(),
+        "listed once"
+    );
+    assert_eq!(
+        registry
+            .list()
+            .iter()
+            .find(|m| m.name == "One Dark")
+            .map(|m| m.source),
+        Some(ThemeSource::User)
+    );
     let theme = registry.get("One Dark").unwrap();
     assert_eq!(
         theme.colors.text,
         crate::color::parse_color("#010203").unwrap()
     );
-    assert_eq!(registry.list()[0].source, ThemeSource::User);
     // The bundled default for the appearance is still the bundled theme.
     assert_ne!(
         registry.default_for(Appearance::Dark).colors.text,
