@@ -125,7 +125,7 @@ fn a_user_theme_shadows_a_bundled_one_of_the_same_name() {
             .list()
             .iter()
             .find(|m| m.name == "One Dark")
-            .map(|m| m.source),
+            .map(|m| m.source.clone()),
         Some(ThemeSource::User)
     );
     let theme = registry.get("One Dark").unwrap();
