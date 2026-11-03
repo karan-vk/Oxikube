@@ -15,9 +15,13 @@ use oxikube_theme::{
 use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::LazyLock;
 
-const AYU: &str = include_str!("fixtures/ayu.json");
-const GRUVBOX: &str = include_str!("fixtures/gruvbox.json");
+// The shipped set already has Ayu and Gruvbox, so the fixtures are renamed to stay distinct from it.
+static AYU: LazyLock<String> =
+    LazyLock::new(|| include_str!("fixtures/ayu.json").replace("Ayu", "Zed Ayu"));
+static GRUVBOX: LazyLock<String> =
+    LazyLock::new(|| include_str!("fixtures/gruvbox.json").replace("Gruvbox", "Zed Gruvbox"));
 
 struct Harness {
     _config: tempfile::TempDir,
@@ -73,21 +77,23 @@ fn collect(cx: &mut TestAppContext) -> (Rc<RefCell<Vec<ThemeNotice>>>, Subscript
 #[gpui::test]
 fn files_added_replaced_and_removed_update_the_registry(cx: &mut TestAppContext) {
     let harness = setup(cx, "{}");
-    assert_eq!(names(cx).len(), 2);
+    // One(2) + Oxikube(2) + Ayu(3) + Gruvbox(6) are bundled.
+    assert_eq!(names(cx).len(), 13);
 
-    std::fs::write(harness.themes.join("ayu.json"), AYU).unwrap();
+    std::fs::write(harness.themes.join("ayu.json"), &*AYU).unwrap();
     reload(cx);
-    assert!(has(cx, "Ayu Dark") && has(cx, "Ayu Mirage"));
+    assert!(has(cx, "Zed Ayu Dark") && has(cx, "Zed Ayu Mirage"));
 
     // Replace the file with a different family: the old family's themes go with it.
-    std::fs::write(harness.themes.join("ayu.json"), GRUVBOX).unwrap();
+    std::fs::write(harness.themes.join("ayu.json"), &*GRUVBOX).unwrap();
     reload(cx);
-    assert!(!has(cx, "Ayu Dark"));
-    assert!(has(cx, "Gruvbox Dark"));
+    assert!(!has(cx, "Zed Ayu Dark"));
+    assert!(has(cx, "Zed Gruvbox Dark"));
 
     std::fs::remove_file(harness.themes.join("ayu.json")).unwrap();
     reload(cx);
-    assert_eq!(names(cx), ["One Dark", "One Light"]);
+    assert_eq!(names(cx).len(), 13, "back to the bundled set");
+    assert!(!has(cx, "Zed Ayu Dark"));
 }
 
 #[gpui::test]
@@ -96,13 +102,16 @@ fn an_invalid_file_keeps_the_old_version_and_raises_one_notice_with_the_path(
 ) {
     let harness = setup(cx, "{}");
     let file = harness.themes.join("ayu.json");
-    std::fs::write(&file, AYU).unwrap();
+    std::fs::write(&file, &*AYU).unwrap();
     reload(cx);
     let (seen, _subscription) = collect(cx);
 
     std::fs::write(&file, "{ \"name\": \"Ayu\", \"themes\": [").unwrap();
     reload(cx);
-    assert!(has(cx, "Ayu Dark"), "the last good version stays installed");
+    assert!(
+        has(cx, "Zed Ayu Dark"),
+        "the last good version stays installed"
+    );
     {
         let seen = seen.borrow();
         assert_eq!(seen.len(), 1);
@@ -124,13 +133,13 @@ fn an_invalid_file_keeps_the_old_version_and_raises_one_notice_with_the_path(
     assert_eq!(seen.borrow().len(), 1);
 
     // Fixing the file clears it; breaking it again announces anew.
-    std::fs::write(&file, AYU).unwrap();
+    std::fs::write(&file, &*AYU).unwrap();
     reload(cx);
     assert!(cx.update(pending_file_problems).is_empty());
     std::fs::write(&file, "nope").unwrap();
     reload(cx);
     assert_eq!(seen.borrow().len(), 2);
-    assert!(has(cx, "Ayu Dark"));
+    assert!(has(cx, "Zed Ayu Dark"));
 }
 
 #[gpui::test]
@@ -141,36 +150,39 @@ fn a_user_reload_does_not_remove_bundled_or_extension_themes(cx: &mut TestAppCon
         insert_theme_families(
             cx,
             &source,
-            [oxikube_theme::import_family(GRUVBOX).unwrap().family],
+            [oxikube_theme::import_family(&GRUVBOX).unwrap().family],
         );
     });
-    std::fs::write(harness.themes.join("ayu.json"), AYU).unwrap();
+    std::fs::write(harness.themes.join("ayu.json"), &*AYU).unwrap();
     reload(cx);
     std::fs::remove_file(harness.themes.join("ayu.json")).unwrap();
     std::fs::write(harness.themes.join("bad.json"), "{").unwrap();
     reload(cx);
     assert!(has(cx, "One Dark") && has(cx, "One Light"));
-    assert!(has(cx, "Gruvbox Dark"), "the extension's themes survive");
-    assert!(!has(cx, "Ayu Dark"));
+    assert!(
+        has(cx, "Zed Gruvbox Dark"),
+        "the extension's themes survive"
+    );
+    assert!(!has(cx, "Zed Ayu Dark"));
 }
 
 #[gpui::test]
 fn the_active_theme_follows_its_file_on_disk(cx: &mut TestAppContext) {
-    let harness = setup(cx, r#"{ "theme": "Ayu Dark" }"#);
+    let harness = setup(cx, r#"{ "theme": "Zed Ayu Dark" }"#);
     let file = harness.themes.join("ayu.json");
-    std::fs::write(&file, AYU).unwrap();
+    std::fs::write(&file, &*AYU).unwrap();
     reload(cx);
     let original = cx.read(ActiveTheme::get);
-    assert_eq!(original.name, "Ayu Dark");
+    assert_eq!(original.name, "Zed Ayu Dark");
     let seen = harness.changes.get();
 
     // Edit one colour of the active theme in place: observers see one change.
     let edited = AYU.replacen("#0d1016ff", "#101820ff", 1);
-    assert_ne!(edited, AYU);
+    assert_ne!(edited, *AYU);
     std::fs::write(&file, edited).unwrap();
     reload(cx);
     let updated = cx.read(ActiveTheme::get);
-    assert_eq!(updated.name, "Ayu Dark");
+    assert_eq!(updated.name, "Zed Ayu Dark");
     assert_ne!(*updated, *original, "the new colours are active");
     assert_eq!(harness.changes.get(), seen + 1);
 
@@ -179,7 +191,10 @@ fn the_active_theme_follows_its_file_on_disk(cx: &mut TestAppContext) {
     reload(cx);
     assert_eq!(cx.read(|cx| ActiveTheme::get(cx).name.clone()), "One Dark");
     // And the file coming back restores it.
-    std::fs::write(&file, AYU).unwrap();
+    std::fs::write(&file, &*AYU).unwrap();
     reload(cx);
-    assert_eq!(cx.read(|cx| ActiveTheme::get(cx).name.clone()), "Ayu Dark");
+    assert_eq!(
+        cx.read(|cx| ActiveTheme::get(cx).name.clone()),
+        "Zed Ayu Dark"
+    );
 }

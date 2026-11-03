@@ -39,6 +39,7 @@ pub const SEED_CONTEXTS: &[&str] = &[
     contexts::APPLY_RESULTS,
     "Input",
     "NotificationPanel",
+    "SettingsPage",
     "TerminalSearch",
     // Contexts views set with a literal or a view-local constant.
     "AuditView",

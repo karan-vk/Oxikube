@@ -336,7 +336,13 @@ fn cmd_comma_opens_the_settings_on_macos() {
         .iter()
         .find(|b| b.action().partial_eq(&super::menus::settings::Open))
         .expect("cmd-, is bound to settings::Open");
-    assert_eq!(settings.keystrokes()[0].unparse(), "cmd-,");
+    // GPUI spells the platform modifier `cmd` on macOS and `super` elsewhere.
+    let spelled = if cfg!(target_os = "macos") {
+        "cmd-,"
+    } else {
+        "super-,"
+    };
+    assert_eq!(settings.keystrokes()[0].unparse(), spelled);
     assert_eq!(
         gpui::Action::name(&super::menus::settings::Open),
         "settings::Open"

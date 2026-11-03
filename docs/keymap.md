@@ -19,7 +19,7 @@ layer a later binding beats an earlier one, and `null` unbinds a key of a weaker
 | Keys | Action | Does |
 | --- | --- | --- |
 | `cmd-q` | `app::Quit` | Quit Oxikube |
-| `cmd-,` | `oxikube::OpenPreferences` |  |
+| `cmd-,` | `settings::Open` | Open Settings |
 | `cmd-h` | `oxikube::Hide` |  |
 | `alt-cmd-h` | `oxikube::HideOthers` |  |
 | `cmd-m` | `oxikube::Minimize` |  |
@@ -614,7 +614,7 @@ layer a later binding beats an earlier one, and `null` unbinds a key of a weaker
 | Keys | Action | Does |
 | --- | --- | --- |
 | `ctrl-shift-q` | `app::Quit` | Quit Oxikube |
-| `ctrl-,` | `oxikube::OpenPreferences` |  |
+| `ctrl-,` | `settings::Open` | Open Settings |
 | `ctrl-shift-p` | `palette::Toggle` | Toggle Command Palette |
 | `ctrl-shift-n` | `window::New` | New Window |
 | `ctrl-=` | `view::ZoomIn` | Zoom In |
@@ -1208,7 +1208,7 @@ layer a later binding beats an earlier one, and `null` unbinds a key of a weaker
 | Keys | Action | Does |
 | --- | --- | --- |
 | `ctrl-shift-q` | `app::Quit` | Quit Oxikube |
-| `ctrl-,` | `oxikube::OpenPreferences` |  |
+| `ctrl-,` | `settings::Open` | Open Settings |
 | `ctrl-shift-p` | `palette::Toggle` | Toggle Command Palette |
 | `ctrl-shift-n` | `window::New` | New Window |
 | `ctrl-=` | `view::ZoomIn` | Zoom In |

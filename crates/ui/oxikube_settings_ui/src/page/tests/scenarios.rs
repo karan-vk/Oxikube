@@ -30,7 +30,7 @@ fn searching_finds_a_field_and_a_miss_shows_the_empty_state(cx: &mut TestAppCont
     assert_eq!(page.read(|p| p.hits().len()), 1, "the cursor_blink field");
     assert!(page.is_laid_out("settings-hit-0"));
 
-    page.keys("cmd-a backspace");
+    page.keys("secondary-a backspace");
     page.type_text("no such setting");
     assert!(page.read(|p| p.hits().is_empty()));
     assert!(!page.is_laid_out("settings-hit-0"));
