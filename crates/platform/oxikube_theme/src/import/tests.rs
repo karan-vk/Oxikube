@@ -302,10 +302,6 @@ fn oxikube_status_colours_default_from_the_themes_own_status_colours() {
     assert_eq!(dark.oxikube.status_pending, dark.status.warning.foreground);
     assert_eq!(dark.oxikube.status_failed, dark.status.error.foreground);
     assert_eq!(dark.oxikube.status_succeeded, dark.status.info.foreground);
-    assert_eq!(
-        dark.oxikube.status_terminating,
-        dark.status.hidden.foreground
-    );
     assert_eq!(dark.oxikube.status_unknown, dark.colors.text_muted);
     // The Argo CD health, sync and diff colours default from the same status colours.
     let o = &dark.oxikube;
@@ -319,7 +315,7 @@ fn oxikube_status_colours_default_from_the_themes_own_status_colours() {
     assert_eq!(o.diff_added, dark.status.success.foreground);
     assert_eq!(o.diff_removed, dark.status.error.foreground);
     // `hint` and `modified` are lifted to AA on every panel where the theme's are fainter.
-    for derived in [o.health_suspended, o.diff_changed] {
+    for derived in [o.health_suspended, o.diff_changed, o.status_terminating] {
         assert!(crate::tokens::contrast_ratio(derived, dark.colors.surface) >= 4.5);
     }
     // The cluster tab palette cycles through the player cursors.

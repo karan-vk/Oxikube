@@ -108,6 +108,7 @@ fn oxikube_status_colours_meet_wcag_aa() {
             ("status_pending", o.status_pending),
             ("status_failed", o.status_failed),
             ("status_succeeded", o.status_succeeded),
+            ("status_terminating", o.status_terminating),
             ("status_unknown", o.status_unknown),
             ("health_healthy", o.health_healthy),
             ("health_progressing", o.health_progressing),

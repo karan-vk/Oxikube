@@ -52,7 +52,7 @@ impl ToneColors {
                 warn: colors.warning,
                 error: colors.error,
                 succeeded: colors.info,
-                terminating: colors.text_disabled,
+                terminating: colors.text_muted,
                 unknown: colors.text_muted,
             },
         }

@@ -113,7 +113,7 @@ pub(crate) fn derive_oxikube(tokens: &ThemeTokens) -> OxikubeColors {
         status_pending: tokens.status.warning.foreground,
         status_failed: tokens.status.error.foreground,
         status_succeeded: tokens.status.info.foreground,
-        status_terminating: tokens.status.hidden.foreground,
+        status_terminating: legible(tokens.status.hidden.foreground),
         status_unknown: tokens.colors.text_muted,
         health_healthy: tokens.status.success.foreground,
         health_progressing: tokens.status.warning.foreground,
