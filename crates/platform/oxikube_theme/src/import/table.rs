@@ -186,6 +186,17 @@ pub(crate) const OXIKUBE: &[(&str, OxikubeSlot)] = &[
     ("status.succeeded", |c| &mut c.status_succeeded),
     ("status.terminating", |c| &mut c.status_terminating),
     ("status.unknown", |c| &mut c.status_unknown),
+    ("health.healthy", |c| &mut c.health_healthy),
+    ("health.progressing", |c| &mut c.health_progressing),
+    ("health.degraded", |c| &mut c.health_degraded),
+    ("health.suspended", |c| &mut c.health_suspended),
+    ("health.missing", |c| &mut c.health_missing),
+    ("syncStatus.synced", |c| &mut c.sync_synced),
+    ("syncStatus.outOfSync", |c| &mut c.sync_out_of_sync),
+    ("syncStatus.unknown", |c| &mut c.sync_unknown),
+    ("diff.added", |c| &mut c.diff_added),
+    ("diff.removed", |c| &mut c.diff_removed),
+    ("diff.changed", |c| &mut c.diff_changed),
 ];
 
 /// Prefix of the cluster tab palette keys (`cluster.tab.1` ..).

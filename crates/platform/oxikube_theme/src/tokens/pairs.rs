@@ -93,6 +93,17 @@ fn push_oxikube(o: &OxikubeColors, out: &mut Vec<Hsla>) {
         o.status_succeeded,
         o.status_terminating,
         o.status_unknown,
+        o.health_healthy,
+        o.health_progressing,
+        o.health_degraded,
+        o.health_suspended,
+        o.health_missing,
+        o.sync_synced,
+        o.sync_out_of_sync,
+        o.sync_unknown,
+        o.diff_added,
+        o.diff_removed,
+        o.diff_changed,
     ]);
     out.extend(o.cluster_tabs);
     out.extend(o.log_sources);

@@ -120,9 +120,9 @@ fn status_follows_the_printer_and_is_toned() {
         (fx::pod_running(), "Running", Tone::Ok),
         (fx::pod_crashloop(), "CrashLoopBackOff", Tone::Error),
         (fx::pod_init(), "Init:1/2", Tone::Warn),
-        (fx::pod_terminating(), "Terminating", Tone::Warn),
+        (fx::pod_terminating(), "Terminating", Tone::Terminating),
         (fx::pod_oom_killed(), "OOMKilled", Tone::Error),
-        (fx::pod_succeeded(), "Completed", Tone::Ok),
+        (fx::pod_succeeded(), "Completed", Tone::Succeeded),
         (
             fx::pod_image_pull_backoff(),
             "ImagePullBackOff",

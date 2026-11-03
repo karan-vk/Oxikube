@@ -4,7 +4,8 @@ use super::report::ImportReport;
 use super::syntax::{accents, color_at, players, syntax};
 use super::table::{OXIKUBE, cluster_tab_index, color_slot, log_source_index};
 use crate::appearance::Appearance;
-use crate::tokens::{PlayerColor, ThemeTokens, derive_colors, derive_oxikube};
+use crate::tokens::{PlayerColor, ThemeTokens, contrast_ratio, derive_colors, derive_oxikube};
+use gpui::Hsla;
 use serde_json::{Map, Value};
 
 /// Builds the tokens for one theme over `base`.
@@ -84,6 +85,7 @@ fn apply_oxikube_block(
         let key_path = format!("oxikube.{key}");
         if let Some((_, slot)) = OXIKUBE.iter().find(|(name, _)| name == key) {
             if let Some(color) = color_at(value, theme, &key_path, report) {
+                warn_if_invisible(theme, key, color, tokens.colors.background);
                 *slot(&mut tokens.oxikube) = color;
             }
         } else if let Some(index) = cluster_tab_index(key) {
@@ -98,5 +100,22 @@ fn apply_oxikube_block(
             tracing::debug!(theme, key, "ignoring unknown oxikube key");
             report.unknown_keys.insert(key_path);
         }
+    }
+}
+
+/// Below this WCAG ratio a status colour is all but invisible on the surface.
+const INVISIBLE_CONTRAST: f32 = 1.5;
+
+/// Keeps a supplied status colour (the author chose it) but warns once per import when it is
+/// nearly invisible on `background`.
+fn warn_if_invisible(theme: &str, key: &str, color: Hsla, background: Hsla) {
+    let ratio = contrast_ratio(color, background);
+    if ratio < INVISIBLE_CONTRAST {
+        tracing::warn!(
+            theme,
+            key,
+            ratio,
+            "oxikube colour is nearly invisible on the surface"
+        );
     }
 }

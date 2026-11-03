@@ -103,10 +103,10 @@ fn ip_prefers_the_first_of_pod_ips() {
 fn status_tones_follow_meaning() {
     let tone = |res: &Resource| cell(res, "status").tone();
     assert_eq!(tone(&fx::pod_running()), Tone::Ok);
-    assert_eq!(tone(&fx::pod_succeeded()), Tone::Ok);
+    assert_eq!(tone(&fx::pod_succeeded()), Tone::Succeeded);
     assert_eq!(tone(&fx::pod_pending()), Tone::Warn);
     assert_eq!(tone(&fx::pod_init()), Tone::Warn);
-    assert_eq!(tone(&fx::pod_terminating()), Tone::Warn);
+    assert_eq!(tone(&fx::pod_terminating()), Tone::Terminating);
     assert_eq!(tone(&fx::pod_crashloop()), Tone::Error);
     assert_eq!(tone(&fx::pod_failed()), Tone::Error);
     assert_eq!(tone(&fx::pod_image_pull_backoff()), Tone::Error);
@@ -118,6 +118,7 @@ fn status_tones_follow_meaning() {
     let unknown = Resource::from_json(json).unwrap();
     assert_eq!(text(&unknown, "status"), "ContainerStatusUnknown");
     assert_eq!(tone(&unknown), Tone::Error);
+    assert_eq!(crate::columns::status_tone("Unknown"), Tone::Unknown);
     // Ready: green when complete, amber when short, quiet for a finished pod.
     assert_eq!(cell(&fx::pod_running(), "ready").tone(), Tone::Ok);
     assert_eq!(cell(&fx::pod_pending(), "ready").tone(), Tone::Warn);

@@ -159,10 +159,52 @@ fn status_cells_take_the_theme_oxikube_colours(cx: &mut TestAppContext) {
     assert_eq!(colors.of(Tone::Ok), gpui::red());
     assert_eq!(colors.of(Tone::Warn), gpui::yellow());
     assert_eq!(colors.of(Tone::Error), gpui::blue());
+    // Succeeded, Terminating and Unknown have colours of their own.
+    let theme = oxikube_theme::ThemeTokens::fallback(oxikube_theme::Appearance::Dark).clone();
+    assert_eq!(colors.of(Tone::Succeeded), theme.oxikube.status_succeeded);
+    assert_eq!(
+        colors.of(Tone::Terminating),
+        theme.oxikube.status_terminating
+    );
+    assert_eq!(colors.of(Tone::Unknown), theme.oxikube.status_unknown);
     let text = f
         .vcx
         .update(|_, cx| oxikube_ui::ActiveTokens::colors(&*cx).text);
     assert_eq!(colors.of(Tone::Neutral), text);
+}
+
+#[gpui::test]
+fn status_badge_colours_follow_the_active_appearance(cx: &mut TestAppContext) {
+    let mut f = Fixture::new(cx);
+    let mut colors_under = |appearance| {
+        let theme = oxikube_theme::ThemeTokens::fallback(appearance).clone();
+        f.vcx.update(|_, cx| {
+            cx.set_global(oxikube_theme::ActiveTheme(Arc::new(theme)));
+            ToneColors::current(cx)
+        })
+    };
+    let dark = colors_under(oxikube_theme::Appearance::Dark);
+    let light = colors_under(oxikube_theme::Appearance::Light);
+    let dark_theme = oxikube_theme::ThemeTokens::fallback(oxikube_theme::Appearance::Dark);
+    let light_theme = oxikube_theme::ThemeTokens::fallback(oxikube_theme::Appearance::Light);
+    for (tones, theme) in [(&dark, dark_theme), (&light, light_theme)] {
+        assert_eq!(tones.of(Tone::Ok), theme.oxikube.status_running);
+        assert_eq!(tones.of(Tone::Warn), theme.oxikube.status_pending);
+        assert_eq!(tones.of(Tone::Error), theme.oxikube.status_failed);
+        assert_eq!(tones.of(Tone::Succeeded), theme.oxikube.status_succeeded);
+        assert_eq!(
+            tones.of(Tone::Terminating),
+            theme.oxikube.status_terminating
+        );
+        assert_eq!(tones.of(Tone::Unknown), theme.oxikube.status_unknown);
+    }
+    for tone in [Tone::Ok, Tone::Warn, Tone::Error, Tone::Succeeded] {
+        assert_ne!(
+            dark.of(tone),
+            light.of(tone),
+            "{tone:?} differs per appearance"
+        );
+    }
 }
 
 #[gpui::test]

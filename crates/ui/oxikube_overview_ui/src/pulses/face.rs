@@ -262,7 +262,9 @@ pub fn cluster_face(
             let level = match thresholds.of(resource == Resource::Cpu).tone(percent) {
                 Tone::Error => Level::Critical,
                 Tone::Warn => Level::Warn,
-                Tone::Neutral | Tone::Ok => Level::Good,
+                Tone::Neutral | Tone::Ok | Tone::Succeeded | Tone::Terminating | Tone::Unknown => {
+                    Level::Good
+                }
             };
             let shown = percent_text(percent);
             TileFace {

@@ -108,7 +108,19 @@ fn oxikube_status_colours_meet_wcag_aa() {
             ("status_pending", o.status_pending),
             ("status_failed", o.status_failed),
             ("status_succeeded", o.status_succeeded),
+            ("status_terminating", o.status_terminating),
             ("status_unknown", o.status_unknown),
+            ("health_healthy", o.health_healthy),
+            ("health_progressing", o.health_progressing),
+            ("health_degraded", o.health_degraded),
+            ("health_suspended", o.health_suspended),
+            ("health_missing", o.health_missing),
+            ("sync_synced", o.sync_synced),
+            ("sync_out_of_sync", o.sync_out_of_sync),
+            ("sync_unknown", o.sync_unknown),
+            ("diff_added", o.diff_added),
+            ("diff_removed", o.diff_removed),
+            ("diff_changed", o.diff_changed),
         ];
         for (name, fg) in fills {
             for (bg_name, bg) in backgrounds(&tokens) {

@@ -56,9 +56,6 @@ pub fn status_tone(status: &str) -> Tone {
     ];
     const OK: &[&str] = &[
         "Running",
-        "Completed",
-        "Complete",
-        "Succeeded",
         "Bound",
         "Active",
         "Ready",
@@ -72,15 +69,19 @@ pub fn status_tone(status: &str) -> Tone {
         Tone::Error
     } else if OK.contains(&status) {
         Tone::Ok
+    } else if matches!(status, "Completed" | "Complete" | "Succeeded") {
+        Tone::Succeeded
+    } else if status.contains("Terminating") {
+        Tone::Terminating
+    } else if status == "Unknown" {
+        Tone::Unknown
     } else if status.starts_with("Init:")
-        || status.contains("Terminating")
         || status.contains("SchedulingDisabled")
         || matches!(
             status,
             "Pending"
                 | "ContainerCreating"
                 | "PodInitializing"
-                | "Unknown"
                 | "Released"
                 | "Suspended"
                 | "SchedulingGated"
