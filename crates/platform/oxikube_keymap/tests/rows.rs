@@ -25,6 +25,15 @@ fn bound<'a>(rows: &'a [KeymapRow], action: &str) -> Vec<&'a KeymapRow> {
         .collect()
 }
 
+/// The palette chord as GPUI spells it here: `cmd` on macOS, `super` elsewhere.
+fn native_palette_chord() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "cmd-shift-p"
+    } else {
+        "super-shift-p"
+    }
+}
+
 #[gpui::test]
 fn bindings_the_loader_rejects_are_not_listed_and_replace_nothing(cx: &mut TestAppContext) {
     let rows = rows_for(
@@ -36,7 +45,9 @@ fn bindings_the_loader_rejects_are_not_listed_and_replace_nothing(cx: &mut TestA
     );
     let palette = rows
         .iter()
-        .find(|row| row.action == "palette::Toggle" && row.keystrokes_text() == "cmd-shift-p")
+        .find(|row| {
+            row.action == "palette::Toggle" && row.keystrokes_text() == native_palette_chord()
+        })
         .expect("the default binding of the palette is listed");
     assert_eq!(
         palette.status,
