@@ -10,14 +10,19 @@ use serde_json::{Map, Value};
 
 /// Parse JSONC text into a JSON object.
 ///
-/// Blank text is an empty object (a new or truncated `settings.json` means "no overrides").
+/// Blank or comment-only text is an empty object (a new or truncated `settings.json` means "no overrides").
 /// Errors carry the parser's line and column; trailing content after the object is an error.
 pub fn parse_jsonc_object(text: &str) -> Result<Map<String, Value>, String> {
     if text.trim().is_empty() {
         return Ok(Map::new());
     }
     let mut deserializer = serde_json_lenient::Deserializer::from_str(text);
-    let value = Value::deserialize(&mut deserializer).map_err(|err| err.to_string())?;
+    let value = match Value::deserialize(&mut deserializer) {
+        Ok(value) => value,
+        // Only a failed parse pays for the comment-only probe.
+        Err(_) if is_comments_only(text) => return Ok(Map::new()),
+        Err(err) => return Err(err.to_string()),
+    };
     deserializer.end().map_err(|err| err.to_string())?;
     match value {
         Value::Object(map) => Ok(map),
@@ -26,6 +31,22 @@ pub fn parse_jsonc_object(text: &str) -> Result<Map<String, Value>, String> {
             value_kind(&other)
         )),
     }
+}
+
+/// Parse JSONC text of any shape (a keymap is a top-level array) into a [`Value`], for tests.
+#[cfg(test)]
+pub(crate) fn parse_jsonc_value(text: &str) -> Value {
+    let mut deserializer = serde_json_lenient::Deserializer::from_str(text);
+    Value::deserialize(&mut deserializer).expect("test text is valid JSONC")
+}
+
+/// Whether `text` holds nothing but whitespace and comments: appending an empty object then
+/// parses, which it only does when nothing else precedes it.
+fn is_comments_only(text: &str) -> bool {
+    let probe = format!("{text}\n{{}}");
+    let mut deserializer = serde_json_lenient::Deserializer::from_str(&probe);
+    Value::deserialize(&mut deserializer).is_ok_and(|value| value == Value::Object(Map::new()))
+        && deserializer.end().is_ok()
 }
 
 /// Merge `overlay` into `base`: objects merge key by key (recursively); any other value in
@@ -107,6 +128,18 @@ mod tests {
     #[test]
     fn blank_text_is_an_empty_object() {
         assert!(parse_jsonc_object("  \n").unwrap().is_empty());
+    }
+
+    #[test]
+    fn comment_only_text_is_an_empty_object() {
+        assert!(
+            parse_jsonc_object("// nothing yet\n/* at all */")
+                .unwrap()
+                .is_empty()
+        );
+        assert!(parse_jsonc_object("// no newline").unwrap().is_empty());
+        assert!(parse_jsonc_object("// a\n{ nope").is_err());
+        assert!(parse_jsonc_object("1 // x").is_err());
     }
 
     #[test]

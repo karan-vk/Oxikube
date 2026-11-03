@@ -4,7 +4,7 @@ use oxikube_domain::ErrorKind;
 use oxikube_domain::ids::ClusterId;
 use serde_json::json;
 
-use super::new_text_for_update;
+use super::{new_text_for_path_update, new_text_for_update};
 use crate::jsonc::parse_jsonc_object;
 use crate::test_support::{GeneralSettings, TerminalSettings};
 
@@ -263,4 +263,83 @@ fn f64_values_are_written_exactly() {
             "{value}: {text}"
         );
     }
+}
+
+#[test]
+fn path_update_changes_one_value_and_keeps_everything_else() {
+    let text = new_text_for_path_update(USER, None, &["terminal", "font_size"], json!(18)).unwrap();
+    assert_eq!(
+        text,
+        USER.replace("\"font_size\": 14,", "\"font_size\": 18,")
+    );
+}
+
+#[test]
+fn path_update_matches_the_typed_edit() {
+    let typed =
+        new_text_for_update::<TerminalSettings>(USER, None, |c| c.shell = Some("fish".into()))
+            .unwrap();
+    let untyped =
+        new_text_for_path_update(USER, None, &["terminal", "shell"], json!("fish")).unwrap();
+    assert_eq!(typed, untyped);
+}
+
+#[test]
+fn path_update_creates_nested_paths_and_a_missing_file() {
+    let text = new_text_for_path_update("", None, &["a", "b", "c"], json!(true)).unwrap();
+    assert_eq!(
+        parse_jsonc_object(&text).unwrap()["a"]["b"]["c"],
+        json!(true)
+    );
+    let text = new_text_for_path_update("// only a comment\n", None, &["x"], json!(1)).unwrap();
+    assert!(text.starts_with("// only a comment"));
+    assert_eq!(parse_jsonc_object(&text).unwrap()["x"], json!(1));
+}
+
+#[test]
+fn path_update_null_resets_and_prunes_emptied_parents() {
+    let input = "{\n  \"keep\": 1,\n  // c\n  \"a\": { \"b\": { \"c\": 2 } },\n}\n";
+    let text =
+        new_text_for_path_update(input, None, &["a", "b", "c"], serde_json::Value::Null).unwrap();
+    let parsed = parse_jsonc_object(&text).unwrap();
+    assert!(parsed.get("a").is_none(), "{text}");
+    assert!(text.contains("// c") && parsed["keep"] == json!(1));
+    // Resetting something that is not there changes nothing.
+    let same = new_text_for_path_update(USER, None, &["terminal", "nope"], serde_json::Value::Null)
+        .unwrap();
+    assert_eq!(same, USER);
+    let same =
+        new_text_for_path_update(USER, None, &["zzz", "nope"], serde_json::Value::Null).unwrap();
+    assert_eq!(same, USER);
+}
+
+#[test]
+fn path_update_cluster_layer_and_crlf_and_tabs() {
+    let id: ClusterId = "00000000000000aa".parse().unwrap();
+    let text = new_text_for_path_update(USER, Some(&id), &["read_only"], json!(true)).unwrap();
+    let parsed = parse_jsonc_object(&text).unwrap();
+    assert_eq!(parsed["clusters"][id.as_str()]["read_only"], json!(true));
+
+    let crlf = "{\r\n  \"a\": 1, // x\r\n  \"b\": 2\r\n}\r\n";
+    let text = new_text_for_path_update(crlf, None, &["b"], json!(3)).unwrap();
+    assert_eq!(text, crlf.replace("\"b\": 2", "\"b\": 3"));
+    let tabs = "{\n\t\"a\": {\n\t\t\"b\": 1\n\t}\n}\n";
+    let text = new_text_for_path_update(tabs, None, &["a", "c"], json!(2)).unwrap();
+    assert_eq!(parse_jsonc_object(&text).unwrap()["a"]["c"], json!(2));
+}
+
+#[test]
+fn path_update_rejects_empty_paths_and_broken_files() {
+    assert_eq!(
+        new_text_for_path_update("{}", None, &[], json!(1))
+            .unwrap_err()
+            .kind(),
+        ErrorKind::Validation
+    );
+    assert_eq!(
+        new_text_for_path_update("{ nope", None, &["a"], json!(1))
+            .unwrap_err()
+            .kind(),
+        ErrorKind::Validation
+    );
 }
