@@ -15,6 +15,7 @@ use oxikube_ui::tooltip::tooltip_for_action;
 use oxikube_ui::{ActiveTokens as _, Icon, IconName, Sizable as _, u};
 
 use super::keys::Close;
+use super::model::StatusChip;
 use super::state::{DetailState, Mount};
 use super::tabs::DetailTab;
 use super::view::DetailView;
@@ -81,7 +82,19 @@ impl Render for DetailView {
     }
 }
 
+/// The icon of a status chip from the active icon theme: its `status:<Status>`, else Lucide's
+/// icon for what the status means (E22-S11).
+pub(super) fn status_icon(chip: &StatusChip) -> Icon {
+    Icon::status(&chip.text)
+}
+
 impl DetailView {
+    /// The icon of the kind shown from the active icon theme: its `kind:<group>/<Kind>` or
+    /// `kind:<Kind>`, else the kind's Lucide icon (E22-S11).
+    pub(super) fn kind_icon(&self) -> Icon {
+        Icon::kind(&self.target.gvk.group, &self.target.gvk.kind)
+    }
+
     fn header(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let tokens = cx.tokens();
         let colors = tokens.colors;
@@ -110,12 +123,19 @@ impl DetailView {
             }))
             .children(chip.map(|chip| {
                 let color = tones.of(chip.tone);
-                div()
+                h_flex()
                     .debug_selector(|| "detail-status".to_owned())
+                    .gap(u(tokens.spacing.sm))
+                    .items_center()
                     .px(u(tokens.spacing.md))
                     .rounded(u(tokens.radius.sm))
                     .bg(color.opacity(0.14))
                     .text_color(color)
+                    .child(
+                        div()
+                            .debug_selector(|| "detail-status-icon".to_owned())
+                            .child(status_icon(&chip).size(u(px(12.))).color(color)),
+                    )
                     .child(chip.text)
             }));
         v_flex()
@@ -129,14 +149,23 @@ impl DetailView {
                     .gap(u(tokens.spacing.md))
                     .items_center()
                     .child(
-                        div()
+                        h_flex()
                             .debug_selector(|| "detail-kind".to_owned())
                             .flex_none()
+                            .gap(u(tokens.spacing.sm))
+                            .items_center()
                             .px(u(tokens.spacing.md))
                             .rounded(u(tokens.radius.sm))
                             .bg(colors.element)
                             .text_size(u(tokens.font.small))
                             .text_color(colors.text_muted)
+                            .child(
+                                div()
+                                    .debug_selector(|| "detail-kind-icon".to_owned())
+                                    .child(
+                                        self.kind_icon().size(u(px(12.))).color(colors.text_muted),
+                                    ),
+                            )
                             .child(kind.to_string()),
                     )
                     .child(

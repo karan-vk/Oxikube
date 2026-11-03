@@ -60,3 +60,7 @@ header or notices entry applies.
   `CrashLoopBackOff`), not a separate enum. Adding a status to the defaults is one match arm.
 - The thread-local copy assumes all drawing happens on the app's one foreground thread, which is
   how GPUI works; a test app that never installs icon themes on its thread draws Lucide.
+- Where the keys are drawn today: `kind:` in the sidebar's kind entries and the detail drawer's
+  kind chip, and `status:` in the detail drawer's status chip. Resource table rows still show
+  status as toned text. Drawing icons there is new UI on the 10k-row hot path and is tracked in
+  #828.

@@ -54,6 +54,11 @@ impl Icon {
         }
     }
 
+    /// The asset path this icon draws from, as the active icon theme resolved it.
+    pub fn path(&self) -> &SharedString {
+        &self.path
+    }
+
     /// Square edge length.
     #[must_use]
     pub fn size(mut self, size: Pixels) -> Self {

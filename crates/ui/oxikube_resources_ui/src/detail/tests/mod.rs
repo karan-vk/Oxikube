@@ -7,6 +7,7 @@ mod ages;
 mod conditions;
 mod describe;
 pub(crate) mod fixture;
+mod icons;
 mod keys;
 mod meta;
 mod open;
