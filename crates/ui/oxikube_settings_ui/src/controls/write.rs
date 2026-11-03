@@ -8,7 +8,7 @@ use serde_json::Value;
 
 use super::WRITE_DEBOUNCE;
 use super::spec::ControlSpec;
-use super::state::Controls;
+use super::state::{Controls, WriteKey};
 use super::validate::{FieldError, validate_text};
 use crate::page::SettingsPage;
 
@@ -51,8 +51,9 @@ impl Controls {
     ) {
         self.clear_error(path);
         if immediately {
-            self.pending.remove(path);
-            self.dirty.remove(path);
+            let key = WriteKey::new(cluster.as_ref(), path);
+            self.pending.remove(&key);
+            self.dirty.remove(&key);
             self.write(path, value, cluster, cx);
         } else {
             self.schedule(path, value, cluster, cx);
@@ -68,10 +69,16 @@ impl Controls {
         error: FieldError,
         cx: &mut Context<SettingsPage>,
     ) {
-        self.pending.remove(path);
-        self.dirty.remove(path);
+        self.drop_waiting(path);
         self.errors.insert(path.clone(), error);
         cx.notify();
+    }
+
+    /// Drops the values of `path` still waiting for their pause, whichever cluster they were
+    /// typed for (the input they came from is gone or invalid).
+    fn drop_waiting(&mut self, path: &SharedString) {
+        self.pending.retain(|key, _| key.path != *path);
+        self.dirty.retain(|key| key.path != *path);
     }
 
     /// Removes the user's value for `path` so the default shows through.
@@ -81,8 +88,9 @@ impl Controls {
         cluster: Option<ClusterId>,
         cx: &mut Context<SettingsPage>,
     ) {
-        self.pending.remove(path);
-        self.dirty.remove(path);
+        let key = WriteKey::new(cluster.as_ref(), path);
+        self.pending.remove(&key);
+        self.dirty.remove(&key);
         self.errors.remove(path);
         self.resync.insert(path.clone());
         self.write(path, Value::Null, cluster, cx);
@@ -98,17 +106,19 @@ impl Controls {
         cluster: Option<ClusterId>,
         cx: &mut Context<SettingsPage>,
     ) {
-        self.dirty.insert(path.clone());
-        let key = path.clone();
+        let key = WriteKey::new(cluster.as_ref(), path);
+        self.dirty.insert(key.clone());
+        let timer_key = key.clone();
         let timer = cx.spawn(async move |page, cx| {
             cx.background_executor().timer(WRITE_DEBOUNCE).await;
             page.update(cx, |page, cx| {
-                page.controls.dirty.remove(&key);
-                page.controls.write(&key, value, cluster, cx);
+                page.controls.dirty.remove(&timer_key);
+                page.controls
+                    .write(&timer_key.path, value, timer_key.cluster.clone(), cx);
             })
             .ok();
         });
-        self.pending.insert(path.clone(), timer);
+        self.pending.insert(key, timer);
     }
 
     /// Writes `value` at `path`, or queues it behind the write already in flight for the field.
@@ -119,11 +129,12 @@ impl Controls {
         cluster: Option<ClusterId>,
         cx: &mut Context<SettingsPage>,
     ) {
-        if self.in_flight.contains(path) {
-            self.queued.insert(path.clone(), value);
+        let key = WriteKey::new(cluster.as_ref(), path);
+        if self.in_flight.contains(&key) {
+            self.queued.insert(key, value);
             return;
         }
-        self.in_flight.insert(path.clone());
+        self.in_flight.insert(key);
         self.writes.retain(|task| !task.is_ready());
         let key_path: Vec<&str> = path.split('.').collect();
         let task = update_user_settings_path(cx, cluster.clone(), &key_path, value);
@@ -147,14 +158,15 @@ impl Controls {
         cluster: Option<ClusterId>,
         cx: &mut Context<SettingsPage>,
     ) {
-        self.in_flight.remove(path);
+        let key = WriteKey::new(cluster.as_ref(), path);
+        self.in_flight.remove(&key);
         if let Some(message) = failure {
             self.errors.insert(
                 path.clone(),
                 FieldError(format!("Could not save: {message}")),
             );
         }
-        if let Some(next) = self.queued.remove(path) {
+        if let Some(next) = self.queued.remove(&key) {
             self.write(path, next, cluster, cx);
         }
         cx.notify();

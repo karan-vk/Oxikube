@@ -251,3 +251,47 @@ fn the_page_lists_the_clusters_of_a_real_catalog(cx: &mut TestAppContext) {
     assert_eq!(names.len(), 2);
     assert!(names.contains(&id("prod")) && names.contains(&id("dev")));
 }
+
+#[gpui::test]
+fn the_same_field_typed_for_two_clusters_inside_one_pause_reaches_both(cx: &mut TestAppContext) {
+    let (prod, dev) = (id("prod"), id("dev"));
+    let mut page = Harness::open(cx, "{}", &["prod", "dev"]);
+    page.type_into("display_name", "Production");
+    page.click(&format!("settings-cluster-{}", id("dev")));
+    page.type_into("display_name", "Development");
+    page.pause(WRITE_DEBOUNCE * 2);
+    let file = page.file_json();
+    assert_eq!(
+        file["clusters"][prod.as_str()]["display_name"],
+        json!("Production"),
+        "{file}"
+    );
+    assert_eq!(
+        file["clusters"][dev.as_str()]["display_name"],
+        json!("Development"),
+        "{file}"
+    );
+}
+
+#[gpui::test]
+fn a_value_queued_behind_another_clusters_write_keeps_its_own_cluster(cx: &mut TestAppContext) {
+    let (prod, dev) = (id("prod"), id("dev"));
+    let mut page = Harness::open(cx, "{}", &["prod", "dev"]);
+    page.type_into("display_name", "Production");
+    // Let the first timer fire (write goes in flight) without letting the write finish.
+    page.pause(WRITE_DEBOUNCE);
+    page.click(&format!("settings-cluster-{}", id("dev")));
+    page.type_into("display_name", "Development");
+    page.pause(WRITE_DEBOUNCE * 2);
+    let file = page.file_json();
+    assert_eq!(
+        file["clusters"][prod.as_str()]["display_name"],
+        json!("Production"),
+        "{file}"
+    );
+    assert_eq!(
+        file["clusters"][dev.as_str()]["display_name"],
+        json!("Development"),
+        "{file}"
+    );
+}

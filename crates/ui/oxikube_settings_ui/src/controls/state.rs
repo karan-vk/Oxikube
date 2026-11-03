@@ -15,6 +15,23 @@ use super::spec::ControlSpec;
 use super::validate::FieldError;
 use crate::page::{PageField, SettingsPage, SettingsPageModel};
 
+/// What a write targets: a field of the user file (`None`) or of one cluster's block. Debounce
+/// and in-flight state are keyed by it so the same field of two clusters never share a slot.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(super) struct WriteKey {
+    pub(super) cluster: Option<ClusterId>,
+    pub(super) path: SharedString,
+}
+
+impl WriteKey {
+    pub(super) fn new(cluster: Option<&ClusterId>, path: &SharedString) -> Self {
+        Self {
+            cluster: cluster.cloned(),
+            path: path.clone(),
+        }
+    }
+}
+
 /// The editing state of one field.
 pub(super) enum Editor {
     /// A text, number, colour or font input.
@@ -35,12 +52,12 @@ pub struct Controls {
     pub(super) editors: HashMap<SharedString, Editor>,
     pub(super) errors: HashMap<SharedString, FieldError>,
     /// The debounce timer of each field with a typed value waiting to be written.
-    pub(super) pending: HashMap<SharedString, Task<()>>,
+    pub(super) pending: HashMap<WriteKey, Task<()>>,
     /// Fields whose typed value has not reached the file yet.
-    pub(super) dirty: HashSet<SharedString>,
+    pub(super) dirty: HashSet<WriteKey>,
     /// Fields with a write in flight, and the newest value waiting behind it.
-    pub(super) in_flight: HashSet<SharedString>,
-    pub(super) queued: HashMap<SharedString, Value>,
+    pub(super) in_flight: HashSet<WriteKey>,
+    pub(super) queued: HashMap<WriteKey, Value>,
     /// Fields whose input must show the store's value on the next change even if focused (after
     /// a reset).
     pub(super) resync: HashSet<SharedString>,
@@ -56,7 +73,9 @@ impl Controls {
 
     /// Whether a typed value for `path` is still waiting for its debounce or its write.
     pub fn has_unsaved(&self, path: &str) -> bool {
-        self.dirty.contains(path) || self.in_flight.contains(path) || self.errors.contains_key(path)
+        self.dirty.iter().any(|key| key.path == path)
+            || self.in_flight.iter().any(|key| key.path == path)
+            || self.errors.contains_key(path)
     }
 
     /// The input entity of the field at `path`, once it has been shown.
@@ -127,7 +146,8 @@ impl Controls {
             }
             // A value being typed (waiting for its pause, or rejected) is the person's, not the
             // file's; a write in flight is not: its echo shows the same value.
-            if self.dirty.contains(path) || self.errors.contains_key(path) {
+            if self.dirty.contains(&WriteKey::new(cluster, path)) || self.errors.contains_key(path)
+            {
                 continue;
             }
             let forced = self.resync.remove(path);
@@ -149,7 +169,7 @@ impl Controls {
 
     /// Forgets every input and error, so the fields shown next are built from the values of the
     /// cluster (or the file) the page now points at. Writes in flight and typed values waiting
-    /// for their pause are kept: each carries the cluster it was typed for.
+    /// for their pause are kept: each is keyed by the cluster it was typed for.
     pub(crate) fn forget_editors(&mut self) {
         self.editors.clear();
         self.errors.clear();
