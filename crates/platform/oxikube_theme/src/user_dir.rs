@@ -40,7 +40,29 @@ pub fn scan_dir(dir: &Path) -> UserThemes {
 }
 
 /// What reading one file produced: its family and first complaint, or why it failed.
-type FileOutcome = Result<(ThemeFamily, Option<String>), String>;
+type FileOutcome = Result<(ThemeFamily, Option<String>), FileError>;
+
+/// Why a file produced no family.
+#[derive(Clone, Debug)]
+struct FileError {
+    message: String,
+    /// The failure came from the filesystem (permissions, transient IO), not from the file's
+    /// content, so it can clear without the stamp changing and must not be cached.
+    io: bool,
+}
+
+impl FileError {
+    fn io(err: &std::io::Error) -> Self {
+        Self {
+            message: format!("cannot read: {err}"),
+            io: true,
+        }
+    }
+
+    fn content(message: String) -> Self {
+        Self { message, io: false }
+    }
+}
 
 /// One remembered file: its stamp, whether the stamp can be trusted, and what it produced.
 #[derive(Debug)]
@@ -114,7 +136,7 @@ pub fn scan_dir_cached(dir: &Path, cache: &mut ScanCache) -> UserThemes {
                 CachedFile {
                     modified,
                     len,
-                    stable,
+                    stable: stable && !matches!(&outcome, Err(err) if err.io),
                     outcome: outcome.clone(),
                 },
             );
@@ -129,7 +151,10 @@ pub fn scan_dir_cached(dir: &Path, cache: &mut ScanCache) -> UserThemes {
                 }
                 scan.families.push((path, family));
             }
-            Err(message) => scan.problems.push(ThemeFileProblem { path, message }),
+            Err(err) => scan.problems.push(ThemeFileProblem {
+                path,
+                message: err.message,
+            }),
         }
     }
     cache.files = kept;
@@ -144,15 +169,15 @@ fn is_hidden(path: &Path) -> bool {
 
 /// The family in `path` and, when some value was invalid, the first complaint.
 fn read_family(path: &Path) -> FileOutcome {
-    let meta = std::fs::metadata(path).map_err(|err| format!("cannot read: {err}"))?;
+    let meta = std::fs::metadata(path).map_err(|err| FileError::io(&err))?;
     if meta.len() > MAX_THEME_FILE_BYTES {
-        return Err(format!(
+        return Err(FileError::content(format!(
             "file is {} bytes; theme files are limited to 8 MiB",
             meta.len()
-        ));
+        )));
     }
-    let text = std::fs::read_to_string(path).map_err(|err| format!("cannot read: {err}"))?;
-    let imported = import_family(&text).map_err(|err| err.to_string())?;
+    let text = std::fs::read_to_string(path).map_err(|err| FileError::io(&err))?;
+    let imported = import_family(&text).map_err(|err| FileError::content(err.to_string()))?;
     let problem = imported.report.diagnostics.first().map(ToString::to_string);
     Ok((imported.family, problem))
 }
@@ -207,6 +232,29 @@ mod tests {
         let after_delete = scan_dir_cached(dir.path(), &mut cache);
         assert!(after_delete.families.is_empty());
         assert_eq!(cache.files.len(), 1, "a deleted file leaves the cache");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_unreadable_file_is_read_again_once_permissions_are_fixed() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("a.json");
+        std::fs::write(&path, AYU).unwrap();
+        backdate(&path);
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000)).unwrap();
+        if std::fs::read_to_string(&path).is_ok() {
+            return; // running as root: permissions do not block reads
+        }
+        let mut cache = ScanCache::default();
+        let first = scan_dir_cached(dir.path(), &mut cache);
+        assert_eq!(first.problems.len(), 1, "{:?}", first.problems);
+
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        let second = scan_dir_cached(dir.path(), &mut cache);
+        assert_eq!(cache.imported, 1, "the failed read is retried");
+        assert!(second.problems.is_empty(), "{:?}", second.problems);
+        assert_eq!(second.families.len(), 1);
     }
 
     #[test]
