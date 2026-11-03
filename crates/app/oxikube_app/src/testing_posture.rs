@@ -8,7 +8,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use futures::future::{BoxFuture, FutureExt};
 use oxikube_domain::cloud::CloudProvider;
 use oxikube_domain::command::{
-    CloudRefreshMode, Command, CommandId, KubeconfigSourceRef, NewKubeconfigSource,
+    CloudRefreshMode, Command, CommandId, KeymapBindingEdit, KeymapBindingRef, KeymapSource,
+    KubeconfigSourceRef, NewKubeconfigSource,
 };
 use oxikube_domain::ids::{ClusterId, ContextName, Gvk, ResourceRef};
 use oxikube_domain::{ClusterColour, ClusterPreset, ErrorKind, OxiError, OxiResult};
@@ -529,6 +530,24 @@ fn build_sample(command: CommandId, name: &str, missing: impl FnOnce(&str) -> Co
         "jump::Last" => Command::JumpLast,
         "keymap::OpenUser" => Command::KeymapOpenUser,
         "keymap::ShowEditor" => Command::KeymapShowEditor,
+        "keymap::RecordBinding" => Command::KeymapRecordBinding,
+        "keymap::SetBinding" => Command::KeymapSetBinding {
+            edit: KeymapBindingEdit {
+                action: "keymap::OpenUser".into(),
+                data: None,
+                context: None,
+                keystrokes: "ctrl-alt-shift-k".into(),
+                replaces: None,
+                unbind: Vec::new(),
+            },
+        },
+        "keymap::RemoveBinding" => Command::KeymapRemoveBinding {
+            binding: KeymapBindingRef {
+                context: None,
+                keystrokes: "ctrl-alt-shift-k".into(),
+                source: KeymapSource::User,
+            },
+        },
         "charts::OpenGallery" => Command::ChartsOpenGallery,
         "settings::Open" => Command::SettingsOpen,
         "pod::Delete" => Command::PodDelete {

@@ -4,17 +4,18 @@ use std::rc::Rc;
 
 use gpui::{
     App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable, SharedString,
-    Subscription, Window,
+    Subscription, WeakEntity, Window,
 };
 use oxikube_domain::command::Command;
 use oxikube_keymap::{KeymapPlatform, KeymapRow};
 use oxikube_ui::IconName;
 use oxikube_ui::input::{InputEvent, InputState};
 use oxikube_ui::table::{RowClick, TableEvent, TableHandle, TableOptions};
-use oxikube_workspace::{CommandDispatcher, Item, ItemEvent, TabContent};
+use oxikube_workspace::{CommandDispatcher, Item, ItemEvent, TabContent, Workspace};
 
 use super::delegate::KeymapDelegate;
 use super::model::{ContextFilter, KeymapListModel};
+use super::recorder::KeybindRecorder;
 
 /// The deduplication key of the tab: opening the editor twice shows the open one.
 pub const ITEM_KEY: &str = "keymap-editor";
@@ -22,8 +23,11 @@ pub const ITEM_KEY: &str = "keymap-editor";
 /// What the page needs from outside.
 #[derive(Clone)]
 pub struct KeymapEditorDeps {
-    /// Where the "Open keymap.json" button's command goes (the bus).
+    /// Where the page's commands go (the bus): "Open keymap.json", and the recorder's and the
+    /// Remove button's edits.
     pub dispatcher: Rc<dyn CommandDispatcher>,
+    /// The workspace the page is in, whose modal layer shows the key recorder (E21-S08).
+    pub workspace: Option<WeakEntity<Workspace>>,
 }
 
 /// The keymap editor page. See the [module docs](super).
@@ -32,6 +36,8 @@ pub struct KeymapEditorView {
     pub(super) table: TableHandle<KeymapDelegate>,
     pub(super) search: Entity<InputState>,
     pub(super) focus: FocusHandle,
+    /// The key recorder last opened from the page, while it is open.
+    pub(super) recorder: Option<WeakEntity<KeybindRecorder>>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -94,6 +100,7 @@ impl KeymapEditorView {
             table,
             search,
             focus: cx.focus_handle(),
+            recorder: None,
             _subscriptions: subscriptions,
         }
     }

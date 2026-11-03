@@ -192,6 +192,12 @@ impl KeymapStore {
         self.user_path.as_deref()
     }
 
+    /// The text the user layer was last loaded from: the file's text, or the last good text while
+    /// the file is unreadable or invalid. `None` before any user text was loaded.
+    pub fn user_text(&self) -> Option<&str> {
+        self.user.text.as_deref()
+    }
+
     /// Record that the user file exists but could not be read. The previous user sections stay
     /// in effect (none at start-up) and the problem is reported on the next merge.
     pub fn set_user_unreadable(&mut self, message: &str) {

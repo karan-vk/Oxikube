@@ -4,10 +4,11 @@ use gpui::{
     AnyElement, Context, Focusable as _, InteractiveElement as _, IntoElement, ParentElement as _,
     Render, SharedString, Styled as _, Window, div, px,
 };
+use oxikube_domain::command::Command;
 use oxikube_ui::button::Button;
 use oxikube_ui::checkbox::Checkbox;
 use oxikube_ui::input::Input;
-use oxikube_ui::layout::{h_flex, v_flex};
+use oxikube_ui::layout::{Disableable as _, h_flex, v_flex};
 use oxikube_ui::menu::{DropdownMenu as _, PopupMenuItem};
 use oxikube_ui::{ActiveTokens as _, Sizable as _, Table, u};
 
@@ -89,6 +90,7 @@ impl KeymapEditorView {
                             .text_color(colors.text_muted)
                             .child(SharedString::from(format!("{shown} of {total}"))),
                     )
+                    .child(self.edit_buttons(cx))
                     .child(
                         div().debug_selector(|| "keymap-open-json".into()).child(
                             Button::new("keymap-open-json")
@@ -119,6 +121,41 @@ impl KeymapEditorView {
                                     .ok();
                             }),
                     ),
+            )
+            .into_any_element()
+    }
+
+    /// "Record binding" (`keymap::RecordBinding`, the recorder on the selected row) and "Remove
+    /// binding" (`keymap::RemoveBinding`), enabled by the selection (E21-S08).
+    fn edit_buttons(&self, cx: &mut Context<Self>) -> AnyElement {
+        let tokens = cx.tokens();
+        let selected = self.selected_row(cx).is_some();
+        let removable = self.can_remove_selected(cx);
+        h_flex()
+            .gap(u(tokens.spacing.md))
+            .child(
+                div().debug_selector(|| "keymap-record".into()).child(
+                    Button::new("keymap-record")
+                        .label("Record binding")
+                        .small()
+                        .disabled(!selected)
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.deps
+                                .dispatcher
+                                .dispatch(Command::KeymapRecordBinding, cx);
+                        })),
+                ),
+            )
+            .child(
+                div().debug_selector(|| "keymap-remove".into()).child(
+                    Button::new("keymap-remove")
+                        .label("Remove binding")
+                        .small()
+                        .disabled(!removable)
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.remove_selected(cx);
+                        })),
+                ),
             )
             .into_any_element()
     }

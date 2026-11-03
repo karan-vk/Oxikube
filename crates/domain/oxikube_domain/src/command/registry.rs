@@ -210,6 +210,13 @@ impl CommandId {
     /// `keymap::ShowEditor`: open the keymap editor page, the searchable list of every action,
     /// its context, binding and source (E21-S07).
     pub const KEYMAP_SHOW_EDITOR: CommandId = CommandId::new("keymap::ShowEditor");
+    /// `keymap::RecordBinding`: open the key recorder for the keymap editor's selected action
+    /// (E21-S08).
+    pub const KEYMAP_RECORD_BINDING: CommandId = CommandId::new("keymap::RecordBinding");
+    /// `keymap::SetBinding`: bind keystrokes to an action in the user's `keymap.json` (E21-S08).
+    pub const KEYMAP_SET_BINDING: CommandId = CommandId::new("keymap::SetBinding");
+    /// `keymap::RemoveBinding`: delete a user binding or unbind a default one (E21-S08).
+    pub const KEYMAP_REMOVE_BINDING: CommandId = CommandId::new("keymap::RemoveBinding");
     /// `kubeconfig::AddSource`: add a kubeconfig file, directory or pasted text as a source.
     pub const KUBECONFIG_ADD_SOURCE: CommandId = CommandId::new("kubeconfig::AddSource");
     /// `kubeconfig::Reload`: re-read every kubeconfig source.
@@ -1306,6 +1313,26 @@ pub static COMMANDS: &[CommandMeta] = &[
     CommandMeta::read(
         CommandId::KEYMAP_OPEN_USER,
         "Open User Keymap",
+        CommandScope::Global,
+        NONE,
+    ),
+    // The keymap edits (E21-S08) write the user's `keymap.json` only, never a default keymap or
+    // a cluster: not `mutating`, no guard tier, like the kubeconfig source list.
+    CommandMeta::read(
+        CommandId::KEYMAP_RECORD_BINDING,
+        "Keymap Editor: Record Binding",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::KEYMAP_REMOVE_BINDING,
+        "Keymap: Remove Binding",
+        CommandScope::Global,
+        NONE,
+    ),
+    CommandMeta::read(
+        CommandId::KEYMAP_SET_BINDING,
+        "Keymap: Set Binding",
         CommandScope::Global,
         NONE,
     ),

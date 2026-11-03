@@ -1,9 +1,11 @@
 //! Tests of the keymap editor: the list model, the page in a workspace window over a real keymap,
-//! and `keymap::ShowEditor` with its sidebar entry.
+//! `keymap::ShowEditor` with its sidebar entry, and the key recorder with its write-back (E21-S08).
 
 mod command;
 mod model;
 mod page;
+mod recorder;
+mod recorder_model;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -36,18 +38,26 @@ pub(super) struct Harness {
     pub vcx: VisualTestContext,
     pub view: Entity<KeymapEditorView>,
     pub bus: RecordingBus,
+    pub workspace: Entity<oxikube_workspace::Workspace>,
 }
 
 impl Harness {
     /// Opens the page over the shipped default keymap plus `user` as the user's `keymap.json`.
     pub fn open(cx: &mut TestAppContext, user: &str) -> Self {
+        let user = user.to_owned();
+        Self::open_with(cx, move |cx| {
+            oxikube_keymap::init_with_text(&user, KeymapOptions::default(), cx);
+        })
+    }
+
+    /// Opens the page over the keymap `install` sets up (a config directory, for a write test).
+    pub fn open_with(cx: &mut TestAppContext, install: impl FnOnce(&mut gpui::App)) -> Self {
         let (workspace, mut vcx) = open_workspace(cx);
-        vcx.update(|_, cx| {
-            oxikube_keymap::init_with_text(user, KeymapOptions::default(), cx);
-        });
+        vcx.update(|_, cx| install(cx));
         let bus = RecordingBus::default();
         let deps = KeymapEditorDeps {
             dispatcher: Rc::new(bus.clone()),
+            workspace: Some(workspace.downgrade()),
         };
         let mut view = None;
         vcx.update(|window, cx| {
@@ -61,6 +71,7 @@ impl Harness {
             vcx,
             view: view.expect("built"),
             bus,
+            workspace,
         };
         harness.settle();
         harness

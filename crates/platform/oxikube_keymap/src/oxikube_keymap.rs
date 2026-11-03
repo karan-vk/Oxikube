@@ -39,6 +39,10 @@
 //!   context names views add to; [`suggest`]: "did you mean"; [`schema`]: `keymap.schema.json`.
 //! - [`rows`]: [`KeymapRow`], the flat list the keymap editor shows (a row per binding with its
 //!   status, plus the unbound commands); [`subscribe_changes`] says when to re-read it.
+//! - [`edit`]: the keymap editor's writes (E21-S08): [`edit::KeybindUpdateOperation`] on the
+//!   comment-preserving JSON edits, conflicts across the context chain ([`edit::ContextModel`],
+//!   over the focus stacks of [`stacks`]), and [`edit::write_user_keymap`], validated before it
+//!   writes and in force at once.
 //! - [`stands_for`]: which commands the view actions (`resource_table::ViewYaml`) stand for.
 //!
 //! The design (sections, `null`, context predicates, layering) follows Zed's `keymap_file.rs`;
@@ -54,6 +58,7 @@ pub mod conflicts;
 pub mod context;
 pub mod diagnostics;
 pub mod dispatch;
+pub mod edit;
 pub mod events;
 pub mod file;
 pub mod global;
@@ -65,12 +70,13 @@ pub mod query;
 pub mod registry;
 pub mod rows;
 pub mod schema;
+pub mod stacks;
 pub mod stands_for;
 pub mod store;
 pub mod suggest;
 pub mod validate;
 
-pub use actions::{OpenUser, ShowEditor};
+pub use actions::{OpenUser, RecordBinding, ShowEditor};
 pub use base_keymap::{BaseKeymap, KeymapSettings, KeymapSettingsContent};
 pub use conflicts::{ConflictEntry, KeymapConflict};
 pub use context::{KeyContextBuilder, KeyContextual, contexts};
@@ -96,5 +102,6 @@ pub use paths::{ensure_user_keymap, user_keymap_path};
 pub use query::{BindingInfo, bindings_for_action, bindings_for_action_name, bindings_for_command};
 pub use registry::ActionRegistry;
 pub use rows::{KeymapRow, LayerBinding, RowStatus, build_rows};
+pub use stacks::{ContextStacks, register_stack};
 pub use store::{KeymapOptions, KeymapStore, ParsedUserKeymap};
 pub use validate::validate;

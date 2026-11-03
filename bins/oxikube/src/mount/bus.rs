@@ -39,7 +39,7 @@
 //! | `oxikube_portforward_ui` | `portforward::CopyUrl`, `OpenInBrowser` (the forward's local URL to the clipboard, to the system browser) and `TogglePanel` (the Port Forwards panel in the bottom dock: `:pf`, the table's `f`, the palette; no cluster is changed; E15-S05) |
 //! | `oxikube_workspace::notifications` | `notifications::TogglePanel` (the notification centre panel in the right dock; E14-S05) |
 //! | `oxikube_settings_ui` | `cluster::ShowMetricsSettings` (the cluster's metrics page, a tab of its tab; E13-S05) |
-//! | `oxikube_settings_ui::keymap` | `keymap::ShowEditor` (the keymap editor page, a tab of the active cluster's tab; E21-S07) |
+//! | `oxikube_settings_ui::keymap` | `keymap::ShowEditor` (the keymap editor page, a tab of the active cluster's tab; E21-S07), `keymap::RecordBinding` (the key recorder on its selected row), `keymap::SetBinding` and `keymap::RemoveBinding` (the user's `keymap.json` only, comments kept, validated before writing; E21-S08) |
 //! | `oxikube_settings_ui::helm_repos` | `helm::ShowRepos` (the Helm repositories page, a tab of the active cluster's tab; E16-S07) |
 //! | `oxikube_helm_ui::releases` | `helm::OpenReleases` (the cluster's Helm releases page, a tab of its tab; `:helm`; E16-S05) |
 //! | `oxikube_app::helm_releases` | `helm::ShowValues`, `helm::ShowManifest` (a release's values and manifest, credential-looking values and Secret data masked) and `helm::RevealValues` (the user's switch to show them in the release view; replies with a count, never a value); read-only, native, no `helm` binary (E16-S05) |
@@ -208,6 +208,8 @@ pub struct BusParts {
     pub helm_repos_pages: oxikube_settings_ui::helm_repos::HelmReposRequestSink,
     /// Where `keymap::ShowEditor` sends its request (E21-S07).
     pub keymap_editor_pages: oxikube_settings_ui::keymap::KeymapEditorRequestSink,
+    /// Where `keymap::SetBinding` / `keymap::RemoveBinding` send their edits (E21-S08).
+    pub keymap_edits: oxikube_settings_ui::keymap::KeymapEditSink,
     /// The releases service (`helm::ShowValues`, `ShowManifest`, `RevealValues`; E16-S05).
     pub helm_releases: oxikube_app::ReleasesService,
     /// Where `helm::OpenReleases` sends its request (E16-S05).
@@ -418,7 +420,11 @@ pub fn build_registry(parts: BusParts) -> Result<CommandRegistry, RegisterError>
         oxikube_settings_ui::helm_repos::register_commands(r, parts.helm_repos_pages)
     })?;
     registry.install("oxikube_settings_ui::keymap", |r| {
-        oxikube_settings_ui::keymap::register_commands(r, parts.keymap_editor_pages)
+        oxikube_settings_ui::keymap::register_commands(
+            r,
+            parts.keymap_editor_pages,
+            parts.keymap_edits,
+        )
     })?;
     registry.install("oxikube_helm_ui::releases", |r| {
         oxikube_helm_ui::releases::register_commands(r, parts.helm_releases_pages)
