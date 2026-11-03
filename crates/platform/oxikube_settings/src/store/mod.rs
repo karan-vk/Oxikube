@@ -29,7 +29,7 @@ use crate::diagnostics::{KeyTree, SettingsDiagnostic, collect_unknown_keys};
 use crate::jsonc::parse_jsonc_object;
 use crate::settings::{RegisteredSetting, Settings, SettingsLocation};
 use layers::MergedLayers;
-pub use provenance::SettingSource;
+pub use provenance::{LayerValues, SettingSource};
 use value::{AnySettingValue, SettingValue};
 
 /// Layered, typed settings: `default.json` → user `settings.json` → `clusters.<id>`.

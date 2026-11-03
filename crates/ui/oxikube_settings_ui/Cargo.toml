@@ -20,6 +20,7 @@ oxikube_domain.workspace = true
 oxikube_helm_ui.workspace = true
 oxikube_keymap.workspace = true
 oxikube_ports.workspace = true
+oxikube_runtime.workspace = true
 oxikube_settings.workspace = true
 oxikube_ui.workspace = true
 oxikube_workspace.workspace = true
@@ -32,7 +33,6 @@ gpui = { workspace = true, features = ["test-support"] }
 gpui_platform = { workspace = true, features = ["test-support"] }
 oxikube_assets.workspace = true
 oxikube_keymap.workspace = true
-oxikube_runtime.workspace = true
 oxikube_testkit = { workspace = true, features = ["gpui-screenshot"] }
 oxikube_workspace = { workspace = true, features = ["test-support"] }
 tempfile.workspace = true

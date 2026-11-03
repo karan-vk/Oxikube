@@ -285,7 +285,8 @@
           "type": [
             "array",
             "null"
-          ]
+          ],
+          "x-oxikube-cluster-scoped": true
         },
         "audit": {
           "$ref": "#/$defs/AuditSettingsContent"
@@ -333,7 +334,8 @@
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "x-oxikube-cluster-scoped": true
         },
         "confirm_quit": {
           "description": "Ask before quitting (or closing the last window on Linux and Windows) while exec sessions,\nport-forwards or applies are running.",
@@ -347,7 +349,8 @@
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "x-oxikube-cluster-scoped": true
         },
         "describe": {
           "$ref": "#/$defs/DescribeSettingsContent"
@@ -360,7 +363,8 @@
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "x-oxikube-cluster-scoped": true
         },
         "editor": {
           "$ref": "#/$defs/EditorSettingsContent"
@@ -373,7 +377,8 @@
           "type": [
             "boolean",
             "null"
-          ]
+          ],
+          "x-oxikube-cluster-scoped": true
         },
         "exec_interactivity": {
           "description": "How interactive exec credential plugins (`aws`, `gke-gcloud-auth-plugin`, ...) may be:\n`never` (no stdin, never prompt; the GUI default), `if_available` or `always`. Read when a\nsession connects: a change takes effect on the next connect.",
@@ -386,7 +391,8 @@
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "x-oxikube-cluster-scoped": true
         },
         "guard": {
           "anyOf": [
@@ -397,7 +403,8 @@
               "type": "null"
             }
           ],
-          "description": "Guard defaults (E19-S04). `guard.default_read_only` decides the read-only mode of a\ncluster that never had `read_only` written, at either level; an explicit `read_only` wins."
+          "description": "Guard defaults (E19-S04). `guard.default_read_only` decides the read-only mode of a\ncluster that never had `read_only` written, at either level; an explicit `read_only` wins.",
+          "x-oxikube-cluster-scoped": true
         },
         "helm": {
           "$ref": "#/$defs/HelmSettingsContent"
@@ -429,21 +436,24 @@
               "type": "null"
             }
           ],
-          "description": "The rest of the node shell pod's template: namespace, command, `nsenter` options,\ntolerations, labels, image pull policy and lifetime. Fields merge across layers."
+          "description": "The rest of the node shell pod's template: namespace, command, `nsenter` options,\ntolerations, labels, image pull policy and lifetime. Fields merge across layers.",
+          "x-oxikube-cluster-scoped": true
         },
         "node_shell_image": {
           "description": "Container image of the node shell pod; it needs `nsenter` and `sleep`. Unset uses the\nbuilt-in image.",
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "x-oxikube-cluster-scoped": true
         },
         "node_shell_pull_secret": {
           "description": "Name of the image pull Secret (in the node shell's namespace) used to pull\n`node_shell_image` from a private registry. It names a Kubernetes Secret, it is not a\ncredential.",
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "x-oxikube-cluster-scoped": true
         },
         "portforward": {
           "$ref": "#/$defs/PortForwardSettingsContent"
@@ -457,14 +467,16 @@
               "type": "null"
             }
           ],
-          "description": "Whether and where history metrics come from: auto-detection (the default), a manual\n`url` or service `path`, or off. Fields merge across layers."
+          "description": "Whether and where history metrics come from: auto-detection (the default), a manual\n`url` or service `path`, or off. Fields merge across layers.",
+          "x-oxikube-cluster-scoped": true
         },
         "read_only": {
           "description": "Block every mutation (create, edit, delete, scale, node shell) for the cluster, and shells and\nattaches into pods unless `exec_in_read_only` allows them.\nSet it under `clusters.<id>` to protect one cluster, or at the top level to start every\ncluster read-only and opt individual ones out with `false`.",
           "type": [
             "boolean",
             "null"
-          ]
+          ],
+          "x-oxikube-cluster-scoped": true
         },
         "reduce_motion": {
           "anyOf": [
@@ -491,7 +503,8 @@
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "x-oxikube-cluster-scoped": true
         },
         "theme": {
           "$ref": "#/$defs/ThemeSelectionContent"
@@ -513,7 +526,8 @@
               "type": "null"
             }
           ],
-          "description": "Limits on the feeds the app opens on the cluster: feeds, objects, when to fall back to\nmetadata-only feeds, and how long a feed nobody looks at keeps running. Fields merge\nacross layers; a change applies to the next feed opened, without reconnecting."
+          "description": "Limits on the feeds the app opens on the cluster: feeds, objects, when to fall back to\nmetadata-only feeds, and how long a feed nobody looks at keeps running. Fields merge\nacross layers; a change applies to the next feed opened, without reconnecting.",
+          "x-oxikube-cluster-scoped": true
         }
       },
       "type": "object"
@@ -2014,7 +2028,8 @@
       "type": [
         "array",
         "null"
-      ]
+      ],
+      "x-oxikube-cluster-scoped": true
     },
     "audit": {
       "$ref": "#/$defs/AuditSettingsContent"
@@ -2083,7 +2098,8 @@
       "type": [
         "string",
         "null"
-      ]
+      ],
+      "x-oxikube-cluster-scoped": true
     },
     "confirm_quit": {
       "description": "Ask before quitting (or closing the last window on Linux and Windows) while exec sessions,\nport-forwards or applies are running.",
@@ -2097,7 +2113,8 @@
       "type": [
         "string",
         "null"
-      ]
+      ],
+      "x-oxikube-cluster-scoped": true
     },
     "describe": {
       "$ref": "#/$defs/DescribeSettingsContent"
@@ -2110,7 +2127,8 @@
       "type": [
         "string",
         "null"
-      ]
+      ],
+      "x-oxikube-cluster-scoped": true
     },
     "editor": {
       "$ref": "#/$defs/EditorSettingsContent"
@@ -2123,7 +2141,8 @@
       "type": [
         "boolean",
         "null"
-      ]
+      ],
+      "x-oxikube-cluster-scoped": true
     },
     "exec_interactivity": {
       "description": "How interactive exec credential plugins (`aws`, `gke-gcloud-auth-plugin`, ...) may be:\n`never` (no stdin, never prompt; the GUI default), `if_available` or `always`. Read when a\nsession connects: a change takes effect on the next connect.",
@@ -2136,7 +2155,8 @@
       "type": [
         "string",
         "null"
-      ]
+      ],
+      "x-oxikube-cluster-scoped": true
     },
     "guard": {
       "anyOf": [
@@ -2147,7 +2167,8 @@
           "type": "null"
         }
       ],
-      "description": "Guard defaults (E19-S04). `guard.default_read_only` decides the read-only mode of a\ncluster that never had `read_only` written, at either level; an explicit `read_only` wins."
+      "description": "Guard defaults (E19-S04). `guard.default_read_only` decides the read-only mode of a\ncluster that never had `read_only` written, at either level; an explicit `read_only` wins.",
+      "x-oxikube-cluster-scoped": true
     },
     "helm": {
       "$ref": "#/$defs/HelmSettingsContent"
@@ -2179,21 +2200,24 @@
           "type": "null"
         }
       ],
-      "description": "The rest of the node shell pod's template: namespace, command, `nsenter` options,\ntolerations, labels, image pull policy and lifetime. Fields merge across layers."
+      "description": "The rest of the node shell pod's template: namespace, command, `nsenter` options,\ntolerations, labels, image pull policy and lifetime. Fields merge across layers.",
+      "x-oxikube-cluster-scoped": true
     },
     "node_shell_image": {
       "description": "Container image of the node shell pod; it needs `nsenter` and `sleep`. Unset uses the\nbuilt-in image.",
       "type": [
         "string",
         "null"
-      ]
+      ],
+      "x-oxikube-cluster-scoped": true
     },
     "node_shell_pull_secret": {
       "description": "Name of the image pull Secret (in the node shell's namespace) used to pull\n`node_shell_image` from a private registry. It names a Kubernetes Secret, it is not a\ncredential.",
       "type": [
         "string",
         "null"
-      ]
+      ],
+      "x-oxikube-cluster-scoped": true
     },
     "portforward": {
       "$ref": "#/$defs/PortForwardSettingsContent"
@@ -2207,14 +2231,16 @@
           "type": "null"
         }
       ],
-      "description": "Whether and where history metrics come from: auto-detection (the default), a manual\n`url` or service `path`, or off. Fields merge across layers."
+      "description": "Whether and where history metrics come from: auto-detection (the default), a manual\n`url` or service `path`, or off. Fields merge across layers.",
+      "x-oxikube-cluster-scoped": true
     },
     "read_only": {
       "description": "Block every mutation (create, edit, delete, scale, node shell) for the cluster, and shells and\nattaches into pods unless `exec_in_read_only` allows them.\nSet it under `clusters.<id>` to protect one cluster, or at the top level to start every\ncluster read-only and opt individual ones out with `false`.",
       "type": [
         "boolean",
         "null"
-      ]
+      ],
+      "x-oxikube-cluster-scoped": true
     },
     "reduce_motion": {
       "anyOf": [
@@ -2241,7 +2267,8 @@
       "type": [
         "string",
         "null"
-      ]
+      ],
+      "x-oxikube-cluster-scoped": true
     },
     "theme": {
       "$ref": "#/$defs/ThemeSelectionContent"
@@ -2263,7 +2290,8 @@
           "type": "null"
         }
       ],
-      "description": "Limits on the feeds the app opens on the cluster: feeds, objects, when to fall back to\nmetadata-only feeds, and how long a feed nobody looks at keeps running. Fields merge\nacross layers; a change applies to the next feed opened, without reconnecting."
+      "description": "Limits on the feeds the app opens on the cluster: feeds, objects, when to fall back to\nmetadata-only feeds, and how long a feed nobody looks at keeps running. Fields merge\nacross layers; a change applies to the next feed opened, without reconnecting.",
+      "x-oxikube-cluster-scoped": true
     }
   },
   "title": "Oxikube settings",

@@ -719,3 +719,29 @@ fn a_palette_name_is_a_colour_and_a_bad_one_keeps_the_last_good_with_a_diagnosti
     );
     assert_eq!(store.diagnostics().len(), 1, "and says why");
 }
+
+#[test]
+fn only_the_per_cluster_fields_are_marked_cluster_scoped() {
+    let schema = store().json_schema();
+    let marked = |node: &Value| node[crate::CLUSTER_SCOPED_KEY] == json!(true);
+    for key in [
+        "display_name",
+        "colour",
+        "read_only",
+        "prometheus",
+        "node_shell",
+    ] {
+        assert!(
+            marked(&schema["properties"][key]),
+            "{key} is cluster scoped"
+        );
+        assert!(
+            marked(&schema["$defs"]["ClusterSettings"]["properties"][key]),
+            "{key} is cluster scoped in the cluster block too"
+        );
+    }
+    // Other settings are accepted under `clusters.<id>` but are not offered per cluster.
+    for key in ["terminal", "ui_scale", "clusters"] {
+        assert!(!marked(&schema["properties"][key]), "{key} is global");
+    }
+}

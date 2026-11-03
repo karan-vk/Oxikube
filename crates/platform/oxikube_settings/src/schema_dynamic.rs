@@ -20,6 +20,12 @@ pub const DYNAMIC_ENUM_KEY: &str = "x-oxikube-dynamic-enum";
 /// a field of type `ClusterColour` is recognised by its hex `pattern` as well.
 pub const COLOR_FORMAT: &str = "color";
 
+/// The schema annotation (`true`) on a field of `ClusterSettings`: the settings a
+/// `clusters.<id>` block is meant to override (E21-S06). Every setting is accepted in a cluster
+/// block (the layers merge field by field), but only these are offered on the settings page's
+/// per-cluster tab. Declared once here; `schema::assemble` adds it.
+pub const CLUSTER_SCOPED_KEY: &str = "x-oxikube-cluster-scoped";
+
 /// List name for installed theme names.
 pub const THEMES: &str = "themes";
 /// List name for the base keymap names.

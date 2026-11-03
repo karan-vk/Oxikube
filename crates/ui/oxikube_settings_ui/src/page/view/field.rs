@@ -36,6 +36,7 @@ impl SettingsPage {
         let control = self
             .controls
             .render(field, source, self.cluster.as_ref(), cx);
+        let precedence = self.precedence_row(field, cx);
         let mono = cx.mono_font_family();
         let path = field.path.clone();
         let kind = if json_only {
@@ -91,6 +92,7 @@ impl SettingsPage {
                         .child(field.description.clone()),
                 )
             })
+            .children(precedence)
             .children(control)
             .child(
                 h_flex()

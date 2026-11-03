@@ -82,8 +82,16 @@ impl ViewDeps {
                 let now = self.clock.now().as_second() as f64;
                 Box::new(cx.new(|cx| ChartGalleryPage::new(now, cx)))
             }
-            // The settings page (E21-S04): built over the settings store's schema.
-            SETTINGS_VIEW => Box::new(cx.new(|cx| SettingsPage::new(window, cx))),
+            // The settings page (E21-S04): built over the settings store's schema; its
+            // per-cluster tab (E21-S06) lists the catalog's clusters.
+            SETTINGS_VIEW => {
+                let catalog = self.catalog.clone();
+                Box::new(cx.new(|cx| {
+                    let mut page = SettingsPage::new(window, cx);
+                    page.set_catalog(catalog, cx);
+                    page
+                }))
+            }
             _ => return,
         };
         let options = OpenOptions {

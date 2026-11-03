@@ -147,6 +147,15 @@ impl Controls {
         }
     }
 
+    /// Forgets every input and error, so the fields shown next are built from the values of the
+    /// cluster (or the file) the page now points at. Writes in flight and typed values waiting
+    /// for their pause are kept: each carries the cluster it was typed for.
+    pub(crate) fn forget_editors(&mut self) {
+        self.editors.clear();
+        self.errors.clear();
+        self.resync.clear();
+    }
+
     /// Drops the error of `path` (a valid value was typed, or the field was reset).
     pub(super) fn clear_error(&mut self, path: &str) {
         self.errors.remove(path);
