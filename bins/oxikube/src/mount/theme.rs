@@ -1,5 +1,6 @@
 //! The window's side of the `theme` setting (E22-S07): following the operating system's
-//! light/dark switch and the toast for a theme name that is not installed.
+//! light/dark switch and the toasts for a theme name that is not installed (S07) and for a theme
+//! file that could not be loaded (S09).
 //!
 //! `oxikube_theme` is platform code: it resolves the setting and announces problems but can
 //! neither observe a window nor show a toast, so both pieces are mounted here.
@@ -10,11 +11,10 @@
 //! never fight over the global. When the owner closes, the next window to mount takes over.
 
 use gpui::{AnyWindowHandle, App, Global, Subscription, Window};
-use oxikube_theme::{SystemAppearance, ThemeNotice, pending_unknown_theme, subscribe_notices};
+use oxikube_theme::{
+    SystemAppearance, ThemeNotice, pending_file_problems, pending_unknown_theme, subscribe_notices,
+};
 use oxikube_workspace::{Toast, Workspace};
-
-/// Key of the toast, so a second unknown name replaces the first rather than stacking.
-const TOAST_KEY: &str = "theme-unknown";
 
 /// The window that currently follows the operating system's appearance.
 struct AppearanceOwner(AnyWindowHandle);
@@ -27,7 +27,7 @@ pub struct ThemeFollow {
     _notices: Subscription,
 }
 
-/// Mounts the appearance follower (when this window is the owner) and the unknown-theme toast.
+/// Mounts the appearance follower (when this window is the owner) and the theme toasts.
 pub fn mount(
     workspace: gpui::WeakEntity<Workspace>,
     window: &mut Window,
@@ -48,12 +48,19 @@ pub fn mount(
         let Some(workspace) = workspace.upgrade() else {
             return;
         };
-        let toast = Toast::warning(notice.message()).key(TOAST_KEY);
+        let toast = match notice {
+            ThemeNotice::UnknownTheme { .. } => Toast::warning(notice.message()),
+            ThemeNotice::BadThemeFile { .. } => Toast::error(notice.message()),
+        }
+        .key(notice.key());
         workspace.update(cx, |workspace, cx| workspace.show_toast(toast, cx));
     };
     let notices = subscribe_notices(cx, show.clone());
     // The start-up resolution happened before this window existed.
     if let Some(notice) = pending_unknown_theme(cx) {
+        show(&notice, cx);
+    }
+    for notice in pending_file_problems(cx) {
         show(&notice, cx);
     }
     ThemeFollow {

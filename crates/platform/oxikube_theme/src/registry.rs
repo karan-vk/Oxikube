@@ -2,8 +2,8 @@
 //!
 //! Pure data (no GPUI), so selection logic is unit-testable with a fake system appearance.
 //! Bundled themes (One Dark, One Light) are always present; user themes come from the
-//! `themes/` directory (`user_dir`) and replace each other wholesale on every rescan, so a
-//! deleted or renamed file disappears from [`ThemeRegistry::list`]. Extensions contribute
+//! `themes/` directory (`user_dir`) and are tracked per file: a deleted or renamed file
+//! disappears from [`ThemeRegistry::list`], an invalid one keeps its last good version. Extensions contribute
 //! families under their own [`ExtensionId`] and can be removed again without touching the other
 //! sources.
 //!
@@ -81,6 +81,8 @@ pub struct ThemeRegistry {
     bundled: BTreeMap<String, Arc<ThemeTokens>>,
     extensions: BTreeMap<ExtensionId, BTreeMap<String, Arc<ThemeTokens>>>,
     user: BTreeMap<String, Arc<ThemeTokens>>,
+    /// The themes each file of the themes directory gave, as of its last good read.
+    user_files: BTreeMap<PathBuf, Vec<ThemeTokens>>,
     problems: Vec<ThemeFileProblem>,
     icon_themes: icon_themes::IconThemeLayers,
 }
@@ -131,17 +133,38 @@ impl ThemeRegistry {
     pub fn remove_by_source(&mut self, source: &ThemeSource) -> usize {
         match source {
             ThemeSource::Bundled => std::mem::take(&mut self.bundled).len(),
-            ThemeSource::User => std::mem::take(&mut self.user).len(),
+            ThemeSource::User => {
+                self.user_files.clear();
+                std::mem::take(&mut self.user).len()
+            }
             ThemeSource::Extension(id) => self.extensions.remove(id).map_or(0, |layer| layer.len()),
         }
     }
 
-    /// Replaces every user theme with the contents of a fresh scan of the themes directory.
+    /// Applies a fresh scan of the themes directory to the user themes.
+    ///
+    /// Tracked per file: a file that parsed contributes its themes (replacing what it gave
+    /// before), a file that is gone contributes nothing, and a file that **failed** keeps the
+    /// themes of its last good version, so a half-saved file never takes a theme away. Only
+    /// the user layer changes; bundled and extension themes are untouched.
     pub fn replace_user_themes(&mut self, scan: UserThemes) {
-        self.user.clear();
-        self.problems = scan.problems;
+        let mut files: BTreeMap<PathBuf, Vec<ThemeTokens>> = BTreeMap::new();
         for (path, family) in scan.families {
-            for theme in family.themes {
+            files.insert(path, family.themes);
+        }
+        for problem in &scan.problems {
+            if files.contains_key(&problem.path) {
+                continue;
+            }
+            if let Some(last_good) = self.user_files.remove(&problem.path) {
+                files.insert(problem.path.clone(), last_good);
+            }
+        }
+        self.problems = scan.problems;
+        self.user.clear();
+        // File-name order, so duplicate names resolve the same way on every rescan.
+        for (path, themes) in &files {
+            for theme in themes {
                 if self.user.contains_key(&theme.name) {
                     self.problems.push(ThemeFileProblem {
                         path: path.clone(),
@@ -149,9 +172,18 @@ impl ThemeRegistry {
                     });
                     continue;
                 }
-                self.user.insert(theme.name.clone(), Arc::new(theme));
+                self.user
+                    .insert(theme.name.clone(), Arc::new(theme.clone()));
             }
         }
+        self.user_files = files;
+    }
+
+    /// The theme names each file of the themes directory currently contributes, by path.
+    pub fn user_files(&self) -> impl Iterator<Item = (&PathBuf, Vec<&str>)> {
+        self.user_files
+            .iter()
+            .map(|(path, themes)| (path, themes.iter().map(|t| t.name.as_str()).collect()))
     }
 
     /// The theme called `name` and the source that wins for it.

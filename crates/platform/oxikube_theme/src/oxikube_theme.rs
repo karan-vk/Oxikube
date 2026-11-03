@@ -51,13 +51,13 @@ mod test_fixtures;
 pub use appearance::{Appearance, SystemAppearance, ThemeMode};
 pub use global::{
     ActiveTheme, ActiveThemeExt, apply_user_scan, init, init_watching_dir, init_with_dir,
-    insert_theme_families, refresh_active, remove_themes_by_source,
+    insert_theme_families, refresh_active, reload_now, remove_themes_by_source,
 };
 pub use icons::{ActiveIconTheme, IconTheme, IconThemeFamily, IconThemeSettings};
 pub use import::{
     ImportDiagnostic, ImportError, ImportReport, ImportedFamily, ThemeFamily, import_family,
 };
-pub use notices::{ThemeNotice, pending_unknown_theme, subscribe_notices};
+pub use notices::{ThemeNotice, pending_file_problems, pending_unknown_theme, subscribe_notices};
 pub use registry::{
     ExtensionId, IconThemeMeta, ThemeFileProblem, ThemeMeta, ThemeRegistry, ThemeSource,
 };
