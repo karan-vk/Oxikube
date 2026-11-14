@@ -1,0 +1,19 @@
+/// The machine the host runs on, for extensions that download platform-specific binaries.
+interface platform {
+    /// An operating system.
+    enum os {
+        mac,
+        linux,
+        windows,
+    }
+
+    /// A CPU architecture.
+    enum architecture {
+        aarch64,
+        x86,
+        x8664,
+    }
+
+    /// Returns the host's operating system and CPU architecture.
+    current-platform: func() -> tuple<os, architecture>;
+}

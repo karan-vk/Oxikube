@@ -9,9 +9,16 @@ description = "Extension SDK for plugin authors: WIT worlds (since_vX), register
 
 [lib]
 path = "src/oxikube_extension_api.rs"
-doctest = false
 
 [dependencies]
+wit-bindgen.workspace = true
+
+[dev-dependencies]
+wit-parser.workspace = true
+
+[[example]]
+name = "hello"
+crate-type = ["cdylib"]
 
 [lints]
 workspace = true

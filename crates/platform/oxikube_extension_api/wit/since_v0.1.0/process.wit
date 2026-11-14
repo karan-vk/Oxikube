@@ -1,0 +1,18 @@
+/// Running processes, allowed only for programs matching the extension's `process:exec` grants.
+interface process {
+    use common.{command, error};
+
+    /// What a finished process produced.
+    record output {
+        /// The exit status, or none when the process was ended by a signal.
+        status: option<s32>,
+        /// Everything the process wrote to standard output.
+        stdout: list<u8>,
+        /// Everything the process wrote to standard error.
+        stderr: list<u8>,
+    }
+
+    /// Runs `command` to completion in the extension's working directory and returns its output.
+    /// Fails with `denied` when no `process:exec` grant matches the program.
+    exec: func(command: command) -> result<output, error>;
+}

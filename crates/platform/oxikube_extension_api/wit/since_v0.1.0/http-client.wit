@@ -1,0 +1,8 @@
+/// HTTP downloads, allowed only for URLs matching the extension's `download_file` grants.
+interface http-client {
+    use common.{error};
+
+    /// Downloads `url` into `path`, a path relative to the extension's working directory.
+    /// Fails with `denied` when no `download_file` grant matches the URL.
+    download-file: func(url: string, path: string) -> result<_, error>;
+}
