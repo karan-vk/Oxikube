@@ -114,15 +114,19 @@ fn scaffold(id: &str, kind: Kind, dir: &Path, repo: &Path) -> Result<()> {
     }
     let api_dependency = api_dependency(dir, repo);
     let type_name = type_name(id);
-    let (body, build_section) = match kind {
-        Kind::Command => (include_str!("../templates/ext/body_command.toml"), true),
-        Kind::Mcp => (include_str!("../templates/ext/body_mcp.toml"), true),
-        Kind::Theme => (include_str!("../templates/ext/body_theme.toml"), false),
-    };
-    let section = if build_section {
-        include_str!("../templates/ext/build_section_lib.md")
-    } else {
-        include_str!("../templates/ext/build_section_theme.md")
+    let (body, section) = match kind {
+        Kind::Command => (
+            include_str!("../templates/ext/body_command.toml"),
+            include_str!("../templates/ext/build_section_lib.md"),
+        ),
+        Kind::Mcp => (
+            include_str!("../templates/ext/body_mcp.toml"),
+            include_str!("../templates/ext/build_section_lib.md"),
+        ),
+        Kind::Theme => (
+            include_str!("../templates/ext/body_theme.toml"),
+            include_str!("../templates/ext/build_section_theme.md"),
+        ),
     };
     let vars = [
         ("id", id),
@@ -138,53 +142,51 @@ fn scaffold(id: &str, kind: Kind, dir: &Path, repo: &Path) -> Result<()> {
     ]
     .concat();
 
-    let mut files: Vec<(String, String)> = vec![
+    let mut files = vec![
         (
-            "extension.toml".into(),
-            include_str!("../templates/ext/extension.toml").into(),
+            "extension.toml".to_string(),
+            include_str!("../templates/ext/extension.toml"),
         ),
         (
-            "README.md".into(),
-            include_str!("../templates/ext/README.md").into(),
+            "README.md".to_string(),
+            include_str!("../templates/ext/README.md"),
         ),
         (
-            ".gitignore".into(),
-            include_str!("../templates/ext/gitignore").into(),
+            ".gitignore".to_string(),
+            include_str!("../templates/ext/gitignore"),
         ),
     ];
-    match kind {
-        Kind::Theme => {
-            files.push((
-                format!("themes/{id}.json"),
-                include_str!("../templates/ext/theme.json").into(),
-            ));
-        }
-        Kind::Command | Kind::Mcp => {
-            let lib = match kind {
-                Kind::Mcp => include_str!("../templates/ext/lib_mcp.rs"),
-                _ => include_str!("../templates/ext/lib_command.rs"),
-            };
-            files.extend([
-                (
-                    "Cargo.toml".into(),
-                    include_str!("../templates/ext/Cargo.toml").into(),
-                ),
-                ("src/lib.rs".into(), lib.into()),
-                (
-                    "build.sh".into(),
-                    include_str!("../templates/ext/build.sh").into(),
-                ),
-                (
-                    ".cargo/config.toml".into(),
-                    include_str!("../templates/ext/cargo_config.toml").into(),
-                ),
-            ]);
-        }
+    if kind == Kind::Theme {
+        files.push((
+            format!("themes/{id}.json"),
+            include_str!("../templates/ext/theme.json"),
+        ));
+    } else {
+        let lib = if kind == Kind::Mcp {
+            include_str!("../templates/ext/lib_mcp.rs")
+        } else {
+            include_str!("../templates/ext/lib_command.rs")
+        };
+        files.extend([
+            (
+                "Cargo.toml".to_string(),
+                include_str!("../templates/ext/Cargo.toml"),
+            ),
+            ("src/lib.rs".to_string(), lib),
+            (
+                "build.sh".to_string(),
+                include_str!("../templates/ext/build.sh"),
+            ),
+            (
+                ".cargo/config.toml".to_string(),
+                include_str!("../templates/ext/cargo_config.toml"),
+            ),
+        ]);
     }
     for (name, template) in files {
         let path = dir.join(&name);
         std::fs::create_dir_all(path.parent().context("file has a parent")?)?;
-        std::fs::write(&path, render(&template, &vars))
+        std::fs::write(&path, render(template, &vars))
             .with_context(|| format!("writing {}", path.display()))?;
         #[cfg(unix)]
         if name == "build.sh" {
