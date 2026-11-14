@@ -133,3 +133,46 @@ fn every_toml_block_in_the_authoring_guide_parses() {
     }
     assert!(blocks >= 3);
 }
+
+#[test]
+fn digit_leading_id_gets_a_valid_cargo_package_name() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("1pass");
+    scaffold("1pass", Kind::Command, &dir, &repo()).unwrap();
+    let cargo: toml::Table = std::fs::read_to_string(dir.join("Cargo.toml"))
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert_eq!(cargo["package"]["name"].as_str(), Some("ext-1pass"));
+    assert!(
+        std::fs::read_to_string(dir.join("build.sh"))
+            .unwrap()
+            .contains("ext-1pass")
+    );
+}
+
+/// Scaffolds each code kind and `cargo check`s it for wasm32-wasip2; skipped when that target is
+/// not installed. Guards the templates against drift in `oxikube_extension_api`.
+#[test]
+fn scaffolded_projects_compile_for_wasm() {
+    let installed = std::process::Command::new("rustup")
+        .args(["target", "list", "--installed"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).contains("wasm32-wasip2"))
+        .unwrap_or(false);
+    if !installed {
+        eprintln!("skipping: wasm32-wasip2 target not installed");
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    for (id, kind) in [("smoke-cmd", Kind::Command), ("1smoke-mcp", Kind::Mcp)] {
+        let dir = tmp.path().join(id);
+        scaffold(id, kind, &dir, &repo()).unwrap();
+        let status = std::process::Command::new("cargo")
+            .args(["check", "--target", "wasm32-wasip2"])
+            .current_dir(&dir)
+            .status()
+            .unwrap();
+        assert!(status.success(), "scaffold {id} failed to compile");
+    }
+}

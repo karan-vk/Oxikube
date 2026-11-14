@@ -128,8 +128,15 @@ fn scaffold(id: &str, kind: Kind, dir: &Path, repo: &Path) -> Result<()> {
             include_str!("../templates/ext/build_section_theme.md"),
         ),
     };
+    // Cargo package names cannot start with a digit.
+    let package = if id.starts_with(|c: char| c.is_ascii_digit()) {
+        format!("ext-{id}")
+    } else {
+        id.to_string()
+    };
     let vars = [
         ("id", id),
+        ("package", package.as_str()),
         ("type_name", type_name.as_str()),
         ("api_version", API_VERSION),
         ("api_dependency", api_dependency.as_str()),

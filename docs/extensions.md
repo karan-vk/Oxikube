@@ -128,5 +128,7 @@ against the user's grants. Secrets must never be written to logs or disk by an e
 
 ## Samples
 
-`extensions/` holds sample extensions (a theme, a command, an MCP server): `theme-sample`,
-`hello-command`, `mcp-echo`.
+`extensions/` is where the sample extensions live (a theme, a command, an MCP server; planned as
+`theme-sample`, `hello-command`, `mcp-echo` in E23-S09). Until they land, `cargo xtask ext new`
+scaffolds the same three kinds. The "Install Dev Extension" command comes from the manager (E23-S08);
+check its exact name in the palette once that story is merged.

@@ -3,5 +3,5 @@
 set -eu
 cd "$(dirname "$0")"
 cargo build --release --target wasm32-wasip2
-cp "target/wasm32-wasip2/release/$(echo "{{id}}" | tr - _).wasm" extension.wasm
+cp "target/wasm32-wasip2/release/$(echo "{{package}}" | tr - _).wasm" extension.wasm
 echo "built $(pwd)/extension.wasm"
