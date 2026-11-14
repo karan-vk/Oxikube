@@ -9,12 +9,14 @@
 //! - `load-pods`      create N pause pods (+ optional churn) for perf work (E01-S10)
 //! - `perf`           headless perf scenarios, report, baseline check (E01-S14); `--windowed`: the
 //!   real-window scenarios of ADR 0016 (E01-P587)
+//! - `ext new`       scaffold an extension project: manifest, lib.rs, build script (E23-S10)
 //! - `gen-keymap-docs`  write (or `--check`) docs/keymap.md from the embedded keymaps (E21-S09)
 //! - `gen-keymap-schema`  write (or `--check`) keymap.schema.json from the `oxikube` binary (E21-S03)
 //! - `gen-settings-schema`  write (or `--check`) settings.schema.json from the `oxikube` binary (E05-S06, E05-S06b)
 #![allow(clippy::print_stdout, reason = "a CLI tool reports on stdout")]
 
 mod check_gpui_pin;
+mod ext;
 mod keymap_docs;
 mod keymap_schema;
 mod kind;
@@ -75,6 +77,9 @@ enum Cmd {
     GenKeymapSchema(keymap_schema::Args),
     /// Write docs/keymap.md from the embedded keymaps; `--check` fails when stale.
     GenKeymapDocs(keymap_docs::Args),
+    /// Extension authoring helpers (`ext new <id>`).
+    #[command(subcommand)]
+    Ext(ext::Cmd),
 }
 
 fn main() -> anyhow::Result<()> {
@@ -91,5 +96,6 @@ fn main() -> anyhow::Result<()> {
         Cmd::GenSettingsSchema(args) => settings_schema::run(&args),
         Cmd::GenKeymapSchema(args) => keymap_schema::run(&args),
         Cmd::GenKeymapDocs(args) => keymap_docs::run(&args),
+        Cmd::Ext(cmd) => ext::run(&cmd),
     }
 }

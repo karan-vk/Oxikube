@@ -6,6 +6,7 @@ Run as `cargo xtask <command>` (aliases `xtask` and `x` in `.cargo/config.toml`)
 
 | Command | What it does |
 |---|---|
+| `ext new <id>` | Scaffolds an extension project (`--kind command\|mcp\|theme`, `--dir`): `extension.toml`, `src/lib.rs`, `Cargo.toml`, `build.sh`; templates in `xtask/templates/ext/` (E23-S10, guide: `docs/extensions.md`). |
 | `lint-deps` | Enforces the hexagonal dependency direction and the banned-crate list over `cargo metadata --no-deps` (docs/ARCHITECTURE.md, ADR 0002). The check is a pure function over `cargo_metadata::Metadata`, unit-tested against fixture JSON in `xtask/tests/fixtures/`. |
 | `check-gpui-pin` | Verifies the `gpui-pre*` and `gpui-component`/`gpui-base`/`gpui-kit-assets` pins are exact `=` and a known pair from the table in ADR 0003; prints the Zed commit of the snapshot. |
 | `kind-up` / `kind-down` | Local kind cluster for integration tests. |

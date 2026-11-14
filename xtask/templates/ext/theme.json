@@ -1,0 +1,11 @@
+{
+  "name": "{{id}}",
+  "author": "Your Name",
+  "themes": [
+    {
+      "name": "{{id}} dark",
+      "appearance": "dark",
+      "style": {}
+    }
+  ]
+}

@@ -22,5 +22,8 @@ toml.workspace = true
 tokio.workspace = true
 xshell.workspace = true
 
+[dev-dependencies]
+tempfile.workspace = true
+
 [lints]
 workspace = true

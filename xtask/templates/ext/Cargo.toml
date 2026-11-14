@@ -1,0 +1,20 @@
+[package]
+name = "{{id}}"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+oxikube_extension_api = {{api_dependency}}
+
+# Keep this crate out of any enclosing workspace.
+[workspace]
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
