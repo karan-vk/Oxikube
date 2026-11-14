@@ -1,0 +1,22 @@
+/// Read-only facts about the user's Kubernetes contexts, allowed only for contexts matching the
+/// extension's `kube:read` grants. Credentials are never exposed.
+interface kube-info {
+    use common.{error};
+
+    /// A kubeconfig context, without its credentials.
+    record kube-context {
+        /// The context name.
+        name: string,
+        /// The name of the cluster the context points at.
+        cluster: string,
+        /// The context's default namespace, if it sets one.
+        namespace: option<string>,
+    }
+
+    /// Returns the contexts the extension may read, in kubeconfig order.
+    contexts: func() -> result<list<kube-context>, error>;
+
+    /// Returns the name of the context active in Oxikube, or none when no cluster is open or the
+    /// extension may not read it.
+    current-context: func() -> result<option<string>, error>;
+}

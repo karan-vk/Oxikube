@@ -188,6 +188,7 @@ lsp-types = "0.97"
 wasmtime = { version = "49", default-features = false, features = ["cranelift", "component-model", "async", "cache", "parallel-compilation", "runtime"] }
 wasmtime-wasi = "49"
 wit-bindgen = "0.62"
+wit-parser = "0.259"
 
 # --- agents ---
 agent-client-protocol = { version = "=2.2.0" }

@@ -240,7 +240,7 @@ A **port** is an async, object-safe trait in `oxikube_ports` that the app depend
 | **ContextBlock** | A bounded piece of cluster context handed to an agent: title, MIME type, text body (capped at 64 KiB, `truncated` flag). Earlier docs called it ContentBlock. | `oxikube_domain::agent` |
 | **AgentPort / AgentClient** | The ACP connection to a hosted agent (what Oxikube calls) and the callbacks the agent may make of Oxikube (permissions, fs, terminal, elicitation). | `oxikube_ports::agent` |
 | **AgentSession / AgentThread** | An ACP session (`AgentSessionId`) with a hosted agent and its thread of entries (messages, thoughts, tool calls, plan, permissions), built from `SessionUpdate`s. The thread model is not written yet. | ids and updates in `oxikube_ports::agent`; thread *(planned)* `oxikube_domain::agent::thread`, `oxikube_app::agent` |
-| **Extension** | A WASM component (WIT world `oxikube:extension`) contributing themes, commands, MCP servers; never UI. | `oxikube_extension_api`, `oxikube_extension_host` |
+| **Extension** | A WASM component (WIT world `oxikube:extension/extension@0.1.0`, files in `oxikube_extension_api/wit/since_v0.1.0`) contributing themes, commands, MCP servers; never UI. Implements the `Extension` trait and registers it with `register_extension!`. | `oxikube_extension_api`, `oxikube_extension_host` |
 
 ## Workspace shell, settings and testing
 

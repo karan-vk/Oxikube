@@ -1,0 +1,19 @@
+/// Reading Oxikube settings.
+interface settings {
+    use common.{error};
+
+    /// Returns the setting at `key` (a dotted path such as `theme.mode`) as JSON text.
+    /// Fails with `failed` when no setting has that key.
+    get: func(key: string) -> result<string, error>;
+}
+
+/// A small persistent store private to the extension. Never put secrets in it.
+interface key-value-store {
+    use common.{error};
+
+    /// Returns the value stored under `key`, or none.
+    get: func(key: string) -> result<option<string>, error>;
+
+    /// Stores `value` under `key`, replacing any earlier value.
+    insert: func(key: string, value: string) -> result<_, error>;
+}

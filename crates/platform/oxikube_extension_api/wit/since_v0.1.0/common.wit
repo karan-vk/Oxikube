@@ -1,0 +1,21 @@
+/// Types shared by several interfaces of the Oxikube extension world.
+interface common {
+    /// Why a host call failed.
+    variant error {
+        /// The extension lacks the capability grant the call needs; the payload names the
+        /// capability (for example `process:exec` or `download_file`).
+        denied(string),
+        /// The call was allowed but failed; the payload says why.
+        failed(string),
+    }
+
+    /// A process to run: the program, its arguments and extra environment variables.
+    record command {
+        /// The program, a path or a name looked up on `PATH`.
+        command: string,
+        /// The arguments, without the program itself.
+        args: list<string>,
+        /// Environment variables set for the process, as (name, value) pairs.
+        env: list<tuple<string, string>>,
+    }
+}

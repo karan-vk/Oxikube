@@ -1,0 +1,35 @@
+/// The Oxikube extension world, API version 0.1.0.
+///
+/// The shape follows Zed's extension world (a `since_vX` folder per released API
+/// version, one world, host services as imports, entry points as exports), trimmed to
+/// what an Oxikube extension contributes: commands and MCP context servers. Themes and
+/// icon themes are plain files declared in `extension.toml` and need no export.
+///
+/// Extensions never contribute UI (ADR 0007): no export may return a view, menu or panel.
+/// Released folders are frozen; breaking changes are collected in PENDING_CHANGES.md and
+/// land in a new `since_vX` folder.
+package oxikube:extension@0.1.0;
+
+world extension {
+    import common;
+    import http-client;
+    import process;
+    import platform;
+    import settings;
+    import key-value-store;
+    import kube-info;
+
+    use common.{command};
+
+    /// Called once, right after the host instantiates the component, before any other export.
+    export init-extension: func();
+
+    /// Runs the command `command-id` (one of the ids the manifest's `commands` table declares)
+    /// with the arguments the user or the palette passed. An `err` is shown to the user.
+    export run-command: func(command-id: string, args: list<string>) -> result<_, string>;
+
+    /// Returns how to start the MCP context server `context-server-id` (one of the ids the
+    /// manifest's `context_servers` table declares). The host spawns the process and speaks MCP
+    /// to it over stdio.
+    export context-server-command: func(context-server-id: string) -> result<command, string>;
+}
