@@ -1,0 +1,7 @@
+
+[lib]
+kind = "rust"
+version = "{{api_version}}"
+
+[[context_servers]]
+id = "{{id}}"

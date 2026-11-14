@@ -34,6 +34,8 @@ jobs:
       - run: cargo run -q -p xtask -- check-gpui-pin
       # The extension SDK and its sample must build as a component for wasm32-wasip2 (E23-S01).
       - run: cargo build -p oxikube_extension_api --target wasm32-wasip2 --examples
+      # The `ext new` templates must keep compiling against the SDK (E23-S10).
+      - run: cargo test -p xtask scaffolded_projects_compile_for_wasm
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check

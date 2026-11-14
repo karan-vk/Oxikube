@@ -1,0 +1,9 @@
+
+[lib]
+kind = "rust"
+version = "{{api_version}}"
+
+[[commands]]
+id = "say-hello"
+title = "Say Hello"
+description = "Example command"

@@ -11519,6 +11519,7 @@ dependencies = [
  "serde",
  "serde_json",
  "syn 2.0.119",
+ "tempfile",
  "tokio",
  "toml 1.1.6+spec-1.1.0",
  "xshell",

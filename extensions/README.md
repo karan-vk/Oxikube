@@ -6,4 +6,6 @@ Sample Oxikube extensions (WASM components built against `oxikube_extension_api`
 - `hello-command/` — contributes a palette command
 - `mcp-echo/` — contributes an MCP context server
 
+Author guide: docs/extensions.md; scaffold with `cargo xtask ext new <id>`.
+
 Extensions cannot add UI; they contribute themes, icon themes, commands and MCP servers (see docs/adr/0007-plugins-wasm.md).
