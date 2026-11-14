@@ -1,0 +1,19 @@
+/// Exports the wasm_host tests call. Only WASI is imported (through Rust std).
+package oxikube:host-fixture;
+
+world fixture {
+    /// Returns 42.
+    export answer: func() -> u32;
+    /// Never returns: the host must interrupt it.
+    export spin: func();
+    /// Reads a file through WASI.
+    export read-file: func(path: string) -> result<string, string>;
+    /// Writes a file through WASI.
+    export write-file: func(path: string, contents: string) -> result<_, string>;
+    /// Reads an environment variable through WASI.
+    export env-var: func(name: string) -> option<string>;
+    /// Grows linear memory by `pages` 64 KiB pages; false when the host refuses.
+    export grow-memory: func(pages: u32) -> bool;
+    /// Prints `line` to stdout.
+    export print: func(line: string);
+}
