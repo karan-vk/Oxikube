@@ -3,7 +3,7 @@
 //!
 //! Every guest entry ([`WasmExtension::call`], instantiation) may run for [`CALL_TIMEOUT`]. At
 //! each epoch tick the guest yields to the async executor, so the caller's thread is never held
-//! for longer than a tick, and the first tick after the timeout traps the call with
+//! for longer than a tick, and the tick that uses up the budget traps the call with
 //! [`WasmError::TimedOut`]. Calls are async and must run off the UI thread: wrap
 //! them in `oxikube_runtime::spawn_kube`, whose task aborts the call when it is dropped (dropping
 //! the call future stops the guest at its next tick). Calls into one extension are serialised by
@@ -17,7 +17,6 @@ use std::path::Path;
 use std::sync::OnceLock;
 use std::thread;
 use std::time::Duration;
-use std::time::Instant;
 use tokio::sync::Mutex;
 use wasmtime::Config;
 use wasmtime::Engine;
@@ -40,8 +39,12 @@ use wasmtime_wasi::WasiView;
 /// How often the ticker advances the engine's epoch.
 pub const EPOCH_TICK: Duration = Duration::from_millis(10);
 
-/// How long one guest entry may run before it is interrupted.
-pub const CALL_TIMEOUT: Duration = Duration::from_secs(1);
+/// How many epoch ticks one guest entry may run before it is interrupted.
+pub const CALL_TICKS: u32 = 100;
+
+/// How long one guest entry may run before it is interrupted: [`CALL_TICKS`] ticks of
+/// [`EPOCH_TICK`] (longer if the ticker thread is starved).
+pub const CALL_TIMEOUT: Duration = EPOCH_TICK.saturating_mul(CALL_TICKS);
 
 /// Most linear memory one extension may hold (64 MiB).
 pub const MAX_MEMORY_BYTES: usize = 64 << 20;
@@ -105,12 +108,12 @@ pub fn engine() -> &'static Engine {
 }
 
 /// What one extension's [`Store`] holds: its WASI context, resource table and limits, and when
-/// the guest entry in progress times out.
+/// the guest entry in progress may still run.
 pub struct WasmState {
     wasi: WasiCtx,
     table: ResourceTable,
     limits: StoreLimits,
-    call_deadline: Instant,
+    ticks_left: u32,
     timed_out: bool,
 }
 
@@ -165,14 +168,15 @@ impl WasmExtension {
             wasi,
             table: ResourceTable::new(),
             limits,
-            call_deadline: Instant::now(),
+            ticks_left: CALL_TICKS,
             timed_out: false,
         };
         let mut store = Store::new(engine, state);
         store.limiter(|state| &mut state.limits);
         store.epoch_deadline_callback(|mut store| {
             let state = store.data_mut();
-            if Instant::now() >= state.call_deadline {
+            state.ticks_left = state.ticks_left.saturating_sub(1);
+            if state.ticks_left == 0 {
                 state.timed_out = true;
                 return Err(wasmtime::format_err!("extension call timed out"));
             }
@@ -213,10 +217,10 @@ impl WasmExtension {
     }
 }
 
-/// Starts the [`CALL_TIMEOUT`] clock for the next guest entry, which yields at every tick.
+/// Gives the next guest entry [`CALL_TICKS`] ticks; it yields at every tick.
 fn start_budget(store: &mut Store<WasmState>) {
     let state = store.data_mut();
-    state.call_deadline = Instant::now() + CALL_TIMEOUT;
+    state.ticks_left = CALL_TICKS;
     state.timed_out = false;
     store.set_epoch_deadline(1);
 }

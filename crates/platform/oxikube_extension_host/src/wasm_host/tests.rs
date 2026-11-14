@@ -2,9 +2,6 @@ use super::*;
 use futures::FutureExt as _;
 use std::pin::pin;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
-use std::time::Instant;
 
 /// The test guest built from `fixtures/guest` (see its `Cargo.toml` for how to rebuild it).
 const GUEST: &[u8] = include_bytes!("../../fixtures/guest.wasm");
@@ -31,39 +28,23 @@ async fn the_engine_is_shared() {
     assert!(Engine::same(engine(), engine()));
 }
 
-/// A spinning guest is interrupted after [`CALL_TIMEOUT`] by the real ticker, and the caller's
-/// single-threaded executor keeps running other work meanwhile: the guest yields at every tick.
+/// A spinning guest yields to its executor at every tick and is interrupted at the
+/// [`CALL_TICKS`]-th one. The tick count, not wall-clock time, decides the outcome, so the
+/// assertions hold however slowly the ticker runs.
 #[tokio::test]
 async fn a_spinning_guest_times_out_without_blocking_its_executor() {
     let (extension, _dir) = load().await;
-    let done = AtomicBool::new(false);
-    let mut other_work = 0_u32;
-    let started = Instant::now();
-    let call = async {
-        let result = extension.call::<(), ()>("spin", ()).await;
-        done.store(true, Ordering::Relaxed);
-        result
-    };
-    let other = async {
-        while !done.load(Ordering::Relaxed) {
-            other_work += 1;
-            tokio::task::yield_now().await;
+    let mut call = pin!(extension.call::<(), ()>("spin", ()));
+    let mut yields = 0_u32;
+    let result = loop {
+        match call.as_mut().now_or_never() {
+            Some(result) => break result,
+            None => yields += 1,
         }
     };
-    let (result, ()) = tokio::join!(call, other);
-    let elapsed = started.elapsed();
-
     assert!(matches!(result, Err(WasmError::TimedOut)), "{result:?}");
-    assert!(elapsed >= CALL_TIMEOUT, "{elapsed:?}");
-    assert!(
-        elapsed < CALL_TIMEOUT + Duration::from_millis(500),
-        "{elapsed:?}"
-    );
-    // About one turn per tick (100 in a second); far fewer would mean the guest held the thread.
-    assert!(
-        other_work >= 20,
-        "the executor ran other work {other_work} times"
-    );
+    // Every tick but the last handed the thread back to the caller.
+    assert_eq!(yields, CALL_TICKS - 1);
 }
 
 #[tokio::test]
