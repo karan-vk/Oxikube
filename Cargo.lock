@@ -6120,6 +6120,13 @@ dependencies = [
 [[package]]
 name = "oxikube_extension_host"
 version = "0.0.1"
+dependencies = [
+ "oxikube_domain",
+ "semver",
+ "serde",
+ "thiserror 2.0.21",
+ "toml 1.1.6+spec-1.1.0",
+]
 
 [[package]]
 name = "oxikube_extensions_ui"

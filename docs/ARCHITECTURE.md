@@ -2257,3 +2257,4 @@ as editor diffs and apply only through `MutationGuard`.
 ## Decision records
 
 See `docs/adr/`. ADRs are the contract; change an ADR before changing an architectural rule.
+- `oxikube_extension_host` — module `manifest` (E23-S02): `ExtensionManifest::parse(text)` reads and validates `extension.toml` (`deny_unknown_fields` on every table, `[[commands]]` / `[[context_servers]]` arrays, `ExtensionCapability` tagged by `kind`: `process:exec`, `download_file`, `kube:read`, glob patterns where `*` matches any run). Pure parsing, no wasmtime; errors are `ManifestError` (syntax, unknown field, missing field, invalid value).

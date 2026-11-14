@@ -1,6 +1,6 @@
 //! [`CommandMeta`]: the static description of a command.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::availability::{Availability, SelectionKind, ViewContext};
 use super::capability::Capabilities;
@@ -10,7 +10,7 @@ use crate::safety::{ConfirmTier, Initiator, Risk};
 
 /// What a command acts on. Drives where the palette offers it and which
 /// context it needs before it can run.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CommandScope {
     /// Always available (open a view, toggle the palette).
