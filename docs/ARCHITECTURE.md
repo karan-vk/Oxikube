@@ -1807,6 +1807,17 @@ crate's `README.md` for its allowed dependencies. Highlights:
   Find in scrollback is `view::find` (bar, matches painted by `element::highlight`, regex scan
   from `TerminalState::search`); the cursor's blink clock and the bell (`terminal.bell`) are
   `view::bell`.
+- `oxikube_extension_host::wasm_host` (E23-S03) — the only crate that links wasmtime (ADR 0007). One shared
+  `Engine` (`wasm_host::engine()`: component model, async, epoch interruption) whose first use starts the
+  `wasm-epoch` ticker thread (`increment_epoch` every 10 ms; never started while no extension loads).
+  `WasmExtension::load(engine, id, component, work_dir)` builds a `Store<WasmState>` per extension: WASI p2
+  with nothing inherited (no env, args, stdin or network; only `work_dir`, created if missing, preopened as
+  `.`), stdout/stderr into `tracing` (target `oxikube::extension`, redacted) and `StoreLimits` (64 MiB
+  memory, 32 instances/tables/memories). `WasmExtension::call` serialises calls per extension behind a
+  mutex; the guest yields at every tick and traps with `WasmError::TimedOut` after `CALL_TIMEOUT` (1 s).
+  Calls are async: run them through `oxikube_runtime::spawn_kube`, whose drop aborts the guest; an
+  interrupted instance refuses later calls and must be loaded again. Test guest: `fixtures/guest`
+  (checked-in `fixtures/guest.wasm`).
 - `oxikube_keymap` — layered key bindings (platform layer; E05-S07, E11-S07). Default keymaps per OS
   (`default-macos.json`, `default-linux.json`, `default-windows.json` = Linux's, in `oxikube_assets`),
   optional `vim.json` (the `base_keymap: "vim"` setting, module `base_keymap`, E11-S09: `ResourceTable &&

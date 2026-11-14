@@ -8,3 +8,4 @@
 pub mod manifest;
 
 pub use manifest::{ExtensionCapability, ExtensionManifest, ManifestError};
+pub mod wasm_host;
