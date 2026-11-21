@@ -3438,6 +3438,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "granit-parser"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9bd04d0d9c7079b416b458d2317aea4aa964c81938cb7c20f559758c4f422dc8"
+dependencies = [
+ "arraydeque",
+ "smallvec",
+]
+
+[[package]]
 name = "h2"
 version = "0.4.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6057,7 +6067,7 @@ dependencies = [
  "futures",
  "gpui-pre",
  "gpui-pre-platform",
- "granit-parser 1.3.0",
+ "granit-parser 2.2.0",
  "insta",
  "oxikube_app",
  "oxikube_assets",

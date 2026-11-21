@@ -109,7 +109,7 @@ json-patch = "4"
 # `Either` of kube's delete responses (object still present / Status). Same major kube uses.
 either = "1"
 similar = "3"
-granit-parser = "1"
+granit-parser = "2"
 
 # --- time / text / misc ---
 jiff = { version = "0.2", features = ["serde"] }
